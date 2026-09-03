@@ -2,8 +2,14 @@ import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast } from '../ui.js';
 import { navigate } from '../router.js';
-import { createPlayer, buildAlbumPage, recordVideo, videoSupported, collectSlides } from '../memory.js';
+import { createPlayer, buildAlbumPage, recordVideo, videoSupported, collectSlides, estimateDuration } from '../memory.js';
 import { downloadBlob, nativeShare } from '../share.js';
+
+const MUSIC_OPTS = [
+  { id: 'gentle', label: '🎵 溫柔（推薦）' },
+  { id: 'bright', label: '🎶 輕快' },
+  { id: 'none', label: '🔇 沒有音樂' },
+];
 
 export default async function album(tripId) {
   const t = store.get(tripId);
@@ -16,33 +22,60 @@ export default async function album(tripId) {
     return;
   }
 
-  const canvas = h('canvas', { class: 'album-canvas' });
-  const playBtn = h('button', { class: 'btn btn-primary btn-block', onclick: togglePlay }, '▶ 播放預覽');
-  const bar = h('div', { class: 'scrub' }, h('div', { class: 'scrub-fill' }));
-  const barFill = bar.firstChild;
+  let music = store.getRaw(tripId)?.musicStyle || 'gentle';
+  let musicFile = null;
 
-  render(h('div', { class: 'page album-page' },
+  const canvas = h('canvas', { class: 'album-canvas' });
+  const bar = h('div', { class: 'scrub' }, h('i'));
+  const barFill = bar.firstChild;
+  const playBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: togglePlay }, '▶ 播放預覽');
+  const musicPick = h('div', { class: 'music-pick' });
+  const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
+
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0]; fileInput.value = '';
+    if (!f) return;
+    musicFile = f; music = 'file';
+    drawMusicPick();
+    toast('已選擇：' + f.name);
+  });
+
+  function drawMusicPick() {
+    musicPick.replaceChildren(
+      ...MUSIC_OPTS.map((o) => h('button', {
+        class: music === o.id ? 'on' : '',
+        onclick: () => { music = o.id; musicFile = null; drawMusicPick(); store.patch(tripId, { musicStyle: o.id }); },
+      }, o.label)),
+      h('button', { class: music === 'file' ? 'on' : '', onclick: () => fileInput.click() },
+        musicFile ? '🎧 ' + musicFile.name : '🎧 用我手機裡的音樂'),
+    );
+  }
+  drawMusicPick();
+
+  render(h('div', { class: 'page' },
     h('div', { class: 'album-frame' }, canvas, bar),
-    h('p', { class: 'muted sm center' }, `${slides.length} 張照片 · 約 ${Math.round((2 + slides.length * 3.2 + 1.5))} 秒`),
+    h('p', { class: 'muted center', style: 'margin:10px 0' },
+      `${slides.length} 張照片 · 約 ${Math.round(estimateDuration(tripId))} 秒`),
     playBtn,
 
+    h('div', { class: 'section-label' }, '配樂'),
+    musicPick,
+    fileInput,
+
     h('div', { class: 'section-label' }, '匯出'),
-    h('button', { class: 'btn btn-soft btn-block', onclick: doAlbumPage }, '📄 下載動態相簿頁（HTML，任何裝置都能開）'),
+    h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doAlbumPage },
+      '📄 存成相簿頁（任何手機都能開、可傳給家人）'),
     videoSupported()
-      ? h('button', { class: 'btn btn-soft btn-block', onclick: doVideo }, '🎬 錄成影片檔')
-      : h('p', { class: 'form-hint' }, '這個瀏覽器不支援直接錄影片，請用上方的相簿頁（一樣可以分享、也很好看）。'),
-    h('p', { class: 'form-hint center' }, '影片 / 相簿都在手機本機產生，不會上傳。'),
+      ? h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doVideo }, '🎬 存成影片檔')
+      : h('p', { class: 'form-hint' }, '這支手機不支援直接存影片，請用上面的相簿頁（一樣好看、一樣能傳）。'),
+    h('p', { class: 'form-hint center' }, '全部都在這支手機裡做好，不會上傳。'),
   ));
 
-  let player = null;
-  let playing = false;
-  let barIv = 0;
-
-  // 進頁就先畫出封面 / 第一張，不要留黑畫面
-  ensurePlayer().then((p) => p.seek(1.2));
+  let player = null, playing = false, barIv = 0;
+  ensurePlayer().then((p) => p.seek(1.4));
 
   async function ensurePlayer() {
-    if (!player) { player = await createPlayer(canvas, tripId); }
+    if (!player) player = await createPlayer(canvas, tripId);
     return player;
   }
   async function togglePlay() {
@@ -54,33 +87,40 @@ export default async function album(tripId) {
     barIv = setInterval(() => {
       barFill.style.width = Math.min(100, ((performance.now() - start) / 1000 / p.duration) * 100) + '%';
     }, 100);
-    p.play(() => { playing = false; playBtn.textContent = '▶ 重播'; clearInterval(barIv); barFill.style.width = '100%'; });
+    await p.play(musicFile ? 'none' : music, () => {
+      playing = false; playBtn.textContent = '▶ 重播'; clearInterval(barIv); barFill.style.width = '100%';
+    });
   }
 
   async function doAlbumPage() {
-    toast('產生相簿頁中…');
+    toast('製作相簿頁中…');
     const blob = await buildAlbumPage(tripId);
     const file = new File([blob], `${t.title || 'trip'}-相簿.html`, { type: 'text/html' });
     if (await nativeShare({ title: t.title, text: '我們的旅程回憶', files: [file] })) return;
     downloadBlob(blob, file.name);
-    toast('已下載，可直接用瀏覽器開啟或傳給朋友');
+    toast('已存檔，可用瀏覽器打開或傳給家人');
   }
 
   async function doVideo() {
+    if (playing) { player.stop(); playing = false; }
     const overlay = h('div', { class: 'record-overlay' },
       h('div', { class: 'spinner' }),
       h('div', { class: 'record-pct' }, '準備中…'),
-      h('p', { class: 'form-hint' }, '錄製是即時進行的，請讓畫面保持開著'),
+      h('p', { class: 'form-hint' }, '影片是即時錄的，請讓畫面開著、不要鎖螢幕'),
     );
     document.body.append(overlay);
     const pct = overlay.querySelector('.record-pct');
     try {
-      const { blob, ext } = await recordVideo(tripId, { onProgress: (r) => { pct.textContent = Math.round(r * 100) + '%'; } });
+      const { blob, ext } = await recordVideo(tripId, {
+        music: musicFile ? 'none' : music,
+        musicFile,
+        onProgress: (r) => { pct.textContent = Math.round(r * 100) + '%'; },
+      });
       overlay.remove();
       const file = new File([blob], `${t.title || 'trip'}-回憶.${ext}`, { type: blob.type });
       if (await nativeShare({ title: t.title, text: '我們的旅程回憶', files: [file] })) return;
       downloadBlob(blob, file.name);
-      toast(ext === 'webm' ? '已下載 .webm（部分 App 需轉檔才能播）' : '已下載影片');
+      toast(ext === 'webm' ? '已存 .webm（有些相簿 App 需轉檔）' : '已存成影片');
     } catch (e) {
       overlay.remove();
       console.error(e);

@@ -1,6 +1,6 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, confirmDialog, promptDialog, modal, KIND_META } from '../ui.js';
+import { h, toast, confirmDialog, promptDialog, celebrate, KIND_META } from '../ui.js';
 import { navigate } from '../router.js';
 import { importPhoto, blobURL } from '../photos.js';
 
@@ -13,69 +13,98 @@ export default async function quest(questId) {
 
   setTop({
     title: spot?.name || '任務',
-    action: { icon: '✏️', label: '編輯任務', onClick: () => editQuest(questId) },
+    action: { icon: '✏️', label: '編輯', onClick: () => editQuest(questId) },
   });
 
   const subs = store.submissionsOf(questId);
   const members = store.membersOf(t.groupId);
   const done = subs.length > 0;
 
+  const heroPhoto = h('div', { class: 'quest-focus-photo' }, h('span', { class: 'qf-emoji' }, km.icon));
+  if (spot?.heroHash) blobURL(spot.heroHash).then((u) => { if (u) { heroPhoto.style.backgroundImage = `url("${u}")`; heroPhoto.classList.add('has-img'); } });
+
   const grid = h('div', { class: 'photo-grid' });
+
   render(h('div', { class: 'page' },
-    h('div', { class: 'quest-hero card' + (done ? ' quest-done' : '') },
-      h('div', { class: 'quest-hero-top' },
-        h('span', { class: 'quest-icon big' }, done ? '✓' : km.icon),
-        h('span', { class: 'tag' }, km.label),
-      ),
-      h('h2', { class: 'quest-hero-title' }, q.title),
-      q.hint ? h('p', { class: 'muted' }, q.hint) : null,
-      q.refImage ? h('img', { class: 'ref-img', src: q.refImage, alt: '參考', loading: 'lazy' }) : null,
+    h('div', { class: 'quest-focus' },
+      heroPhoto,
+      h('span', { class: 'tag quest-focus-kind' }, `${km.icon} ${km.label}`),
+      h('h2', {}, q.title),
+      q.hint ? h('p', { class: 'qf-hint' }, q.hint) : null,
     ),
 
-    h('div', { class: 'section-label' }, done ? `已完成 · ${subs.length} 張照片` : '還沒有人拍到，快去解鎖！'),
+    done ? h('div', { class: 'section-label' }, `已完成 · ${subs.length} 張照片`) : null,
     grid,
 
-    addButton(t, questId, members),
+    photoButton(t, q, spot, members),
+    h('p', { class: 'form-hint center' }, '照片只存在這支手機，會自動縮小、不會上傳。'),
   ));
 
   await paintGrid(grid, questId);
 }
 
-function addButton(trip, questId, members) {
+function photoButton(trip, q, spot, members) {
   const input = h('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: true, hidden: true });
   input.addEventListener('change', async () => {
     const files = [...input.files];
     input.value = '';
     if (!files.length) return;
 
-    let memberId = members[0]?.id || null;
-    if (members.length > 1) {
+    // 「我是誰」：每個旅程問一次就記住
+    let memberId = store.getActiveMember(trip.id);
+    if (memberId && !store.getRaw(memberId)) memberId = null;
+    if (!memberId && members.length > 1) {
       memberId = await pickMember(members);
       if (memberId === undefined) return;
+      if (memberId) store.setActiveMember(trip.id, memberId);
+    } else if (!memberId) {
+      memberId = members[0]?.id || null;
+      if (memberId) store.setActiveMember(trip.id, memberId);
     }
 
-    const prog = h('div', { class: 'upload-prog' }, `處理中 0/${files.length}`);
+    const wasDone = store.isQuestDone(q.id);
+    const prog0 = store.tripProgress(trip.id);
+
+    const prog = h('div', { class: 'upload-prog' }, `處理中 0/${files.length}…`);
     document.querySelector('.page')?.append(prog);
-    let ok = 0;
+    let ok = 0; let lastSub = null;
     for (const f of files) {
       try {
-        await importPhoto(f, { tripId: trip.id, questId, memberId, allowGeo: !!trip.allowGeo });
+        lastSub = await importPhoto(f, { tripId: trip.id, questId: q.id, memberId, allowGeo: !!trip.allowGeo });
         ok++;
-        prog.textContent = `處理中 ${ok}/${files.length}`;
-      } catch (e) {
-        console.error(e);
-        toast('一張照片處理失敗：' + e.message);
-      }
+        prog.textContent = `處理中 ${ok}/${files.length}…`;
+      } catch (e) { console.error(e); toast('一張照片處理失敗'); }
     }
     prog.remove();
-    toast(ok ? `已加入 ${ok} 張，任務解鎖！` : '沒有成功加入照片');
-    quest(questId);
+    if (!ok) { toast('沒有成功加入照片'); return; }
+
+    const prog1 = store.tripProgress(trip.id);
+    if (!wasDone) {
+      const allDone = prog1.done === prog1.total;
+      const url = lastSub ? await blobURL(lastSub.thumbHash) : null;
+      const res = await celebrate({
+        title: allDone ? '全部完成啦！🎉' : '完成一個任務！',
+        lines: allDone
+          ? [`${prog1.total} 個任務全部達成`, '可以來做回憶影片了']
+          : [`「${q.title}」搞定`, `進度 ${prog1.done} / ${prog1.total}`],
+        photoURL: url,
+        actions: allDone
+          ? [{ label: '🎬 去做回憶影片', value: 'album', primary: true }, { label: '看看大家', value: 'people' }]
+          : [{ label: '繼續下一個', value: 'stay', primary: true }, { label: '看看大家', value: 'people' }],
+      });
+      if (res === 'album') return navigate(`/trip/${trip.id}/album`);
+      if (res === 'people') return navigate(`/trip/${trip.id}/people`);
+    } else {
+      toast(`已加入 ${ok} 張`);
+    }
+    void prog0;
+    quest(q.id);
   });
 
-  return h('div', {},
+  return h('div', { class: 'big-shot-btn' },
     input,
-    h('button', { class: 'btn btn-primary btn-block', onclick: () => input.click() }, '📷 拍照 / 選照片上傳'),
-    h('p', { class: 'form-hint center' }, '照片只會存在這支手機，經壓縮後預設清除位置等資訊，不會上傳。'),
+    h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => input.click() },
+      store.isQuestDone(q.id) ? '📷 再拍一張' : '📷 拍照'),
   );
 }
 
@@ -85,9 +114,10 @@ function pickMember(members) {
     const onKey = (e) => { if (e.key === 'Escape') done(undefined); };
     const card = h('div', { class: 'modal-card' },
       h('h2', { class: 'modal-title' }, '這張是誰拍的？'),
+      h('p', { class: 'sm muted', style: 'margin:-6px 0 12px' }, '選一次就好，之後這個旅程都記住'),
       h('div', { class: 'member-pick' },
-        ...members.map((m) => h('button', { class: 'btn btn-soft btn-block', onclick: () => done(m.id) }, m.displayName)),
-        h('button', { class: 'btn btn-ghost btn-block', onclick: () => done(null) }, '未指定'),
+        ...members.map((m) => h('button', { class: 'btn btn-soft btn-block btn-big', onclick: () => done(m.id) }, m.displayName)),
+        h('button', { class: 'btn btn-ghost btn-block', onclick: () => done(null) }, '先不指定'),
       ),
     );
     const overlay = h('div', { class: 'modal-overlay', onclick: (e) => { if (e.target === overlay) done(undefined); } }, card);
@@ -102,22 +132,24 @@ async function paintGrid(grid, questId) {
   for (const sub of subs) {
     const url = await blobURL(sub.thumbHash || sub.photoHash);
     const member = sub.memberId ? store.getRaw(sub.memberId) : null;
-    const cell = h('figure', { class: 'photo-cell' },
+    const likes = store.reactionsOf(sub.id).length;
+    grid.append(h('figure', { class: 'photo-cell' },
       h('img', { src: url, alt: sub.caption || '', loading: 'lazy', onclick: () => viewPhoto(sub) }),
+      likes ? h('span', { class: 'mini-likes' }, '❤️ ' + likes) : null,
       h('figcaption', {}, member?.displayName || sub.byDevice || '未指定'),
-    );
-    grid.append(cell);
+    ));
   }
 }
 
 async function viewPhoto(sub) {
+  const { modal } = await import('../ui.js');
   const url = await blobURL(sub.photoHash);
   const member = sub.memberId ? store.getRaw(sub.memberId) : null;
   await modal({
     body: h('div', { class: 'photo-view' },
       h('img', { src: url, alt: '' }),
-      h('div', { class: 'photo-view-meta' },
-        h('div', {}, member?.displayName || sub.byDevice || '未指定'),
+      h('div', {},
+        h('div', { style: 'font-weight:700' }, member?.displayName || sub.byDevice || '未指定'),
         sub.caption ? h('div', { class: 'muted sm' }, sub.caption) : null,
         sub.gps ? h('div', { class: 'form-hint' }, `📍 ${sub.gps.lat}, ${sub.gps.lng}`) : null,
       ),
@@ -125,13 +157,11 @@ async function viewPhoto(sub) {
         h('button', { class: 'btn btn-soft', onclick: async () => {
           const c = await promptDialog('照片說明', { value: sub.caption || '', multiline: true });
           if (c !== null) { await patchSub(sub.id, { caption: c }); toast('已更新'); close(); quest(sub.questId); }
-        } }, '✏️ 加說明'),
+        } }, '✏️ 說明'),
         h('button', { class: 'btn btn-danger', onclick: async () => {
           if (await confirmDialog('刪除這張照片？', { danger: true, okLabel: '刪除' })) {
             await store.deleteSubmission(sub.id);
-            toast('已刪除');
-            close();
-            quest(sub.questId);
+            toast('已刪除'); close(); quest(sub.questId);
           }
         } }, '🗑️ 刪除'),
       ),
@@ -142,7 +172,6 @@ async function viewPhoto(sub) {
 }
 
 async function patchSub(id, changes) {
-  // 投稿理論上不可變，但「說明」是純顯示欄位，v1 直接就地改；v2 同步時屬 LWW 欄位
   const raw = store.getRaw(id);
   if (!raw) return;
   Object.assign(raw, changes);

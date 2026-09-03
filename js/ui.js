@@ -137,6 +137,41 @@ export function fmtDate(iso) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+// 成就慶祝畫面
+export function celebrate({ title, lines = [], photoURL, actions = [] }) {
+  const root = document.getElementById('modalRoot');
+  return new Promise((resolve) => {
+    const close = (v) => { wrap.remove(); conf.remove(); resolve(v); };
+    const conf = confetti();
+    const wrap = h('div', { class: 'celebrate' },
+      h('div', { class: 'celebrate-badge' }, '✓'),
+      h('h2', {}, title || '完成了！'),
+      ...lines.map((l) => h('p', {}, l)),
+      photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null,
+      ...actions.map((a) => h('button', {
+        class: 'btn ' + (a.primary ? 'btn-primary' : 'btn-soft') + ' btn-block btn-big',
+        onclick: () => close(a.value),
+      }, a.label)),
+    );
+    root.append(conf, wrap);
+    if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch { /* noop */ } }
+    if (!actions.length) setTimeout(() => close(null), 2200);
+  });
+}
+
+function confetti() {
+  const wrap = h('div', { class: 'confetti' });
+  const colors = ['#4f8dff', '#ffb454', '#4fd6a6', '#ff6b8b', '#c58bff'];
+  for (let i = 0; i < 60; i++) {
+    wrap.append(h('i', {
+      style: `left:${Math.random() * 100}%;background:${colors[i % colors.length]};` +
+        `animation-duration:${1.6 + Math.random() * 1.8}s;animation-delay:${Math.random() * 0.5}s`,
+    }));
+  }
+  setTimeout(() => wrap.remove(), 4200);
+  return wrap;
+}
+
 export const KIND_META = {
   building: { icon: '🏛️', label: '建築' },
   food: { icon: '🍜', label: '美食' },

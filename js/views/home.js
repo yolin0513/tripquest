@@ -8,21 +8,20 @@ export default function home() {
   setTop({ title: 'TripQuest', back: false });
   const trips = store.trips();
 
-  const list = trips.length
-    ? h('div', { class: 'stack' }, ...trips.map(tripCard))
-    : emptyState();
-
   render(h('div', { class: 'page' },
     h('div', { class: 'hero' },
-      h('h2', {}, '把每趟旅行變成一場拍照任務'),
-      h('p', { class: 'muted' }, '共建行程 → 系統出題 → 蒐集照片 → 全部解鎖做成回憶影片'),
+      h('h2', {}, '把旅行變成拍照任務'),
+      h('p', { class: 'muted lg' }, '一起完成、一起回味'),
     ),
-    list,
-    h('button', { class: 'btn btn-primary btn-block', onclick: () => navigate('/new') }, '＋ 建立新行程'),
-    h('button', {
-      class: 'btn btn-ghost btn-block',
-      onclick: () => navigate('/settings'),
-    }, '用任務代碼加入朋友的行程'),
+    trips.length
+      ? h('div', { class: 'stack' }, ...trips.map(tripCard))
+      : h('div', { class: 'empty' },
+          h('div', { class: 'empty-emoji' }, '🧳'),
+          h('p', {}, '還沒有旅程'),
+          h('p', { class: 'muted sm' }, '按下面的按鈕開一個'),
+        ),
+    h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => navigate('/new') }, '＋ 建立新旅程'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('/settings') }, '用代碼加入旅伴的旅程'),
   ));
 }
 
@@ -34,21 +33,13 @@ function tripCard(trip) {
     class: 'card trip-card', onclick: () => navigate(`/trip/${trip.id}`),
   },
     h('div', { class: 'trip-card-main' },
-      h('div', { class: 'trip-card-title' }, trip.title || '未命名行程'),
+      h('div', { class: 'trip-card-title' }, trip.title || '未命名旅程'),
       h('div', { class: 'muted sm' },
         [trip.region, spots.length ? `${spots.length} 個景點` : null,
-         (trip.startDate ? `${fmtDate(trip.startDate)}${trip.endDate ? '–' + fmtDate(trip.endDate) : ''}` : null)]
-          .filter(Boolean).join(' · ')),
-      members.length ? h('div', { class: 'avatars' }, ...members.slice(0, 5).map((m) => avatar(m.displayName, hashHue(m.id)))) : null,
+         trip.startDate ? `${fmtDate(trip.startDate)}${trip.endDate ? '–' + fmtDate(trip.endDate) : ''}` : null]
+          .filter(Boolean).join('　')),
+      members.length ? h('div', { class: 'avatars' }, ...members.slice(0, 6).map((m) => avatar(m.displayName, hashHue(m.id)))) : null,
     ),
-    ring(p.ratio, { size: 52, label: `${p.done}/${p.total}` }),
-  );
-}
-
-function emptyState() {
-  return h('div', { class: 'empty' },
-    h('div', { class: 'empty-emoji' }, '🧳'),
-    h('p', {}, '還沒有行程'),
-    h('p', { class: 'muted sm' }, '建立一個，把出遊清單貼進來就會自動出任務'),
+    ring(p.ratio, { size: 60, label: `${p.done}/${p.total}` }),
   );
 }

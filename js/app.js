@@ -4,6 +4,7 @@ import { route, setNotFound, startRouter, navigate, currentRoute } from './route
 import * as store from './store.js';
 import { requestPersist } from './db.js';
 import { mount, h, toast } from './ui.js';
+import { apply as applyPrefs } from './prefs.js';
 
 const view = document.getElementById('view');
 const backBtn = document.getElementById('backBtn');
@@ -67,6 +68,7 @@ route('/new', async () => (await import('./views/create.js')).default());
 route('/join', async ({ query }) => (await import('./views/join.js')).default(query));
 route('/trip/:id', async ({ params }) => (await import('./views/trip.js')).default(params.id));
 route('/trip/:id/settings', async ({ params }) => (await import('./views/trip.js')).settings(params.id));
+route('/trip/:id/people', async ({ params }) => (await import('./views/people.js')).default(params.id));
 route('/trip/:id/album', async ({ params }) => (await import('./views/album.js')).default(params.id));
 route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
 route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
@@ -75,11 +77,18 @@ setNotFound(() => { navigate('/', { replace: true }); });
 
 // ---- 啟動 ----
 (async function boot() {
+  applyPrefs();
   renderLoading();
   await store.init();
   requestPersist(); // 盡量請系統別在 7 天沒開就清掉資料
   startRouter();
   syncTabs();
+
+  // 若已設定自架伺服器，開啟時在背景同步一次
+  import('./sync.js').then(async ({ activeAdapter, syncNow }) => {
+    if (activeAdapter().id === 'local') return;
+    try { await syncNow(); } catch { /* 靜默 */ }
+  });
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

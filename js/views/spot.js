@@ -1,9 +1,10 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, ring, toast, promptDialog, confirmDialog, KIND_META } from '../ui.js';
+import { h, toast, promptDialog, confirmDialog, KIND_META } from '../ui.js';
 import { navigate } from '../router.js';
 import { uuid } from '../ids.js';
-import { enrichSpotFromWiki } from '../quests/generate.js';
+import { blobURL } from '../photos.js';
+import { enrichSpot } from '../enrich.js';
 
 export default async function spot(tripId, spotId) {
   const s = store.get(spotId);
@@ -15,73 +16,78 @@ export default async function spot(tripId, spotId) {
     action: { icon: '＋', label: '新增任務', onClick: () => addQuest(tripId, spotId) },
   });
 
-  const p = store.spotProgress(spotId);
   const quests = store.questsOf(spotId);
+  const p = store.spotProgress(spotId);
 
-  const wikiBox = h('div', { class: 'wiki-box', hidden: true });
+  const hero = h('div', { class: 'quest-focus-photo' }, h('span', { class: 'qf-emoji' }, s.emoji || '📍'));
+  if (s.heroHash) blobURL(s.heroHash).then((u) => { if (u) hero.style.backgroundImage = `url("${u}")`; });
 
   render(h('div', { class: 'page' },
-    h('div', { class: 'spot-hero card' },
+    hero,
+    h('div', { class: 'setting-row' },
       h('div', {},
-        h('div', { class: 'trip-card-title' }, s.name),
-        h('div', { class: 'muted sm' }, [s.region, `第 ${s.day || 1} 天`].filter(Boolean).join(' · ')),
+        h('div', { style: 'font-size:1.2rem;font-weight:800' }, s.name),
+        h('div', { class: 'muted sm' }, [s.region, `第 ${s.day || 1} 天`, `${p.done}/${p.total} 完成`].filter(Boolean).join(' · ')),
       ),
-      ring(p.ratio, { size: 56, label: `${p.done}/${p.total}` }),
+      h('button', { class: 'btn btn-soft', onclick: async () => {
+        const v = await promptDialog('景點名稱', { value: s.name });
+        if (v) { await store.patch(spotId, { name: v, _enriched: false }); enrichSpot(store.getRaw(spotId)); toast('已更新'); spot(tripId, spotId); }
+      } }, '改名字'),
     ),
-    wikiBox,
-    quests.length
-      ? h('div', { class: 'stack' }, ...quests.map((q) => questCard(q)))
-      : h('div', { class: 'empty' }, h('p', {}, '這個景點還沒有任務'),
-          h('button', { class: 'btn btn-primary', onclick: () => addQuest(tripId, spotId) }, '＋ 新增任務')),
-    h('button', { class: 'btn btn-ghost btn-block', onclick: () => addQuest(tripId, spotId) }, '＋ 自訂任務'),
-  ));
 
-  // 可選：維基百科補圖（需在行程設定開啟）
-  if (t.allowWiki && s.source !== 'curated' && !s._wikiTried) {
-    store.patch(spotId, { _wikiTried: true });
-    const info = await enrichSpotFromWiki(s);
-    if (info && info.thumb) {
-      wikiBox.hidden = false;
-      wikiBox.append(
-        h('img', { src: info.thumb, alt: s.name, loading: 'lazy' }),
-        h('div', { class: 'wiki-text' },
-          h('p', { class: 'sm' }, info.extract || ''),
-          h('span', { class: 'form-hint' }, '參考圖 · 維基百科'),
-        ),
-      );
-      if (info.lat && !s.lat) store.patch(spotId, { lat: info.lat, lng: info.lng });
-    }
-  }
+    h('div', { class: 'section-label' }, '這個景點的任務'),
+    h('div', { class: 'stack' }, ...quests.map((q) => questRow(q, tripId, spotId))),
+
+    h('button', { class: 'btn btn-primary btn-block', style: 'margin-top:16px', onclick: () => addQuest(tripId, spotId) }, '＋ 新增任務'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate(`/trip/${tripId}`) }, '回旅程'),
+
+    h('div', { class: 'danger-zone' },
+      h('button', { class: 'btn btn-danger btn-block', onclick: async () => {
+        if (await confirmDialog(`刪除景點「${s.name}」？它的任務與照片都會刪除。`, { danger: true, okLabel: '刪除' })) {
+          for (const q of quests) { for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id); await store.remove(q.id); }
+          await store.remove(spotId);
+          toast('已刪除');
+          navigate(`/trip/${tripId}`);
+        }
+      } }, '🗑️ 刪除這個景點'),
+    ),
+  ));
 }
 
-function questCard(q) {
-  const done = store.isQuestDone(q.id);
-  const subs = store.submissionsOf(q.id);
+function questRow(q, tripId, spotId) {
   const km = KIND_META[q.kind] || KIND_META.thing;
-  return h('button', {
-    class: 'card quest-card' + (done ? ' quest-done' : ''),
-    onclick: () => navigate(`/quest/${q.id}`),
-  },
-    h('div', { class: 'quest-icon' }, done ? '✓' : km.icon),
-    h('div', { class: 'quest-main' },
-      h('div', { class: 'quest-title' }, q.title),
-      h('div', { class: 'quest-hint sm muted' }, q.hint),
-      h('div', { class: 'quest-meta' },
-        h('span', { class: 'tag' }, km.label),
-        subs.length ? h('span', { class: 'tag tag-ok' }, `${subs.length} 張` ) : h('span', { class: 'tag tag-todo' }, '待拍'),
+  const done = store.isQuestDone(q.id);
+  return h('div', { class: 'card', style: 'align-items:flex-start' },
+    h('span', { class: 'quest-icon', style: 'width:44px;height:44px;flex:none;border-radius:12px;background:var(--bg-elev-2);display:grid;place-items:center;font-size:1.3rem' }, done ? '✓' : km.icon),
+    h('div', { style: 'flex:1;min-width:0' },
+      h('div', { style: 'font-weight:700' }, q.title),
+      q.hint ? h('div', { class: 'muted sm' }, q.hint) : null,
+      h('div', { style: 'display:flex;gap:8px;margin-top:8px' },
+        h('button', { class: 'tag', style: 'cursor:pointer', onclick: async () => {
+          const title = await promptDialog('任務名稱', { value: q.title });
+          if (title === null) return;
+          const hint = await promptDialog('提示', { value: q.hint || '', multiline: true });
+          await store.patch(q.id, { title: title || q.title, hint: hint ?? q.hint });
+          toast('已更新'); spot(tripId, spotId);
+        } }, '編輯'),
+        h('button', { class: 'tag', style: 'cursor:pointer;color:var(--danger)', onclick: async () => {
+          if (await confirmDialog(`刪除任務「${q.title}」？`, { danger: true, okLabel: '刪除' })) {
+            for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id);
+            await store.remove(q.id);
+            toast('已刪除'); spot(tripId, spotId);
+          }
+        } }, '刪除'),
       ),
     ),
-    h('span', { class: 'chev' }, '›'),
   );
 }
 
 async function addQuest(tripId, spotId) {
-  const title = await promptDialog('任務名稱', { placeholder: '例：找到那隻招財貓', okLabel: '下一步' });
+  const title = await promptDialog('要拍什麼？', { placeholder: '例：找到那隻招財貓', okLabel: '下一步' });
   if (!title) return;
-  const hint = await promptDialog('提示（可留空）', { placeholder: '要拍成怎樣才算完成？', multiline: true, okLabel: '新增' }) || '';
+  const hint = await promptDialog('提示（可留空）', { placeholder: '拍成怎樣算完成？', multiline: true, okLabel: '新增' }) || '';
   const order = store.questsOf(spotId).length;
   await store.put({ id: uuid(), type: 'quest', tripId, spotId, title, hint, kind: 'custom', source: 'custom', order, refImage: null });
-  toast('已新增任務');
-  navigate(`/trip/${tripId}/spot/${spotId}`);
-  void confirmDialog;
+  toast('已新增');
+  spot(tripId, spotId);
 }

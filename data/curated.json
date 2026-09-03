@@ -1,175 +1,190 @@
 {
   "_meta": {
-    "note": "策展資料庫：知名景點 → 代表性拍照任務。使用者輸入行程時比對 aliases（不分大小寫、去除空白）命中即帶入。命中不到時改用 templates.json 的規則式模板 + Wikipedia 補圖。",
-    "version": 1,
-    "questTypes": ["building", "food", "thing", "view", "culture"]
+    "note": "策展資料庫：知名景點 → 代表性拍照任務。使用者輸入行程時比對 aliases（不分大小寫、去空白標點）命中即帶入。未命中改用 templates.json 的規則式模板。emoji 供「建立行程」畫面的點選清單使用。",
+    "version": 2,
+    "questTypes": ["building", "food", "thing", "view", "culture", "group"]
   },
   "spots": [
     {
-      "id": "kiyomizu-dera",
-      "name": "清水寺",
-      "region": "京都",
-      "country": "日本",
+      "id": "kiyomizu-dera", "name": "清水寺", "region": "京都", "country": "日本", "emoji": "⛩️",
       "aliases": ["清水寺", "きよみずでら", "kiyomizu", "kiyomizu-dera", "kiyomizudera"],
-      "lat": 34.9948, "lng": 135.7850,
-      "wiki": { "lang": "zh", "title": "清水寺" },
+      "lat": 34.9948, "lng": 135.7850, "wiki": { "lang": "zh", "title": "清水寺" },
       "quests": [
-        { "id": "kiyomizu-butai", "type": "building", "title": "清水舞台", "hint": "拍下懸空的「清水舞台」木造平台，最好帶到下方的懸造式支柱。" },
-        { "id": "kiyomizu-niomon", "type": "building", "title": "朱紅仁王門", "hint": "入口那座鮮豔的朱紅色大門，站遠一點把整座門拍進去。" },
-        { "id": "kiyomizu-otowa", "type": "culture", "title": "音羽瀑布三道水", "hint": "拍下遊客拿長柄杓接山泉水的音羽の滝。" },
-        { "id": "kiyomizu-yasaka", "type": "view", "title": "產寧坂石板路遠望八坂塔", "hint": "在往清水寺的坂道上，捕捉遠方的八坂之塔（法觀寺五重塔）。" }
+        { "id": "kiyomizu-butai", "type": "building", "title": "清水舞台", "hint": "拍下懸空的木造大平台，可以的話帶到下面的柱子。" },
+        { "id": "kiyomizu-niomon", "type": "building", "title": "朱紅色大門", "hint": "門口那座鮮紅的仁王門，站遠一點整座拍進去。" },
+        { "id": "kiyomizu-otowa", "type": "culture", "title": "接山泉水的地方", "hint": "拍下大家排隊用長杓子接水的音羽瀑布。" },
+        { "id": "kiyomizu-yasaka", "type": "view", "title": "石板坡道看到的塔", "hint": "在往清水寺的坡道上，拍遠方的五重塔（八坂塔）。" }
       ]
     },
     {
-      "id": "kinkaku-ji",
-      "name": "金閣寺",
-      "region": "京都",
-      "country": "日本",
+      "id": "kinkaku-ji", "name": "金閣寺", "region": "京都", "country": "日本", "emoji": "🏯",
       "aliases": ["金閣寺", "鹿苑寺", "きんかくじ", "kinkaku", "kinkaku-ji", "kinkakuji"],
-      "lat": 35.0394, "lng": 135.7292,
-      "wiki": { "lang": "zh", "title": "鹿苑寺" },
+      "lat": 35.0394, "lng": 135.7292, "wiki": { "lang": "zh", "title": "鹿苑寺" },
       "quests": [
-        { "id": "kinkaku-reflection", "type": "building", "title": "鏡湖池倒影金閣", "hint": "從正面池畔拍金色樓閣與水面倒影，經典角度。" },
-        { "id": "kinkaku-phoenix", "type": "thing", "title": "屋頂的金鳳凰", "hint": "放大拍屋頂上那隻展翅的鳳凰裝飾。" },
-        { "id": "kinkaku-matcha", "type": "food", "title": "抹茶與金箔和菓子", "hint": "在寺內茶席或門口茶屋，來一份抹茶配金箔菓子。" }
+        { "id": "kinkaku-reflection", "type": "building", "title": "金色樓閣與水中倒影", "hint": "從池子正面拍金閣，把水面的倒影也拍進去。" },
+        { "id": "kinkaku-phoenix", "type": "thing", "title": "屋頂上的金鳳凰", "hint": "把鏡頭拉近，拍屋頂那隻展翅的鳳凰。" },
+        { "id": "kinkaku-matcha", "type": "food", "title": "抹茶配金箔點心", "hint": "在茶席或門口茶屋，來一份抹茶跟金箔和菓子。" }
       ]
     },
     {
-      "id": "fushimi-inari",
-      "name": "伏見稻荷大社",
-      "region": "京都",
-      "country": "日本",
+      "id": "fushimi-inari", "name": "伏見稻荷大社", "region": "京都", "country": "日本", "emoji": "⛩️",
       "aliases": ["伏見稻荷", "伏見稲荷大社", "千本鳥居", "fushimi inari", "fushimi-inari", "inari"],
-      "lat": 34.9671, "lng": 135.7727,
-      "wiki": { "lang": "zh", "title": "伏見稻荷大社" },
+      "lat": 34.9671, "lng": 135.7727, "wiki": { "lang": "zh", "title": "伏見稻荷大社" },
       "quests": [
-        { "id": "inari-senbon", "type": "building", "title": "千本鳥居隧道", "hint": "站在朱紅鳥居隧道正中央，往前拍出無限延伸感。" },
-        { "id": "inari-kitsune", "type": "thing", "title": "叼鑰匙的狐狸石像", "hint": "找到一尊嘴裡叼著稻穗或鑰匙的狐狸使者石像。" },
-        { "id": "inari-inarizushi", "type": "food", "title": "稻荷壽司", "hint": "參道邊的攤販買一份豆皮包的稻荷壽司。" }
+        { "id": "inari-senbon", "type": "building", "title": "紅色鳥居隧道", "hint": "站在鳥居隧道正中間，往前拍出一直延伸的感覺。" },
+        { "id": "inari-kitsune", "type": "thing", "title": "叼東西的狐狸石像", "hint": "找一尊嘴裡叼著稻穗或鑰匙的狐狸石像。" },
+        { "id": "inari-inarizushi", "type": "food", "title": "豆皮壽司", "hint": "參道邊攤子買一份豆皮包的稻荷壽司。" }
       ]
     },
     {
-      "id": "arashiyama",
-      "name": "嵐山竹林",
-      "region": "京都",
-      "country": "日本",
-      "aliases": ["嵐山", "竹林", "嵐山竹林", "arashiyama", "bamboo grove"],
-      "lat": 35.0170, "lng": 135.6717,
-      "wiki": { "lang": "zh", "title": "嵐山" },
+      "id": "arashiyama", "name": "嵐山竹林", "region": "京都", "country": "日本", "emoji": "🎋",
+      "aliases": ["嵐山", "竹林", "嵐山竹林", "arashiyama", "bamboo grove", "渡月橋"],
+      "lat": 35.0170, "lng": 135.6717, "wiki": { "lang": "zh", "title": "嵐山" },
       "quests": [
-        { "id": "arashiyama-bamboo", "type": "view", "title": "竹林小徑", "hint": "抬頭拍高聳竹林形成的綠色隧道。" },
-        { "id": "arashiyama-togetsukyo", "type": "building", "title": "渡月橋", "hint": "以背後的山景為襯，拍下橫跨桂川的渡月橋。" }
+        { "id": "arashiyama-bamboo", "type": "view", "title": "抬頭看竹林", "hint": "在竹林小徑上抬頭，拍高高的竹子形成的綠色隧道。" },
+        { "id": "arashiyama-togetsukyo", "type": "building", "title": "渡月橋", "hint": "以後面的山當背景，拍橫跨河面的渡月橋。" },
+        { "id": "arashiyama-group", "type": "group", "title": "竹林前大合照", "hint": "找路人幫忙，全部人在竹林前一起入鏡。" }
       ]
     },
     {
-      "id": "osaka-castle",
-      "name": "大阪城",
-      "region": "大阪",
-      "country": "日本",
+      "id": "osaka-castle", "name": "大阪城", "region": "大阪", "country": "日本", "emoji": "🏯",
       "aliases": ["大阪城", "大坂城", "osaka castle", "osaka-jo", "おおさかじょう"],
-      "lat": 34.6873, "lng": 135.5259,
-      "wiki": { "lang": "zh", "title": "大阪城" },
+      "lat": 34.6873, "lng": 135.5259, "wiki": { "lang": "zh", "title": "大阪城" },
       "quests": [
-        { "id": "osakajo-tenshu", "type": "building", "title": "天守閣全景", "hint": "從西之丸庭園或本丸廣場，把整座綠瓦金飾的天守閣拍進去。" },
-        { "id": "osakajo-ishigaki", "type": "thing", "title": "巨石「蛸石」", "hint": "找到本丸櫻門旁那塊超大的城牆巨石。" }
+        { "id": "osakajo-tenshu", "type": "building", "title": "天守閣全景", "hint": "從廣場或庭園，把整座綠瓦金飾的天守閣拍進去。" },
+        { "id": "osakajo-ishigaki", "type": "thing", "title": "城牆大石頭", "hint": "找到櫻門旁那塊超大的城牆巨石。" },
+        { "id": "osakajo-group", "type": "group", "title": "護城河前合照", "hint": "以護城河和城牆當背景，全員合照。" }
       ]
     },
     {
-      "id": "dotonbori",
-      "name": "道頓堀",
-      "region": "大阪",
-      "country": "日本",
-      "aliases": ["道頓堀", "道頓崛", "dotonbori", "どうとんぼり", "心齋橋", "心斎橋"],
-      "lat": 34.6687, "lng": 135.5013,
-      "wiki": { "lang": "zh", "title": "道頓堀" },
+      "id": "dotonbori", "name": "道頓堀", "region": "大阪", "country": "日本", "emoji": "🍢",
+      "aliases": ["道頓堀", "道頓崛", "dotonbori", "どうとんぼり", "心齋橋", "心斎橋", "難波", "namba"],
+      "lat": 34.6687, "lng": 135.5013, "wiki": { "lang": "zh", "title": "道頓堀" },
       "quests": [
-        { "id": "dotonbori-glico", "type": "thing", "title": "固力果跑跑人看板", "hint": "在戎橋上拍下那面經典的 Glico 霓虹跑者廣告。" },
-        { "id": "dotonbori-kani", "type": "thing", "title": "會動的螃蟹招牌", "hint": "かに道楽 門口那隻巨大的機械螃蟹。" },
+        { "id": "dotonbori-glico", "type": "thing", "title": "固力果跑步招牌", "hint": "在戎橋上拍那面經典的 Glico 霓虹跑者廣告。" },
+        { "id": "dotonbori-kani", "type": "thing", "title": "會動的大螃蟹招牌", "hint": "螃蟹道樂門口那隻巨大的機械螃蟹。" },
         { "id": "dotonbori-takoyaki", "type": "food", "title": "章魚燒", "hint": "現買一盒剛起鍋、撒滿柴魚片的章魚燒。" },
         { "id": "dotonbori-okonomiyaki", "type": "food", "title": "大阪燒", "hint": "鐵板上現煎的大阪燒，拍它淋醬撒海苔粉的樣子。" }
       ]
     },
     {
-      "id": "sensoji",
-      "name": "淺草寺",
-      "region": "東京",
-      "country": "日本",
-      "aliases": ["淺草寺", "浅草寺", "雷門", "asakusa", "sensoji", "senso-ji", "kaminarimon"],
-      "lat": 35.7148, "lng": 139.7967,
-      "wiki": { "lang": "zh", "title": "淺草寺" },
+      "id": "nara-park", "name": "奈良公園", "region": "奈良", "country": "日本", "emoji": "🦌",
+      "aliases": ["奈良公園", "奈良", "nara", "nara park", "東大寺", "梅花鹿"],
+      "lat": 34.6851, "lng": 135.8430, "wiki": { "lang": "zh", "title": "奈良公園" },
       "quests": [
-        { "id": "sensoji-kaminarimon", "type": "building", "title": "雷門大燈籠", "hint": "站在雷門正下方，抬頭拍那顆寫著「雷門」的巨大紅燈籠。" },
-        { "id": "sensoji-nakamise", "type": "view", "title": "仲見世商店街", "hint": "從雷門往寶藏門方向，拍整條紅底商店街的縱深。" },
-        { "id": "sensoji-ningyoyaki", "type": "food", "title": "人形燒", "hint": "仲見世買一袋現烤的人形燒。" },
-        { "id": "sensoji-skytree", "type": "view", "title": "同框晴空塔", "hint": "在淺草附近找一個能把晴空塔和傳統街景一起入鏡的角度。" }
+        { "id": "nara-deer", "type": "thing", "title": "餵鹿的一刻", "hint": "拿鹿仙貝餵梅花鹿，拍下牠靠過來的瞬間。" },
+        { "id": "nara-deer-bow", "type": "culture", "title": "會鞠躬的鹿", "hint": "拍到鹿低頭「行禮」討餅乾的畫面。" },
+        { "id": "nara-todaiji", "type": "building", "title": "東大寺大佛殿", "hint": "拍下巨大的木造大佛殿，或裡面的大佛。" },
+        { "id": "nara-group", "type": "group", "title": "和鹿一起自拍", "hint": "全員蹲下來，跟一隻鹿一起入鏡。" }
       ]
     },
     {
-      "id": "shibuya-crossing",
-      "name": "澀谷十字路口",
-      "region": "東京",
-      "country": "日本",
-      "aliases": ["澀谷", "渋谷", "shibuya", "shibuya crossing", "スクランブル交差点", "忠犬八公"],
-      "lat": 35.6595, "lng": 139.7005,
-      "wiki": { "lang": "zh", "title": "澀谷站前十字路口" },
+      "id": "sensoji", "name": "淺草寺", "region": "東京", "country": "日本", "emoji": "🏮",
+      "aliases": ["淺草寺", "浅草寺", "雷門", "asakusa", "sensoji", "senso-ji", "kaminarimon", "淺草"],
+      "lat": 35.7148, "lng": 139.7967, "wiki": { "lang": "zh", "title": "淺草寺" },
       "quests": [
-        { "id": "shibuya-scramble", "type": "view", "title": "行人全向通行", "hint": "從高處（如 SHIBUYA SKY 或星巴克二樓）俯拍人潮同時穿越的瞬間。" },
-        { "id": "shibuya-hachiko", "type": "thing", "title": "忠犬八公銅像", "hint": "和八公像合照，排隊的話拍排隊人龍也可以。" }
+        { "id": "sensoji-kaminarimon", "type": "building", "title": "雷門大燈籠", "hint": "站在雷門正下方，抬頭拍那顆寫著「雷門」的大紅燈籠。" },
+        { "id": "sensoji-nakamise", "type": "view", "title": "紅色商店街", "hint": "從雷門往裡面拍整條紅底商店街的縱深。" },
+        { "id": "sensoji-ningyoyaki", "type": "food", "title": "人形燒", "hint": "商店街買一袋現烤的人形燒。" },
+        { "id": "sensoji-skytree", "type": "view", "title": "跟晴空塔同框", "hint": "找一個能把晴空塔和傳統街景一起拍到的角度。" }
       ]
     },
     {
-      "id": "taipei-101",
-      "name": "台北101",
-      "region": "台北",
-      "country": "台灣",
+      "id": "skytree", "name": "東京晴空塔", "region": "東京", "country": "日本", "emoji": "🗼",
+      "aliases": ["晴空塔", "天空樹", "スカイツリー", "skytree", "tokyo skytree", "押上"],
+      "lat": 35.7101, "lng": 139.8107, "wiki": { "lang": "zh", "title": "東京晴空塔" },
+      "quests": [
+        { "id": "skytree-full", "type": "building", "title": "塔的全身照", "hint": "退到夠遠的地方，把整座塔從頭到腳拍進去。" },
+        { "id": "skytree-view", "type": "view", "title": "從觀景台看城市", "hint": "上展望台，拍一張東京的city view。" },
+        { "id": "skytree-night", "type": "thing", "title": "夜間點燈", "hint": "入夜後回來，拍一張晴空塔點燈的樣子。" }
+      ]
+    },
+    {
+      "id": "meiji-jingu", "name": "明治神宮", "region": "東京", "country": "日本", "emoji": "⛩️",
+      "aliases": ["明治神宮", "明治神宫", "meiji jingu", "meiji shrine", "原宿", "harajuku"],
+      "lat": 35.6764, "lng": 139.6993, "wiki": { "lang": "zh", "title": "明治神宮" },
+      "quests": [
+        { "id": "meiji-torii", "type": "building", "title": "巨大的木製鳥居", "hint": "參道上那座高大的檜木鳥居，站遠一點拍。" },
+        { "id": "meiji-sake", "type": "thing", "title": "整排的清酒桶", "hint": "拍下參道旁堆得整整齊齊、色彩繽紛的清酒桶牆。" },
+        { "id": "meiji-ema", "type": "culture", "title": "許願木牌", "hint": "拍下大樹下掛滿祈願繪馬的木架。" }
+      ]
+    },
+    {
+      "id": "shibuya-crossing", "name": "澀谷十字路口", "region": "東京", "country": "日本", "emoji": "🚦",
+      "aliases": ["澀谷", "渋谷", "shibuya", "shibuya crossing", "スクランブル交差点", "忠犬八公", "hachiko"],
+      "lat": 35.6595, "lng": 139.7005, "wiki": { "lang": "zh", "title": "澀谷站前十字路口" },
+      "quests": [
+        { "id": "shibuya-scramble", "type": "view", "title": "行人同時過馬路", "hint": "從高處（星巴克二樓或天橋）俯拍人潮同時穿越的瞬間。" },
+        { "id": "shibuya-hachiko", "type": "thing", "title": "忠犬八公銅像", "hint": "跟八公像合照，排隊的話拍排隊人龍也行。" }
+      ]
+    },
+    {
+      "id": "taipei-101", "name": "台北101", "region": "台北", "country": "台灣", "emoji": "🏙️",
       "aliases": ["台北101", "臺北101", "101", "taipei 101", "信義區"],
-      "lat": 25.0338, "lng": 121.5645,
-      "wiki": { "lang": "zh", "title": "台北101" },
+      "lat": 25.0338, "lng": 121.5645, "wiki": { "lang": "zh", "title": "台北101" },
       "quests": [
-        { "id": "t101-full", "type": "building", "title": "101 全身照", "hint": "找一個能拍到整棟塔身的角度（象山、市府站、國父紀念館前水池倒影都行）。" },
-        { "id": "t101-damper", "type": "thing", "title": "88 樓風阻尼器", "hint": "上觀景台拍那顆金色的巨型阻尼球。" },
-        { "id": "t101-xiaolongbao", "type": "food", "title": "小籠包", "hint": "在附近的鼎泰豐或任一家，拍剛蒸好、皮薄透光的小籠包。" }
+        { "id": "t101-full", "type": "building", "title": "101 全身照", "hint": "找能拍到整棟的角度（象山、市府站、水池倒影都行）。" },
+        { "id": "t101-damper", "type": "thing", "title": "88 樓的大金球", "hint": "上觀景台拍那顆金色的風阻尼器。" },
+        { "id": "t101-xiaolongbao", "type": "food", "title": "小籠包", "hint": "在附近任一家，拍剛蒸好、皮薄透光的小籠包。" }
       ]
     },
     {
-      "id": "jiufen",
-      "name": "九份老街",
-      "region": "新北",
-      "country": "台灣",
+      "id": "jiufen", "name": "九份老街", "region": "新北", "country": "台灣", "emoji": "🏮",
       "aliases": ["九份", "九分", "jiufen", "jioufen", "阿妹茶樓", "豎崎路"],
-      "lat": 25.1097, "lng": 121.8443,
-      "wiki": { "lang": "zh", "title": "九份" },
+      "lat": 25.1097, "lng": 121.8443, "wiki": { "lang": "zh", "title": "九份" },
       "quests": [
-        { "id": "jiufen-ameiteahouse", "type": "building", "title": "豎崎路紅燈籠階梯", "hint": "傍晚點燈後，從階梯下往上拍紅燈籠與茶樓。" },
-        { "id": "jiufen-taro", "type": "food", "title": "芋圓", "hint": "來一碗現煮的綜合芋圓，拍它 Q 彈的樣子。" },
-        { "id": "jiufen-seaview", "type": "view", "title": "老街盡頭的海景", "hint": "在觀景平台拍山城與基隆嶼海景。" }
+        { "id": "jiufen-teahouse", "type": "building", "title": "紅燈籠階梯", "hint": "傍晚點燈後，從階梯下往上拍紅燈籠與茶樓。" },
+        { "id": "jiufen-taro", "type": "food", "title": "芋圓", "hint": "來一碗現煮的綜合芋圓，拍它Q彈的樣子。" },
+        { "id": "jiufen-seaview", "type": "view", "title": "山城海景", "hint": "在觀景平台拍山城與基隆嶼的海景。" }
       ]
     },
     {
-      "id": "chihkan-tower",
-      "name": "赤崁樓",
-      "region": "台南",
-      "country": "台灣",
+      "id": "chihkan-tower", "name": "赤崁樓", "region": "台南", "country": "台灣", "emoji": "🏛️",
       "aliases": ["赤崁樓", "赤嵌樓", "chihkan", "chikan tower", "普羅民遮城"],
-      "lat": 22.9977, "lng": 120.2026,
-      "wiki": { "lang": "zh", "title": "赤崁樓" },
+      "lat": 22.9977, "lng": 120.2026, "wiki": { "lang": "zh", "title": "赤崁樓" },
       "quests": [
-        { "id": "chihkan-pavilion", "type": "building", "title": "文昌閣紅樓", "hint": "拍中式閣樓建築與前方的九座御龜碑。" },
+        { "id": "chihkan-pavilion", "type": "building", "title": "紅色閣樓", "hint": "拍中式閣樓建築與前面那排石龜馱碑。" },
         { "id": "chihkan-coffin", "type": "food", "title": "棺材板", "hint": "台南名物棺材板，拍它切開流出濃湯的樣子。" }
       ]
     },
     {
-      "id": "gyeongbokgung",
-      "name": "景福宮",
-      "region": "首爾",
-      "country": "韓國",
-      "aliases": ["景福宮", "경복궁", "gyeongbokgung", "gyeongbok palace"],
-      "lat": 37.5796, "lng": 126.9770,
-      "wiki": { "lang": "zh", "title": "景福宮" },
+      "id": "taroko", "name": "太魯閣", "region": "花蓮", "country": "台灣", "emoji": "⛰️",
+      "aliases": ["太魯閣", "taroko", "太魯閣國家公園", "砂卡礑", "燕子口", "九曲洞"],
+      "lat": 24.1580, "lng": 121.4900, "wiki": { "lang": "zh", "title": "太魯閣國家公園" },
       "quests": [
-        { "id": "gbg-geunjeongjeon", "type": "building", "title": "勤政殿", "hint": "站在品階石中軸線上，正面拍雙層屋簷的勤政殿。" },
-        { "id": "gbg-hanbok", "type": "culture", "title": "韓服合照", "hint": "穿韓服進宮免門票，拍一張與宮門的合照。" },
-        { "id": "gbg-guard", "type": "culture", "title": "守門將換崗儀式", "hint": "光化門前的換崗儀式，拍下穿傳統服飾的儀仗隊。" }
+        { "id": "taroko-gorge", "type": "view", "title": "大理石峽谷", "hint": "在燕子口或九曲洞，拍下高聳的大理石峽谷。" },
+        { "id": "taroko-water", "type": "thing", "title": "溪水的顏色", "hint": "拍立霧溪那種特別的藍綠色溪水。" },
+        { "id": "taroko-bridge", "type": "building", "title": "紅色的橋", "hint": "拍下峽谷裡任一座朱紅色的橋。" }
+      ]
+    },
+    {
+      "id": "sun-moon-lake", "name": "日月潭", "region": "南投", "country": "台灣", "emoji": "🌊",
+      "aliases": ["日月潭", "sun moon lake", "向山", "文武廟", "伊達邵"],
+      "lat": 23.8500, "lng": 120.9150, "wiki": { "lang": "zh", "title": "日月潭" },
+      "quests": [
+        { "id": "sml-lake", "type": "view", "title": "湖景一張", "hint": "找個岸邊或碼頭，拍下開闊的湖面。" },
+        { "id": "sml-boat", "type": "thing", "title": "湖上的船", "hint": "拍一艘遊艇劃過水面、或停在碼頭的樣子。" },
+        { "id": "sml-teaegg", "type": "food", "title": "阿婆茶葉蛋", "hint": "伊達邵買一顆用香菇滷的茶葉蛋。" }
+      ]
+    },
+    {
+      "id": "alishan", "name": "阿里山", "region": "嘉義", "country": "台灣", "emoji": "🌄",
+      "aliases": ["阿里山", "alishan", "小火車", "神木", "日出", "祝山"],
+      "lat": 23.5100, "lng": 120.8030, "wiki": { "lang": "zh", "title": "阿里山國家風景區" },
+      "quests": [
+        { "id": "alishan-train", "type": "thing", "title": "阿里山小火車", "hint": "拍下紅色的森林小火車，月台上或行進中都可以。" },
+        { "id": "alishan-sunrise", "type": "view", "title": "日出或雲海", "hint": "早起到觀景台，拍日出或山谷裡的雲海。" },
+        { "id": "alishan-tree", "type": "thing", "title": "神木", "hint": "站在巨大的紅檜神木旁邊，拍出它的高大。" }
+      ]
+    },
+    {
+      "id": "gyeongbokgung", "name": "景福宮", "region": "首爾", "country": "韓國", "emoji": "🏯",
+      "aliases": ["景福宮", "경복궁", "gyeongbokgung", "gyeongbok palace", "首爾", "seoul"],
+      "lat": 37.5796, "lng": 126.9770, "wiki": { "lang": "zh", "title": "景福宮" },
+      "quests": [
+        { "id": "gbg-geunjeongjeon", "type": "building", "title": "勤政殿", "hint": "站在中軸線上，正面拍雙層屋簷的勤政殿。" },
+        { "id": "gbg-hanbok", "type": "culture", "title": "韓服合照", "hint": "穿韓服進宮免門票，拍一張跟宮門的合照。" },
+        { "id": "gbg-guard", "type": "culture", "title": "守門將換崗", "hint": "光化門前的換崗儀式，拍穿傳統服飾的儀仗隊。" }
       ]
     }
   ]

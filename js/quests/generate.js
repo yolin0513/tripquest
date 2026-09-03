@@ -14,6 +14,41 @@ async function loadData() {
   if (!_templates) _templates = await fetch('./data/templates.json').then((r) => r.json());
 }
 
+// 給「建立行程」畫面用：熱門地區與該地區的景點（讓長輩用點的、不用打字）
+export async function curatedIndex() {
+  await loadData();
+  const byRegion = new Map();
+  for (const s of _curated.spots) {
+    if (!byRegion.has(s.region)) byRegion.set(s.region, []);
+    byRegion.get(s.region).push({ id: s.id, name: s.name, region: s.region, emoji: s.emoji || spotEmoji(s), questCount: s.quests.length });
+  }
+  return [...byRegion.entries()].map(([region, spots]) => ({ region, country: spots[0] && _curated.spots.find((x) => x.id === spots[0].id)?.country, spots }));
+}
+
+export async function searchCurated(q) {
+  await loadData();
+  const n = norm(q);
+  if (n.length < 1) return [];
+  const hits = [];
+  for (const s of _curated.spots) {
+    if (s.aliases.some((a) => norm(a).includes(n)) || norm(s.name).includes(n) || norm(s.region).includes(n)) {
+      hits.push({ id: s.id, name: s.name, region: s.region, emoji: s.emoji || spotEmoji(s), questCount: s.quests.length });
+    }
+  }
+  return hits.slice(0, 12);
+}
+
+function spotEmoji(s) {
+  const t = inferTypeSync(s.name);
+  return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🍢', park: '🌳', mountain: '⛰️', water: '🌊', museum: '🖼️', street: '🏮', station: '🚉', tower: '🗼', themepark: '🎡' })[t] || '📍';
+}
+function inferTypeSync(name) {
+  if (!_templates) return null;
+  const nn = String(name || '').toLowerCase();
+  for (const rule of _templates.typeRules) if (rule.match.some((kw) => nn.includes(kw.toLowerCase()))) return rule.type;
+  return null;
+}
+
 const norm = (s) => String(s || '').toLowerCase().replace(/[\s　·・.,，、。！!？?「」『』（）()【】\-—_/／]+/g, '');
 
 // ---- 行程文字 → 景點清單 ----

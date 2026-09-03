@@ -19,3 +19,6 @@ scripts/_*.mjs
 
 # Puppeteer 本地下載的瀏覽器（若下載到專案內）
 .pptr-cache/
+
+# 自架伺服器的資料
+server/data/

@@ -58,6 +58,65 @@ export async function remove(id) {
   await patch(id, { deleted: true });
 }
 
+// ---------- 反應（按讚）與留言 ----------
+export async function toggleReaction(submissionId, actorId, emoji = '❤️') {
+  const sub = state.byId.get(submissionId);
+  if (!sub) return;
+  const mine = list().find((r) => r.type === 'reaction' && r.submissionId === submissionId && r.actorId === actorId);
+  if (mine) {
+    state.byId.delete(mine.id);
+    await db.deleteRecordHard(mine.id);
+  } else {
+    const rec = {
+      id: uuid(), type: 'reaction', tripId: sub.tripId, submissionId,
+      actorId, emoji, createdAt: Date.now(), deviceId: deviceId(),
+    };
+    state.byId.set(rec.id, rec);
+    await db.putRecord(rec);
+  }
+  emit();
+}
+
+export async function addComment(submissionId, actorId, text) {
+  const sub = state.byId.get(submissionId);
+  if (!sub || !String(text).trim()) return;
+  const rec = {
+    id: uuid(), type: 'comment', tripId: sub.tripId, submissionId,
+    actorId, text: String(text).trim().slice(0, 240), createdAt: Date.now(), deviceId: deviceId(),
+  };
+  state.byId.set(rec.id, rec);
+  await db.putRecord(rec);
+  emit();
+  return rec;
+}
+
+export async function deleteComment(id) {
+  const c = state.byId.get(id);
+  if (!c || c.type !== 'comment') return;
+  state.byId.delete(id);
+  await db.deleteRecordHard(id);
+  emit();
+}
+
+export function reactionsOf(submissionId) {
+  return list().filter((r) => r.type === 'reaction' && r.submissionId === submissionId);
+}
+export function commentsOf(submissionId) {
+  return list().filter((r) => r.type === 'comment' && r.submissionId === submissionId)
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+export function myReaction(submissionId, actorId) {
+  return reactionsOf(submissionId).find((r) => r.actorId === actorId) || null;
+}
+
+// ---------- 「我是誰」（每個行程記住一次，之後拍照不再追問） ----------
+export function getActiveMember(tripId) {
+  try { return localStorage.getItem('tripquest.me.' + tripId) || null; } catch { return null; }
+}
+export function setActiveMember(tripId, memberId) {
+  try { localStorage.setItem('tripquest.me.' + tripId, memberId); } catch { /* noop */ }
+}
+
 // PhotoSubmission 專用：直接新增，不走 stamp 的可變語意
 export async function addSubmission(sub) {
   sub.id = sub.id || uuid();
@@ -152,7 +211,7 @@ export async function importRecords(incoming, { merge = true } = {}) {
     const cur = state.byId.get(inc.id);
     if (!cur) { state.byId.set(inc.id, inc); continue; }
     if (!merge) { state.byId.set(inc.id, inc); continue; }
-    if (inc.type === 'submission') continue; // 只新增；已存在就跳過
+    if (inc.type === 'submission' || inc.type === 'reaction' || inc.type === 'comment') continue; // 只新增；已存在就跳過
     // 後寫入者勝，deviceId 決勝
     const incWins = (inc.updatedAt || 0) > (cur.updatedAt || 0) ||
       ((inc.updatedAt || 0) === (cur.updatedAt || 0) && String(inc.deviceId) > String(cur.deviceId));
