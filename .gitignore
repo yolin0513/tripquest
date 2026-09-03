@@ -1,0 +1,21 @@
+# 依賴（只有截圖 / 圖示產生腳本需要；執行 App 本身不需要任何依賴）
+node_modules/
+package-lock.json
+
+# 暫存 / 系統
+*.tmp
+*.log
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 測試腳本產生的暫存截圖
+screenshots/_*.png
+screenshots/responsive/
+scripts/_*.mjs
+
+# 本機開發設定（不影響部署）
+.claude/settings.local.json
+
+# Puppeteer 本地下載的瀏覽器（若下載到專案內）
+.pptr-cache/

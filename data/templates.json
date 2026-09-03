@@ -1,0 +1,85 @@
+{
+  "_meta": {
+    "note": "策展資料庫沒收錄的景點，用這裡的規則式模板產任務。先用關鍵字判斷景點型別，再取對應題組 + 通用題組。{spot} 會替換成景點名稱。",
+    "version": 1
+  },
+  "typeRules": [
+    { "type": "temple",   "match": ["寺", "院", "廟", "temple", "てら", "じ"] },
+    { "type": "shrine",   "match": ["神社", "大社", "宮", "shrine", "じんじゃ", "稲荷", "稻荷"] },
+    { "type": "castle",   "match": ["城", "castle", "じょう", "天守"] },
+    { "type": "market",   "match": ["市場", "市集", "夜市", "商店街", "市", "market", "橫丁", "横丁"] },
+    { "type": "park",     "match": ["公園", "庭園", "花園", "park", "garden", "植物園"] },
+    { "type": "mountain", "match": ["山", "岳", "峠", "mountain", "やま", "高原", "展望"] },
+    { "type": "water",    "match": ["湖", "池", "瀑布", "滝", "川", "河", "海", "灘", "岬", "湾", "灣", "運河", "溫泉", "温泉", "onsen"] },
+    { "type": "museum",   "match": ["美術館", "博物館", "紀念館", "記念館", "資料館", "museum", "gallery", "科學館", "水族館", "aquarium"] },
+    { "type": "street",   "match": ["老街", "古街", "商圈", "步道", "散步道", "街道", "通"] },
+    { "type": "station",  "match": ["車站", "駅", "station", "空港", "機場", "airport", "港", "碼頭"] },
+    { "type": "tower",    "match": ["塔", "tower", "展望台", "スカイ", "sky"] },
+    { "type": "themepark","match": ["樂園", "遊樂園", "主題樂園", "land", "world", "迪士尼", "環球", "universal", "disney"] }
+  ],
+  "byType": {
+    "temple": [
+      { "kind": "building", "title": "山門 / 正殿", "hint": "拍下 {spot} 最主要的一棟木造建築，站遠一點把整體拍進去。" },
+      { "kind": "thing",    "title": "御守 / 繪馬", "hint": "找到販售御守的地方，或掛滿祈願繪馬的木架。" },
+      { "kind": "culture",  "title": "參拜的一刻", "hint": "拍下有人在洗手舍淨手、或在正殿前投香油錢參拜的畫面。" }
+    ],
+    "shrine": [
+      { "kind": "building", "title": "鳥居", "hint": "拍下 {spot} 的鳥居，最好從正下方往上或從正面拍。" },
+      { "kind": "thing",    "title": "狛犬 / 手水舍", "hint": "找到守在參道的一對狛犬石像，或是淨手用的手水舍。" },
+      { "kind": "culture",  "title": "御神籤", "hint": "抽一支御神籤，把籤詩或綁籤的地方拍下來。" }
+    ],
+    "castle": [
+      { "kind": "building", "title": "天守 / 城樓全景", "hint": "找一個能拍到整座 {spot} 主體的角度。" },
+      { "kind": "thing",    "title": "石垣 / 護城河", "hint": "拍下城牆的巨石堆疊，或環繞的護城河。" },
+      { "kind": "view",     "title": "從城上看出去", "hint": "登上高處，拍一張俯瞰城下町的風景。" }
+    ],
+    "market": [
+      { "kind": "food",  "title": "現吃一攤", "hint": "在 {spot} 挑一攤現做小吃，拍下剛入手熱騰騰的樣子。" },
+      { "kind": "thing", "title": "最有氣勢的攤位", "hint": "拍下擺得最澎湃、或看板最浮誇的一攤。" },
+      { "kind": "view",  "title": "人潮縱深", "hint": "站在通道中央，拍出攤販一路排下去的縱深感。" }
+    ],
+    "park": [
+      { "kind": "view",   "title": "代表性一景", "hint": "拍下 {spot} 最上相的角度（水池、大樹、花圃、拱橋都行）。" },
+      { "kind": "thing",  "title": "季節細節", "hint": "拍一個能看出季節的特寫：花、葉、果實或光影。" },
+      { "kind": "group",  "title": "全員入鏡", "hint": "找路人幫忙，在草地或步道上拍一張團體照。" }
+    ],
+    "mountain": [
+      { "kind": "view",   "title": "展望點全景", "hint": "在 {spot} 的觀景點拍一張開闊風景。" },
+      { "kind": "thing",  "title": "標高牌 / 三角點", "hint": "找到標示海拔的牌子或基石。" },
+      { "kind": "group",  "title": "登頂合照", "hint": "全員在最高點或最佳觀景處合照。" }
+    ],
+    "water": [
+      { "kind": "view",  "title": "水景一張", "hint": "拍下 {spot} 的水面，帶一點岸邊或倒影更好。" },
+      { "kind": "thing", "title": "近水的細節", "hint": "拍一個貼近水的特寫：船、橋、石階、水鳥或水花。" }
+    ],
+    "museum": [
+      { "kind": "building", "title": "建築外觀", "hint": "拍下 {spot} 的外觀，很多館體本身就是作品。" },
+      { "kind": "thing",    "title": "最有印象的一件", "hint": "拍下（可拍照區）最讓你停下腳步的一件展品。" },
+      { "kind": "culture",  "title": "門票 / 導覽手冊", "hint": "把門票或摺頁擺好拍一張，之後做回憶影片很好用。" }
+    ],
+    "street": [
+      { "kind": "view",  "title": "老街街景", "hint": "拍一張能代表 {spot} 氣氛的街景。" },
+      { "kind": "food",  "title": "在地名產", "hint": "買一份這條街最有名的小吃或伴手禮。" },
+      { "kind": "thing", "title": "有故事的一角", "hint": "拍下一面老招牌、紅磚牆、或有年代感的門窗。" }
+    ],
+    "station": [
+      { "kind": "building", "title": "站體 / 站名牌", "hint": "拍下 {spot} 的站體外觀，或月台上的站名牌。" },
+      { "kind": "thing",    "title": "在地限定", "hint": "找一個只有這裡有的東西：紀念章、限定便當、特色列車。" }
+    ],
+    "tower": [
+      { "kind": "building", "title": "塔身全身照", "hint": "退到夠遠的地方，把整座 {spot} 拍進畫面。" },
+      { "kind": "view",     "title": "從塔上看城市", "hint": "上觀景層，拍一張城市俯瞰。" },
+      { "kind": "thing",    "title": "夜間點燈", "hint": "入夜後回來，拍一張 {spot} 點燈的樣子。" }
+    ],
+    "themepark": [
+      { "kind": "thing",  "title": "入口地標", "hint": "在 {spot} 入口的招牌或地標前拍一張。" },
+      { "kind": "group",  "title": "設施前合照", "hint": "在最受歡迎的設施前，全員合照。" },
+      { "kind": "food",   "title": "園區限定造型食物", "hint": "買一個園區限定的造型點心或飲料。" }
+    ]
+  },
+  "generic": [
+    { "kind": "view",  "title": "到此一遊代表照", "hint": "拍一張最能代表「我來過 {spot}」的照片。" },
+    { "kind": "group", "title": "全員合照", "hint": "找路人或用自拍棒，全員在 {spot} 一起入鏡。" },
+    { "kind": "thing", "title": "一個小細節", "hint": "拍下 {spot} 一個容易被忽略、但你覺得有意思的小東西。" }
+  ]
+}

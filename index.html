@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1523" />
+  <meta name="description" content="TripQuest 旅圖任務 — 一群人共建行程，把每個景點變成拍照任務，全部解鎖後做成回憶影片。純前端、免註冊、離線可用。" />
+  <title>TripQuest 旅圖任務</title>
+
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TripQuest" />
+
+  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="modulepreload" href="./js/app.js" />
+  <link rel="modulepreload" href="./js/router.js" />
+  <link rel="modulepreload" href="./js/store.js" />
+  <link rel="modulepreload" href="./js/db.js" />
+  <link rel="modulepreload" href="./js/ui.js" />
+  <link rel="modulepreload" href="./js/views/home.js" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <button id="backBtn" class="icon-btn" aria-label="返回" hidden>‹</button>
+      <h1 id="topTitle">TripQuest</h1>
+      <button id="topActionBtn" class="icon-btn" hidden></button>
+    </header>
+
+    <main id="view" aria-live="polite"></main>
+
+    <nav id="tabbar">
+      <a href="#/" class="tab" data-tab="home"><span class="ti">🗺️</span><span>行程</span></a>
+      <a href="#/settings" class="tab" data-tab="settings"><span class="ti">⚙️</span><span>設定</span></a>
+    </nav>
+  </div>
+
+  <div id="toast" role="status" hidden></div>
+  <div id="modalRoot"></div>
+
+  <noscript>TripQuest 需要啟用 JavaScript 才能執行。</noscript>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
