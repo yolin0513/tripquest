@@ -9,9 +9,9 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# 測試腳本產生的暫存截圖
+# 冒煙測試產生的截圖（QA 用，可由 npm run screenshots 重產）
+screenshots/_smoke/
 screenshots/_*.png
-screenshots/responsive/
 scripts/_*.mjs
 
 # 本機開發設定（不影響部署）

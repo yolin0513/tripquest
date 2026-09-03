@@ -1,0 +1,253 @@
+// 產生完整功能截圖集（含示範資料，全部用佔位圖 / 維基百科公開圖，不含任何真實個人照片）。
+// 輸出到 screenshots/，檔名見 console。
+// 用法：node scripts/gallery.mjs  （或 npm run gallery）
+import { spawn } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+import puppeteer from 'puppeteer';
+
+const PORT = 5196;
+const BASE = `http://localhost:${PORT}`;
+const OUT = fileURLToPath(new URL('../screenshots/', import.meta.url));
+mkdirSync(OUT, { recursive: true });
+
+const server = spawn('python', ['-m', 'http.server', String(PORT)], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)), stdio: 'ignore',
+});
+await sleep(1200);
+
+const browser = await puppeteer.launch({
+  headless: 'new',
+  args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
+});
+const page = await browser.newPage();
+await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
+
+const shot = (name) => page.screenshot({ path: join(OUT, name + '.png') }).then(() => console.log('  ✓', name + '.png'));
+const shotEl = (sel, name) => page.$(sel).then((el) => el.screenshot({ path: join(OUT, name + '.png') })).then(() => console.log('  ✓', name + '.png'));
+async function go(hash) { await page.goto('about:blank'); await page.goto(BASE + hash, { waitUntil: 'networkidle0' }); }
+
+// ---------- 塞示範資料 ----------
+await page.goto(BASE, { waitUntil: 'networkidle0' });
+await page.waitForSelector('.hero');
+
+const { tripId } = await page.evaluate(async () => {
+  const s = await import('./js/store.js');
+  const { generateForTrip } = await import('./js/quests/generate.js');
+  const { uuid } = await import('./js/ids.js');
+  const gid = uuid(), tid = uuid();
+  await s.put({ id: gid, type: 'group', name: '京都三日遊 旅伴' });
+  const members = [];
+  for (const n of ['爸', '媽', '我']) { const id = uuid(); members.push(id); await s.put({ id, type: 'member', groupId: gid, displayName: n }); }
+  await s.put({ id: tid, type: 'trip', groupId: gid, title: '京都三日遊', startDate: '2026-04-01', endDate: '2026-04-03', region: '京都', allowGeo: false, allowWiki: true });
+  const { spots, quests } = await generateForTrip({
+    tripId: tid, region: '京都',
+    itineraryText: '第1天 清水寺、金閣寺、伏見稻荷大社\n第2天 嵐山竹林、大阪城\n第3天 奈良公園',
+  });
+  for (const sp of spots) await s.put(sp);
+  for (const q of quests) await s.put(q);
+  window.__members = members;
+  return { tripId: tid };
+});
+
+// 景點示意圖（Wikipedia）
+await page.evaluate(async (tid) => { await (await import('./js/enrich.js')).enrichTrip(tid, { force: true }); }, tripId);
+await sleep(500);
+
+// 產生佔位照片的函式 + 灌入「部分完成」
+async function fillPhotos(tid, fraction) {
+  return page.evaluate(async (tid, fraction) => {
+    const s = await import('./js/store.js');
+    const { importPhoto } = await import('./js/photos.js');
+    const members = s.membersOf(s.get(tid).groupId).map((m) => m.id);
+    const make = (hue, label) => {
+      const c = document.createElement('canvas'); c.width = 1400; c.height = 1050;
+      const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 0, 1400, 1050);
+      g.addColorStop(0, `hsl(${hue},58%,54%)`); g.addColorStop(1, `hsl(${(hue + 55) % 360},52%,32%)`);
+      x.fillStyle = g; x.fillRect(0, 0, 1400, 1050);
+      x.fillStyle = 'rgba(255,255,255,.22)';
+      for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(200 + i * 220, 300 + (i % 2) * 400, 120, 0, 7); x.fill(); }
+      x.fillStyle = 'rgba(255,255,255,.92)'; x.font = 'bold 84px sans-serif'; x.textAlign = 'center';
+      x.fillText(label, 700, 560);
+      x.font = '38px sans-serif'; x.fillText('示範佔位圖', 700, 640);
+      return new Promise(r => c.toBlob(b => r(b), 'image/jpeg', 0.86));
+    };
+    const quests = s.questsOfTrip(tid);
+    const n = Math.round(quests.length * fraction);
+    const existing = new Set(quests.filter(q => s.isQuestDone(q.id)).map(q => q.id));
+    let done = existing.size, i = 0;
+    for (const q of quests) {
+      if (done >= n) break;
+      if (existing.has(q.id)) { i++; continue; }
+      const blob = await make((i * 41) % 360, q.title.slice(0, 5));
+      const sub = await importPhoto(new File([blob], `p${i}.jpg`, { type: 'image/jpeg' }),
+        { tripId: tid, questId: q.id, memberId: members[i % members.length], allowGeo: false });
+      // 幾張加讚 / 留言
+      if (i % 3 === 0) await s.toggleReaction(sub.id, members[(i + 1) % 3], '❤️');
+      if (i % 4 === 0) await s.toggleReaction(sub.id, members[(i + 2) % 3], '👍');
+      if (i === 0) { await s.addComment(sub.id, members[1], '阿嬤這張拍得真好！'); await s.addComment(sub.id, members[0], '構圖有進步 👍'); }
+      if (i === 3) await s.addComment(sub.id, members[2], '這個角度我沒想到');
+      done++; i++;
+    }
+    return done;
+  }, tid, fraction);
+}
+
+console.log('截圖：');
+
+// ---------- 1. 首頁 ----------
+await fillPhotos(tripId, 0.55);
+await go('/#/');
+await page.waitForSelector('.trip-card');
+await shot('01-home');
+
+// ---------- 2-3. 建立行程：地區 / 景點 ----------
+await go('/#/new');
+await page.waitForSelector('.quick-pick');
+await page.evaluate(() => { const f = document.querySelector('input[type=text]'); if (f) f.value = '京都家族旅行'; });
+await shot('02-create-regions');
+// 點「京都」地區
+await page.evaluate(() => { [...document.querySelectorAll('.quick-pick button')].find(b => b.textContent.trim() === '京都')?.click(); });
+await sleep(300);
+// 點幾個景點
+await page.evaluate(() => {
+  const btns = [...document.querySelectorAll('.quick-pick button')].filter(b => /清水寺|金閣寺|伏見稻荷/.test(b.textContent));
+  btns.slice(0, 3).forEach(b => b.click());
+});
+await page.evaluate(() => { const el = [...document.querySelectorAll('.quick-pick button.on')].pop(); el?.scrollIntoView({ block: 'center' }); });
+await sleep(300);
+await shot('03-create-spots');
+
+// ---------- 4. 行程總覽 ----------
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.qbig');
+await shot('04-trip-overview');
+
+// ---------- 5. 任務大圖卡（往下捲露出卡片） ----------
+await page.evaluate(() => window.scrollTo(0, 820));
+await sleep(300);
+await shot('05-task-cards');
+
+// ---------- 6. 任務詳情 ----------
+const questId = await page.evaluate(async (tid) => {
+  const s = await import('./js/store.js');
+  const spot = s.spotsOf(tid)[0];
+  return s.questsOf(spot.id).find(q => !s.isQuestDone(q.id))?.id || s.questsOf(spot.id)[0].id;
+}, tripId);
+await go(`/#/quest/${questId}`);
+await page.waitForSelector('.quest-focus');
+await sleep(400);
+await shot('06-quest-detail');
+
+// ---------- 7. 完成任務的慶祝 ----------
+await page.evaluate(async () => {
+  const { celebrate } = await import('./js/ui.js');
+  celebrate({
+    title: '完成一個任務！',
+    lines: ['「清水舞台」搞定', '進度 12 / 20'],
+    actions: [{ label: '繼續下一個', value: 'stay', primary: true }, { label: '看看大家', value: 'people' }],
+  });
+});
+await sleep(700);
+await shot('07-celebrate');
+await page.evaluate(() => { document.querySelector('.celebrate')?.remove(); document.querySelector('.confetti')?.remove(); });
+
+// ---------- 8-9. 照片牆 ----------
+await go(`/#/trip/${tripId}/people`);
+await page.waitForSelector('.people-row');
+await sleep(400);
+await shot('08-people-progress');
+// 捲到「有留言 + 有讚」的那則動態
+await page.evaluate(() => {
+  const c = document.querySelector('.fi-comment');
+  const item = c ? c.closest('.feed-item') : document.querySelector('.feed-item');
+  if (item) { item.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); }
+});
+await sleep(400);
+await shot('09-people-feed');
+
+// ---------- 10. 全部解鎖 ----------
+await fillPhotos(tripId, 1);
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.qbig.done');
+await shot('10-trip-all-done');
+
+// ---------- 11. 回憶影片：製作介面 ----------
+await go(`/#/trip/${tripId}/album`);
+await page.waitForSelector('.album-canvas');
+await sleep(1400);
+await page.evaluate(() => { const l = [...document.querySelectorAll('.section-label')].find(e => e.textContent.includes('配樂')); l?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -120); });
+await sleep(300);
+await shot('11-album-controls');
+
+// ---------- 12-16. 回憶影片代表幀 ----------
+const times = await page.evaluate(async (tid) => {
+  const m = await import('./js/memory.js');
+  const tl = await m.buildTimeline(tid);
+  const pick = {};
+  for (const kind of ['intro', 'day', 'photo', 'map', 'outro']) {
+    const seg = tl.segs.find(s => s.kind === kind);
+    if (seg) pick[kind] = seg.start + seg.dur * 0.5;
+  }
+  const c = document.querySelector('.album-canvas');
+  window.__player = await m.createPlayer(c, tid);
+  return pick;
+}, tripId);
+const frameNames = { intro: '12-video-intro', day: '13-video-dayCard', photo: '14-video-photo', map: '15-video-routeMap', outro: '16-video-outro' };
+for (const [kind, t] of Object.entries(times)) {
+  await page.evaluate((t) => window.__player.seek(t), t);
+  await sleep(200);
+  await shotEl('.album-canvas', frameNames[kind]);
+}
+
+// ---------- 17. 設定 ----------
+await go('/#/settings');
+await page.waitForSelector('.seg');
+await shot('17-settings');
+
+// ---------- 18. 多人同步設定 ----------
+await page.evaluate(() => { document.querySelector('.section-label:nth-of-type(3)') || 0; window.scrollTo(0, 0); });
+await page.evaluate(() => {
+  const lbl = [...document.querySelectorAll('.section-label')].find(e => e.textContent.includes('多人同步'));
+  lbl?.scrollIntoView();
+});
+await sleep(300);
+await shot('18-settings-sync');
+
+// ---------- 19. 特大字 ----------
+await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); });
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.qbig');
+await shot('19-font-xl');
+
+// ---------- 20. 高對比（維持特大字關掉、開高對比）----------
+await page.evaluate(async () => { const p = await import('./js/prefs.js'); p.setPref('fs', 'm'); p.setPref('contrast', 'high'); });
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.qbig');
+await shot('20-high-contrast');
+await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('contrast', 'normal'); });
+
+// ---------- 21. 分享代碼 ----------
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.qbig');
+await page.evaluate(() => { try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); } catch {} });
+await page.evaluate(() => { [...document.querySelectorAll('button')].find(b => b.textContent.includes('分享給旅伴'))?.click(); });
+await page.waitForSelector('.modal-card textarea', { timeout: 8000 });
+await sleep(500);
+await shot('21-share-code');
+
+// ---------- 22. 加入群組 ----------
+const shareUrl = await page.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), tripId);
+const code = shareUrl.split('d=')[1];
+await go(`/#/join?d=${code}`);
+await page.waitForSelector('.hero');
+await sleep(300);
+await shot('22-join');
+
+await browser.close();
+server.kill();
+console.log('\n完成，輸出於 screenshots/');

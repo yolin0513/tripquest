@@ -556,7 +556,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 
 /* ---------- 相簿 / 影片 ---------- */
 .album-frame { position: relative; border-radius: 18px; overflow: hidden; background: var(--bg); width: fit-content; margin: 0 auto; }
-.album-canvas { display: block; width: auto; max-width: 100%; height: 56vh; margin: 0 auto; aspect-ratio: 9 / 16; object-fit: contain; background: var(--bg); }
+.album-canvas { display: block; width: auto; max-width: 100%; height: 46vh; margin: 0 auto; aspect-ratio: 9 / 16; object-fit: contain; background: var(--bg); }
 .scrub { height: 6px; background: rgba(255, 255, 255, 0.15); }
 .scrub > i { display: block; height: 100%; width: 0; background: var(--primary); transition: width 0.1s linear; }
 .record-overlay {

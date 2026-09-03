@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer';
 
 const PORT = 5199;
 const BASE = `http://localhost:${PORT}`;
-const OUT = fileURLToPath(new URL('../screenshots/', import.meta.url));
+const OUT = fileURLToPath(new URL('../screenshots/_smoke/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
 
 const server = spawn('python', ['-m', 'http.server', String(PORT)], {
@@ -172,5 +172,5 @@ try {
   else ok('無主控台錯誤');
   await browser.close();
   server.kill();
-  console.log('\n截圖輸出：screenshots/');
+  console.log('\n截圖輸出：screenshots/_smoke/（完整功能截圖集請用 npm run gallery）');
 }
