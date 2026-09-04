@@ -97,7 +97,7 @@ async function storeBlob(blob, kind) {
   return { hash, bytes: blob.size };
 }
 
-// file: File；opts: { tripId, questId, memberId, allowGeo }
+// file: File；opts: { tripId, questId, memberId, allowGeo, forMemberId, subjectIds }
 export async function importPhoto(file, opts) {
   if (!file || !file.type.startsWith('image/')) throw new Error('不是圖片檔');
   const exif = await readExif(file);
@@ -123,6 +123,8 @@ export async function importPhoto(file, opts) {
     tripId: opts.tripId,
     questId: opts.questId,
     memberId: opts.memberId || null,
+    forMemberId: opts.forMemberId || null,          // 幫誰拍（代拍）→ 完成歸屬給他
+    subjectIds: Array.isArray(opts.subjectIds) && opts.subjectIds.length ? opts.subjectIds : null, // 照片裡有誰
     photoHash: photo.hash,
     thumbHash: thumb.hash,
     w: comp.w, h: comp.h,

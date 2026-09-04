@@ -5,6 +5,7 @@ import { navigate, back } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
 import { ensureMember, activeMemberId } from '../claim.js';
+import { creditOf, earnedBadges } from '../badges.js';
 
 const REACTIONS = ['❤️', '👍', '😍', '👏'];
 
@@ -20,19 +21,27 @@ export default async function people(tripId) {
 
   // 每個人的進度
   page.append(h('div', { class: 'section-label' }, `大家一起完成了 ${prog.done} / ${prog.total}`));
+  const allSubs = store.submissionsOfTrip(tripId);
   for (const m of members) {
-    const mineSubs = store.submissionsOfTrip(tripId).filter((s) => s.memberId === m.id);
-    const questSet = new Set(mineSubs.map((s) => s.questId));
-    const ratio = prog.total ? questSet.size / prog.total : 0;
+    const credited = new Set(allSubs.filter((s) => creditOf(s) === m.id).map((s) => s.questId));
+    const shot = allSubs.filter((s) => s.memberId === m.id);
+    const forOthers = shot.filter((s) => s.forMemberId && s.forMemberId !== m.id).length;
+    const inPhotos = allSubs.filter((s) => Array.isArray(s.subjectIds) && s.subjectIds.includes(m.id)).length;
+    const ratio = prog.total ? credited.size / prog.total : 0;
+    const bCount = earnedBadges(tripId, m.id).length;
     page.append(h('div', { class: 'people-row' },
       avatar(m.displayName, hashHue(m.id)),
       h('div', { class: 'pr-main' },
-        h('div', { class: 'pr-name' }, m.displayName),
-        h('div', { class: 'pr-count' }, `拍到 ${questSet.size} 個任務 · ${mineSubs.length} 張照片`),
+        h('div', { class: 'pr-name' }, m.displayName, bCount ? h('span', { class: 'pr-badges' }, `🏅${bCount}`) : null),
+        h('div', { class: 'pr-count' },
+          `完成 ${credited.size} 個任務 · 拍 ${shot.length} 張`
+          + (forOthers ? ` · 幫拍 ${forOthers}` : '')
+          + (inPhotos ? ` · 入鏡 ${inPhotos}` : '')),
         h('div', { class: 'pr-mini-track' }, h('i', { style: `width:${Math.round(ratio * 100)}%` })),
       ),
     ));
   }
+  page.append(h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/badges`) }, '🏅 看成就徽章'));
 
   // 照片動態
   page.append(h('div', { class: 'section-label' }, subs.length ? '大家拍的照片' : '還沒有照片'));
@@ -54,12 +63,18 @@ async function feedItem(sub, tripId) {
   const author = sub.memberId ? store.getRaw(sub.memberId) : null;
   const url = await blobURL(sub.photoHash);
 
+  const forM = sub.forMemberId ? store.getRaw(sub.forMemberId) : null;
+  const subjects = Array.isArray(sub.subjectIds)
+    ? sub.subjectIds.map((id) => store.getRaw(id)?.displayName).filter(Boolean) : [];
+
   const item = h('div', { class: 'feed-item' });
   item.append(h('div', { class: 'fi-head' },
     avatar(author?.displayName || '?', hashHue(sub.memberId || sub.deviceId || 'x')),
     h('div', {},
-      h('div', { class: 'fi-who' }, author?.displayName || sub.byDevice || '旅伴'),
+      h('div', { class: 'fi-who' }, (author?.displayName || sub.byDevice || '旅伴')
+        + (forM ? ` 幫 ${forM.displayName} 拍` : '')),
       h('div', { class: 'fi-what' }, [spot?.name, quest?.title].filter(Boolean).join(' · ')),
+      subjects.length ? h('div', { class: 'fi-what' }, '📸 ' + subjects.join('、')) : null,
     ),
   ));
   item.append(h('img', { class: 'fi-photo', src: url, alt: '', loading: 'lazy' }));

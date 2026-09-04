@@ -94,6 +94,7 @@ export default async function album(tripId) {
 
   async function doAlbumPage() {
     toast('製作相簿頁中…');
+    if (!t.albumMade) store.patch(tripId, { albumMade: true }).catch(() => {});
     const blob = await buildAlbumPage(tripId);
     const file = new File([blob], `${t.title || 'trip'}-相簿.html`, { type: 'text/html' });
     if (await nativeShare({ title: t.title, text: '我們的旅程回憶', files: [file] })) return;
@@ -117,6 +118,7 @@ export default async function album(tripId) {
         onProgress: (r) => { pct.textContent = Math.round(r * 100) + '%'; },
       });
       overlay.remove();
+      if (!t.albumMade) store.patch(tripId, { albumMade: true }).catch(() => {});
       const file = new File([blob], `${t.title || 'trip'}-回憶.${ext}`, { type: blob.type });
       if (await nativeShare({ title: t.title, text: '我們的旅程回憶', files: [file] })) return;
       downloadBlob(blob, file.name);

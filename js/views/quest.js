@@ -1,9 +1,10 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, confirmDialog, promptDialog, celebrate, KIND_META } from '../ui.js';
+import { h, toast, confirmDialog, promptDialog, celebrate, modal, KIND_META } from '../ui.js';
 import { navigate } from '../router.js';
 import { importPhoto, blobURL } from '../photos.js';
 import { ensureMember } from '../claim.js';
+import { newlyEarned } from '../badges.js';
 
 export default async function quest(questId) {
   const q = store.get(questId);
@@ -61,6 +62,10 @@ function photoButton(trip, q, spot, members) {
       if (!memberId) return;
     }
 
+    // 代拍 / 入鏡標記（多人才問，可略過）
+    let attr = { forMemberId: null, subjectIds: null };
+    if (members.length > 1) attr = await askAttribution(members, memberId);
+
     const wasDone = store.isQuestDone(q.id);
     const prog0 = store.tripProgress(trip.id);
 
@@ -69,7 +74,10 @@ function photoButton(trip, q, spot, members) {
     let ok = 0; let lastSub = null;
     for (const f of files) {
       try {
-        lastSub = await importPhoto(f, { tripId: trip.id, questId: q.id, memberId, allowGeo: !!trip.allowGeo });
+        lastSub = await importPhoto(f, {
+          tripId: trip.id, questId: q.id, memberId, allowGeo: !!trip.allowGeo,
+          forMemberId: attr.forMemberId, subjectIds: attr.subjectIds,
+        });
         ok++;
         prog.textContent = `處理中 ${ok}/${files.length}…`;
       } catch (e) { console.error(e); toast('一張照片處理失敗'); }
@@ -91,11 +99,14 @@ function photoButton(trip, q, spot, members) {
           ? [{ label: '🎬 去做回憶影片', value: 'album', primary: true }, { label: '看看大家', value: 'people' }]
           : [{ label: '繼續下一個', value: 'stay', primary: true }, { label: '看看大家', value: 'people' }],
       });
-      if (res === 'album') return navigate(`/trip/${trip.id}/album`);
-      if (res === 'people') return navigate(`/trip/${trip.id}/people`);
+      if (res === 'album') { await showNewBadges(trip.id, attr.forMemberId || memberId); return navigate(`/trip/${trip.id}/album`); }
+      if (res === 'people') { await showNewBadges(trip.id, attr.forMemberId || memberId); return navigate(`/trip/${trip.id}/people`); }
     } else {
       toast(`已加入 ${ok} 張`);
     }
+    // 代拍者與被幫的人都檢查新徽章
+    await showNewBadges(trip.id, memberId);
+    if (attr.forMemberId && attr.forMemberId !== memberId) await showNewBadges(trip.id, attr.forMemberId);
     void prog0;
     quest(q.id);
   });
@@ -107,17 +118,67 @@ function photoButton(trip, q, spot, members) {
   );
 }
 
+// 幫誰拍 / 照片裡有誰
+async function askAttribution(members, myId) {
+  let forId = null;
+  const subjects = new Set();
+  const forRow = h('div', { class: 'quick-pick' });
+  const subRow = h('div', { class: 'quick-pick' });
+  const drawFor = () => forRow.replaceChildren(
+    h('button', { class: (forId === null ? 'on ' : '') + 'chip-sm', onclick: () => { forId = null; drawFor(); } }, '就是我拍的'),
+    ...members.filter((m) => m.id !== myId).map((m) =>
+      h('button', { class: (forId === m.id ? 'on ' : '') + 'chip-sm', onclick: () => { forId = m.id; drawFor(); } }, '幫 ' + m.displayName)),
+  );
+  const drawSub = () => subRow.replaceChildren(...members.map((m) =>
+    h('button', {
+      class: (subjects.has(m.id) ? 'on ' : '') + 'chip-sm',
+      onclick: () => { subjects.has(m.id) ? subjects.delete(m.id) : subjects.add(m.id); drawSub(); },
+    }, m.displayName)));
+  drawFor(); drawSub();
+
+  const res = await modal({
+    title: '這張照片…（可略過）',
+    body: h('div', {},
+      h('div', { class: 'form-label' }, '是幫誰拍的？'),
+      forRow,
+      h('div', { class: 'form-label', style: 'margin-top:14px' }, '照片裡有誰？'),
+      subRow,
+    ),
+    actions: [{ label: '略過', value: 'skip' }, { label: '好了', value: 'ok', primary: true }],
+  });
+  if (res === 'skip') return { forMemberId: null, subjectIds: null };
+  return { forMemberId: forId, subjectIds: subjects.size ? [...subjects] : null };
+}
+
+async function showNewBadges(tripId, memberId) {
+  try {
+    const fresh = await newlyEarned(tripId, memberId);
+    const member = store.getRaw(memberId);
+    for (const b of fresh) {
+      await celebrate({
+        title: `解鎖新徽章！`,
+        lines: [`${b.emoji}　${b.name}`, b.desc + (member ? `（${member.displayName}）` : '')],
+        actions: [{ label: '太棒了', value: 'ok', primary: true }],
+      });
+    }
+  } catch (e) { console.warn('badge', e); }
+}
+
 async function paintGrid(grid, questId) {
   const subs = store.submissionsOf(questId);
   grid.replaceChildren();
   for (const sub of subs) {
     const url = await blobURL(sub.thumbHash || sub.photoHash);
     const member = sub.memberId ? store.getRaw(sub.memberId) : null;
+    const forM = sub.forMemberId ? store.getRaw(sub.forMemberId) : null;
     const likes = store.reactionsOf(sub.id).length;
+    const cap = forM
+      ? `${member?.displayName || '旅伴'} 幫 ${forM.displayName} 拍`
+      : (member?.displayName || sub.byDevice || '未指定');
     grid.append(h('figure', { class: 'photo-cell' },
       h('img', { src: url, alt: sub.caption || '', loading: 'lazy', onclick: () => viewPhoto(sub) }),
       likes ? h('span', { class: 'mini-likes' }, '❤️ ' + likes) : null,
-      h('figcaption', {}, member?.displayName || sub.byDevice || '未指定'),
+      h('figcaption', {}, cap),
     ));
   }
 }

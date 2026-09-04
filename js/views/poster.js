@@ -62,6 +62,7 @@ export default async function poster(tripId) {
     try {
       const results = await renderPoster(tripId, { presetId, onProgress: (m) => { pct.textContent = m; } });
       overlay.remove();
+      if (!t.posterMade) store.patch(tripId, { posterMade: true }).catch(() => {});
       const files = results.map((r) => new File([r.blob], `${r.label}.jpg`, { type: 'image/jpeg' }));
       if (mode === 'share' && await nativeShare({ title: t.title, text: '我們的行程', files })) return;
       for (const [i, r] of results.entries()) {
