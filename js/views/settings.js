@@ -256,6 +256,7 @@ async function joinByCode() {
   const s = raw.trim();
   try {
     if (s.includes('j=')) {
+      toast('加入中…（可能要等一下）');
       const tripId = await joinInvite(s.split('j=')[1].trim().split(/[&\s]/)[0]);
       toast('已加入');
       navigate(`/trip/${tripId}`, { replace: true });
@@ -265,7 +266,7 @@ async function joinByCode() {
       toast('已加入');
       navigate(`/trip/${tripId}`, { replace: true });
     }
-  } catch (e) { toast('連結無法解析：' + e.message); }
+  } catch (e) { toast(/伺服器上還沒有/.test(e.message) ? e.message : '連結無法解析：' + e.message, 4000); }
 }
 
 // ---- 設定同步伺服器 ----

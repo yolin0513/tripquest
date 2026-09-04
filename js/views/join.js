@@ -34,11 +34,14 @@ export default async function join(query) {
       info.sync ? h('p', { class: 'sm muted' }, '加入後大家的照片會自動同步') : null,
     ),
     h('button', {
-      class: 'btn btn-primary btn-block btn-big', onclick: async () => {
+      class: 'btn btn-primary btn-block btn-big', onclick: async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = '加入中…（可能要等一下）';
         try {
           let tripId;
           if (syncCode) {
-            toast('加入中…');
             tripId = await joinInvite(syncCode);
           } else {
             tripId = await importShareCode(copyCode);
@@ -48,7 +51,11 @@ export default async function join(query) {
             await ensureMember(tripId, { force: true }); // 「這是誰的手機？」
           }
           navigate(`/trip/${tripId}`, { replace: true });
-        } catch (e) { toast('加入失敗：' + e.message); }
+        } catch (err) {
+          toast('加入失敗：' + err.message);
+          btn.disabled = false;
+          btn.textContent = original;
+        }
       },
     }, '加入這個旅程'),
     h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('/') }, '先不要'),

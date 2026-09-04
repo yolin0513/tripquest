@@ -135,13 +135,31 @@ export async function joinInvite(code) {
     // 遇到瀏覽器把分頁切到背景、連線被回收的情況）。
     const { adapterForGroup, setCursor } = await import('./sync.js');
     const adapter = adapterForGroup(p.groupId, p.secret);
-    let since = 0;
-    const all = [];
-    for (let guard = 0; guard < 30; guard++) {
-      const res = await adapter.pull(since);
-      if (res.records && res.records.length) all.push(...res.records);
-      if (typeof res.seq === 'number') since = res.seq;
-      if (!res.more) break;
+    // pull 對「伺服器還沒見過這個群組」的回應是 404（不是 200 配空陣列）——
+    // 分享連結當下的推送還沒送達時就是這個狀態，不能讓它整個丟出去、要當成
+    // 「還沒有資料」一樣的情況去重試，不然使用者會看到一個原始的技術錯誤。
+    const pullAll = async () => {
+      let since = 0;
+      const all = [];
+      for (let guard = 0; guard < 30; guard++) {
+        let res;
+        try { res = await adapter.pull(since); }
+        catch { return { all, since }; }               // 404 / 網路問題 → 當作這次還拉不到
+        if (res.records && res.records.length) all.push(...res.records);
+        if (typeof res.seq === 'number') since = res.seq;
+        if (!res.more) break;
+      }
+      return { all, since };
+    };
+    // 分享連結的當下會盡量把資料先推上伺服器，但那是「盡力而為」——網路慢、
+    // 分享當下手機被切去背景等都可能讓那次推送還沒真的送達。這裡不要一拉
+    // 是空的就直接放棄，退避重試幾次（約 20 秒內），給伺服器一點時間跟上。
+    let all = [], since = 0;
+    const delays = [1500, 3000, 5000, 8000];
+    for (let i = 0; i <= delays.length; i++) {
+      ({ all, since } = await pullAll());
+      if (all.length) break;
+      if (i < delays.length) await new Promise((r) => setTimeout(r, delays[i]));
     }
     if (!all.length) throw new Error('伺服器上還沒有這趟旅程的資料，請邀請人確認網路正常後再分享一次連結');
     await store.importRecords(all, { merge: true });
