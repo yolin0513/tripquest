@@ -1,13 +1,20 @@
 // DOM / UI 小工具
 
+// 只允許的網址協定（擋 javascript: / data:text 等注入向量；blob:/data:image 用於本機照片）
+const SAFE_URL = /^(https?:|blob:|mailto:|tel:|geo:|#|\.?\/|data:image\/)/i;
+const URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'formaction', 'action', 'poster']);
+
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className = v;
-    else if (k === 'html') el.innerHTML = v;
     else if (k === 'dataset') Object.assign(el.dataset, v);
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (URL_ATTRS.has(k)) {
+      // 網址屬性：不合白名單就丟掉（避免 javascript: 之類）
+      if (SAFE_URL.test(String(v).trim())) el.setAttribute(k, v);
+    }
     else if (k in el && k !== 'list') el[k] = v;
     else el.setAttribute(k, v);
   }
@@ -17,6 +24,8 @@ export function h(tag, props = {}, ...children) {
   }
   return el;
 }
+// h() 不再支援 `html:` prop —— 動態字串一律走 textNode。
+// 需要內嵌標記的地方（只有進度環的靜態 SVG）用下面 svgEl()，且輸入必須是本檔案內的常數字串。
 
 export function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 export function mount(node, ...children) { clear(node); node.append(...children.flat().filter(Boolean)); }
@@ -47,7 +56,7 @@ export function modal({ title, body, actions }) {
     const onKey = (e) => { if (e.key === 'Escape') close(null); };
     const card = h('div', { class: 'modal-card', role: 'dialog', 'aria-modal': 'true' },
       title && h('h2', { class: 'modal-title' }, title),
-      typeof body === 'string' ? h('div', { class: 'modal-body', html: body }) : h('div', { class: 'modal-body' }, body),
+      h('div', { class: 'modal-body' }, body),   // body 可為字串（→ textNode）或節點
       h('div', { class: 'modal-actions' },
         ...(actions || [{ label: '好', value: true, primary: true }]).map((a) =>
           h('button', {
@@ -107,12 +116,12 @@ export function ring(ratio, { size = 44, stroke = 5, label } = {}) {
   ]);
 }
 
+// 只給進度環用：str 必須是本檔案內以數值內插組成的常數 SVG 字串，不接受外部輸入。
 function fromSVG(str) {
   const wrap = document.createElement('div');
   wrap.innerHTML = str.trim();
   return wrap.firstChild;
 }
-export { fromSVG };
 
 export function avatar(name, hue) {
   const ch = (name || '?').trim().slice(0, 1).toUpperCase();

@@ -64,14 +64,18 @@
 
 ---
 
-## AI 加值層（可選，預設關閉）
+## AI 加值層（每個行程各自決定，預設關閉）
 
-**不設定也完全能用。** 想要「更精美一點」的人，可以接自己的金鑰——**但金鑰一律放在你自己的 Cloudflare Worker（`wrangler secret`），前端與 repo 永遠不會有金鑰，我們也不經手。**
+**不開一切照舊、離線可用、零花費。** 想要更精美的行程，**由該行程的建立者輸入自己的 API 金鑰**：
 
-- Worker（`workers/ai.mjs`，與同步 Worker 同一個）代理 Claude API（景點一句話介紹、影片旁白）與 Google TTS（旁白配音）。
-- **每月花費上限 + 速率限制**寫在 Worker 裡（D1 `ai_usage` / `ai_rate`）：達上限回 402、太頻繁回 429，App 自動改回免金鑰做法。邀請連結外流也只會撞上限。
-- 前端只存「Worker 網址 + 你自訂的通行碼」，設定頁可逐項開關、看得到「本月已用 $X / 上限 $Y」。
-- 三個獨立代理查證官方文件後的完整效益評估與計價見 [`docs/AI_INTEGRATION.md`](./docs/AI_INTEGRATION.md)。結論：**大多數 AI 用途該在維護者端批次做掉**；Instagram / Threads 抓熱門都做不到；訂閱制音樂庫不值得；實測一年成本約 $0–3 美金。
+- 建立行程時「進階」有個「開啟 AI 加值」勾選框；開了之後到「旅程設定 → AI 加值」貼上自己的 Claude API 金鑰（可稍後再貼）。
+- **金鑰只存在建立者這台手機的 IndexedDB 專用 store（`tripSecrets`）**——絕不同步給旅伴、絕不進備份、絕不進身分卡、絕不出現在邀請連結、絕不進 repo。`scripts/secret-leak-test.mjs` 斷言這點（已納入 `npm test`）。
+- 呼叫**瀏覽器直連** `api.anthropic.com`（帶 `anthropic-dangerous-direct-browser-access`）與 `texttospeech.googleapis.com`，經 TLS，**沒有任何中間伺服器**（`workers/ai.mjs` 已移除）。金鑰只在 HTTP header、永不進 prompt；輸出與錯誤訊息都會洗掉金鑰樣式字串。
+- 每個行程獨立的用量與花費上限（預設 US$2），建立者看得到、可調整。真正的硬上限是**供應商後台的 Billing 上限**——建議申請專用金鑰並設每月上限。
+- AI 產出（景點介紹句、影片旁白）走一般同步，旅伴享受得到成果、看不到也用不到金鑰。非建立者完全看不到金鑰設定。
+- 「清除這個行程的金鑰」/「清除所有 AI 金鑰」按鈕；提醒本機刪除不等於停用，要另到供應商後台 Delete。
+- `index.html` 有 `Content-Security-Policy`（`script-src 'self'`）：注入的腳本一律不執行，就算頁面被 XSS 也沒有程式碼能讀 IndexedDB 送出金鑰。
+- 兩輪三代理投票的完整效益評估、計價、威脅模型見 [`docs/AI_INTEGRATION.md`](./docs/AI_INTEGRATION.md)。Instagram / Threads 抓熱門都做不到；訂閱制音樂庫不值得。
 
 ---
 
@@ -120,7 +124,8 @@ js/
   identity.js              裝置身分（存 IndexedDB）+ 身分備份卡
   prefs.js                 字級 / 對比偏好
   daterange.js             月曆式起訖日選擇（點兩下選範圍、顯示天數）
-  ai.js                    可選的 AI 加值層（只存 Worker 網址+通行碼，無金鑰）
+  ai.js                    每行程 AI：瀏覽器直連 Claude / Google TTS + 洗金鑰字串
+  aikeys.js                每行程金鑰的 IndexedDB 專用 store 存取 + 用量計量
   theme.js                 景點分類 → 主題判定（海報 / 行程頁 / 文案語氣共用）
   quests/compose.js        依主題組出不重複的介紹句與任務文字
   geo.js                   定位 + 反向地理編碼（Nominatim）+ 距離計算，最後位置快取
@@ -149,9 +154,9 @@ data/phrases.json          依主題的介紹句與任務句型庫
 data/emergency.json        各國緊急電話（號碼經查證，附來源）
 views/sos.js               緊急求助畫面
 server/index.mjs           選配的自架同步伺服器（零相依，協定同 Worker）
-workers/                   Cloudflare Worker（worker.mjs 同步 / ai.mjs 可選 AI 代理 / schema.sql / wrangler.toml）
+workers/                   Cloudflare Worker（worker.mjs 只做同步 / schema.sql / wrangler.toml）
 docs/ARCHITECTURE_DECISION.md   後端 / 身分 / 照片策略的決策紀錄（3 代理投票）
-scripts/                   make-icons · screenshots（冒煙測試）· gallery（功能截圖）· synctest（同步端到端）
+scripts/                   make-icons · screenshots（冒煙）· gallery（功能截圖）· synctest（同步端到端）· secret-leak-test（AI 金鑰不外洩斷言）
 ```
 
 執行 App 本身**不需要任何 npm 套件**。`puppeteer` 只有測試腳本會用到。

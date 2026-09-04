@@ -11,6 +11,7 @@ import { activeMemberId, ensureMember } from '../claim.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
+import { aiConfigCard } from './ai-config.js';
 
 const COUNTRY_NAMES = {};
 function countryName(code) { return code ? (COUNTRY_NAMES[code] || code) : ''; }
@@ -338,6 +339,9 @@ export async function settings(tripId) {
       geoToggle),
 
     settingRow('重新產生任務', h('button', { class: 'btn btn-soft', onclick: () => regenerate(tripId) }, '補齊')),
+
+    h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, 'AI 加值（進階、可選）'),
+    aiConfigCard(tripId, () => settings(tripId)),
 
     h('div', { class: 'danger-zone' },
       h('button', { class: 'btn btn-soft btn-block', onclick: async () => {

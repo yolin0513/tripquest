@@ -20,16 +20,3 @@ CREATE TABLE IF NOT EXISTS records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_records_group_seq ON records (group_id, seq);
-
--- 可選的 AI 加值層：每月花費上限 + 速率限制（ai.mjs 也會自動建表，這裡先列出）
-CREATE TABLE IF NOT EXISTS ai_usage (
-  month     TEXT PRIMARY KEY,        -- 'YYYY-MM'
-  micro_usd INTEGER NOT NULL DEFAULT 0,   -- 累計花費（微美金）
-  calls     INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS ai_rate (
-  bucket TEXT PRIMARY KEY,           -- 'd:<device>:<minute>' 或 '*:<minute>'
-  n      INTEGER NOT NULL DEFAULT 0,
-  exp    INTEGER NOT NULL
-);

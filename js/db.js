@@ -4,7 +4,7 @@
 //   blobs   — 照片二進位，以 SHA-256 內容雜湊定址，永遠不進同步 payload
 
 const DB_NAME = 'tripquest';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let _db = null;
 
@@ -32,6 +32,10 @@ export function openDB() {
       }
       if (!db.objectStoreNames.contains('meta')) {
         db.createObjectStore('meta', { keyPath: 'key' });
+      }
+      // v3：每個行程的 AI 金鑰與用量。獨立 store —— 絕不進 records / meta / 任何匯出。
+      if (!db.objectStoreNames.contains('tripSecrets')) {
+        db.createObjectStore('tripSecrets', { keyPath: 'tripId' });
       }
       void e;
     };
@@ -99,6 +103,21 @@ export async function metaSet(key, value) {
   return wrap((await tx('meta', 'readwrite')).put({ key, value }));
 }
 
+// ---- tripSecrets（每個行程的 AI 金鑰 + 用量；本機專屬，絕不同步 / 匯出）----
+export async function tripSecretGet(tripId) {
+  return wrap((await tx('tripSecrets')).get(tripId));
+}
+export async function tripSecretSet(entry) {
+  // entry: { tripId, provider, key, capUsd, usedMicroUsd, at }
+  return wrap((await tx('tripSecrets', 'readwrite')).put(entry));
+}
+export async function tripSecretDelete(tripId) {
+  return wrap((await tx('tripSecrets', 'readwrite')).delete(tripId));
+}
+export async function tripSecretClearAll() {
+  return wrap((await tx('tripSecrets', 'readwrite')).clear());
+}
+
 // ---- outbox（離線同步佇列）----
 export async function outboxAll() {
   return wrap((await tx('outbox')).getAll());
@@ -138,7 +157,7 @@ export async function isPersisted() {
 
 export async function wipeAll() {
   const db = await openDB();
-  await Promise.all(['records', 'blobs', 'outbox', 'meta'].map((name) =>
+  await Promise.all(['records', 'blobs', 'outbox', 'meta', 'tripSecrets'].map((name) =>
     wrap(db.transaction(name, 'readwrite').objectStore(name).clear())
   ));
 }

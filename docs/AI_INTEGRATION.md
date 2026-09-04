@@ -1,9 +1,11 @@
 # AI 加值層 —— 效益評估與決策
 
-> 三個獨立 opus 代理各自查證官方文件後投票，**九項結論全數一致（3–0）**。
-> 本文是決議紀錄；實作見 `workers/ai.mjs`、`js/ai.js`、設定頁「AI 加值功能（進階）」。
-> 評估基準：**一年 10 趟、每趟 5 人、每趟約 20 個任務 / 6–10 個景點**。
-> 查證日期：2026-09（Anthropic / Google Maps Platform / Meta 官方文件與計價頁）。
+> 兩輪各三個獨立 opus 代理投票，都全數一致。
+> **第一輪**（效益 / 成本 / 可行性）：查證官方文件，決定哪些值得接、哪些不接。
+> **第二輪**（權限模型）：把 AI 從「維護者一個 Worker」改成「**每個行程由建立者自帶金鑰**」。
+> 評估基準：一年 10 趟、每趟 5 人、每趟約 20 個任務 / 6–10 個景點。查證日期 2026-09。
+> 實作見 `js/ai.js`、`js/aikeys.js`、`js/views/ai-config.js`、`js/db.js`（`tripSecrets` store）、
+> `scripts/secret-leak-test.mjs`。
 
 ---
 
@@ -11,207 +13,151 @@
 
 | 用途 | 建議 | 一年成本 | 誰要註冊 |
 |---|---|---|---|
-| 景點・美食文字（長尾補充） | ✅ 做，但**維護者批次跑**、不是每人即時呼叫 | 一次性 $1–23，之後 $0 | 維護者：Anthropic |
-| Google Places（評分・是否歇業） | ✅ 做，但**只即時查、不寫進 repo** | $0（在免費額度內） | 維護者：Google Cloud |
-| Instagram 抓熱門 | ❌ 不做（官方 API 做不到，爬蟲違反 ToS） | — | — |
-| Threads 抓熱門 | ❌ 不做（有 API 但無地點、無互動數） | — | — |
-| 「最近爆紅」熱度分數 | ⚠️ 做**建置期版本**，誠實標為「精選打卡」 | $0 | 維護者 |
-| 海報水彩插畫 | ✅ **混合**：插畫元素生成一次、快取重用 | 一次性 $1–25，之後 $0 | 維護者：影像生成 |
-| 回憶影片 AI（挑照片・旁白・配音） | ✅ 挑照片在裝置端；旁白/配音走可選 Worker | $0–0.5 | 進階使用者（可選） |
-| 配樂授權音樂庫 | ❌ 不訂閱（程式合成已足夠） | — | — |
-| 訂閱制服務 | ❌ **一律不建議**（10 趟/年，整包 metered 成本 < $2） | — | — |
+| 景點・美食一句話介紹（長尾） | ✅ 每個行程可選，用建立者自己的 Claude 金鑰即時補；也可維護者批次擴資料庫 | 建立者側 < $1；批次一次性 $1–23 | 想開的行程建立者：Anthropic |
+| 回憶影片旁白文字 | ✅ 同上，開了才產生，仍可自己改 | < $0.1 | 同上 |
+| 回憶影片旁白配音（TTS） | ✅ 選用，另貼 Google 金鑰；沒貼就只有文字字卡 | ~$0（免費額度內） | 同上（選用）：Google Cloud |
+| 自動挑最佳照片 | 在裝置端做，不需金鑰、不上傳 | $0 | 無 |
+| Google Places（評分・是否歇業） | ⏸️ 有價值但**資料不能落地**（快取上限 30 天），列為下一步 | $0（免費額度內） | 之後：Google Cloud |
+| 海報水彩插畫 | ⏸️ 混合方案（插畫元素生成一次、快取重用），列為下一步 | 一次性 $1–25 | 之後：影像生成 |
+| Instagram / Threads 抓「最近爆紅」 | ❌ 官方 API 做不到（無地點搜尋、無互動數）；爬蟲違反 ToS | — | — |
+| 「最近爆紅」熱度分數 | ⚠️ 只能做建置期版本，誠實標「精選打卡」 | $0 | 維護者 |
+| 授權音樂庫（配樂） | ❌ 全是訂閱制，10 支/年不划算，程式合成已足夠 | — | — |
 
-**核心結論**：這個 App 的 AI 用途，**絕大多數該在「建置期 / 維護者端」做掉**，不是做成每位使用者即時呼叫。
-一旦接受這點，「前端不能有金鑰」就不再是限制，而是正確的架構——使用者什麼都不用註冊，離線也全部能用。
-
----
-
-## 安全前提（不可妥協，已實作為程式碼）
-
-前端是公開靜態站。**任何 API 金鑰都不會出現在前端或 repo，我們也不經手。**
-
-- 所有第三方 API 一律經過**使用者自己的 Cloudflare Worker**（`workers/ai.mjs`，與同步 Worker 同一個）。
-- 金鑰由使用者本人用 `wrangler secret put` 設定，存成 Worker secret：
-  - `AI_ACCESS_TOKEN` — 自訂通行碼，填進 App 設定分享給家人
-  - `ANTHROPIC_API_KEY` — 文字（沒設就文字功能停用）
-  - `GOOGLE_TTS_KEY` — 語音（沒設就配音停用）
-- **前端只存「Worker 網址 + 通行碼」**，`localStorage['tripquest.ai']`，沒有金鑰。
-- Worker 端防濫用（`ai.mjs`）：
-  1. **每月花費上限** `AI_MONTHLY_CAP_USD`（預設 $5）。D1 `ai_usage(month, micro_usd, calls)`，
-     **先預扣估算成本、條件式 `UPDATE ... WHERE micro_usd + est <= cap`**，改動 0 列就回 `402`，
-     呼叫完再用回傳的實際 token 數校正。達上限 → App 自動改用免金鑰做法。
-  2. **速率限制**：每裝置每分鐘 `AI_RATE_PER_MIN`（預設 6）、全域每分鐘 `AI_RATE_GLOBAL_PER_MIN`（預設 30）。
-     D1 `ai_rate` 分鐘桶，超過回 `429`。邀請連結外流也只會撞到上限，不會無限刷。
-  3. 通行碼錯 → `401`（常數時間比對）。
-  4. 呼叫上游失敗 → 退回預扣，使用者不白付。
-- 前端每個功能可獨立開關；回應帶 `X-AI-Used-USD` / `X-AI-Cap-USD`，設定頁顯示「本月已用 $X / 上限 $Y」。
+**核心結論**：AI 是**每個行程各自決定要不要開的加值層**。沒開一切照舊、離線可用、零花費。
+開了的行程用的是**建立者自己的 API 金鑰**，金鑰只留在建立者這台手機，旅伴只收到成果。
 
 ---
 
-## 逐項評估
+## 安全模型（第二輪投票決議，已實作為程式碼）
 
-### 1. 行程・景點・美食推薦（LLM）
+前端是公開靜態站。使用者的原始需求是：「讓每個行程建立者自行決定是否使用 AI，要用才輸入自己的 key，不會有我的用量被別人使用的疑慮」。三個代理實測後一致同意，並把方案簡化到比原本更乾淨：
 
-**驗證的計價**（每百萬 token 進 / 出）：Haiku 4.5 `claude-haiku-4-5` $1 / $5；Sonnet 5 `claude-sonnet-5` $2 / $10；Opus 5 `claude-opus-5` $5 / $25。Batch API 進出都打 5 折。
+### 1. 瀏覽器直連供應商，**沒有中間伺服器**
 
-**每人即時呼叫的成本其實是雜訊**：100 個景點 × (500 進 + 400 出) ≈ Haiku $0.25/年、Sonnet $0.50/年。
-但兩件事讓「即時產生」不可取：
+實測（2026-09-04）確認兩家都支援瀏覽器直接呼叫：
 
-- **Prompt caching 幫不上忙**：cache TTL 只有 5 分鐘 / 1 小時，一年內散在各趟旅程的呼叫不可能命中。
-- **幻覺在這裡是安全問題**：LLM 掰一家不存在的牛肉麵、或推薦一家 2024 就收掉的店，等於叫長輩走去一個不存在的地方。這比「沒有推薦」更糟。
+- **Anthropic**：帶 `anthropic-dangerous-direct-browser-access: true` header 就開放 CORS（`Access-Control-Allow-Origin: *`）。不帶這個 header 則完全沒有 ACAO —— 瀏覽器預設擋，是 fail-closed。「dangerous」是在警告「把**你自己的**金鑰包進公開 JS 發給所有訪客」；這裡金鑰屬於輸入它的人、只在他的裝置、花的是他自己的帳單，正是這個 header 設計來允許的情境。
+- **Google Cloud TTS**：`OPTIONS texttospeech.googleapis.com/v1/text:synthesize` 回 `Access-Control-Allow-Origin: <origin>`，且允許 `x-goog-api-key` 這個 request header —— 金鑰放 header、不進網址。回應帶 `Vary: Referer`，代表**支援 HTTP 參照網址限制**，建議建立者把 TTS 金鑰鎖到自己的網站網址。
 
-**決議**：維護者跑 **Batch API 批次工作**，把 135 筆策展資料庫擴充到 ~1,000 筆，**人工抽查後** commit 進 `data/places/`。
-一次性成本 Opus 5 batch ≈ $1–3（擴 500 筆）到 ~$11–23（擴到 1,000 筆），**每位使用者 $0**、離線可用、可審閱。
+因此 **AI 完全不經過 Cloudflare Worker**。`workers/ai.mjs` 已刪除，`worker.mjs` 只剩同步端點。金鑰經 TLS 直達 `api.anthropic.com` / `texttospeech.googleapis.com`，不經任何我們或第三方控制的機器，也就沒有「中間伺服器可能記 log」的信任問題。
 
-保留一個**執行期 `/ai/recommend` 端點當長尾補充**（Haiku 4.5），只在景點不在資料庫、且使用者自己開了 AI 功能時呼叫，
-產出的句子在 UI 標記為 AI 產生（`spot.aiBlurb = true`），不混入策展文字。→ 已實作於 `js/enrich.js` 第 3 步。
+Anthropic 金鑰無法綁 origin（bearer-only），所以那一側的防線是**建立者自己設的花費上限**：建議去 console.anthropic.com 開一把**專用**金鑰、在 Billing 設每月硬上限（例如 US$5）。
 
-**不接 AI 的替代**：規則模板 + Wikipedia REST 摘要（已有）。**效果差距**：大——多數餐廳沒有維基條目，模板讀起來機械。差距正好是「一句有溫度的在地介紹」，也正是批次工作一次買斷的東西。
+### 2. 金鑰存哪裡 —— 結構性隔離，不是靠過濾
 
----
+金鑰存在 IndexedDB 一個**獨立的 object store `tripSecrets`**（keyPath `tripId`，`js/db.js` DB v3）。**不是** `records`、**不是** `meta`。
 
-### 2. Google Places API（新版 Places API）
+`tripSecrets` 從設計上就在所有匯出路徑之外——它們全都只讀 `records`：
 
-**欄位（對照官方 Place Details 資料欄位文件）**：
-
-| 欄位 | SKU 層級 |
+| 路徑 | 為什麼碰不到金鑰 |
 |---|---|
-| `photos`（只有 ID） | Essentials |
-| `businessStatus`、`displayName`、`primaryType` | **Pro**（$17/千次，5,000 次/月免費） |
-| `rating`、`userRatingCount`、`priceLevel`、`regularOpeningHours` | **Enterprise**（$20/千次，1,000 次/月免費） |
-| `editorialSummary`、`reviews`、`generativeSummary` | Enterprise + Atmosphere |
-| **熱門時段 / 即時人潮（popular times）** | **API 沒有這個欄位** —— 只有 Google 地圖 App 有，任何「提供」它的套件都是爬地圖前端 |
+| `store.exportGroup(groupId)` | 純粹過濾 `state.byId`（= `records` store），金鑰從來不是 record |
+| `store.exportRecords()` | 同上，就是 `[...state.byId.values()]` |
+| 「匯出完整備份」`share.exportBundle()` | 讀 `records` + `blobs`，從不讀 `meta` / `tripSecrets` |
+| 身分備份卡 `identity.exportCard()` | 明確的欄位白名單（deviceId / name / 群組祕鑰），不 spread 任何東西 |
+| `store.importRecords()` | 只寫 `records`，惡意 record 也植不進 `tripSecrets` |
+| Service Worker | `sw.js` 兩道關卡：非 GET 直接跳過、跨網域直接跳過。AI 呼叫是跨網域 POST，SW 根本沒看到 |
+| 邀請連結 | 只帶 128-bit 群組祕鑰，不帶行程內容以外的東西 |
 
-**計價**：2025 年 3 月起 **$200 統一額度取消**，改成**每個 SKU 各自的每月免費上限**（Essentials 10,000 / Pro 5,000 / Enterprise 1,000 次/月，不跨 API 共用）。
-Text Search $32/千次；Place Details Essentials $5、Pro $17、Enterprise $20/千次；Place Photos $7/千次（1,000 免費）。
+**回歸測試**：`scripts/secret-leak-test.mjs`（已納入 `npm test`）存入假金鑰後，斷言 `exportRecords` / `exportGroup` / `exportBundle` / `exportCard` / `encodeCard` / `shareURL` 的序列化結果都不含 `sk-ant-` / `AIza`，且 SW 快取沒有 `anthropic` / `googleapis` 主機。
 
-**基準成本：$0.00/年**。100 次 Enterprise Place Details + 100 次 Photos + 50 次 Text Search，對照每月上限只用了約 1%。要 100 倍的量才會付到一塊錢。**但仍必須綁信用卡**。
+### 3. 用量與上限
 
-**快取 / 儲存條款（關鍵，已查證）**：
-- **Place ID 可無限期儲存**（明文豁免）。
-- **經緯度可暫存最多 30 個連續日曆天**，之後必須刪除。
-- **評分、評論數、營業時間沒有快取豁免** —— 不能合法長存在 IndexedDB。
-- **照片名稱不可快取**、會過期；照片顯示時必須附作者姓名 + 連回 Google 地圖。
+只有建立者這台裝置會呼叫供應商，所以裝置端計量就是完整的。每次 Claude 回應帶 `usage.input_tokens` / `output_tokens`，乘上費率（Haiku 4.5：$1 / $5 每百萬 token）換成微美金，累加存在 `tripSecrets` 那一列的 `usedMicroUsd`。
 
-**架構後果**：Google Places 的資料**永遠不能進 `data/places/`**（那是 git 追蹤的靜態檔，等於違規儲存）。
-Places 只能是**「檢視當下經 Worker 即時查、即時顯示、不落地」**的裝飾層，任務在沒有它時照常運作。
+- 達到建立者設的每月上限（預設 US$2）→ `aiOn()` 回 false → App 自動改用免金鑰做法。
+- 這個上限是**參考用的儀表板**，不是硬性防護。真正的硬上限是**供應商後台的 Billing 上限**，那個才跨裝置、由供應商強制執行，也是為什麼要用專用金鑰。
+- 建立者用兩台以上自己的裝置 → 各自一份計數器，會低估。誠實標示為「這台手機這趟已用約 $X」。
 
-**決議**：✅ 做，只取 **`businessStatus`（最有價值——「這家永久歇業」對長輩最關鍵）、`rating`、`userRatingCount`**，
-只在記憶體、不寫進 IndexedDB、不寫進 repo。**略過照片**（歸屬負擔 + 不可快取 + App 本來就是用大家自己的照片）、**略過 editorialSummary**（策展文字更好）。
+### 4. 結果如何給旅伴
 
-*本項未在此輪實作為前端消費端（需要 Google Cloud 帳號才能測），Worker 端 `/places/*` 代理端點列為下一步。*
+AI 產出走一般的同步 record，旅伴直接看到成果、看不到也用不到金鑰：
+
+- `spot.blurb` + `spot.aiBlurb: true` + `spot.aiAt`（時間戳，可分辨 AI 句與維基句）——**只填空白欄位**，寫入前重讀最新記錄，若已有 blurb 或 `spot.blurbManual` 就跳過，不覆蓋別人改過的。
+- 回憶影片旁白：獨立 record `{ type:'aiText', tripId, key:'narration', lines:[…] }`，放在**自己的 record** 而不是塞進 `trip` 欄位，避免整筆 trip record 的 LWW 覆蓋掉旅伴的其他改動。
+- TTS 音檔（下一版接進影片時）：走內容定址 blob，用雜湊參照，不 base64 進 record。
+
+**金鑰外洩到結果裡的風險**：金鑰只在 HTTP header，永遠不進 prompt，所以模型沒有東西可以複述。保險起見，所有 AI 輸出與錯誤訊息在寫入 / 顯示前都用 `/sk-ant-…/` 與 `/AIza…/` 正則洗掉。
+
+### 5. 威脅模型（誠實列出）
+
+| 風險 | 可能性 | 緩解 |
+|---|---|---|
+| 金鑰躺在 IndexedDB | 必然（設計如此） | 同源隔離，其他網站讀不到。惡意瀏覽器擴充功能讀得到 → 無法完全防，靠花費上限把損失限縮在已知的小額 |
+| **手機遺失 / 被偷（未鎖定）** | 中（長輩族群真實存在） | 「清除這個行程的金鑰」+「清除所有 AI 金鑰」按鈕；**並提醒：本機刪除不等於停用，還要到 Anthropic 後台把金鑰 Delete**。專用金鑰 + 花費上限把最壞情況變成「已知的一筆小錢」 |
+| **家人共用平板** | 中 | 同上；每個行程可獨立關閉 |
+| 貼錯欄位（把金鑰貼進留言 / 群組聊天） | 中 | 金鑰欄位驗證前綴（`sk-ant-` / `AIza`）才收；一般文字欄位如偵測到金鑰樣式字串會擋下 |
+| PWA 頁面被 XSS | 低（見下） | `script-src 'self'` CSP：注入的腳本一律不執行，沒有程式碼能讀 IndexedDB 送出去 |
+
+**要不要加密儲存（PIN）？三個代理一致：不要。** 一個 4–6 位 PIN 的金鑰強度很弱、用的時候明文還是得進記憶體、對惡意擴充功能與 XSS 都沒用、又跟手機本身的鎖屏重複；而長輩會忘記 PIN 然後永久失去金鑰——把罕見的安全事件換成頻繁的可用性故障。**專用金鑰 + 供應商 Billing 硬上限就夠了**，力氣花在「清除鈕」「TTS 金鑰的參照網址限制」「CSP」上。
+
+**`js/ui.js` 的 XSS 收口（第二輪 blocker）**：
+- 移除 `h()` 的 `html:` prop（會 `el.innerHTML = v`）。動態字串一律走 `document.createTextNode`。
+- `modal({ body })` 的字串分支改成 textNode（原本會走 `html:`）。
+- `href` / `src` / `action` 等網址屬性加白名單（只允許 `https:` `http:` `blob:` `mailto:` `tel:` `#` `./`），擋掉 `javascript:`。
+- `index.html` 加 `<meta http-equiv="Content-Security-Policy">`：`script-src 'self'`（關鍵）、`object-src 'none'`、`base-uri 'self'`。
+
+### 6. 建立行程時的操作（長輩友善）
+
+- 預設**關**。建立行程的「進階（可略過）」區有一個「建立後開啟 AI 加值」勾選框——不勾就完全看不到 AI 相關的東西。
+- 勾了只是把 `trip.aiEnabled` 設 true（無害的同步旗標），**金鑰可以稍後再貼**。這是預設路徑——逼在建立流程裡貼金鑰正是長輩會放棄的地方。
+- 到「行程 → 旅程設定 → AI 加值」貼金鑰：`type="password"` 欄位 + 「📋 貼上」鈕（讀剪貼簿，免得在手機上打 100 個字）+ 前綴驗證 + 一次真的最小呼叫測試 + 之後只顯示遮罩（`sk-ant-…4f2a`）。
+- **非建立者完全看不到金鑰輸入**（用 `trip.createdByDevice === myDeviceId()` 判斷），只看到一個「AI 由建立者提供」的標記。
 
 ---
+
+## 第一輪：逐項效益評估（研究內容不變）
+
+### 1. 景點 / 美食一句話介紹（LLM）
+
+**驗證計價**（每百萬 token 進 / 出）：Haiku 4.5 `claude-haiku-4-5` $1 / $5；Sonnet 5 `claude-sonnet-5` $2 / $10；Opus 5 `claude-opus-5` $5 / $25。Batch API 進出都打 5 折。
+
+100 個景點 × (500 進 + 400 出) ≈ Haiku **$0.25**。以每行程自帶金鑰的模型來說，一趟旅程頂多幾十個沒有內建資料的景點，成本是**幾分美金**。
+
+**已實作**（`js/enrich.js` 第 3 步）：景點沒有 blurb、行程有開 AI 且有金鑰時，補一句 25–40 字的在地介紹，標記 `aiBlurb`。**只填空白、不覆蓋、以最新記錄為準。**
+
+**維護者批次仍值得做**：把 135 筆策展資料庫用 Batch API 擴充到 ~1,000 筆、人工抽查後 commit，一次性 $1–23，讓「沒開 AI 的行程」也有更好的長尾覆蓋。（幻覺在這裡是安全問題——掰一家不存在的店等於叫長輩白跑，批次工作有人把關。）
+
+**不接 AI 的替代**：規則模板 + 主題句型庫（`data/phrases.json`）+ Wikipedia REST 摘要。**效果差距**：中——句型庫已做到不罐頭，但 LLM 能講出更具體的「這家的湯頭 / 這個角度」。
+
+### 2. Google Places API（新版）
+
+**欄位**（對照官方 Place Details 文件）：`rating`、`userRatingCount`、`regularOpeningHours`、`priceLevel` = Enterprise SKU；`businessStatus` = Pro；`editorialSummary` / `reviews` = Enterprise + Atmosphere。**熱門時段 / 即時人潮 API 沒有這個欄位**，只有 Google 地圖 App 有。
+
+**計價**：2025 年 3 月起 $200 統一額度取消，改成每個 SKU 各自的每月免費上限（Essentials 10,000 / Pro 5,000 / Enterprise 1,000 次/月）。基準用量 **$0/年**，但仍必須綁卡。
+
+**快取條款（關鍵）**：Place ID 可無限期存；經緯度可暫存 30 個連續日曆天；**評分、評論數、營業時間沒有快取豁免**，不能長存 IndexedDB；照片名稱不可快取。
+
+**架構後果**：Places 資料**永遠不能進 `data/places/`**（git 追蹤的靜態檔 = 違規儲存），只能是「檢視當下即時查、即時顯示、不落地」。
+
+**決議**：✅ 有價值（`businessStatus`「已歇業」對長輩最關鍵），但需要即時查詢的快取管理，**列為下一步**。若做，同樣走「每行程建立者的 Google 金鑰、瀏覽器直連」——Places API 也支援 CORS + 參照網址限制。
 
 ### 3. Instagram —— ❌ 不可行
 
-官方 Instagram Platform（Graph API）**沒有公開地區熱門、也沒有一般公開 hashtag 探索**。
-Hashtag Search 上限 **每帳號每 7 天 30 個不重複 hashtag**、需要商業/創作者帳號綁 Facebook 粉專、掛在每小時 200 次的 Business Use Case 限制下，回傳的是媒體物件，不是排序過的熱度訊號，也**無法查「台南附近的熱門餐廳」**。Basic Display API 已於 2024/12 關閉。
+官方 Graph API 沒有公開地區熱門、沒有一般 hashtag 探索。Hashtag Search 上限每帳號每 7 天 30 個不重複 hashtag、需商業帳號綁粉專、回傳媒體物件不是熱度訊號，**無法查「台南附近的熱門餐廳」**。Basic Display 已於 2024/12 關閉。**爬蟲一律不採用**：違反 Meta Platform Terms，會導致帳號 / IP 終止與法律風險。
 
-**爬蟲一律不採用**：違反 Meta Platform Terms 與網站 ToS，會導致帳號 / IP 終止與法律風險，
-而且「代理一個違規請求只是讓我們變成違規方」——用 Worker 代理無法讓它合法化。
+### 4. Threads —— ❌ 不可行
 
----
-
-### 4. Threads —— ❌ 不可行（但理由值得記錄）
-
-**Threads 確實有關鍵字搜尋**：`GET /keyword_search`（文件 2026-01 更新），`search_type=TOP|RECENT`，
-需要 `threads_basic` + `threads_keyword_search`，每人每 24 小時 2,200 次。
-
-但三件事讓它不能用：
-1. **必須通過 App Review** 才能搜尋公開貼文（沒過的話只能搜自己的貼文）；
-2. **沒有地點搜尋**；
-3. **拿不到別人公開貼文的互動數**（沒有讚 / 瀏覽數）——只能測「被提到的次數」，測不到「爆紅」，而且 TOP 排序是黑箱。
-
-對長輩要求每人做 Threads OAuth 是不可跨越的牆。唯一可行的形態是**維護者端**（一個帳號、一個過審的 App）餵給建置期熱度工作——但 v1 不值得花這個 App Review 的功夫。
-
----
+`GET /keyword_search` 確實存在（`search_type=TOP|RECENT`），但：① 必須通過 App Review 才能搜公開貼文；② 沒有地點搜尋；③ **拿不到別人公開貼文的互動數**——只能測「被提到幾次」，測不到「爆紅」。每人做 Threads OAuth 對長輩是不可跨越的牆。
 
 ### 5. 「最近爆紅」熱度分數
 
-因為 IG / Threads / 小紅書的即時風向拿不到（免費且官方管道都沒有），設計一個**建置期**的複合分數，來源全部合法：
+即時社群風向免費 / 官方管道都拿不到。設計一個**建置期**複合分數（維基瀏覽量成長 + 旅遊媒體 RSS + 觀光署開放資料 + OSM 新增時間），每城市各自 z 分數，只存最後分級。**誠實侷限**：全部有延遲，偵測的是「在百科 / 官方統計上有名氣且上升」，**抓不到 Threads 上爆紅的甜點店**。**標籤**：預設「精選打卡」；絕不寫「爆紅」。
 
-```
-hot = 0.40·z(維基瀏覽量 近30天 vs 前90天成長)
-    + 0.25·z(旅遊媒體 RSS 近90天提及次數)
-    + 0.20·z(觀光署 / 縣市政府開放資料 遊客人次 年增率)
-    + 0.15·newness(OpenStreetMap 節點 < 18 個月)
-    − （可選）Google 評論數成長：只當「即時加註」的徽章，不落地（落地會違反 §2 的快取條款）
-```
-- 每個城市各自算 z 分數（東京不會淹掉台東）。
-- **全部在維護者批次工作算好，只存最後的分級（decile bucket）+ 計算月份**，不存上游原始數字。
-- **維基瀏覽量 API**：免費、免金鑰、需帶描述性 User-Agent，每篇每日粒度。
-- **台灣開放資料**：`data.gov.tw` 觀光資訊資料庫「景點」、臺北 / 臺中市遊客人次等——**年更 / 月更，是「基準人氣」不是「近期訊號」**。
+### 6. 海報水彩插畫
 
-**誠實的侷限（要寫在 UI 裡）**：每個輸入都有延遲。維基百科沒有半年新開甜點店的條目；開放資料年更；OSM「新」不等於「紅」。
-這個分數偵測的是**「在百科 / 官方統計上有名氣且上升」**，**永遠抓不到 Threads 上爆紅的舒芙蕾店**。
+單張 $0.02–0.17。**混合方案**（版面照片用程式排、裝飾插畫元素每風格生成一次 ~24 張、人工挑過、commit 成靜態資產、之後重複用）一次性 $5–25、之後 $0。執行期維持純 canvas 2D。**列為下一步**（需影像 API 帳號才能實作）。
 
-**標籤決議**：預設用 **「精選打卡」**（人工策展，誠實又好聽）。
-只在 Google 評論數成長項有值且過門檻的項目，才可加第二個徽章 **「近期討論度上升」**。
-**絕不寫「爆紅」「最近很紅」**——長輩會照字面理解，而我們無法背書。
+### 7. 回憶影片 AI
 
----
+- **挑最佳照片：裝置端做，$0**（Laplacian 變異數判模糊 + 亮度直方圖 + `FaceDetector`）。雲端視覺 API 贏不了、又要上傳家庭照片。
+- **旁白文字：已實作**（`aiNarrate`，開了 AI 才有，`aiText` record，仍可自己改）。
+- **旁白配音（TTS）：已實作 `aiTTS`**（Google TTS，另貼金鑰）。基準用量每年 ~5,000 字，遠在免費額度內。影片配音的接線列為下一版。
+- **配樂：維持程式合成的 Web Audio。** 授權音樂庫全訂閱制，10 支/年每支 $15–30，且打包 MP3 進公開 repo 多半違反授權。
 
-### 6. 海報水彩插畫 —— AI 生成 vs 純程式
+### 8. 訂閱制 vs 用多少付多少
 
-**驗證的單張計價**：OpenAI gpt-image-1 $0.011 / $0.042 / $0.167（低 / 中 / 高，2026-10-23 汰換為 gpt-image-1.5 / 2）；
-Google Imagen 4 Fast $0.02 / Standard $0.04 / Ultra $0.06；Gemini 3 Pro Image $0.134。
-
-- **每張海報都即時生成背景**：10 張/年 × $0.04–0.17 = **$0.40–1.70/年**——錢不是問題，**確定性**才是。
-  風格會在海報之間漂移、繁中地名會變成亂碼、無法保證路線與地點標籤落在可讀位置、手機端 10–30 秒延遲、離線就壞。
-- **混合（使用者提的方案）✅**：版面 + 照片用程式排，**裝飾插畫元素每種風格生成一次（3 風格 × 8 元素 ≈ 24 張）、人工挑過、commit 成透明 WebP 靜態資產、之後重複用**。
-  一次性 $1（純生成）到 $5–25（含反覆調整），**之後 $0/年**。執行期維持純 canvas 2D——確定、離線、即時、繁中清晰。
-
-**效果差距**：水彩的暈染、顆粒、邊緣暈開，Path2D 在合理程式碼量下做不出來，**AI 在這裡明顯更好**；幾何元素則差距趨近於零。
-**保留程式產生的紙紋**（免費、可無縫平鋪，擴散模型反而不擅長無縫貼圖）。
-
-`js/poster/presets.js` 已預留 `preset.bgProvider` / 裝飾資產掛載點；此輪不生成資產（需影像 API 帳號）。
-
----
-
-### 7. 回憶影片 AI 加值
-
-- **自動挑最佳照片：在裝置端做，$0。** Laplacian 變異數判模糊、亮度直方圖、`FaceDetector`（有就用，沒有當加分）。
-  雲端視覺 API（~$1.5/千張）在「這張糊不糊 / 阿嬤在不在」這個真正的問題上贏不了這些，還要把家庭照片上傳第三方。
-- **旁白文字：值得，成本雞肋。** 10 支 × 每天一句 ≈ Haiku **$0.08/年**，是第 1 項的免費搭車。已做成 `/ai/narrate`，預設關閉。
-- **旁白配音（TTS）：實質免費，前提是 Worker 已經為第 1 項存在。**
-  查證：Azure Neural **每月 50 萬字免費**、Google Chirp 3 HD $30/百萬字（每月 100 萬字免費）、OpenAI tts-1 $15/百萬字。
-  基準用量 **每年 5,000 字** → Azure / Google 免費額度的 0.5%，**$0/年**（Google Chirp 3 HD 有真正的 cmn-TW 聲音）。
-  已做成 `/ai/tts`（Google TTS），預設關閉。
-- **配樂：維持程式合成的 Web Audio。** 授權音樂庫全是訂閱制（Epidemic ~$16/月、Artlist ~$199/年、Suno ~$10/月），
-  10 支影片/年 = 每支 $15–30。而且把下載的 MP3 打包進公開 repo 多半違反授權。嫌配樂單薄就改善合成（五聲音階 pad、小 SoundFont 鋼琴、節奏對齊剪點），不是買訂閱。
-
----
-
-### 8. 訂閱制 vs 用多少付多少 —— 誠實講
-
-**只有訂閱制**：Epidemic Sound、Artlist、Suno、ElevenLabs（好聲音）。
-**其餘全部是 metered + 免費額度**：Claude、Google Places、Azure / Google / OpenAI TTS、Imagen / gpt-image。
-
-**以一年只用 ~10 趟來說，沒有任何一項月費划算。** 上面整包 metered 的年成本 **< $2**。
-一個 $10/月的訂閱是整個系統其他部分的 60 倍。**只能按月買的東西，要嘛維護者一次性買斷做成資產，要嘛不要買。**
-訂閱可隨時取消，但取消不會退已扣的月費——對這個用量，等於每次用都在浪費。
-
----
-
-### 9. Worker 代理與防護（已實作）
-
-| 端點 | 用途 |
-|---|---|
-| `GET /ai/usage` | 本月花費 / 上限 / 呼叫次數 / 重置時間 / 各功能是否有金鑰 |
-| `POST /ai/recommend` | `{place, city, kind}` → `{text}` 一句在地介紹 |
-| `POST /ai/narrate` | `{trip, days[]}` → `{lines[]}` 每天一句旁白 |
-| `POST /ai/tts` | `{text, voice}` → `{audio(base64), mime}` |
-
-- **月上限**：D1 `ai_usage`，條件式 `UPDATE ... WHERE micro_usd + est <= cap`（改動 0 列 = 超標 → `402`），呼叫後用實際 token 校正。
-- **速率**：D1`ai_rate` 分鐘桶，每裝置 + 全域雙重限制，超過 `429`。
-- **通行碼**：`X-AI-Token` 常數時間比對，錯 → `401`。
-- **前端**：`js/ai.js` 任何錯誤都回 `null`，呼叫端自動 fallback；設定頁顯示用量條。
-- **降級**：達上限或連不上 → App 靜默改用「策展資料 + 規則模板 + 程式合成」那條路，**不會出現錯誤畫面**。
-
-**對長輩的現實**：`wrangler secret put` 是終端機指令，長輩不會用。
-既然整包成本 < $2/年，正確做法是**一位「設定者」跑一個 Worker、用自己的金鑰、設 $5/月硬上限**，其他人只要在 App 貼「網址 + 通行碼」。
-「每人自帶金鑰」只當進階逃生口。
+**只有訂閱制**：Epidemic Sound、Artlist、Suno、ElevenLabs。**其餘都是 metered + 免費額度**。以一年 10 趟來說沒有任何月費划算——只能按月買的東西要嘛維護者一次性買斷做成資產，要嘛不買。
 
 ---
 
@@ -219,28 +165,40 @@ Google Imagen 4 Fast $0.02 / Standard $0.04 / Ultra $0.06；Gemini 3 Pro Image $
 
 | 服務 | 誰 | 時間 | 綁卡 | 最低消費 |
 |---|---|---|---|---|
-| **Anthropic Console** | 維護者（批次擴資料庫 + 執行期補句） | ~10 分 | 是 | 預付 ~$5，無月費 |
-| **Google Cloud — Places API (New)** | 維護者（評分 / 歇業狀態） | ~20–30 分 | 是 | 無；免費上限吃掉基準用量 |
-| **Google Cloud — Text-to-Speech**（要配音才需要） | 設定者（可選） | ~20 分 | 是 | 無；每月免費額度遠大於用量 |
-| **影像生成**（Imagen / OpenAI，一次性做 ~24 個海報元素） | 維護者 | ~10 分 | 是 | ~$1–25 一次，之後不用 |
-| **Cloudflare Workers + D1 + R2** | 設定者 | 已完成（見 `SETUP_TODO.md`） | R2 需綁卡，免費額度內不扣 | 無 |
-| **Meta / Instagram / Threads** | —— | —— | —— | **不需要，兩者都否決** |
-| **任何音樂 / 語音訂閱** | —— | —— | —— | **不建議** |
+| **Anthropic Console** | 想開 AI 的**行程建立者**（每人自己的） | ~10 分 | 是 | 預付 ~$5，無月費。**建議開專用金鑰 + 設每月上限** |
+| **Google Cloud — Text-to-Speech** | 想要旁白配音的建立者（選用） | ~20 分 | 是 | 無；免費額度遠大於用量。**建議加參照網址限制** |
+| **Cloudflare Workers**（只做同步，與 AI 無關） | 設定同步的人 | 見 `SETUP_TODO.md` | R2 需綁卡，免費額度內不扣 | 無 |
+| Google Places / 影像生成 | 之後若實作 | — | 是 | 免費額度內 $0 |
+| Meta / Instagram / Threads | —— | —— | —— | **不需要，否決** |
+| 任何音樂 / 語音訂閱 | —— | —— | —— | **不建議** |
 
 ---
 
-## 代理投票結果
+## 兩輪投票結果
+
+**第一輪（效益 / 可行性）**
 
 | # | 項目 | A | B | C |
 |---|---|---|---|---|
-| 1 | LLM 推薦 → 維護者批次、非每人即時 | ✅ | ✅ | ✅ |
-| 2 | Google Places → 只即時查、不落地；快取上限 30 天；無 popular times | ✅ | ✅ | ✅ |
+| 1 | LLM 一句話介紹值得接（每行程 + 批次擴資料庫） | ✅ | ✅ | ✅ |
+| 2 | Google Places 只即時查不落地；無 popular times；快取 30 天 | ✅ | ✅ | ✅ |
 | 3 | Instagram 抓熱門 | ❌ | ❌ | ❌ |
 | 4 | Threads 抓熱門 | ❌ | ❌ | ❌ |
-| 5 | 熱度分數 → 建置期版本、標「精選打卡」、不寫「爆紅」 | ✅ | ✅ | ✅ |
+| 5 | 熱度分數 → 建置期版本、標「精選打卡」 | ✅ | ✅ | ✅ |
 | 6 | 海報 → 混合快取、非每張生成 | ✅ | ✅ | ✅ |
-| 7 | 影片 → 裝置端挑照片 + 可選旁白/TTS、配樂維持程式合成 | ✅ | ✅ | ✅ |
+| 7 | 影片 → 裝置端挑照片 + 可選旁白 / TTS、配樂維持程式合成 | ✅ | ✅ | ✅ |
 | 8 | 訂閱制 → 一律不建議 | ✅ | ✅ | ✅ |
-| 9 | Worker → D1 月上限（fail-closed）+ 速率桶 + 優雅降級 | ✅ | ✅ | ✅ |
+
+**第二輪（權限模型，全數一致「ship」）**
+
+| 問題 | 決議 |
+|---|---|
+| Q1 金鑰位置 & 呼叫路徑 | **(a) 瀏覽器直連供應商**，Claude 與 Google TTS 都經實測支援 CORS，Worker 退出 AI 路徑 |
+| Q2 金鑰儲存 | IndexedDB 專用 store `tripSecrets`，結構性排除所有匯出 + 回歸測試斷言 |
+| Q3 用量 / 上限 | 裝置端計量 + 供應商 Billing 硬上限（真正的防線） |
+| Q4 結果同步 | blurb 填空不覆蓋 + `blurbManual` 旗標；旁白用獨立 record；輸出洗金鑰字串 |
+| Q5 加密儲存 | **不加密**（PIN 對長輩是淨負面）；靠專用限額金鑰 + 清除鈕 + CSP |
+| Q6 建立流程 | 預設關、收在「進階」、金鑰可延後貼、貼上為主 + 測試、非建立者看不到 |
+| 4 個 blocker | ①專用 store + 匯出斷言 ②金鑰字串洗白（輸出 + 錯誤）③修 LWW 覆蓋 ④`ui.js` innerHTML 收口 + CSP — 全部完成 |
 
 三份完整分析與引用連結存於 session log。

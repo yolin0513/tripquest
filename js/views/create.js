@@ -6,6 +6,7 @@ import { uuid } from '../ids.js';
 import { generateForTrip, placeHierarchy, placesOfCity, searchPlaces } from '../quests/generate.js';
 import { enrichTrip } from '../enrich.js';
 import { dateRangeField } from '../daterange.js';
+import { myDeviceId } from '../identity.js';
 
 export default async function create() {
   setTop({ title: '建立新旅程' });
@@ -175,9 +176,16 @@ export default async function create() {
     class: 'field mono', rows: 5,
     placeholder: '一行一個景點，或用「、」分隔：\n第1天 清水寺、金閣寺\n第2天 大阪城、道頓堀\n（不在清單裡的也可以，系統會自動出題）',
   });
+  const aiChk = h('input', { type: 'checkbox' });
   const advDetails = h('details', {},
-    h('summary', { style: 'cursor:pointer;font-weight:700;padding:10px 0' }, '進階：直接貼上完整行程文字'),
-    h('div', { style: 'margin-top:8px' }, itinField));
+    h('summary', { style: 'cursor:pointer;font-weight:700;padding:10px 0' }, '進階（可略過）'),
+    h('div', { style: 'margin-top:8px' },
+      field('直接貼上完整行程文字', itinField),
+      h('label', { class: 'switch-row' },
+        h('div', {}, h('div', { style: 'font-weight:700' }, '建立後開啟 AI 加值'),
+          h('div', { class: 'form-hint' }, '預設關閉。開了之後到「旅程設定」貼你自己的 API 金鑰即可（只存這台手機）。不開一切照舊。')),
+        aiChk),
+    ));
 
   const submitBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: submit }, '產生拍照任務');
 
@@ -211,6 +219,8 @@ export default async function create() {
         id: tripId, type: 'trip', groupId, title,
         startDate: state.dates.start || '', endDate: state.dates.end || '',
         region: region, country, allowGeo: false, allowWiki: true,
+        createdByDevice: myDeviceId(),
+        aiEnabled: !!aiChk.checked,
       });
 
       const { spots, quests } = await generateForTrip({ tripId, items, itineraryText, region });

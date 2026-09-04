@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f1523" />
+  <!-- 內容安全政策：關鍵是 script-src 'self' —— 只跑本站自己的 JS，注入的腳本一律不執行，
+       就算頁面被 XSS 也沒有程式碼能讀 IndexedDB 把 AI 金鑰送出去。
+       style 用到 inline 所以放行；圖片與連線放寬（維基圖、多個免金鑰 API、自架同步伺服器可能是 http）。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data: https: http:; connect-src 'self' https: http:; media-src 'self' blob: data:; object-src 'none'; base-uri 'self'" />
   <meta name="description" content="TripQuest 旅圖任務 — 一群人共建行程，把每個景點變成拍照任務，全部解鎖後做成回憶影片。純前端、免註冊、離線可用。" />
   <title>TripQuest 旅圖任務</title>
 

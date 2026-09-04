@@ -55,13 +55,16 @@ async function _enrich(spot) {
       }
     }
 
-    // 3. 還是沒有介紹句 → 若使用者開了 AI 加值層，補一句（失敗就算了）
-    if (!spot.blurb && !patch.blurb) {
+    // 3. 還是沒有介紹句 → 若這個行程有開 AI 且有金鑰，補一句（失敗就算了）
+    //    只填空白欄位、且以最新記錄為準，不覆蓋別人改過的
+    const fresh3 = store.getRaw(spot.id) || spot;
+    if (!fresh3.blurb && !fresh3.blurbManual && !patch.blurb && spot.tripId) {
       try {
         const { aiOn, aiRecommend } = await import('./ai.js');
-        if (aiOn('recommend')) {
-          const line = await aiRecommend({ place: spot.name, city: spot.region || '', kind: spot.primary || '' });
-          if (line) { patch.blurb = line; patch.aiBlurb = true; }
+        if (await aiOn(spot.tripId, 'recommend')) {
+          const line = await aiRecommend(spot.tripId, { place: spot.name, city: spot.region || '', kind: spot.primary || '' });
+          const after = store.getRaw(spot.id) || spot;
+          if (line && !after.blurb && !after.blurbManual) { patch.blurb = line; patch.aiBlurb = true; patch.aiAt = Date.now(); }
         }
       } catch { /* 靜默 */ }
     }

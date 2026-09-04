@@ -84,15 +84,20 @@ export async function buildTimeline(tripId) {
     if (!byDay.has(f.day)) byDay.set(f.day, []);
     byDay.get(f.day).push(f);
   }
+  // AI 旁白（有開才有；沒有就用不到）
+  let narration = [];
+  const nrec = store.exportRecords().find((r) => r.type === 'aiText' && r.tripId === tripId && r.key === 'narration' && !r.deleted);
+  if (nrec && Array.isArray(nrec.lines)) narration = nrec.lines;
+
   const days = [...byDay.keys()].sort((a, b) => a - b);
-  for (const day of days) {
+  days.forEach((day, di) => {
     const dayFrames = byDay.get(day);
     const region = store.spotsOf(tripId).find((s) => s.day === day)?.region || trip.region || '';
-    segs.push({ kind: 'day', dur: T_DAY, day, region, count: dayFrames.length });
+    segs.push({ kind: 'day', dur: T_DAY, day, region, count: dayFrames.length, narration: narration[di] || '' });
     dayFrames.forEach((fr, idx) => {
       segs.push({ kind: 'photo', dur: T_PHOTO, frame: fr, next: dayFrames[idx + 1] || null });
     });
-  }
+  });
   if (spots.length >= 2) segs.push({ kind: 'map', dur: T_MAP, spots, trip });
   segs.push({ kind: 'outro', dur: T_OUTRO, trip, stats });
 
@@ -209,6 +214,7 @@ function drawDay(ctx, seg, t) {
   ctx.beginPath(); ctx.moveTo(W / 2 - 60, H * 0.42); ctx.lineTo(W / 2 + 60, H * 0.42); ctx.stroke();
   textCenter(ctx, `第 ${seg.day} 天`, W / 2, H * 0.5, `800 96px ${FONT}`, '#fff');
   if (seg.region) textCenter(ctx, seg.region, W / 2, H * 0.56, `400 46px ${FONT}`, 'rgba(255,255,255,0.7)');
+  if (seg.narration) textCenter(ctx, seg.narration, W / 2, H * 0.64, `400 40px ${FONT}`, 'rgba(255,255,255,0.85)', W * 0.8);
   ctx.restore();
 }
 

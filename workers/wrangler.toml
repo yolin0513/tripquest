@@ -18,13 +18,5 @@ bucket_name = "tripquest-photos"
 [vars]
 MAX_BLOB_BYTES = "15000000"
 
-# ---- 可選的 AI 加值層 ----
-# 金鑰一律用 `wrangler secret put`（不要寫在這個檔案，也不要進 git）：
-#   wrangler secret put AI_ACCESS_TOKEN    自訂通行碼，填進 App 設定分享給家人
-#   wrangler secret put ANTHROPIC_API_KEY  行程/景點/旁白文字
-#   wrangler secret put GOOGLE_TTS_KEY     語音旁白（沒有就 TTS 停用）
-# 下面幾個是「用量上限」的預設值，可自行調整：
-AI_MODEL = "claude-haiku-4-5"
-AI_MONTHLY_CAP_USD = "5"
-AI_RATE_PER_MIN = "6"
-AI_RATE_GLOBAL_PER_MIN = "30"
+# AI 不經這個 Worker。每個行程由建立者在 App 內輸入自己的 API 金鑰，
+# 瀏覽器直連 api.anthropic.com / texttospeech.googleapis.com。詳見 docs/AI_INTEGRATION.md。

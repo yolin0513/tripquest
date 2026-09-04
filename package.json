@@ -11,7 +11,8 @@
     "theme-posters": "node scripts/theme-posters.mjs",
     "synctest": "node scripts/synctest.mjs",
     "validate-places": "node scripts/validate-places.mjs",
-    "test": "node scripts/validate-places.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"
+    "secret-leak-test": "node scripts/secret-leak-test.mjs",
+    "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"
   },
   "keywords": [
     "pwa",
