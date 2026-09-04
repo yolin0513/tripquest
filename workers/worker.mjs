@@ -66,11 +66,15 @@ async function handlePush(request, env, groupId, secret) {
   const { group, error } = await authGroup(env, groupId, secret, { createIfMissing: true });
   if (error) return error;
 
-  // 撈出這批 id 目前的狀態
+  // 撈出這批 id 目前的狀態。D1 一條敘述最多約 100 個綁定參數（含 groupId 這個），
+  // 超過的話這條查詢會讓整個 Worker 直接被平台中止（不是普通的 JS 例外，try/catch
+  // 接不住，使用者那端只會看到一個沒有 CORS 標頭的錯誤頁）。這裡一批最多帶 99 個
+  // id（+1 個 groupId＝100，貼著上限但不超過）。
   const ids = [...new Set(records.map((r) => r && r.id).filter(Boolean))];
   const existing = new Map();
-  for (let i = 0; i < ids.length; i += 100) {
-    const chunk = ids.slice(i, i + 100);
+  const ID_CHUNK = 99;
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const chunk = ids.slice(i, i + ID_CHUNK);
     const rs = await env.DB.prepare(
       `SELECT id, updated_at, device_id, type FROM records WHERE group_id = ? AND id IN (${chunk.map(() => '?').join(',')})`
     ).bind(groupId, ...chunk).all();
@@ -99,10 +103,17 @@ async function handlePush(request, env, groupId, secret) {
     ).bind(groupId, rec.id, seq, rec.type || null, rec.updatedAt || null, rec.deviceId || null, JSON.stringify(rec)));
   }
   if (stmts.length) {
-    stmts.push(env.DB.prepare('UPDATE groups SET seq = ? WHERE id = ?').bind(seq, groupId));
-    await env.DB.batch(stmts);
+    // D1 的 batch() 一次最多約 100 條陳述式，超過會整批失敗（且失敗時 Cloudflare
+    // Workers 平台回的錯誤頁沒有 CORS 標頭，瀏覽器那端只會看到一個看不懂的
+    // 「CORS policy blocked / Failed to fetch」，訊息完全對不上真正原因）。
+    // 拆成安全的小批依序送，一個行程景點任務多的時候才不會整包推送失敗。
+    const D1_BATCH_LIMIT = 90;
+    for (let i = 0; i < stmts.length; i += D1_BATCH_LIMIT) {
+      await env.DB.batch(stmts.slice(i, i + D1_BATCH_LIMIT));
+    }
+    await env.DB.prepare('UPDATE groups SET seq = ? WHERE id = ?').bind(seq, groupId).run();
   }
-  return json({ ok: true, seq, wrote: stmts.length ? stmts.length - 1 : 0 });
+  return json({ ok: true, seq, wrote: stmts.length });
 }
 
 // ---------- /pull ----------
