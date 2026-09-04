@@ -14,13 +14,28 @@ const ok = (m) => console.log('✓ ' + m);
 const fail = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 
 // outbox 可能正在背景自動 drain；busy 就等一下再試，最多 ~30 秒
-async function drain(page) {
+async function drain(page, opts = {}) {
   for (let i = 0; i < 30; i++) {
-    const r = await page.evaluate(async () => (await import('./js/outbox.js')).drain());
+    const r = await page.evaluate(async (o) => (await import('./js/outbox.js')).drain(o), opts);
     if (!r || r.skipped !== 'busy') return r;
     await sleep(1000);
   }
   return { skipped: 'busy' };
+}
+
+// 直接問伺服器這個群組有幾筆記錄。
+// 不要用 drain() 回傳的 pushed 來判斷有沒有推成功：那個數字只代表「這一次 drain 有沒有
+// 發出推送」，而 App 背景本來就會自動 drain，背景先推完並清掉 outbox 之後，測試自己叫的
+// 那次就會拿到 pushed:0——資料其實好好地在伺服器上。要驗就驗伺服器的實際狀態。
+async function serverCount(page) {
+  return page.evaluate(async () => {
+    const store = await import('./js/store.js');
+    const sync = await import('./js/sync.js');
+    const g = store.syncedGroups()[0];
+    if (!g) return -1;
+    const res = await sync.adapterForGroup(g.id, g.syncSecret).pull(0);
+    return (res.records || []).length;
+  });
 }
 
 async function device(name) {
@@ -68,9 +83,10 @@ try {
   });
   ok('裝置 A 建立行程 + 2 張照片');
 
-  const aPush = await drain(A.page);
-  if (aPush && aPush.pushed >= 1 && aPush.uploaded >= 2) ok(`裝置 A 推送到雲端：資料 ${aPush.pushed}、照片 ${aPush.uploaded}`);
-  else fail('裝置 A 推送異常：' + JSON.stringify(aPush));
+  const aPush = await drain(A.page, { force: true });
+  const aOnServer = await serverCount(A.page);
+  if (aOnServer >= 6 && aPush && aPush.uploaded >= 2) ok(`裝置 A 推送到雲端：伺服器上 ${aOnServer} 筆、照片 ${aPush.uploaded}`);
+  else fail(`裝置 A 推送異常：伺服器上 ${aOnServer} 筆、drain=${JSON.stringify(aPush)}`);
 
   const invite = await A.page.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), setup.tid);
   if (invite.includes('#/join?j=')) ok('產生邀請連結'); else fail('邀請連結：' + invite.slice(0, 60));
@@ -93,7 +109,20 @@ try {
   if (joinRes.spots === 2 && joinRes.members === 2) ok(`裝置 B 加入：${joinRes.spots} 景點、${joinRes.members} 成員`);
   else fail('裝置 B 骨架同步：' + JSON.stringify(joinRes));
   if (joinRes.subs === 2) ok('裝置 B 收到 2 筆投稿'); else fail('裝置 B 投稿數：' + joinRes.subs);
-  if (joinRes.thumbsLocal === 2) ok('裝置 B 縮圖已下載到本機'); else fail('裝置 B 縮圖：' + joinRes.thumbsLocal + '/2');
+  // 縮圖預抓是背景工作：joinInvite 要快點回，讓長輩一按加入就看得到行程，縮圖慢一步沒關係
+  // （真的還沒到，blobURL 也會即時去雲端抓）。所以這裡等背景跑完再驗，不要求 join 當下就好。
+  let thumbs = joinRes.thumbsLocal;
+  for (let i = 0; i < 20 && thumbs < 2; i++) {
+    await sleep(1000);
+    await drain(B.page);
+    thumbs = await B.page.evaluate(async (tid) => {
+      const s = await import('./js/store.js');
+      const db = await import('./js/db.js');
+      const keys = new Set(await db.allBlobKeys());
+      return s.submissionsOfTrip(tid).filter((x) => keys.has(x.thumbHash)).length;
+    }, joinRes.tid);
+  }
+  if (thumbs === 2) ok('裝置 B 縮圖已下載到本機'); else fail('裝置 B 縮圖：' + thumbs + '/2');
 
   const lazy = await B.page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
