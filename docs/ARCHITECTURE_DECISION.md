@@ -132,3 +132,31 @@
 2. **你明早做**（見 `SETUP_TODO.md`）：註冊 Cloudflare、`wrangler deploy`、（若接受綁卡）啟用 R2。約 45 分鐘。
 3. **部署後我做**：對著你的實際網址跑一次端到端測試，補 Worker 端細節。
 4. **v2 之後**：投稿簽章、Realtime 推播（改用 Durable Objects 或 SSE）取代輪詢。
+
+---
+
+# 第二輪決策：策展地點資料 + 行程海報（2026-09-05）
+
+方法同上：3 個獨立 Opus 代理各自評估、投票。**兩大題、八小項，全數一致。**
+
+## 決策四 —— 地點資料結構與無金鑰擴充
+
+| 項目 | 決議 |
+|---|---|
+| **結構** | `data/places/index.json`（只有國家→地區→城市→行政區的階層骨架，進 SW precache）+ `data/places/<city>.json`（該城市的 flat `places[]`，惰性載入）。**行政區是地點上的欄位，不另外抓檔**；選景點 UI 的第 4 層按鈕是對已載入城市檔的前端篩選。分類用**標籤陣列**不是單一 enum（士林夜市同時是 夜市/小吃/打卡點）。圖片存 Commons 檔名，執行期經 `Special:FilePath` 解析成 blob 存 IndexedDB（重用 `enrich.js` 既有的 sha256 快取路徑）。 |
+| **內建 vs 執行期** | 內建 ~15 城市 / ~135 地點（台日韓熱門），gzip 後約數十 KB。SW 只 precache index + 台灣城市檔；其餘走既有的 same-origin stale-while-revalidate，建立該城市行程時 pin 住。**Wikivoyage（See/Eat/Do 描述）、維基瀏覽量排序、Overpass 都是「建置期」用**，輸出 commit 進 repo。執行期只有：Wikipedia REST summary（一次拿縮圖＋摘要）＋ Commons 圖片＋（使用者主動點「找附近夜市」時才用）Overpass，8 秒逾時、失敗軟著陸。**每個內建地點都要有人工 blurb**（wiki 摘要是連線才有的路徑）。 |
+| **「近期熱門打卡點」** | **免費做不到，不假裝。** 沒有任何免金鑰來源看得到 IG / Threads / 小紅書。做法：人工維護的「精選打卡」清單，標上日期（`hot` 欄位 + `_meta.updated`）；維基百科瀏覽量趨勢（30 天 vs 前 90 天）只在**建置期**算，當隱藏排序權重或標成「YYYY 年 M 月熱門（維基百科瀏覽量）」。絕不顯示假的熱度數字，絕不用 OSM 標註密度冒充人氣。 |
+| **可擴充格式** | 一份 schema、每城市一檔、穩定字串 id、欄位只增不改。關鍵欄位 **`src: hand\|wikivoyage\|osm`**：建置腳本可任意覆寫/刪除機器來源的列，但**永不碰 `src:hand` 的列**。機器產出先寫 `_staging/`，人工審過才 promote。搭 `scripts/validate-places.mjs`（JSON schema 檢查）。 |
+
+**被否決**：一個大 JSON（改一筆資料就讓整個 SW shell 失效重抓）、深層巢狀（難 hand-edit、難 merge）、單一分類 enum、執行期跑 Wikivoyage/Overpass（慢、要解 wikitext、中文名不全）。
+
+## 決策五 —— 行程海報產生管線
+
+| 項目 | 決議 |
+|---|---|
+| **rasterize 方式** | **canvas 2D 是唯一 rasterizer**；裝飾是預先寫好的 `Path2D` / inline SVG 常數，**不用 `<foreignObject>`、絕不 `drawImage` 遠端 URL**（只從 IndexedDB blob 畫，blob URL 不會 taint）。**排除 html2canvas**（mobile Safari 上陰影/混合模式/transform/CJK 網頁字時序會靜默畫出空白或半殘海報——當海報就是交付物時，這比醜還糟）。**排除純 SVG/foreignObject**（Safari 會 taint canvas，`toBlob` 直接 SecurityError）。代價「canvas 沒有文字排版」→ 把 `memory.js` 既有的 CJK 逐字斷行抽成 `poster/text.js`，兩段式（先量測算高→設 canvas 高→畫），畫之前 `await document.fonts.load()`。 |
+| **風格架構** | preset 是純資料物件 `{palette, paper, fonts, deco[], polaroid}`，餵給同一個排版引擎。紙紋 + 水彩暈染**程序生成**（種子雜訊 + 低透明度疊路徑，零位元組、可延伸到任意長的 canvas）。**不內建 CJK 手寫字型**（3–8MB、無建置步驟無法 subset）→ 中文用系統字（PingFang TC / Noto Sans TC），拉丁字/數字（DAY 1、11:00、標題）用 ~30–40KB 的 Caveat woff2。3 風格：水彩 / 簡約 / 雜誌（簡約全系統字 = 保底一定能跑）。 |
+| **內容管線** | 先建 `PosterModel` 再畫。照片：使用者投稿縮圖 → `spot.heroHash` → 維基百科縮圖 → emoji 底圖。介紹：策展 `blurb` → 維基摘要首句 → 任務提示 → 省略（不放填充字）。**時間：在 spot 記錄加選填的 `startTime`/`endTime` 字串**（附加欄位、LWW 同步安全、無排程器），沒填就退回序號 / 上午下午。裝飾用 tripId 種子的亂數放在版面量測後的安全區，重畫結果一致。 |
+| **輸出與分享** | 1240px 寬（A4 150dpi、LINE 會自己壓）、高度隨內容、面積上限約 16M px（iOS canvas 限制）；**行程 ≥ 3 天 → 一天一張**。`toBlob('image/jpeg', 0.88)`，約 250KB–1.2MB。用既有的 `nativeShare`（`canShare({files})`）分享到 LINE，退路是下載 + 全螢幕預覽「長按存到相簿」。AI 金鑰掛在單一 `preset.bgProvider(w,h)` 背景層 seam，預設 null，沒有任何 render path 會 await 它。 |
+
+**已落地**：以上全部（`data/places/`、`js/poster/`、`js/views/poster.js`、`spot.js` 時間欄位、`scripts/validate-places.mjs`、`scripts/build-places.mjs` 骨架）。build 腳本的各來源擷取尚未實作（誠實標注），合併安全邏輯與 staging 流程已就緒。
