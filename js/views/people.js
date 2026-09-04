@@ -1,7 +1,7 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, avatar } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, back } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
 import { ensureMember, activeMemberId } from '../claim.js';
@@ -38,7 +38,7 @@ export default async function people(tripId) {
   page.append(h('div', { class: 'section-label' }, subs.length ? '大家拍的照片' : '還沒有照片'));
   if (!subs.length) {
     page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'),
-      h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單')));
+      h('button', { class: 'btn btn-primary', onclick: () => back(`/trip/${tripId}`) }, '回任務清單')));
   }
 
   render(page);

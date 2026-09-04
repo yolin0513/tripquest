@@ -27,7 +27,7 @@ export default async function settings() {
     try {
       const tripId = await importBundle(f);
       toast('匯入完成');
-      if (tripId) navigate(`/trip/${tripId}`);
+      if (tripId) navigate(`/trip/${tripId}`, { replace: true });
     } catch (e) { toast('匯入失敗：' + e.message); }
   });
 
@@ -135,12 +135,12 @@ async function joinByCode() {
     if (s.includes('j=')) {
       const tripId = await joinInvite(s.split('j=')[1].trim().split(/[&\s]/)[0]);
       toast('已加入');
-      navigate(`/trip/${tripId}`);
+      navigate(`/trip/${tripId}`, { replace: true });
     } else {
       const code = s.includes('d=') ? s.split('d=')[1].trim().split(/[&\s]/)[0] : s;
       const tripId = await importShareCode(code);
       toast('已加入');
-      navigate(`/trip/${tripId}`);
+      navigate(`/trip/${tripId}`, { replace: true });
     }
   } catch (e) { toast('連結無法解析：' + e.message); }
 }

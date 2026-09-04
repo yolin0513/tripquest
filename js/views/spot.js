@@ -1,7 +1,7 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, promptDialog, confirmDialog, KIND_META } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, back } from '../router.js';
 import { uuid } from '../ids.js';
 import { blobURL } from '../photos.js';
 import { enrichSpot } from '../enrich.js';
@@ -39,7 +39,7 @@ export default async function spot(tripId, spotId) {
     h('div', { class: 'stack' }, ...quests.map((q) => questRow(q, tripId, spotId))),
 
     h('button', { class: 'btn btn-primary btn-block', style: 'margin-top:16px', onclick: () => addQuest(tripId, spotId) }, '＋ 新增任務'),
-    h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate(`/trip/${tripId}`) }, '回旅程'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: () => back(`/trip/${tripId}`) }, '回旅程'),
 
     h('div', { class: 'danger-zone' },
       h('button', { class: 'btn btn-danger btn-block', onclick: async () => {
@@ -47,7 +47,7 @@ export default async function spot(tripId, spotId) {
           for (const q of quests) { for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id); await store.remove(q.id); }
           await store.remove(spotId);
           toast('已刪除');
-          navigate(`/trip/${tripId}`);
+          navigate(`/trip/${tripId}`, { replace: true });
         }
       } }, '🗑️ 刪除這個景點'),
     ),

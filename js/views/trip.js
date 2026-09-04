@@ -1,7 +1,7 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, KIND_META } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, back } from '../router.js';
 import { uuid, hashHue } from '../ids.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import { generateForTrip, templateQuests, inferType } from '../quests/generate.js';
@@ -267,5 +267,5 @@ async function regenerate(tripId) {
     }
   }
   toast(added ? `補了 ${added} 個任務` : '沒有可補的');
-  navigate(`/trip/${tripId}`);
+  navigate(`/trip/${tripId}`, { replace: true });
 }

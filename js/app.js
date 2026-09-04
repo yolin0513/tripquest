@@ -1,6 +1,6 @@
 // 進入點：註冊 SW、初始化 store、掛路由、管理頂列
 
-import { route, setNotFound, startRouter, navigate, currentRoute } from './router.js';
+import { route, setNotFound, startRouter, navigate, currentRoute, back } from './router.js';
 import * as store from './store.js';
 import { mount, h, toast } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
@@ -12,23 +12,19 @@ const topTitle = document.getElementById('topTitle');
 const topActionBtn = document.getElementById('topActionBtn');
 
 let _action = null;
-backBtn.addEventListener('click', () => {
-  const r = currentRoute();
-  const fb = r?.query?.from || backTargetFor(r);
-  navigate(fb);
-});
+backBtn.addEventListener('click', () => back(fallbackFor(currentRoute())));
 topActionBtn.addEventListener('click', () => { if (_action) _action.onClick(); });
 
-function backTargetFor(r) {
+// 只有「直接深連結進來、沒有可退歷史」時才會用到：退去合理的上一層
+function fallbackFor(r) {
   if (!r) return '/';
   const p = r.path;
   if (p.startsWith('/quest/')) {
     const q = store.getRaw(r.params.id);
-    return q ? `/trip/${q.tripId}/spot/${q.spotId}` : '/';
+    return q ? `/trip/${q.tripId}` : '/';
   }
-  const m = p.match(/^\/trip\/([^/]+)\/spot\//);
+  const m = p.match(/^\/trip\/([^/]+)\//);
   if (m) return `/trip/${m[1]}`;
-  if (p.startsWith('/trip/')) return '/';
   return '/';
 }
 
