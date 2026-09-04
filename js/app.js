@@ -15,6 +15,22 @@ let _action = null;
 backBtn.addEventListener('click', () => back(fallbackFor(currentRoute())));
 topActionBtn.addEventListener('click', () => { if (_action) _action.onClick(); });
 
+// 緊急求助浮動鈕：任何畫面都能一鍵進入（在 SOS 畫面本身則隱藏）
+const sosFab = document.getElementById('sosFab');
+if (sosFab) {
+  sosFab.addEventListener('click', () => {
+    const r = currentRoute();
+    const m = r && r.path.match(/^\/trip\/([^/]+)/);
+    navigate(m ? `/trip/${m[1]}/sos` : '/sos');
+  });
+  const syncFab = () => {
+    const p = (location.hash.replace(/^#/, '') || '/').split('?')[0];
+    sosFab.hidden = /\/sos$/.test(p);
+  };
+  window.addEventListener('hashchange', syncFab);
+  syncFab();
+}
+
 // 只有「直接深連結進來、沒有可退歷史」時才會用到：退去合理的上一層
 function fallbackFor(r) {
   if (!r) return '/';
@@ -68,6 +84,8 @@ route('/trip/:id/people', async ({ params }) => (await import('./views/people.js
 route('/trip/:id/album', async ({ params }) => (await import('./views/album.js')).default(params.id));
 route('/trip/:id/poster', async ({ params }) => (await import('./views/poster.js')).default(params.id));
 route('/trip/:id/plan', async ({ params }) => (await import('./views/plan.js')).default(params.id));
+route('/trip/:id/sos', async ({ params }) => (await import('./views/sos.js')).default(params.id));
+route('/sos', async () => (await import('./views/sos.js')).default(null));
 route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
 route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
 route('/settings', async () => (await import('./views/settings.js')).default());

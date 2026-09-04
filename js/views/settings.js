@@ -9,6 +9,7 @@ import { getConfig, setConfig, modeLabel, syncEnabled, testConnection, syncNow }
 import { myName, setMyName, exportCard, encodeCard, decodeCard, importCard } from '../identity.js';
 import { pendingCount } from '../outbox.js';
 import { getAIConfig, setAIConfig, aiConfigured, aiTest, aiUsage, FEATURES } from '../ai.js';
+import { getContacts, setContacts } from '../emergency.js';
 
 const AI_FEATURE_LABELS = {
   recommend: ['景點・美食一句話介紹', '內建資料庫沒有的景點，補一句在地介紹'],
@@ -59,6 +60,14 @@ export default async function settings() {
         const v = await promptDialog('你的名字', { value: myName() });
         if (v) { await setMyName(v); toast('已更新'); settings(); }
       } }, myName())),
+
+    // ---- 緊急聯絡人 ----
+    h('div', { class: 'section-label' }, '緊急聯絡人'),
+    h('div', { class: 'card about' },
+      h('p', { class: 'sm muted' }, '出門在外走失或需要幫忙時，右下角紅色「🆘」按鈕會用到這些聯絡人。只存這支手機，不會同步給旅伴。'),
+      emergencyContactEditor(settings),
+      h('button', { class: 'btn btn-danger btn-block', style: 'margin-top:10px', onclick: () => navigate('/sos') }, '🆘 打開緊急求助畫面'),
+    ),
 
     // ---- 儲存空間 ----
     h('div', { class: 'section-label' }, '儲存空間'),
@@ -136,6 +145,42 @@ function checkbox(checked, onChange) {
   const el = h('input', { type: 'checkbox', checked });
   el.addEventListener('change', () => onChange(el.checked));
   return el;
+}
+
+function emergencyContactEditor(refresh) {
+  const wrap = h('div', {});
+  const draw = async () => {
+    const list = await getContacts();
+    wrap.replaceChildren(
+      ...list.map((c, i) => h('div', { class: 'contact-row' },
+        h('div', { class: 'contact-row-main' },
+          h('div', { style: 'font-weight:700' }, c.name + (c.relation ? `（${c.relation}）` : '')),
+          h('div', { class: 'muted sm' }, c.phone || '未填電話'),
+        ),
+        h('button', { class: 'btn btn-soft sm-btn', onclick: async () => {
+          const name = await promptDialog('名字', { value: c.name });
+          if (name === null) return;
+          const phone = await promptDialog('電話', { value: c.phone || '', placeholder: '09xx-xxx-xxx' });
+          const rel = await promptDialog('關係（例：兒子、女兒，可留空）', { value: c.relation || '' });
+          list[i] = { name: name || c.name, phone: (phone || '').trim(), relation: (rel || '').trim() };
+          await setContacts(list); draw();
+        } }, '✎'),
+        h('button', { class: 'btn btn-danger sm-btn', onclick: async () => {
+          list.splice(i, 1); await setContacts(list); draw();
+        } }, '🗑️'),
+      )),
+      h('button', { class: 'btn btn-soft btn-block', style: 'margin-top:8px', onclick: async () => {
+        const name = await promptDialog('聯絡人名字', { okLabel: '下一步' });
+        if (!name) return;
+        const phone = await promptDialog('電話', { placeholder: '09xx-xxx-xxx', okLabel: '下一步' });
+        const rel = await promptDialog('關係（可留空）', { okLabel: '加入' });
+        list.push({ name, phone: (phone || '').trim(), relation: (rel || '').trim() });
+        await setContacts(list); draw();
+      } }, '＋ 加緊急聯絡人'),
+    );
+  };
+  draw();
+  return wrap;
 }
 
 // ---- AI 加值層 ----

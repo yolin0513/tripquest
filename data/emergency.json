@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "note": "各國緊急電話。數字經查證（Wikipedia List of emergency telephone numbers + 各國官方觀光單位，2026-01）。generic 112 在多數 GSM 手機上可撥。tourist 為 24 小時多語旅客專線（含中文）。",
+    "verified": "2026-01",
+    "sources": [
+      "https://en.wikipedia.org/wiki/List_of_emergency_telephone_numbers",
+      "https://www.jnto.go.jp/emergency/eng/mi_guide.html",
+      "https://big5.gov.taipei",
+      "https://english.visitkorea.or.kr"
+    ]
+  },
+  "generic": { "all": "112", "note": "多數手機在無訊號 / 無 SIM 時仍可撥 112 轉接當地緊急單位。" },
+  "countries": {
+    "TW": { "name": "台灣", "police": "110", "fire": "119", "ambulance": "119", "coastguard": "118", "tourist": "0800-011-765", "touristNote": "交通部觀光署 24H 旅遊服務熱線（中英日）" },
+    "JP": { "name": "日本", "police": "110", "fire": "119", "ambulance": "119", "coastguard": "118", "tourist": "050-3816-2787", "touristNote": "JNTO 訪日旅客諮詢熱線 24H（中英日韓）" },
+    "KR": { "name": "韓國", "police": "112", "fire": "119", "ambulance": "119", "tourist": "1330", "touristNote": "韓國觀光公社 24H 旅遊諮詢（含中文）" },
+    "HK": { "name": "香港", "police": "999", "fire": "999", "ambulance": "999", "note": "手機亦可撥 112。" },
+    "MO": { "name": "澳門", "police": "999", "fire": "999", "ambulance": "999", "note": "亦可撥 110（治安警）/ 120（救護）。" },
+    "CN": { "name": "中國大陸", "police": "110", "fire": "119", "ambulance": "120" },
+    "SG": { "name": "新加坡", "police": "999", "fire": "995", "ambulance": "995" },
+    "MY": { "name": "馬來西亞", "police": "999", "fire": "999", "ambulance": "999", "note": "手機請撥 112。", "tourist": "+603-8891-8080", "touristNote": "旅客服務熱線" },
+    "TH": { "name": "泰國", "police": "191", "fire": "199", "ambulance": "1669", "tourist": "1155", "touristNote": "觀光警察（英語）" },
+    "VN": { "name": "越南", "police": "113", "fire": "114", "ambulance": "115" },
+    "PH": { "name": "菲律賓", "police": "911", "fire": "911", "ambulance": "911" },
+    "ID": { "name": "印尼", "police": "110", "fire": "113", "ambulance": "119", "note": "整合緊急號碼 112。" },
+    "US": { "name": "美國", "police": "911", "fire": "911", "ambulance": "911" },
+    "CA": { "name": "加拿大", "police": "911", "fire": "911", "ambulance": "911" },
+    "GB": { "name": "英國", "police": "999", "fire": "999", "ambulance": "999", "note": "亦可撥 112。" },
+    "FR": { "name": "法國", "police": "17", "fire": "18", "ambulance": "15", "note": "全歐通用 112。" },
+    "DE": { "name": "德國", "police": "110", "fire": "112", "ambulance": "112" },
+    "IT": { "name": "義大利", "police": "112", "fire": "112", "ambulance": "112" },
+    "ES": { "name": "西班牙", "police": "112", "fire": "112", "ambulance": "112" },
+    "CH": { "name": "瑞士", "police": "117", "fire": "118", "ambulance": "144", "note": "亦可撥 112。" },
+    "NL": { "name": "荷蘭", "police": "112", "fire": "112", "ambulance": "112" },
+    "AU": { "name": "澳洲", "police": "000", "fire": "000", "ambulance": "000", "note": "手機亦可撥 112。" },
+    "NZ": { "name": "紐西蘭", "police": "111", "fire": "111", "ambulance": "111" },
+    "AE": { "name": "阿聯 (杜拜)", "police": "999", "fire": "997", "ambulance": "998" },
+    "TR": { "name": "土耳其", "police": "112", "fire": "112", "ambulance": "112" },
+    "GU": { "name": "關島", "police": "911", "fire": "911", "ambulance": "911" }
+  },
+  "euNote": "歐盟與多數歐洲國家可直接撥 112。"
+}

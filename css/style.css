@@ -777,3 +777,80 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-day-tools .btn { flex: 1; margin-top: 0; }
 .day-move-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .day-move-grid .btn { margin-top: 0; }
+
+/* ---------- 緊急求助 ---------- */
+#sosFab {
+  position: fixed;
+  right: 14px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+  width: 58px; height: 58px; border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--danger) 60%, #fff);
+  background: var(--danger); color: #fff;
+  font-size: 1.5rem; font-weight: 800; cursor: pointer;
+  z-index: 60;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: grid; place-items: center;
+}
+#sosFab:active { transform: scale(0.92); }
+
+.sos h3 { font-size: 1.1rem; margin: 0 0 12px; }
+.sos-section { margin-top: 26px; }
+
+.sos-help {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--danger) 26%, var(--bg-elev)), var(--bg-elev));
+  border: 2px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: var(--radius); padding: 20px 16px;
+}
+.sos-help-big { font-size: 2.1rem; font-weight: 900; text-align: center; letter-spacing: 2px; }
+.sos-help-sub { text-align: center; color: var(--muted); margin: 6px 0 16px; font-size: 0.95rem; }
+.sos-people { display: flex; flex-direction: column; gap: 10px; }
+.sos-person {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; text-decoration: none; color: var(--text); min-height: 56px;
+}
+.sos-person-name { font-size: 1.15rem; font-weight: 800; }
+.sos-person-phone { font-size: 1.05rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sos-call { margin-left: auto; background: var(--ok); color: var(--ok-ink); font-weight: 800; padding: 6px 14px; border-radius: 999px; }
+.sos-none { color: var(--muted); font-size: 0.95rem; }
+.sos-loc-wrap { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+.sos-loc-title { font-weight: 800; margin-bottom: 6px; }
+.sos-addr { font-size: 1.1rem; font-weight: 700; }
+.sos-addr-full { font-size: 0.9rem; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+.sos-coord { font-family: ui-monospace, monospace; margin-top: 6px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sos-loc-btns { display: flex; gap: 10px; margin-top: 12px; }
+.sos-loc-btns .btn { flex: 1; text-decoration: none; }
+
+.sos-tel-grid { display: flex; flex-direction: column; gap: 10px; }
+.sos-tel {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  text-decoration: none; padding: 16px 18px; min-height: 62px;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.sos-tel-label { font-size: 1.15rem; font-weight: 800; }
+.sos-tel-num { font-size: 1.4rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+
+.sos-near-group { margin-bottom: 18px; }
+.sos-near-head { font-weight: 800; font-size: 1.05rem; margin-bottom: 8px; }
+.sos-near-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
+}
+.sos-near-main { flex: 1; min-width: 0; }
+.sos-near-name { font-weight: 700; }
+.sos-near-acts { display: flex; gap: 8px; flex: none; }
+.sos-near-acts .sm-btn { min-height: 44px; padding: 8px 12px; text-decoration: none; font-size: 1.1rem; }
+
+.sm-btn { min-height: 44px; padding: 8px 14px; flex: none; }
+.member-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.member-row-main { flex: 1; min-width: 0; }
+.contact-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.contact-row-main { flex: 1; min-width: 0; }

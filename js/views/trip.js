@@ -10,6 +10,19 @@ import { enrichTrip } from '../enrich.js';
 import { activeMemberId, ensureMember } from '../claim.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta } from '../theme.js';
+import { loadEmergency } from '../emergency.js';
+
+const COUNTRY_NAMES = {};
+function countryName(code) { return code ? (COUNTRY_NAMES[code] || code) : ''; }
+async function pickCountry(tripId) {
+  const D = await loadEmergency();
+  Object.entries(D.countries || {}).forEach(([k, v]) => { COUNTRY_NAMES[k] = v.name; });
+  const entries = Object.entries(D.countries || {});
+  const actions = entries.map(([code, v]) => ({ label: `${v.name}（報警 ${v.police || v.all}）`, value: code }));
+  actions.push({ label: '取消', value: null });
+  const pick = await modal({ title: '目的地國家', body: h('p', { class: 'sm muted' }, '用來顯示正確的當地緊急電話。'), actions });
+  if (pick) { await store.patch(tripId, { country: pick }); toast('已設定'); settings(tripId); }
+}
 
 export default async function trip(tripId) {
   const t = store.get(tripId);
@@ -64,6 +77,7 @@ export default async function trip(tripId) {
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/poster`) }, '🎨 做一張行程海報'),
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
       h('button', { class: 'btn btn-ghost btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
+      h('button', { class: 'btn btn-ghost btn-block', style: 'color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)', onclick: () => navigate(`/trip/${tripId}/sos`) }, '🆘 緊急求助（迷路、找警局醫院）'),
     ),
   );
 
@@ -213,10 +227,14 @@ async function addSpot(tripId) {
 }
 
 // ---------- 旅程設定 ----------
-export function settings(tripId) {
+export async function settings(tripId) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '旅程設定' });
+  try {
+    const D = await loadEmergency();
+    Object.entries(D.countries || {}).forEach(([k, v]) => { COUNTRY_NAMES[k] = v.name; });
+  } catch { /* noop */ }
 
   const geoToggle = h('input', { type: 'checkbox', checked: !!t.allowGeo });
   geoToggle.addEventListener('change', async () => {
@@ -251,7 +269,11 @@ export function settings(tripId) {
       if (res) { await store.patch(tripId, { startDate: res.start, endDate: res.end }); toast('已更新日期'); settings(tripId); }
     } }, t.startDate ? rangeLabel(t.startDate, t.endDate) : '選擇')),
 
-    settingRow('旅伴', memberEditor(tripId, t.groupId)),
+    settingRow('目的地國家（緊急電話用）', h('button', { class: 'btn btn-soft', onclick: () => pickCountry(tripId) },
+      countryName(t.country) || '未設定')),
+
+    h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '旅伴與電話'),
+    memberEditor(tripId, t.groupId),
 
     h('label', { class: 'switch-row' },
       h('div', {}, h('div', { style: 'font-weight:700' }, '景點示意圖'),
@@ -290,20 +312,35 @@ function settingRow(label, control) {
 }
 
 function memberEditor(tripId, groupId) {
-  const wrap = h('div', { class: 'chip-input' });
+  const wrap = h('div', {});
   const draw = () => {
     wrap.replaceChildren(
-      ...store.membersOf(groupId).map((m) => h('span', { class: 'chip' }, m.displayName,
-        h('button', { class: 'chip-x', onclick: async () => {
+      ...store.membersOf(groupId).map((m) => h('div', { class: 'member-row' },
+        h('div', { class: 'member-row-main' },
+          h('div', { style: 'font-weight:700' }, m.displayName),
+          h('div', { class: 'muted sm' }, m.phone ? '📞 ' + m.phone : '未填電話（緊急求助會用到）'),
+        ),
+        h('button', { class: 'btn btn-soft sm-btn', onclick: async () => {
+          const name = await promptDialog('名字', { value: m.displayName });
+          if (name === null) return;
+          const phone = await promptDialog('電話（可留空，用於緊急求助）', { value: m.phone || '', placeholder: '09xx-xxx-xxx' });
+          await store.patch(m.id, { displayName: name || m.displayName, phone: (phone || '').trim() });
+          draw();
+        } }, '✎'),
+        h('button', { class: 'btn btn-danger sm-btn', onclick: async () => {
           const used = store.submissionsOfTrip(tripId).some((s) => s.memberId === m.id);
           if (used && !await confirmDialog(`${m.displayName} 已有照片，移除後那些照片會標為「未指定」。要繼續嗎？`)) return;
           await store.remove(m.id);
           draw();
-        } }, '×'))),
-      h('button', { class: 'chip chip-add', onclick: async () => {
-        const name = await promptDialog('旅伴名字', { okLabel: '加入' });
-        if (name) { await store.put({ id: uuid(), type: 'member', groupId, displayName: name }); draw(); }
-      } }, '＋ 加人'),
+        } }, '🗑️'),
+      )),
+      h('button', { class: 'btn btn-soft btn-block', style: 'margin-top:10px', onclick: async () => {
+        const name = await promptDialog('旅伴名字', { okLabel: '下一步' });
+        if (!name) return;
+        const phone = await promptDialog('電話（可留空）', { placeholder: '09xx-xxx-xxx', okLabel: '加入' });
+        await store.put({ id: uuid(), type: 'member', groupId, displayName: name, phone: (phone || '').trim() });
+        draw();
+      } }, '＋ 加旅伴'),
     );
   };
   draw();

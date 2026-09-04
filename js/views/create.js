@@ -199,6 +199,7 @@ export default async function create() {
       const tripId = uuid();
       const picks = [...state.picked.keys()];
       const region = picks.length ? (state.picked.get(picks[0])?.cityName || '') : '';
+      const country = state.nav.country || countryOfCity(idx, state.picked.get(picks[0])?.cityId) || '';
 
       // 依旅程天數把選到的景點平均分配
       const days = tripDays(state.dates.start, state.dates.end);
@@ -209,7 +210,7 @@ export default async function create() {
       await store.put({
         id: tripId, type: 'trip', groupId, title,
         startDate: state.dates.start || '', endDate: state.dates.end || '',
-        region: region, allowGeo: false, allowWiki: true,
+        region: region, country, allowGeo: false, allowWiki: true,
       });
 
       const { spots, quests } = await generateForTrip({ tripId, items, itineraryText, region });
@@ -245,6 +246,16 @@ export default async function create() {
     h('div', { style: 'margin-top:14px' }, advDetails),
     submitBtn,
   ));
+}
+
+function countryOfCity(idx, cityId) {
+  if (!idx || !cityId) return '';
+  for (const c of idx.countries || []) {
+    for (const r of c.regions || []) {
+      if ((r.cities || []).some((ci) => ci.id === cityId)) return c.id;
+    }
+  }
+  return '';
 }
 
 function tripDays(start, end) {
