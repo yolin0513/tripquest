@@ -21,9 +21,17 @@ import * as db from './db.js';
 
 const CFG_KEY = 'tripquest.sync';
 
+// 部署後把 Worker 網址填在這裡 → 家人開網址就自動連同步，連「設定同步伺服器」都不用點。
+// 留空 = 預設單機，使用者可自行在設定頁填。
+const BUILT_IN = { mode: '', url: '' };
+
 export function getConfig() {
-  try { return { mode: 'local', url: '', ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; }
-  catch { return { mode: 'local', url: '' }; }
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch { /* noop */ }
+  // 使用者存過設定 → 以他的為準；沒存過 → 用內建預設（若有）
+  if (stored && (stored.mode || stored.url)) return { mode: 'local', url: '', ...stored };
+  if (BUILT_IN.url) return { mode: BUILT_IN.mode || (BUILT_IN.url.includes('workers.dev') ? 'cloud' : 'lan'), url: BUILT_IN.url };
+  return { mode: 'local', url: '' };
 }
 export function setConfig(cfg) {
   try { localStorage.setItem(CFG_KEY, JSON.stringify({ mode: 'local', url: '', ...cfg })); } catch { /* noop */ }
