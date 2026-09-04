@@ -38,7 +38,7 @@ export default async function join(query) {
         const btn = e.currentTarget;
         btn.disabled = true;
         const original = btn.textContent;
-        btn.textContent = '加入中…（可能要等一下）';
+        btn.textContent = '加入中…（大行程最多約 1 分鐘，請稍候）';
         try {
           let tripId;
           if (syncCode) {

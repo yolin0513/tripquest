@@ -16,6 +16,24 @@ function newSecret() {
   return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
+// 分批推送——避免行程大（照片留言讚多）時整包塞進一次 POST 在慢的行動網路上逾時。
+// 每批有自己的逾時 + 最多重試 1 次；整體有個總預算，超過就放手交給 outbox 背景重試
+// （分享連結還是照樣給，不要卡住使用者）。
+async function pushAllChunked(adapter, records, { chunkSize = 150, chunkTimeoutMs = 12000, totalBudgetMs = 40000 } = {}) {
+  const deadline = Date.now() + totalBudgetMs;
+  for (let i = 0; i < records.length; i += chunkSize) {
+    const chunk = records.slice(i, i + chunkSize);
+    if (Date.now() > deadline) return;                      // 時間到了，剩下的交給背景 outbox
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), chunkTimeoutMs));
+      try { await Promise.race([adapter.push(chunk), timeout]); lastErr = null; break; }
+      catch (e) { lastErr = e; }
+    }
+    if (lastErr) return;                                      // 這批推不上去，別再硬撐後面幾批
+  }
+}
+
 export async function ensureGroupSync(groupId) {
   const g = store.getRaw(groupId);
   if (!g) return null;
@@ -84,12 +102,16 @@ export async function shareURL(tripId) {
     // 連結只帶「群組識別碼」，不帶整包資料——不然景點/任務一多，網址長到
     // LINE 等 App 傳不過去、貼上也常斷行漏字，變成「無法解析」。
     // 朋友點連結加入時，直接從伺服器把這個群組的資料整包拉下來（見 joinInvite）。
-    // 所以這裡要先確保伺服器上真的有最新資料：即時推一次（等不到也不擋，outbox 背景會補）。
+    // 所以這裡要先確保伺服器上真的有最新資料：即時推一次。行程大（照片留言讚多）
+    // 時整包塞一次 POST 在慢的行動網路上會逾時，所以拆成一小批一小批推、每批有
+    // 自己的逾時與重試。這個背景推送最多給 40 秒——但不要讓使用者對著「分享」
+    // 按鈕乾等這麼久：只等最多 6 秒讓小行程快速完成，時間到了就先把連結生出來，
+    // 推送在背景繼續跑完（加入那邊有自己的重試，會等到資料真的送達）。
     try {
       const { adapterForGroup } = await import('./sync.js');
       const adapter = adapterForGroup(group.id, group.syncSecret);
-      const pushTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000));
-      await Promise.race([adapter.push(store.exportGroup(group.id)), pushTimeout]);
+      const pushJob = pushAllChunked(adapter, store.exportGroup(group.id)).catch(() => {});
+      await Promise.race([pushJob, new Promise((r) => setTimeout(r, 6000))]);
     } catch { /* 推不上去也繼續給連結；outbox 背景會重試，加入時也會再拉一次 */ }
     const payload = {
       v: 3, kind: 'sync',
@@ -152,16 +174,17 @@ export async function joinInvite(code) {
       return { all, since };
     };
     // 分享連結的當下會盡量把資料先推上伺服器，但那是「盡力而為」——網路慢、
-    // 分享當下手機被切去背景等都可能讓那次推送還沒真的送達。這裡不要一拉
-    // 是空的就直接放棄，退避重試幾次（約 20 秒內），給伺服器一點時間跟上。
+    // 行程大（照片留言讚多，推送拆成好幾批）、分享當下手機被切去背景，都可能讓
+    // 資料還沒真的送達。這裡不要一拉是空的就直接放棄，退避重試（總共約 50 秒），
+    // 給伺服器足夠時間跟上——分享那邊的背景推送最多留了 40 秒的預算。
     let all = [], since = 0;
-    const delays = [1500, 3000, 5000, 8000];
+    const delays = [2000, 3000, 5000, 8000, 10000, 12000];
     for (let i = 0; i <= delays.length; i++) {
       ({ all, since } = await pullAll());
       if (all.length) break;
       if (i < delays.length) await new Promise((r) => setTimeout(r, delays[i]));
     }
-    if (!all.length) throw new Error('伺服器上還沒有這趟旅程的資料，請邀請人確認網路正常後再分享一次連結');
+    if (!all.length) throw new Error('伺服器上還沒有這趟旅程的資料，可能是行程比較大、推送還沒完成。請等旅伴那邊網路穩定一點後再分享一次連結，或請他到「設定 → 多人同步」按「立即同步」後再分享。');
     await store.importRecords(all, { merge: true });
     await setCursor(p.groupId, since);
   }
