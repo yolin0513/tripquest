@@ -16,7 +16,13 @@ const bad = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 let mode = 'good';                 // good | fail
 let calls = 0;
 async function newPage() {
-  const p = await b.newPage();
+  // 每個「裝置」要用獨立的瀏覽器 context——用 b.newPage() 的話所有分頁共用同一份
+  // IndexedDB（同一個 origin），前面幾節測試建立的行程會一直留著，後面用
+  // 「找第一個 trip 記錄」這種寫法就會因為 IndexedDB getAll() 不保證插入順序
+  // （用 uuid 當 key，回傳順序接近亂序）隨機挑到別節測試留下的舊行程，測試才會
+  // 時過時不過。
+  const ctx = await b.createBrowserContext();
+  const p = await ctx.newPage();
   p.on('pageerror', (e) => console.log('  [pageerror]', e.message));
   await p.setRequestInterception(true);
   p.on('request', (req) => {
@@ -53,10 +59,15 @@ async function newPage() {
       });
     }
     if (/wikipedia|wikimedia|open-meteo|nominatim|overpass/.test(u)) return req.respond({ status: 404, body: '' });
+    // js/sync.js 內建預設指向正式 Cloudflare Worker（BUILT_IN）——本機測試絕對不要真的
+    // 打過去（會把測試資料寫進正式環境，而且外部網路延遲會讓測試跑起來時快時慢）。
+    if (u.includes('workers.dev')) return req.abort('failed');
     req.continue();
   });
   await p.goto(BASE, { waitUntil: 'networkidle0' });
   await p.waitForSelector('.hero');
+  // 強制單機模式：不讓背景 outbox 真的打正式伺服器，測試才是純本機、確定性的。
+  await p.evaluate(async () => { (await import('./js/sync.js')).setConfig({ mode: 'local', url: '' }); });
   return p;
 }
 
@@ -97,9 +108,11 @@ try {
   // ---------- 2. AI 啟用 + 金鑰 → 自動產生、快取、標記、用量、同步無金鑰 ----------
   calls = 0;
   let exported;
+  let creatorTid;
   {
     const p = await newPage();
     const { tid, gid } = await makeTrip(p, true);
+    creatorTid = tid;
     await p.evaluate(async (tid, key) => {
       const { setTripKey } = await import('./js/aikeys.js');
       await setTripKey(tid, { key });
@@ -154,16 +167,16 @@ try {
   calls = 0;
   {
     const p = await newPage();
-    const r = await p.evaluate(async (dump) => {
+    const r = await p.evaluate(async (dump, tripId) => {
       const s = await import('./js/store.js');
       const ai = await import('./js/aicontent.js');
       for (const rec of JSON.parse(dump)) await s.put(rec);          // 模擬 pull 下來
-      const trip = s.exportRecords().find((x) => x.type === 'trip');
+      const trip = s.get(tripId);
       // 這台沒有金鑰，且 createdByDevice 不是自己
       const tx = ai.aiPayload(trip.id, 'tripText');
       const gen = await ai.ensureTripText(trip.id);                   // 不該真的呼叫
       return { hasCached: !!tx && tx.subtitle === 'AI海報副標', genSame: gen && gen.subtitle === 'AI海報副標' };
-    }, exported.json);
+    }, exported.json, creatorTid);
     if (r.hasCached && r.genSame && calls === 0) ok('非建立者：直接看到同步來的 AI 文案、自己不呼叫 AI');
     else bad('非建立者行為錯誤：' + JSON.stringify(r) + ' calls=' + calls);
     await p.close();
