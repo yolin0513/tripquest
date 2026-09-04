@@ -54,6 +54,17 @@ async function _enrich(spot) {
         if (h) patch.heroHash = h;
       }
     }
+
+    // 3. 還是沒有介紹句 → 若使用者開了 AI 加值層，補一句（失敗就算了）
+    if (!spot.blurb && !patch.blurb) {
+      try {
+        const { aiOn, aiRecommend } = await import('./ai.js');
+        if (aiOn('recommend')) {
+          const line = await aiRecommend({ place: spot.name, city: spot.region || '', kind: spot.primary || '' });
+          if (line) { patch.blurb = line; patch.aiBlurb = true; }
+        }
+      } catch { /* 靜默 */ }
+    }
   } catch { /* 靜默 */ }
   await store.patch(spot.id, patch).catch(() => {});
   return store.getRaw(spot.id);

@@ -67,6 +67,7 @@ route('/trip/:id/settings', async ({ params }) => (await import('./views/trip.js
 route('/trip/:id/people', async ({ params }) => (await import('./views/people.js')).default(params.id));
 route('/trip/:id/album', async ({ params }) => (await import('./views/album.js')).default(params.id));
 route('/trip/:id/poster', async ({ params }) => (await import('./views/poster.js')).default(params.id));
+route('/trip/:id/plan', async ({ params }) => (await import('./views/plan.js')).default(params.id));
 route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
 route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
 route('/settings', async () => (await import('./views/settings.js')).default());

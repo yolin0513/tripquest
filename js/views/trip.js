@@ -8,6 +8,7 @@ import { generateForTrip, templateQuests, inferType } from '../quests/generate.j
 import { blobURL } from '../photos.js';
 import { enrichTrip } from '../enrich.js';
 import { activeMemberId, ensureMember } from '../claim.js';
+import { pickDateRange, rangeLabel } from '../daterange.js';
 
 export default async function trip(tripId) {
   const t = store.get(tripId);
@@ -59,6 +60,7 @@ export default async function trip(tripId) {
         onclick: () => allDone ? navigate(`/trip/${tripId}/album`) : toast(`還有 ${prog.total - prog.done} 個任務就能做影片`),
       }, allDone ? '🎬 製作回憶影片' : `🔒 回憶影片（還差 ${prog.total - prog.done} 個）`),
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/poster`) }, '🎨 做一張行程海報'),
+      spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
       h('button', { class: 'btn btn-ghost btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
     ),
   );
@@ -67,18 +69,9 @@ export default async function trip(tripId) {
     container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'),
       h('button', { class: 'btn btn-primary', onclick: () => addSpot(tripId) }, '＋ 新增景點')));
   } else {
-    for (const [day, list] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
+    for (const [day, daySpots] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
       const sec = h('section', { class: 'day-group' }, h('h3', { class: 'day-title' }, `第 ${day} 天`));
-      for (const s of list) {
-        sec.append(h('div', { class: 'section-label', style: 'margin:16px 2px 8px;display:flex;justify-content:space-between;align-items:center' },
-          h('span', {}, `${s.emoji || '📍'} ${s.name}`),
-          h('button', {
-            class: 'tag', style: 'cursor:pointer',
-            onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`),
-          }, '編輯'),
-        ));
-        for (const q of store.questsOf(s.id)) sec.append(questBigCard(q, s));
-      }
+      for (const s of daySpots) sec.append(spotSection(s, tripId));
       container.append(sec);
     }
     container.append(h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:20px', onclick: () => addSpot(tripId) }, '＋ 新增景點'));
@@ -92,6 +85,56 @@ export default async function trip(tripId) {
       if (location.hash.includes(`/trip/${tripId}`) && !location.hash.includes('/spot/')) trip(tripId);
     }).catch(() => {});
   }
+}
+
+// 每個景點的任務清單：預設折疊，標題列顯示完成進度（3/5）。
+// 展開時機：有任務剛完成 → 自動展開；使用者點擊 → 展開/收合並記住。
+function spotSection(s, tripId) {
+  const quests = store.questsOf(s.id);
+  const p = store.spotProgress(s.id);
+  const allDone = p.total > 0 && p.done === p.total;
+
+  const openKey = 'tripquest.spotOpen.' + s.id;
+  const seenKey = 'tripquest.spotSeen.' + s.id;
+  let open;
+  try {
+    const seen = +(localStorage.getItem(seenKey) || 0);
+    const justCompleted = p.done > seen;
+    localStorage.setItem(seenKey, String(p.done));
+    const stored = localStorage.getItem(openKey);
+    if (justCompleted && !allDone) open = true;
+    else if (stored === '1') open = true;
+    else if (stored === '0') open = false;
+    else open = p.done > 0 && !allDone;
+  } catch { open = p.done > 0 && !allDone; }
+
+  const chev = h('span', { class: 'qc-chev' }, open ? '▾' : '▸');
+  const sec = h('section', { class: 'qcollapse' + (open ? ' open' : '') },
+    h('div', { class: 'qc-head' },
+      h('button', {
+        class: 'qc-toggle', 'aria-expanded': String(open),
+        onclick: () => {
+          const nowOpen = !sec.classList.contains('open');
+          sec.classList.toggle('open', nowOpen);
+          chev.textContent = nowOpen ? '▾' : '▸';
+          try { localStorage.setItem(openKey, nowOpen ? '1' : '0'); } catch { /* noop */ }
+        },
+      },
+        h('span', { class: 'qc-emoji' }, s.emoji || '📍'),
+        h('span', { class: 'qc-name' }, s.name),
+        h('span', {
+          class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
+        }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
+        chev,
+      ),
+      h('button', {
+        class: 'qc-edit', 'aria-label': '編輯景點',
+        onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`),
+      }, '編輯'),
+    ),
+    h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' }, ...quests.map((q) => questBigCard(q, s)))),
+  );
+  return sec;
 }
 
 function questBigCard(q, spot) {
@@ -194,6 +237,11 @@ export function settings(tripId) {
       const v = await promptDialog('旅程名稱', { value: t.title });
       if (v) { store.patch(tripId, { title: v }); toast('已更新'); settings(tripId); }
     } }, '改名字')),
+
+    settingRow('旅程日期', h('button', { class: 'btn btn-soft', onclick: async () => {
+      const res = await pickDateRange({ start: t.startDate, end: t.endDate });
+      if (res) { await store.patch(tripId, { startDate: res.start, endDate: res.end }); toast('已更新日期'); settings(tripId); }
+    } }, t.startDate ? rangeLabel(t.startDate, t.endDate) : '選擇')),
 
     settingRow('旅伴', memberEditor(tripId, t.groupId)),
 

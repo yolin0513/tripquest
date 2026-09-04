@@ -5,6 +5,7 @@ import { navigate } from '../router.js';
 import { uuid } from '../ids.js';
 import { generateForTrip, placeHierarchy, placesOfCity, searchPlaces } from '../quests/generate.js';
 import { enrichTrip } from '../enrich.js';
+import { dateRangeField } from '../daterange.js';
 
 export default async function create() {
   setTop({ title: '建立新旅程' });
@@ -13,12 +14,12 @@ export default async function create() {
     members: ['我'],
     picked: new Map(),          // placeId -> { name, cityId, blurb, emoji }
     nav: { country: null, region: null, city: null, district: null },
+    dates: { start: '', end: '' },
   };
 
   // ---- 基本欄位 ----
   const titleField = h('input', { class: 'field', type: 'text', placeholder: '例：京都家族旅行', maxlength: 40 });
-  const startField = h('input', { class: 'field', type: 'date' });
-  const endField = h('input', { class: 'field', type: 'date' });
+  const dateField = dateRangeField(state.dates);
 
   const memberList = h('div', { class: 'chip-input' });
   const memberField = h('input', { class: 'field', type: 'text', placeholder: '打名字後按 Enter', maxlength: 16 });
@@ -200,14 +201,14 @@ export default async function create() {
       const region = picks.length ? (state.picked.get(picks[0])?.cityName || '') : '';
 
       // 依旅程天數把選到的景點平均分配
-      const days = tripDays(startField.value, endField.value);
+      const days = tripDays(state.dates.start, state.dates.end);
       const items = picks.map((placeId, i) => ({ placeId, day: days > 1 ? Math.min(days, Math.floor(i / Math.ceil(picks.length / days)) + 1) : 1 }));
 
       await store.put({ id: groupId, type: 'group', name: title + ' 旅伴', joinCode: '' });
       for (const name of state.members) await store.put({ id: uuid(), type: 'member', groupId, displayName: name });
       await store.put({
         id: tripId, type: 'trip', groupId, title,
-        startDate: startField.value || '', endDate: endField.value || '',
+        startDate: state.dates.start || '', endDate: state.dates.end || '',
         region: region, allowGeo: false, allowWiki: true,
       });
 
@@ -232,7 +233,7 @@ export default async function create() {
 
   render(h('div', { class: 'page form' },
     field('旅程名稱', titleField),
-    h('div', { class: 'row-2' }, field('出發日', startField), field('回程日', endField)),
+    field('哪幾天去？', dateField),
     field('有誰要一起', h('div', {}, memberList, memberField)),
 
     h('div', { class: 'section-label' }, '選景點'),

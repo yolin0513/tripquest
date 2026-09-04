@@ -3,7 +3,7 @@
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  */
-const VERSION = 'tripquest-v1.3.0';
+const VERSION = 'tripquest-v1.4.0';
 const SHELL = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [
@@ -19,6 +19,8 @@ const SHELL_ASSETS = [
   './js/ids.js',
   './js/identity.js',
   './js/prefs.js',
+  './js/daterange.js',
+  './js/ai.js',
   './js/photos.js',
   './js/exif.js',
   './js/share.js',
@@ -35,6 +37,7 @@ const SHELL_ASSETS = [
   './js/poster/deco.js',
   './js/poster/presets.js',
   './js/views/poster.js',
+  './js/views/plan.js',
   './js/views/home.js',
   './js/views/create.js',
   './js/views/trip.js',

@@ -14,6 +14,8 @@
 // 合併規則：submission / reaction / comment / memberClaim 只新增（already-exists 就跳過）；
 // 其餘中繼資料用「後寫入者勝（updatedAt，deviceId 決勝）＋ 墓碑」。
 
+import { isAIPath, handleAI } from './ai.mjs';
+
 const APPEND_ONLY = new Set(['submission', 'reaction', 'comment', 'retraction', 'memberClaim']);
 const PULL_LIMIT = 500;
 
@@ -23,7 +25,15 @@ export default {
     const path = url.pathname.replace(/\/+$/, '') || '/';
 
     if (request.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
-    if (path === '/health') return json({ ok: true, ts: Date.now() });
+    if (path === '/health') {
+      return json({ ok: true, ts: Date.now(), ai: !!env.AI_ACCESS_TOKEN });
+    }
+
+    // 可選的 AI 加值層（自帶通行碼 + 用量上限，不需要群組祕鑰）
+    if (isAIPath(path)) {
+      try { return await handleAI(request, env, url, path); }
+      catch (e) { return json({ error: 'ai_error', detail: String(e && e.message || e) }, 500); }
+    }
 
     const groupId = url.searchParams.get('g');
     const secret = bearer(request) || url.searchParams.get('s');

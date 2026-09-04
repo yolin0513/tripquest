@@ -125,6 +125,20 @@ await page.evaluate(() => document.querySelector('.place-card')?.scrollIntoView(
 await sleep(300);
 await shot('03-create-places');
 
+// ---------- 27. 日期選擇（月曆連點起訖） ----------
+await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('.date-range-btn')?.click(); });
+await page.waitForSelector('.cal-grid');
+await sleep(200);
+await page.evaluate(() => {
+  const cells = [...document.querySelectorAll('.cal-cell:not(.cal-blank)')];
+  cells[9]?.click();
+  cells[11]?.click();
+});
+await sleep(250);
+await shot('27-date-picker');
+await page.evaluate(() => [...document.querySelectorAll('.modal-card .btn')].find(b => b.textContent.includes('完成'))?.click());
+await sleep(150);
+
 // ---------- 4. 行程總覽 ----------
 await go(`/#/trip/${tripId}`);
 await page.waitForSelector('.qbig');
@@ -134,6 +148,20 @@ await shot('04-trip-overview');
 await page.evaluate(() => window.scrollTo(0, 820));
 await sleep(300);
 await shot('05-task-cards');
+
+// ---------- 26. 任務清單預設折疊（部分完成）----------
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.qcollapse');
+await page.evaluate(() => window.scrollTo(0, 560));
+await sleep(300);
+await shot('26-tasks-collapsed');
+
+// ---------- 25. 總行程編輯（拖拉 + 大按鈕）----------
+await go(`/#/trip/${tripId}/plan`);
+await page.waitForSelector('.plan-row');
+await page.evaluate(() => window.scrollTo(0, 120));
+await sleep(300);
+await shot('25-plan-editor');
 
 // ---------- 6. 任務詳情 ----------
 const questId = await page.evaluate(async (tid) => {

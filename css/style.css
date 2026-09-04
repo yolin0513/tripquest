@@ -639,3 +639,136 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .wiki-box img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; flex: none; }
 .wiki-text { min-width: 0; }
 .wiki-text p { margin: 0 0 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- 日期範圍選擇 ---------- */
+.date-range-btn {
+  appearance: none; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg-elev); border: 2px solid var(--line); border-radius: 14px;
+  padding: 16px 14px; color: var(--text); min-height: var(--tap);
+}
+.date-range-btn.has-val { border-color: var(--primary); }
+.date-range-btn:active { transform: scale(0.99); }
+.drb-icon { font-size: 1.4rem; flex: none; }
+.drb-placeholder { color: var(--muted); font-weight: 600; }
+.drb-val { font-weight: 800; flex: 1; min-width: 0; }
+.drb-edit { color: var(--primary); font-weight: 800; font-size: 0.9rem; flex: none; }
+
+.cal-card { max-width: 460px; margin: 0 auto; border-radius: 24px; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.cal-title { font-size: 1.15rem; font-weight: 800; }
+.cal-arrow {
+  appearance: none; border: 2px solid var(--line); background: var(--bg-elev);
+  color: var(--text); border-radius: 12px; width: 52px; height: 52px; flex: none;
+  font-size: 1.7rem; line-height: 1; cursor: pointer; display: grid; place-items: center;
+}
+.cal-arrow:active { transform: scale(0.94); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-wd { text-align: center; font-size: 0.8rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.cal-cell {
+  appearance: none; border: 0; background: transparent; color: var(--text);
+  font: inherit; font-weight: 700; cursor: pointer;
+  aspect-ratio: 1; min-height: 44px; border-radius: 12px;
+  display: grid; place-items: center;
+}
+.cal-cell.cal-blank { visibility: hidden; }
+.cal-cell:active { transform: scale(0.92); }
+.cal-today { box-shadow: inset 0 0 0 2px var(--line); }
+.cal-mid { background: color-mix(in srgb, var(--primary) 22%, transparent); border-radius: 0; }
+.cal-start, .cal-end, .cal-single { background: var(--primary); color: var(--primary-ink); }
+.cal-start:not(.cal-single) { border-radius: 12px 0 0 12px; }
+.cal-end { border-radius: 0 12px 12px 0; }
+.cal-summary {
+  text-align: center; font-weight: 700; color: var(--muted);
+  margin: 14px 4px 4px; line-height: 1.5; min-height: 2.6em;
+}
+.cal-card .btn-big { margin-top: 6px; }
+
+/* ---------- 折疊式任務清單 ---------- */
+.qcollapse {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-elev); overflow: hidden; margin-bottom: 12px;
+}
+.qc-head { display: flex; align-items: stretch; }
+.qc-toggle {
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit;
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 16px 14px; cursor: pointer; text-align: left;
+}
+.qc-toggle:active { background: var(--bg-elev-2); }
+.qc-emoji { font-size: 1.5rem; flex: none; }
+.qc-name { font-size: 1.1rem; font-weight: 800; flex: 1; min-width: 0; line-height: 1.25; }
+.qc-prog {
+  flex: none; font-size: 0.9rem; font-weight: 800; padding: 4px 12px; border-radius: 999px;
+  background: var(--bg-elev-2); color: var(--muted);
+}
+.qc-prog.part { color: var(--accent); }
+.qc-prog.done { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+.qc-chev { flex: none; color: var(--muted); font-size: 0.9rem; width: 1.2em; text-align: center; }
+.qc-edit {
+  appearance: none; border: 0; border-left: 1px solid var(--line); background: transparent;
+  color: var(--muted); font: inherit; font-weight: 700; padding: 0 16px; cursor: pointer; flex: none;
+}
+.qc-edit:active { background: var(--bg-elev-2); }
+.qc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.28s ease; }
+.qcollapse.open .qc-body { grid-template-rows: 1fr; }
+.qc-inner { overflow: hidden; min-height: 0; padding: 4px 12px 2px; }
+.qc-inner .qbig:last-child { margin-bottom: 12px; }
+
+/* ---------- 總行程編輯 ---------- */
+.plan-tip { color: var(--muted); font-size: 0.95rem; line-height: 1.6; margin: 0 2px 16px; }
+.plan-list { display: block; }
+.plan-divider {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin: 22px 2px 10px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
+}
+.plan-divider:first-child { margin-top: 4px; }
+.pd-day { font-size: 1.15rem; font-weight: 800; }
+.pd-count { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+.plan-empty {
+  border: 2px dashed var(--line); border-radius: 14px; padding: 18px 14px;
+  text-align: center; color: var(--muted); font-weight: 600; margin-bottom: 10px;
+}
+.plan-row {
+  display: flex; align-items: stretch; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 16px;
+  padding: 12px; margin-bottom: 10px;
+}
+.plan-row.is-dragging { opacity: 0.35; }
+.plan-ghost {
+  background: var(--bg-elev-2); border: 2px solid var(--primary); border-radius: 16px;
+  padding: 12px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); opacity: 0.96;
+  display: flex; gap: 10px;
+}
+.plan-handle {
+  appearance: none; border: 0; background: var(--bg-elev-2); color: var(--muted);
+  border-radius: 12px; width: 52px; flex: none; font-size: 1.5rem; cursor: grab;
+  touch-action: none; display: grid; place-items: center;
+}
+.plan-handle:active { cursor: grabbing; background: var(--primary); color: var(--primary-ink); }
+.plan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.plan-name { font-size: 1.1rem; font-weight: 800; line-height: 1.3; }
+.plan-time { font-size: 0.9rem; color: var(--muted); font-weight: 700; }
+.plan-row-actions { display: flex; gap: 8px; margin-top: 6px; }
+.plan-mini {
+  appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+  border-radius: 999px; padding: 8px 16px; font-weight: 800; font-size: 0.9rem; cursor: pointer; min-height: 42px;
+}
+.plan-mini:active { transform: scale(0.95); }
+.plan-updown { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.plan-arrow {
+  appearance: none; border: 2px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+  border-radius: 12px; width: 52px; flex: 1; font-size: 1.1rem; font-weight: 800; cursor: pointer;
+}
+.plan-arrow:active { transform: scale(0.94); }
+.plan-arrow:disabled { opacity: 0.28; cursor: default; }
+.plan-addspot {
+  appearance: none; width: 100%; border: 2px dashed var(--line); background: transparent;
+  color: var(--primary); border-radius: 14px; padding: 14px; font-weight: 800; cursor: pointer;
+  min-height: 52px; margin-bottom: 6px;
+}
+.plan-addspot:active { transform: scale(0.99); }
+.plan-day-tools { display: flex; gap: 10px; margin-top: 20px; }
+.plan-day-tools .btn { flex: 1; margin-top: 0; }
+.day-move-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.day-move-grid .btn { margin-top: 0; }

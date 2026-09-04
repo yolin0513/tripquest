@@ -14,6 +14,9 @@
 
 - **大字、大按鈕**：全站用 rem 排版，字級可在設定切「標準 / 大 / 特大」，另有高對比模式。觸控目標 ≥ 56px。
 - **少打字**：建立行程時**階層式按鈕選景點**（國家 → 地區 → 城市 → 行政區 → 地點），打字搜尋為輔；貼整段行程文字則收在「進階」裡。內建台日韓 15 城市、約 135 個地點，含**夜市與必吃清單**、在地小吃、打卡點，每個都有一句在地介紹。
+- **日期用月曆點**：點輸入框跳出大格子月曆，點一下起日、再點一下訖日，中間範圍標色，即時顯示「共 N 天 M 夜」，支援單日行程。
+- **任務清單預設折疊**：每個景點的任務收起來，標題列顯示完成進度（如 `3/5`）；有任務完成會自動展開，收合狀態會記住。景點多也不會爆版。
+- **總行程編輯**：一頁綜觀整趟行程，**按住 ☰ 拖曳**把景點換天、換順序（跨天也行），或用每個景點的 ▲ ▼ 和「換天」大按鈕。調整後任務與照片自動跟著搬，不掉進度。
 - **一鍵拍照**：任務頁只有一顆大大的「📷 拍照」。「這張誰拍的」每個旅程只問一次就記住。
 - **明確的成就回饋**：每完成一個任務跳出全螢幕慶祝畫面（打勾 + 彩帶 + 震動 + 進度），全部完成再放大絕。
 - **看得到彼此**：「照片牆」顯示每個人的進度，和所有人拍的照片；可以按 ❤️👍😍👏、留言互相鼓勵。
@@ -48,6 +51,17 @@
 - **3 種風格**：水彩 / 簡約 / 雜誌
 - 輸出 1240px 寬 JPEG；行程 ≥ 3 天則一天一張。全程 canvas 2D，無外部函式庫，不上傳
 - 之後若接影像生成 API，介面已預留（`preset.bgProvider`），但現在完全不依賴
+
+---
+
+## AI 加值層（可選，預設關閉）
+
+**不設定也完全能用。** 想要「更精美一點」的人，可以接自己的金鑰——**但金鑰一律放在你自己的 Cloudflare Worker（`wrangler secret`），前端與 repo 永遠不會有金鑰，我們也不經手。**
+
+- Worker（`workers/ai.mjs`，與同步 Worker 同一個）代理 Claude API（景點一句話介紹、影片旁白）與 Google TTS（旁白配音）。
+- **每月花費上限 + 速率限制**寫在 Worker 裡（D1 `ai_usage` / `ai_rate`）：達上限回 402、太頻繁回 429，App 自動改回免金鑰做法。邀請連結外流也只會撞上限。
+- 前端只存「Worker 網址 + 你自訂的通行碼」，設定頁可逐項開關、看得到「本月已用 $X / 上限 $Y」。
+- 三個獨立代理查證官方文件後的完整效益評估與計價見 [`docs/AI_INTEGRATION.md`](./docs/AI_INTEGRATION.md)。結論：**大多數 AI 用途該在維護者端批次做掉**；Instagram / Threads 抓熱門都做不到；訂閱制音樂庫不值得；實測一年成本約 $0–3 美金。
 
 ---
 
@@ -95,6 +109,8 @@ js/
   store.js db.js ids.js    狀態層（所有寫入的唯一入口）+ IndexedDB + UUID/雜湊
   identity.js              裝置身分（存 IndexedDB）+ 身分備份卡
   prefs.js                 字級 / 對比偏好
+  daterange.js             月曆式起訖日選擇（點兩下選範圍、顯示天數）
+  ai.js                    可選的 AI 加值層（只存 Worker 網址+通行碼，無金鑰）
   photos.js exif.js        照片匯入：讀 EXIF → Worker 壓縮去中繼資料 → 內容雜湊 → 存 blob；全圖延遲下載
   worker-image.js          背景執行緒影像壓縮（WebP 探測 → JPEG 保險）
   quests/generate.js       地點資料存取 + 任務產生（策展地點 → 標籤/必吃出題 → 類型模板 → 通用題保底）
@@ -103,12 +119,13 @@ js/
   memory.js music.js       回憶影片：時間軸繪製 + MediaRecorder + 程序配樂 + 動態相簿頁
   share.js                 邀請連結（同步 / 複製兩種）+ 備份匯入匯出
   sync.js outbox.js claim.js  可插拔同步層 + 離線重試佇列 + 「這是誰的手機」認領
-  views/                   home create trip spot quest people album settings join
+  views/                   home create trip spot quest people album settings join plan
+  views/plan.js            總行程編輯：拖曳 / 大按鈕調整景點的天與順序
 data/places/index.json     選景點的階層骨架（國家→地區→城市→行政區）
 data/places/<city>.json    各城市的地點清單（惰性載入；schema.json 定義形狀）
 data/templates.json        規則式任務模板
 server/index.mjs           選配的自架同步伺服器（零相依，協定同 Worker）
-workers/                   Cloudflare Worker（worker.mjs / schema.sql / wrangler.toml）
+workers/                   Cloudflare Worker（worker.mjs 同步 / ai.mjs 可選 AI 代理 / schema.sql / wrangler.toml）
 docs/ARCHITECTURE_DECISION.md   後端 / 身分 / 照片策略的決策紀錄（3 代理投票）
 scripts/                   make-icons · screenshots（冒煙測試）· gallery（功能截圖）· synctest（同步端到端）
 ```

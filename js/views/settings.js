@@ -8,6 +8,13 @@ import { getPrefs, setPref, FS_LABELS } from '../prefs.js';
 import { getConfig, setConfig, modeLabel, syncEnabled, testConnection, syncNow } from '../sync.js';
 import { myName, setMyName, exportCard, encodeCard, decodeCard, importCard } from '../identity.js';
 import { pendingCount } from '../outbox.js';
+import { getAIConfig, setAIConfig, aiConfigured, aiTest, aiUsage, FEATURES } from '../ai.js';
+
+const AI_FEATURE_LABELS = {
+  recommend: ['景點・美食一句話介紹', '內建資料庫沒有的景點，補一句在地介紹'],
+  narrate: ['回憶影片旁白文字', '每天一句溫暖的旁白（仍可自己改）'],
+  tts: ['旁白語音（唸出來）', '把旁白配成語音，需要伺服器設定 Google TTS 金鑰'],
+};
 
 export default async function settings() {
   setTop({ title: '設定', back: false });
@@ -103,11 +110,15 @@ export default async function settings() {
     h('button', { class: 'btn btn-soft btn-block', onclick: () => bundleInput.click() }, '📥 匯入備份檔（.tripquest.json）'),
     bundleInput,
 
+    // ---- AI 加值（進階、可選）----
+    h('div', { class: 'section-label' }, 'AI 加值功能（進階、可選）'),
+    aiSection(settings),
+
     // ---- 關於 ----
     h('div', { class: 'section-label' }, '關於'),
     h('div', { class: 'card about' },
-      h('p', { class: 'sm' }, 'TripQuest 旅圖任務 v1.2 — 純前端 App，不需帳號密碼。單機可用；設定同步後照片會存一份到旅伴共用的伺服器。'),
-      h('p', { class: 'form-hint' }, '任務來源：內建景點資料庫 + 規則模板；景點示意圖來自 zh.wikipedia.org（只送景點名稱）。'),
+      h('p', { class: 'sm' }, 'TripQuest 旅圖任務 v1.4 — 純前端 App，不需帳號密碼。單機可用；設定同步後照片會存一份到旅伴共用的伺服器。'),
+      h('p', { class: 'form-hint' }, '任務來源：內建景點資料庫 + 規則模板；景點示意圖來自 zh.wikipedia.org（只送景點名稱）。AI 加值功能預設關閉。'),
     ),
 
     h('div', { class: 'danger-zone' },
@@ -125,6 +136,77 @@ function checkbox(checked, onChange) {
   const el = h('input', { type: 'checkbox', checked });
   el.addEventListener('change', () => onChange(el.checked));
   return el;
+}
+
+// ---- AI 加值層 ----
+function aiSection(refresh) {
+  const cfg = getAIConfig();
+  const on = aiConfigured();
+
+  const box = h('div', { class: 'card about' },
+    h('p', { class: 'sm' }, on
+      ? '已連上你自己的 AI 伺服器。沒開的功能一切照舊，不會有任何花費。'
+      : '不設定也完全能用 —— 這是給想要「更精美一點」的人的選項。金鑰放在你自己的 Cloudflare Worker（我們不經手），Worker 有每月花費上限與速率限制。'),
+  );
+
+  if (!on) {
+    box.append(h('button', { class: 'btn btn-soft btn-block', onclick: () => configureAI(refresh) }, '⚙️ 設定 AI 伺服器'),
+      h('p', { class: 'form-hint' }, '做法見 docs/AI_INTEGRATION.md。實測一年約 $0～3 美金；訂閱制服務一律不建議。'));
+    return box;
+  }
+
+  // 各功能開關
+  for (const f of FEATURES) {
+    const [title, hint] = AI_FEATURE_LABELS[f];
+    box.append(h('label', { class: 'switch-row' },
+      h('div', {}, h('div', { style: 'font-weight:700' }, title), h('div', { class: 'form-hint' }, hint)),
+      checkbox(cfg.features[f], (v) => { setAIConfig({ features: { [f]: v } }); })));
+  }
+
+  // 用量 / 花費
+  const usageLine = h('p', { class: 'sm muted', style: 'margin-top:10px' }, '讀取本月用量…');
+  const bar = h('div', { class: 'storage-bar', style: 'margin-top:6px' }, h('i', { style: 'width:0%' }));
+  aiUsage().then((u) => {
+    if (!u) { usageLine.textContent = '（連不上伺服器，無法顯示用量）'; return; }
+    const pct = u.capUsd ? Math.min(100, (u.usedUsd / u.capUsd) * 100) : 0;
+    bar.firstChild.style.width = pct + '%';
+    usageLine.textContent = `本月已用 $${u.usedUsd.toFixed(2)} / 上限 $${u.capUsd.toFixed(2)}（${u.calls} 次）・每月 1 號重置`;
+  });
+  box.append(usageLine, bar);
+
+  box.append(h('div', { class: 'stack', style: 'margin-top:12px' },
+    h('button', { class: 'btn btn-soft btn-block', onclick: () => configureAI(refresh) }, '更改伺服器 / 通行碼'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: async () => {
+      if (await confirmDialog('移除 AI 設定？功能會回到免金鑰的做法。')) { setAIConfig({ url: '', token: '' }); toast('已移除'); refresh(); }
+    } }, '移除 AI 設定'),
+  ));
+  return box;
+}
+
+async function configureAI(refresh) {
+  const cfg = getAIConfig();
+  const urlField = h('input', { class: 'field', type: 'url', value: cfg.url, placeholder: 'https://tripquest.你的名字.workers.dev' });
+  const tokenField = h('input', { class: 'field', type: 'text', value: cfg.token, placeholder: 'AI 通行碼（你在 Worker 設的 AI_ACCESS_TOKEN）' });
+  const res = await modal({
+    title: 'AI 伺服器設定',
+    body: h('div', {},
+      h('p', { class: 'sm muted', style: 'margin:0 0 10px' }, '同一個 Cloudflare Worker 就能跑同步 + AI。這裡只填網址和你自訂的通行碼，真正的 API 金鑰請用 `wrangler secret put` 設在 Worker，不要填在這裡。'),
+      h('div', { class: 'stack' }, urlField, tokenField),
+      h('p', { class: 'form-hint' }, '把通行碼分享給家人，他們在自己手機貼上就能用。金鑰外流也只會撞到每月上限，不會無限刷。'),
+    ),
+    actions: [{ label: '取消', value: null }, { label: '測試並儲存', value: 'save', primary: true }],
+  });
+  if (res !== 'save') return;
+  const url = urlField.value.trim().replace(/\/$/, '');
+  const token = tokenField.value.trim();
+  if (!url || !token) { toast('網址和通行碼都要填'); return refresh(); }
+  toast('測試中…');
+  const t = await aiTest(url, token);
+  if (!t.ok) { toast('連不上：' + (t.message || t.error || '')); return; }
+  setAIConfig({ url, token });
+  const f = t.usage && t.usage.features || {};
+  toast(`連線成功！文字：${f.recommend ? '可用' : '未設金鑰'}、語音：${f.tts ? '可用' : '未設金鑰'}`);
+  refresh();
 }
 
 async function joinByCode() {
