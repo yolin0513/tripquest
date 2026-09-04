@@ -163,7 +163,7 @@ views/sos.js               緊急求助畫面
 server/index.mjs           選配的自架同步伺服器（零相依，協定同 Worker）
 workers/                   Cloudflare Worker（worker.mjs 只做同步 / schema.sql / wrangler.toml）
 docs/ARCHITECTURE_DECISION.md   後端 / 身分 / 照片策略的決策紀錄（3 代理投票）
-scripts/                   make-icons · screenshots（冒煙）· gallery（功能截圖）· synctest（同步端到端）· secret-leak-test（AI 金鑰不外洩斷言）
+scripts/                   make-icons · screenshots（冒煙）· gallery（功能截圖）· synctest（同步端到端）· livetest（正式站端到端）· secret-leak-test（AI 金鑰不外洩斷言）· publish-cloud.mjs（免 WSL 部署）
 ```
 
 執行 App 本身**不需要任何 npm 套件**。`puppeteer` 只有測試腳本會用到。
@@ -178,9 +178,11 @@ python -m http.server 5174        # 或 npx serve、或 node server/index.mjs
 
 開 <http://localhost:5174>。（`file://` 直接開也能跑大部分功能，SW 與 module worker 需要 http。）
 
-## 部署 GitHub Pages
+## 部署
 
-見 [`SETUP_TODO.md`](./SETUP_TODO.md) 第 1 項。已含 `.nojekyll`，全相對路徑，可放子目錄。
+- **前端**：GitHub Pages，已上線 <https://yolin0513.github.io/tripquest/>。含 `.nojekyll`，全相對路徑，可放子目錄。
+- **多人同步後端**：Cloudflare Worker，已上線 <https://tripquest.yolin0513.workers.dev>（Workers + D1 + R2，全在免費額度內）。家人開前端網址即自動連上，不需設定。
+- **重新部署 / 換帳號**：`npm run deploy-cloud`（`scripts/publish-cloud.mjs`，跨平台 Node、免 WSL；開一次瀏覽器按 Allow，其餘全自動）。詳見 [`SETUP_TODO.md`](./SETUP_TODO.md)。
 
 ## 開發者指令
 
@@ -188,6 +190,9 @@ python -m http.server 5174        # 或 npx serve、或 node server/index.mjs
 npm run dev          # python http.server
 npm run icons        # 重新產生 App 圖示
 npm run screenshots  # Puppeteer 冒煙測試 + 產生 screenshots/
+npm run synctest     # 同步端到端（本機自架後端，或 --url <workers.dev>）
+npm run livetest     # 對正式站（Pages + Worker）跑完整同步端到端
+npm run deploy-cloud # 部署 / 更新 Cloudflare 同步後端（免 WSL）
 ```
 
 ---

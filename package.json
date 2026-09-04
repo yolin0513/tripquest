@@ -10,6 +10,8 @@
     "gallery": "node scripts/gallery.mjs",
     "theme-posters": "node scripts/theme-posters.mjs",
     "synctest": "node scripts/synctest.mjs",
+    "livetest": "node scripts/livetest.mjs",
+    "deploy-cloud": "node scripts/publish-cloud.mjs",
     "validate-places": "node scripts/validate-places.mjs",
     "secret-leak-test": "node scripts/secret-leak-test.mjs",
     "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"
