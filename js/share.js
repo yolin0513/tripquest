@@ -81,19 +81,22 @@ export async function shareURL(tripId) {
     const spots = store.spotsOf(tripId);
     const quests = store.questsOfTrip(tripId);
     const members = store.membersOf(trip.groupId);
+    // 連結只帶「群組識別碼」，不帶整包資料——不然景點/任務一多，網址長到
+    // LINE 等 App 傳不過去、貼上也常斷行漏字，變成「無法解析」。
+    // 朋友點連結加入時，直接從伺服器把這個群組的資料整包拉下來（見 joinInvite）。
+    // 所以這裡要先確保伺服器上真的有最新資料：即時推一次（等不到也不擋，outbox 背景會補）。
+    try {
+      const { adapterForGroup } = await import('./sync.js');
+      const adapter = adapterForGroup(group.id, group.syncSecret);
+      const pushTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000));
+      await Promise.race([adapter.push(store.exportGroup(group.id)), pushTimeout]);
+    } catch { /* 推不上去也繼續給連結；outbox 背景會重試，加入時也會再拉一次 */ }
     const payload = {
-      v: 2, kind: 'sync',
+      v: 3, kind: 'sync',
       url: getConfig().url,
       groupId: group.id, secret: group.syncSecret, tripId,
-      title: trip.title, startDate: trip.startDate, endDate: trip.endDate,
-      // 帶真實記錄（用真 id），讓朋友立刻能玩，同步再補其餘（照片 / 投稿 / 讚）
-      records: [
-        { id: group.id, type: 'group', name: group.name, syncSecret: group.syncSecret, syncUrl: group.syncUrl, updatedAt: group.updatedAt, deviceId: group.deviceId },
-        { id: trip.id, type: 'trip', groupId: group.id, title: trip.title, startDate: trip.startDate, endDate: trip.endDate, region: trip.region || '', allowGeo: !!trip.allowGeo, allowWiki: trip.allowWiki !== false, updatedAt: trip.updatedAt, deviceId: trip.deviceId },
-        ...members.map((m) => ({ id: m.id, type: 'member', groupId: group.id, displayName: m.displayName, updatedAt: m.updatedAt, deviceId: m.deviceId })),
-        ...spots.map((s) => ({ id: s.id, type: 'spot', tripId, name: s.name, nameLocal: s.name, region: s.region, day: s.day, order: s.order, lat: s.lat ?? null, lng: s.lng ?? null, heroHash: s.heroHash || null, emoji: s.emoji || null, source: s.source, updatedAt: s.updatedAt, deviceId: s.deviceId })),
-        ...quests.map((q) => ({ id: q.id, type: 'quest', tripId, spotId: q.spotId, title: q.title, hint: q.hint, kind: q.kind, order: q.order, source: q.source, updatedAt: q.updatedAt, deviceId: q.deviceId })),
-      ],
+      title: trip.title, groupName: group.name || '旅伴',
+      spots: spots.length, quests: quests.length, members: members.length,
     };
     return `${base}#/join?j=${await gzip(JSON.stringify(payload))}`;
   }
@@ -105,10 +108,14 @@ export async function shareURL(tripId) {
 export async function peekInvite(code) {
   const p = JSON.parse(await gunzip(code));
   if (p.kind !== 'sync') throw new Error('邀請格式不符');
-  const spots = (p.records || []).filter((r) => r.type === 'spot').length;
-  const quests = (p.records || []).filter((r) => r.type === 'quest').length;
-  const grp = (p.records || []).find((r) => r.type === 'group');
-  return { sync: true, group: grp?.name || '旅伴', title: p.title || '行程', spots, quests, url: p.url };
+  if (Array.isArray(p.records)) {
+    // 舊版連結相容（v2，整包資料直接帶在連結裡）
+    const spots = p.records.filter((r) => r.type === 'spot').length;
+    const quests = p.records.filter((r) => r.type === 'quest').length;
+    const grp = p.records.find((r) => r.type === 'group');
+    return { sync: true, group: grp?.name || '旅伴', title: p.title || '行程', spots, quests, url: p.url };
+  }
+  return { sync: true, group: p.groupName || '旅伴', title: p.title || '行程', spots: p.spots || 0, quests: p.quests || 0, url: p.url };
 }
 
 export async function joinInvite(code) {
@@ -118,8 +125,26 @@ export async function joinInvite(code) {
   if (p.url && getConfig().mode === 'local') {
     setConfig({ mode: p.url.includes('workers.dev') ? 'cloud' : 'lan', url: p.url });
   }
-  // 用真實 id 建立 / 合併群組與行程骨架
-  await store.importRecords(p.records || [], { merge: true });
+  if (Array.isArray(p.records) && p.records.length) {
+    // 舊版連結相容：資料本來就帶在連結裡
+    await store.importRecords(p.records, { merge: true });
+  } else {
+    // 新版連結：只帶群組識別碼，資料整包從伺服器拉下來（這台是新裝置，since=0）
+    const { adapterForGroup, setCursor } = await import('./sync.js');
+    const adapter = adapterForGroup(p.groupId, p.secret);
+    let since = 0, total = 0;
+    for (let guard = 0; guard < 30; guard++) {
+      const res = await adapter.pull(since);
+      if (res.records && res.records.length) {
+        await store.importRecords(res.records, { merge: true });
+        total += res.records.length;
+      }
+      if (typeof res.seq === 'number') since = res.seq;
+      if (!res.more) break;
+    }
+    await setCursor(p.groupId, since);
+    if (!total) throw new Error('伺服器上還沒有這趟旅程的資料，請邀請人確認網路正常後再分享一次連結');
+  }
   // 立刻同步一輪，把成員 / 投稿 / 照片補回來
   try { const { drain } = await import('./outbox.js'); await drain(); } catch { /* 稍後自動重試 */ }
   return p.tripId;

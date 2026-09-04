@@ -50,19 +50,29 @@ function sigOf(obj) {
 const inFlight = new Map();
 
 // 核心：回傳快取 payload，或（建立者且該產時）產一份、快取、回傳。永不 throw。
-async function ensure(tripId, key, sig, generate) {
+//
+// 併發安全的關鍵：從「查快取」到「登記 inFlight」這段路上絕不能有 await —— 這裡的
+// 每一步都是同步的，JS 單執行緒保證兩個幾乎同時的呼叫，先跑到的那個會不被打斷地
+// 做完「查快取 → 查 inFlight → 登記 inFlight」整套，第二個呼叫進來時一定看得到
+// 第一個已經登記的 inFlight，不會兩邊都誤判「還沒人在做」而各自真的打一次 API
+// （例如 enrichTrip 背景任務跟第一次進頁的 warmTripContent 幾乎同時觸發時）。
+// 真正要等的（aiOn 要讀 IndexedDB 金鑰、generate 要打 API）全部搬進 inFlight
+// 追蹤的 promise 裡面才 await。
+function ensure(tripId, key, sig, generate) {
   const cached = aiTextRec(tripId, key);
-  if (cached && cached.sig === sig && cached.payload) return cached.payload;
-
-  const trip = store.get(tripId);
-  if (!trip || !isCreator(trip)) return cached ? cached.payload : null;
-  if (!(await aiOn(tripId))) return cached ? cached.payload : null;
+  if (cached && cached.sig === sig && cached.payload) return Promise.resolve(cached.payload);
 
   const flightKey = tripId + ':' + key;
-  if (inFlight.has(flightKey)) { try { return await inFlight.get(flightKey); } catch { return cached ? cached.payload : null; } }
+  if (inFlight.has(flightKey)) return inFlight.get(flightKey).catch(() => (cached ? cached.payload : null));
 
   const p = (async () => {
     try {
+      const trip = store.get(tripId);
+      if (!trip || !isCreator(trip)) return cached ? cached.payload : null;
+      if (!(await aiOn(tripId))) return cached ? cached.payload : null;
+      // 等 aiOn 的這段時間，sig 有可能已經被別的呼叫寫好了（沒被 inFlight 擋到的舊快取）
+      const cached2 = aiTextRec(tripId, key);
+      if (cached2 && cached2.sig === sig && cached2.payload) return cached2.payload;
       const payload = await generate();
       if (payload && (Array.isArray(payload) ? payload.length : Object.keys(payload).length)) {
         await writePayload(tripId, key, payload, sig);
@@ -297,16 +307,25 @@ export async function ensureRecapText(tripId, facts) {
 
 // 行程頁載入時在背景把該產的都產一產（安靜、有快取就秒回）。
 // 回傳 true = 這次真的有新內容產生 / 更新（呼叫端才需要重繪，避免無限重繪）。
-export async function warmTripContent(tripId) {
-  const trip = store.get(tripId);
-  if (!trip || !trip.aiEnabled) return false;
-  const before = warmStamp(tripId);
-  try {
-    await ensureTripText(tripId);
-    await ensureSpotBlurbs(tripId);
-    await ensureSpotQuests(tripId);
-  } catch { /* 靜默 */ }
-  return warmStamp(tripId) !== before;
+//
+// 同一個 tripId 同時只會真的跑一份：trip.js 進頁會呼叫、enrichTrip 補完景點後的
+// 重繪也會再呼叫一次，兩個幾乎同時發生時不能各自都去產生 / 花錢一次。
+const warmingTrips = new Map();
+export function warmTripContent(tripId) {
+  if (warmingTrips.has(tripId)) return warmingTrips.get(tripId);
+  const p = (async () => {
+    const trip = store.get(tripId);
+    if (!trip || !trip.aiEnabled) return false;
+    const before = warmStamp(tripId);
+    try {
+      await ensureTripText(tripId);
+      await ensureSpotBlurbs(tripId);
+      await ensureSpotQuests(tripId);
+    } catch { /* 靜默 */ }
+    return warmStamp(tripId) !== before;
+  })().finally(() => warmingTrips.delete(tripId));
+  warmingTrips.set(tripId, p);
+  return p;
 }
 
 function warmStamp(tripId) {
