@@ -47,6 +47,17 @@ export function back(fallback = '/') {
 }
 export function canGoBack() { return depth > 0; }
 
+// 清掉導覽堆疊、直接回到某一頁（用在「主畫面」的返回：一步跳回我的旅程，
+// 不要一層一層退）。
+export function resetHistory(path = '/') {
+  trail.length = 0;
+  trail.push(path);
+  depth = 0;
+  const target = '#' + path;
+  if ((location.hash || '#/') === target) resolve();
+  else location.replace(target);
+}
+
 function parse(hash) {
   const raw = (hash ?? location.hash).replace(/^#/, '') || '/';
   const path = raw.split('?')[0];

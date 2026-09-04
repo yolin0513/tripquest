@@ -15,7 +15,8 @@ const KIND = {
   pharmacy: { label: '藥局', emoji: '💊', q: 'amenity=pharmacy' },
 };
 
-function cacheKey(lat, lng) { return `${lat.toFixed(2)},${lng.toFixed(2)}`; }
+// v2：醫院查詢半徑放大 + 分級排序，舊快取自動失效
+function cacheKey(lat, lng) { return `v2:${lat.toFixed(2)},${lng.toFixed(2)}`; }
 
 function readCache(lat, lng) {
   try {
@@ -36,9 +37,14 @@ function writeCache(lat, lng, data) {
 }
 
 function buildQuery(lat, lng, radius) {
-  const parts = Object.values(KIND).map((k) =>
-    `nwr[${k.q}](around:${radius},${lat},${lng});`).join('');
-  return `[out:json][timeout:20];(${parts});out center tags 60;`;
+  // 醫院 / 急診用大一點的半徑（真正緊急時，遠一點的大醫院比隔壁小診所有用）
+  const hospRadius = Math.max(radius * 3, 8000);
+  const parts = [
+    `nwr[amenity=police](around:${radius},${lat},${lng});`,
+    `nwr[amenity=pharmacy](around:${radius},${lat},${lng});`,
+    `nwr[amenity~"^(hospital|clinic)$"](around:${hospRadius},${lat},${lng});`,
+  ].join('');
+  return `[out:json][timeout:25];(${parts});out center tags 80;`;
 }
 
 function classify(tags) {
@@ -47,6 +53,13 @@ function classify(tags) {
   if (a === 'hospital' || a === 'clinic') return 'hospital';
   if (a === 'pharmacy') return 'pharmacy';
   return null;
+}
+// 醫療院所的分級：有急診的大醫院 > 醫院 > 診所
+function hospTier(t) {
+  if (t.amenity === 'hospital') return t.emergency === 'yes' ? 0 : 1;
+  if (t.emergency === 'yes') return 1;                 // 有掛急診的診所
+  if (t.healthcare === 'hospital') return 1;
+  return 3;                                             // 一般診所
 }
 
 function addr(tags) {
@@ -80,6 +93,8 @@ export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false 
           id: el.type[0] + el.id, kind, name: t.name,
           lat: p.lat, lng: p.lon,
           addr: addr(t), phone: t.phone || t['contact:phone'] || t['emergency:phone'] || '',
+          tier: kind === 'hospital' ? hospTier(t) : 0,
+          er: kind === 'hospital' && (t.emergency === 'yes' || (t.amenity === 'hospital' && t.emergency !== 'no')),
         });
       }
       writeCache(lat, lng, items);
@@ -94,7 +109,13 @@ export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false 
 function rank(items, lat, lng) {
   return (items || [])
     .map((it) => ({ ...it, dist: Math.round(haversine({ lat, lng }, { lat: it.lat, lng: it.lng })) }))
-    .sort((a, b) => a.dist - b.dist);
+    .sort((a, b) => {
+      // 醫院：先照分級（有急診的大醫院優先），同級再比距離
+      if (a.kind === 'hospital' && b.kind === 'hospital' && (a.tier || 0) !== (b.tier || 0)) {
+        return (a.tier || 0) - (b.tier || 0);
+      }
+      return a.dist - b.dist;
+    });
 }
 
 export { KIND };

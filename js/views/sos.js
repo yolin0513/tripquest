@@ -28,7 +28,9 @@ export default async function sos(tripId) {
   const locLine = h('div', { class: 'sos-loc' }, h('span', { class: 'spinner' }));
   const helpCard = h('div', { class: 'sos-help' },
     h('div', { class: 'sos-help-big' }, '我迷路了'),
-    h('div', { class: 'sos-help-sub' }, '請幫我打電話給我的家人 · Please help me call my family'),
+    h('div', { class: 'sos-help-sub' },
+      h('div', {}, '請幫我打電話給我的家人'),
+      h('div', { class: 'sos-help-sub-en' }, 'Please help me call my family')),
     companions.length
       ? h('div', { class: 'sos-people' }, ...companions.map((c) =>
           h('a', { class: 'sos-person', href: c.phone ? `tel:${c.phone.replace(/\s/g, '')}` : null },
@@ -158,7 +160,8 @@ function nearItem(it) {
   const tel = (it.phone || '').replace(/[\s-]/g, '');
   return h('div', { class: 'sos-near-item' },
     h('div', { class: 'sos-near-main' },
-      h('div', { class: 'sos-near-name' }, it.name),
+      h('div', { class: 'sos-near-name' }, it.name,
+        it.er ? h('span', { class: 'tag tag-er' }, '🚨 有急診') : null),
       h('div', { class: 'muted sm' }, [fmtDist(it.dist), it.addr].filter(Boolean).join(' · ')),
     ),
     h('div', { class: 'sos-near-acts' },

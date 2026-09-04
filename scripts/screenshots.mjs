@@ -155,15 +155,18 @@ try {
   if (fsAttr === 'xl') ok('字級切換（特大）'); else fail('字級切換：' + fsAttr);
   await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'm'); });
 
-  // 分享代碼往返
+  // 分享代碼往返（測「複製一份任務清單」的無同步路徑）
   const rt = await page.evaluate(async (tid) => {
     const share = await import('./js/share.js');
     const store = await import('./js/store.js');
+    const sync = await import('./js/sync.js');
+    sync.setConfig({ mode: 'local', url: '' });   // 內建 BUILT_IN 是 cloud，這裡強制單機才會產 d= 代碼
     const url = await share.shareURL(tid);
-    const newTid = await share.importShareCode(url.split('d=')[1]);
-    return { urlLen: url.length, spots: store.spotsOf(newTid).length };
+    const code = url.includes('d=') ? url.split('d=')[1] : url.split('j=')[1];
+    const newTid = await share.importShareCode(code);
+    return { urlLen: url.length, form: url.includes('d=') ? 'd' : 'j', spots: store.spotsOf(newTid).length };
   }, tripId);
-  if (rt.spots === 6) ok(`分享代碼往返（${rt.urlLen} 字元）`); else fail('分享代碼：' + JSON.stringify(rt));
+  if (rt.spots === 6 && rt.form === 'd') ok(`分享代碼往返（${rt.urlLen} 字元）`); else fail('分享代碼：' + JSON.stringify(rt));
 
 } catch (e) {
   fail('例外：' + e.stack);

@@ -1,6 +1,6 @@
 // 進入點：註冊 SW、初始化 store、掛路由、管理頂列
 
-import { route, setNotFound, startRouter, navigate, currentRoute, back } from './router.js';
+import { route, setNotFound, startRouter, navigate, currentRoute, back, resetHistory } from './router.js';
 import * as store from './store.js';
 import { mount, h, toast } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
@@ -12,7 +12,20 @@ const topTitle = document.getElementById('topTitle');
 const topActionBtn = document.getElementById('topActionBtn');
 
 let _action = null;
-backBtn.addEventListener('click', () => back(fallbackFor(currentRoute())));
+backBtn.addEventListener('click', () => {
+  const r = currentRoute();
+  // 「主畫面」（旅程首頁、照片牆 / 分帳 / 回顧分頁、設定）按返回 → 一步跳回「我的旅程」；
+  // 其他都是小功能頁（景點、任務、海報、天氣、回顧影片、求助…），返回 = 回上一個實際畫面。
+  if (r && isMainScreen(r.path)) { resetHistory('/'); return; }
+  back(fallbackFor(r));
+});
+
+function isMainScreen(p) {
+  if (p === '/' || p === '/settings') return true;
+  if (/^\/trip\/[^/]+$/.test(p)) return true;                       // 旅程首頁（任務清單）
+  if (/^\/trip\/[^/]+\/(people|expenses|memories)$/.test(p)) return true;  // 底部分頁
+  return false;
+}
 topActionBtn.addEventListener('click', () => { if (_action) _action.onClick(); });
 
 // 緊急求助浮動鈕：任何畫面都能一鍵進入（在 SOS 畫面本身則隱藏）
