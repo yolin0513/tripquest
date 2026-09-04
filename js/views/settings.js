@@ -256,7 +256,7 @@ async function joinByCode() {
   const s = raw.trim();
   try {
     if (s.includes('j=')) {
-      toast('加入中…（可能要等一下）');
+      toast('加入中…（大行程最多約 1 分鐘，請稍候）', 4000);
       const tripId = await joinInvite(s.split('j=')[1].trim().split(/[&\s]/)[0]);
       toast('已加入');
       navigate(`/trip/${tripId}`, { replace: true });
