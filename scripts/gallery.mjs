@@ -105,22 +105,25 @@ await go('/#/');
 await page.waitForSelector('.trip-card');
 await shot('01-home');
 
-// ---------- 2-3. 建立行程：地區 / 景點 ----------
+// ---------- 2-3. 建立行程：階層選景點 ----------
 await go('/#/new');
-await page.waitForSelector('.quick-pick');
+await page.waitForSelector('.pick-big');
 await page.evaluate(() => { const f = document.querySelector('input[type=text]'); if (f) f.value = '京都家族旅行'; });
-await shot('02-create-regions');
-// 點「京都」地區
-await page.evaluate(() => { [...document.querySelectorAll('.quick-pick button')].find(b => b.textContent.trim() === '京都')?.click(); });
-await sleep(300);
+await shot('02-create-hierarchy');
+// 台灣 → 北部 → 台北
+const clickText = (t) => page.evaluate((t) => {
+  [...document.querySelectorAll('.pick-big,.crumb-btn,.chip-sm')].find(b => b.textContent.trim().includes(t))?.click();
+}, t);
+await clickText('日本'); await sleep(150);
+await clickText('關西'); await sleep(150);
+await clickText('京都'); await sleep(700);
 // 點幾個景點
 await page.evaluate(() => {
-  const btns = [...document.querySelectorAll('.quick-pick button')].filter(b => /清水寺|金閣寺|伏見稻荷/.test(b.textContent));
-  btns.slice(0, 3).forEach(b => b.click());
+  [...document.querySelectorAll('.place-card')].slice(0, 3).forEach(c => c.click());
 });
-await page.evaluate(() => { const el = [...document.querySelectorAll('.quick-pick button.on')].pop(); el?.scrollIntoView({ block: 'center' }); });
+await page.evaluate(() => document.querySelector('.place-card')?.scrollIntoView({ block: 'start' }));
 await sleep(300);
-await shot('03-create-spots');
+await shot('03-create-places');
 
 // ---------- 4. 行程總覽 ----------
 await go(`/#/trip/${tripId}`);
@@ -247,6 +250,31 @@ await go(`/#/join?d=${code}`);
 await page.waitForSelector('.hero');
 await sleep(300);
 await shot('22-join');
+
+// ---------- 23. 行程海報 ----------
+// 給景點填時間，海報才有時間軸
+await page.evaluate(async (tid) => {
+  const s = await import('./js/store.js');
+  const sp = s.spotsOf(tid);
+  const tt = [['09:00', '11:30'], ['12:30', '14:00'], ['15:00', ''], ['09:30', '12:00'], ['13:30', ''], ['16:00', ''], ['10:00', '']];
+  for (let i = 0; i < sp.length; i++) if (tt[i]) await s.patch(sp[i].id, { startTime: tt[i][0], endTime: tt[i][1] });
+}, tripId);
+await go(`/#/trip/${tripId}/poster`);
+await page.waitForSelector('.poster-canvas');
+await sleep(3000); // 等字型 + 首次繪製
+await shot('23-poster-page');
+// 直接輸出成品大圖
+const posterOut = await page.evaluate(async (tid) => {
+  const P = await import('./js/poster/index.js');
+  const res = await P.renderPoster(tid, { presetId: 'watercolor' });
+  return { count: res.length, dataUrl: await blobToDataUrl(res[0].blob), w: 1240 };
+  async function blobToDataUrl(b) { return new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); }
+}, tripId);
+if (posterOut.dataUrl) {
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(join(OUT, '24-poster-output.jpg'), Buffer.from(posterOut.dataUrl.split(',')[1], 'base64'));
+  console.log('  ✓ 24-poster-output.jpg（' + posterOut.count + ' 張其一）');
+}
 
 await browser.close();
 server.kill();

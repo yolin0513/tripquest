@@ -235,8 +235,16 @@ function questsForPlace(place) {
 }
 
 const TAG_EMOJI = { sight: '🏛️', food: '🍜', nightmarket: '🏮', snack: '🍢', checkin: '📸', culture: '🎎', nature: '🌄', shopping: '🛍️', view: '🌇' };
+const NAME_EMOJI = [
+  [/夜市/, '🏮'], [/神社|大社|稻荷|稲荷|[^海]宮$|鳥居/, '⛩️'], [/[^醫眼]城$|城堡|天守/, '🏯'],
+  [/寺$|寺院|大佛/, '🛕'], [/廟$|祠$/, '🀄'], [/塔$|101|晴空|鐵塔|tower/i, '🗼'],
+  [/公園|草原|牧場|農場/, '🌳'], [/山$|岳$|峰$/, '⛰️'], [/湖$|潭$|運河|瀑布|溪$|海$|灘$|岬$/, '🌊'],
+  [/溫泉|温泉/, '♨️'], [/水族館|美麗海/, '🐠'], [/教堂/, '⛪'], [/纜車/, '🚠'],
+  [/博物館|美術館|文物|故宮/, '🖼️'], [/老街|商店街/, '🏘️'], [/瞭望|觀景|展望/, '🔭'],
+];
 function primaryEmoji(place) {
   if (place.emoji) return place.emoji;
+  for (const [re, e] of NAME_EMOJI) if (re.test(place.name)) return e;
   return TAG_EMOJI[place.primary] || TAG_EMOJI[(place.tags || [])[0]] || '📍';
 }
 
