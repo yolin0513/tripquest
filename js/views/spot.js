@@ -36,6 +36,9 @@ export default async function spot(tripId, spotId) {
       } }, '改名字'),
     ),
 
+    s.blurb ? h('p', { class: 'spot-blurb' }, s.blurb,
+      s.aiBlurb ? h('span', { class: 'ai-mark', title: '這句由 AI 生成' }, ' ✨') : null) : null,
+
     h('div', { class: 'switch-row' },
       h('div', {}, h('div', { style: 'font-weight:700' }, '安排的時間'),
         h('div', { class: 'form-hint' }, '選填。填了行程海報會顯示時間軸（例：11:00–13:00）。')),

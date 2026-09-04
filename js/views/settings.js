@@ -10,7 +10,7 @@ import { myName, setMyName, exportCard, encodeCard, decodeCard, importCard } fro
 import { pendingCount } from '../outbox.js';
 import { getContacts, setContacts } from '../emergency.js';
 import { getHome, setHome } from '../weather.js';
-import { wipeAllTripKeys } from '../aikeys.js';
+import { wipeAllTripKeys, usageOf } from '../aikeys.js';
 
 const HOME_CITIES = [
   { name: '台北', lat: 25.03, lng: 121.56 }, { name: '新北', lat: 25.01, lng: 121.46 },
@@ -130,7 +130,8 @@ export default async function settings() {
     // ---- AI（進階、可選）----
     h('div', { class: 'section-label' }, 'AI 加值功能'),
     h('div', { class: 'card about' },
-      h('p', { class: 'sm muted' }, 'AI 是每個行程各自決定要不要開、由建立者輸入自己的 API 金鑰（設定在「行程 → 旅程設定」裡）。金鑰只存在那台手機，不會傳給旅伴。'),
+      h('p', { class: 'sm muted' }, 'AI 是每個行程各自決定要不要開、由建立者輸入自己的 API 金鑰（設定在「行程 → 旅程設定」裡）。金鑰只存在那台手機，不會傳給旅伴。開了之後，行程表、海報、回憶影片、最終回顧的文案會自動改用 AI 生成；沒開就用內建句型庫。'),
+      aiSpendBox(),
       h('button', { class: 'btn btn-danger btn-block', onclick: async () => {
         if (await confirmDialog('清除這台手機上「所有行程」的 AI 金鑰？\n\n提醒：本機刪除不等於停用金鑰，若擔心外流，還要到供應商網站把該金鑰停用。', { danger: true, okLabel: '全部清除' })) {
           await wipeAllTripKeys(); toast('已清除所有 AI 金鑰');
@@ -160,6 +161,36 @@ function checkbox(checked, onChange) {
   const el = h('input', { type: 'checkbox', checked });
   el.addEventListener('change', () => onChange(el.checked));
   return el;
+}
+
+// 這台手機每個行程的 AI 花費（金鑰只在本機，所以只有本機看得到用量）
+function aiSpendBox() {
+  const box = h('div', { style: 'margin:8px 0' });
+  (async () => {
+    const trips = store.exportRecords().filter((r) => r.type === 'trip' && !r.deleted);
+    const rows = [];
+    let total = 0;
+    for (const t of trips) {
+      const u = await usageOf(t.id);
+      if (!u || !u.hasKey) continue;
+      total += u.usedUsd;
+      rows.push(h('div', { class: 'setting-row', style: 'padding:6px 0' },
+        h('span', { class: 'sm' }, t.title || '（未命名行程）'),
+        h('span', { class: 'sm mono' + (u.overCap ? ' tag-todo' : '') },
+          `$${u.usedUsd.toFixed(3)} / $${u.capUsd.toFixed(2)}` + (u.overCap ? '（已達上限）' : '')),
+      ));
+    }
+    if (!rows.length) {
+      box.replaceChildren(h('p', { class: 'form-hint' }, '目前這台手機沒有任何行程輸入 AI 金鑰。'));
+      return;
+    }
+    box.replaceChildren(
+      h('div', { class: 'section-label', style: 'margin:4px 0' }, `這台手機的 AI 花費（合計約 $${total.toFixed(3)}）`),
+      ...rows,
+      h('p', { class: 'form-hint' }, '費用直接向你的 API 供應商計，這裡是本機估算；真正的上限請在供應商 Billing 設定。'),
+    );
+  })();
+  return box;
 }
 
 async function pickHome(refresh) {

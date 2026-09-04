@@ -60,36 +60,27 @@ function safeOut(text) {
   return t.replace(/^["「]|["」]$/g, '');
 }
 
-// 一句在地介紹（景點沒有 blurb 時補）
-export async function aiRecommend(tripId, { place, city, kind }) {
-  if (!place || !(await aiOn(tripId, 'recommend'))) return null;
+// ---------- 通用文字 / JSON（aicontent.js 用，批次產生海報、影片、回顧文案）----------
+// 一律：沒開 AI / 沒金鑰 / 超上限 / 失敗 → 回 null，呼叫端自動用內建做法。
+export async function aiComplete(tripId, { system, prompt, maxTokens = 500, feature = 'recommend', timeout = 30000 }) {
+  if (!prompt || !(await aiOn(tripId, feature))) return null;
   const k = await getTripKey(tripId);
-  const res = await callClaude(k.key, {
-    system: '你是台灣在地旅遊小幫手。用繁體中文寫一句 25～40 字、給長輩看的親切介紹，講這個地點最有代表性的東西或必拍必吃。不要用英文、不要誇飾、不要流行語。只回那一句，不要引號。',
-    prompt: `地點：${String(place).slice(0, 80)}${city ? `（${String(city).slice(0, 40)}）` : ''}${kind ? `，類型：${String(kind).slice(0, 20)}` : ''}`,
-    maxTokens: 120,
-  });
+  const res = await callClaude(k.key, { system, prompt, maxTokens, timeout });
   if (res.error) return null;
   await addUsage(tripId, res.microUsd);
   return safeOut(res.text);
 }
 
-// 回憶影片旁白：days = 每天一段摘要文字
-export async function aiNarrate(tripId, { trip, days }) {
-  if (!Array.isArray(days) || !days.length || !(await aiOn(tripId, 'narrate'))) return null;
-  const k = await getTripKey(tripId);
-  const res = await callClaude(k.key, {
-    system: '你在為一支家庭旅遊回憶影片寫旁白。每天一句、繁體中文、12～22 字、溫暖口語。用 JSON 陣列回覆，例如 ["第一天…","第二天…"]，不要多餘文字。',
-    prompt: `旅程：${String(trip || '').slice(0, 60)}\n` + days.slice(0, 10).map((d, i) => `第${i + 1}天：${String(d).slice(0, 120)}`).join('\n'),
-    maxTokens: 400,
-  });
-  if (res.error) return null;
-  await addUsage(tripId, res.microUsd);
-  let lines;
-  try { lines = JSON.parse(scrubSecrets(res.text).match(/\[[\s\S]*\]/)[0]); }
-  catch { lines = scrubSecrets(res.text).split(/\n+/); }
-  const clean = (lines || []).map((s) => safeOut(String(s))).filter(Boolean).slice(0, 10);
-  return clean.length ? clean : null;
+export async function aiJSON(tripId, opts) {
+  const raw = await aiComplete(tripId, opts);
+  if (!raw) return null;
+  const scrub = scrubSecrets(raw);
+  const m = scrub.match(/[[{][\s\S]*[\]}]/);
+  if (!m) return null;
+  try {
+    const val = JSON.parse(m[0]);
+    return containsSecret(JSON.stringify(val)) ? null : val;
+  } catch { return null; }
 }
 
 // 連線測試（設定頁用）—— 最小一次呼叫確認金鑰可用

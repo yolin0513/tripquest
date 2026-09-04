@@ -55,19 +55,8 @@ async function _enrich(spot) {
       }
     }
 
-    // 3. 還是沒有介紹句 → 若這個行程有開 AI 且有金鑰，補一句（失敗就算了）
-    //    只填空白欄位、且以最新記錄為準，不覆蓋別人改過的
-    const fresh3 = store.getRaw(spot.id) || spot;
-    if (!fresh3.blurb && !fresh3.blurbManual && !patch.blurb && spot.tripId) {
-      try {
-        const { aiOn, aiRecommend } = await import('./ai.js');
-        if (await aiOn(spot.tripId, 'recommend')) {
-          const line = await aiRecommend(spot.tripId, { place: spot.name, city: spot.region || '', kind: spot.primary || '' });
-          const after = store.getRaw(spot.id) || spot;
-          if (line && !after.blurb && !after.blurbManual) { patch.blurb = line; patch.aiBlurb = true; patch.aiAt = Date.now(); }
-        }
-      } catch { /* 靜默 */ }
-    }
+    // AI 介紹句由 aicontent.js 的 ensureSpotBlurbs 統一處理（有開 AI 時一次產全部景點、
+    // 避免同一趟句型重複、會快取並同步給旅伴），這裡只負責維基資料。
   } catch { /* 靜默 */ }
   await store.patch(spot.id, patch).catch(() => {});
   return store.getRaw(spot.id);

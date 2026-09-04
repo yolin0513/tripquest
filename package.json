@@ -14,7 +14,8 @@
     "deploy-cloud": "node scripts/publish-cloud.mjs",
     "validate-places": "node scripts/validate-places.mjs",
     "secret-leak-test": "node scripts/secret-leak-test.mjs",
-    "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"
+    "aitest": "node scripts/aitest.mjs",
+    "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"
   },
   "keywords": [
     "pwa",

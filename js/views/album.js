@@ -31,7 +31,7 @@ export default async function album(tripId) {
   const playBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: togglePlay }, '▶ 播放預覽');
   const musicPick = h('div', { class: 'music-pick' });
   const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
-  const aiNarrateSlot = h('span', {});
+  const aiNote = h('p', { class: 'form-hint center', hidden: true }, '✨ 片頭片尾、每天的旁白與部分照片字幕由 AI 生成');
 
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0]; fileInput.value = '';
@@ -70,39 +70,28 @@ export default async function album(tripId) {
       ? h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doVideo }, '🎬 存成影片檔')
       : h('p', { class: 'form-hint' }, '這支手機不支援直接存影片，請用上面的相簿頁（一樣好看、一樣能傳）。'),
     h('p', { class: 'form-hint center' }, '全部都在這支手機裡做好，不會上傳。'),
-    aiNarrateSlot,
+    aiNote,
     h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:14px', onclick: () => navigate(`/trip/${tripId}/recap`) }, '🎁 看這趟的數字回顧'),
   ));
 
-  (async () => {
-    try {
-      const { aiOn, aiNarrate } = await import('../ai.js');
-      if (!(await aiOn(tripId, 'narrate'))) return;
-      aiNarrateSlot.replaceChildren(h('button', {
-        class: 'btn btn-soft btn-block', style: 'margin-top:10px',
-        onclick: async () => {
-          toast('AI 潤飾旁白中…');
-          const lines = await aiNarrate(tripId, { trip: t.title, days: daySummaries(tripId) });
-          if (!lines || !lines.length) { toast('這次沒產生，維持原本的字卡'); return; }
-          const { uuid } = await import('../ids.js');
-          const cur = store.exportRecords().find((r) => r.type === 'aiText' && r.tripId === tripId && r.key === 'narration');
-          await store.put({ id: cur ? cur.id : uuid(), type: 'aiText', tripId, groupId: t.groupId, key: 'narration', lines, aiAt: Date.now() });
-          toast('旁白更新了，重新播放看看');
-          album(tripId);
-        },
-      }, '✨ 用 AI 潤飾每天的旁白'));
-    } catch { /* noop */ }
-  })();
-
-  function daySummaries(tid) {
-    const spots = store.spotsOf(tid);
-    const byDay = new Map();
-    for (const s of spots) { const d = s.day || 1; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(s.name); }
-    return [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([, names]) => names.join('、'));
-  }
-
   let player = null, playing = false, barIv = 0;
   ensurePlayer().then((p) => p.seek(1.4));
+
+  // 有開 AI → 背景自動產生影片文案（片頭片尾、旁白、照片字幕），好了重繪一次
+  if (t.aiEnabled) {
+    (async () => {
+      try {
+        const { ensureTripText, ensurePhotoCaptions, aiPayload } = await import('../aicontent.js');
+        await Promise.all([ensureTripText(tripId), ensurePhotoCaptions(tripId)]);
+        if ((aiPayload(tripId, 'tripText') || aiPayload(tripId, 'photoCaptions'))
+          && location.hash.includes(`/trip/${tripId}/album`)) {
+          aiNote.hidden = false;
+          player = null;                      // 讓 timeline 重建、吃到新文案
+          ensurePlayer().then((p) => p.seek(1.4));
+        }
+      } catch { /* 靜默 */ }
+    })();
+  }
 
   async function ensurePlayer() {
     if (!player) player = await createPlayer(canvas, tripId);

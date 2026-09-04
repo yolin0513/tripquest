@@ -137,6 +137,14 @@ export default async function trip(tripId) {
       if (location.hash.includes(`/trip/${tripId}`) && !location.hash.includes('/spot/')) trip(tripId);
     }).catch(() => {});
   }
+
+  // 有開 AI → 背景自動產生 / 更新行程表與任務文案（有快取就秒回、沒開就不會進來）
+  if (t.aiEnabled && spots.length) {
+    import('../aicontent.js').then(async ({ warmTripContent }) => {
+      const changed = await warmTripContent(tripId);
+      if (changed && location.hash.includes(`/trip/${tripId}`) && !location.hash.match(/\/(spot|plan|poster|weather)/)) trip(tripId);
+    }).catch(() => {});
+  }
 }
 
 function tripEnded(t) {
@@ -379,7 +387,8 @@ function questBigCard(q, spot) {
   },
     photo,
     h('div', { class: 'qbig-body' },
-      h('div', { class: 'qbig-title' }, q.title),
+      h('div', { class: 'qbig-title' }, q.title,
+        q.aiQuest ? h('span', { class: 'ai-mark', title: '這個任務由 AI 出題' }, ' ✨') : null),
       q.hint ? h('div', { class: 'qbig-hint' }, q.hint) : null,
       h('div', { class: 'qbig-foot' },
         h('span', { class: 'tag' }, km.label),
