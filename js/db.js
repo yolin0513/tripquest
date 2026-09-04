@@ -7,9 +7,9 @@ const DB_NAME = 'tripquest';
 const DB_VERSION = 3;
 
 let _db = null;
+let _opening = null;
 
-export function openDB() {
-  if (_db) return Promise.resolve(_db);
+function openOnce() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
@@ -40,16 +40,43 @@ export function openDB() {
       void e;
     };
     req.onsuccess = () => {
-      _db = req.result;
-      _db.onversionchange = () => { _db.close(); _db = null; };
-      resolve(_db);
+      const db = req.result;
+      // 連線被瀏覽器關掉的情況不只「有人要求升級」——手機把 App 切到背景、
+      // 分頁凍結、記憶體不足時，瀏覽器也可能主動關閉閒置的 IndexedDB 連線
+      // （例如分享出去切到 LINE 再切回來）。兩種情況都要讓下一次 tx() 知道
+      // 要重開一條新的連線，而不是拿著一條已經在關閉中的連線去開交易
+      // （那會丟 InvalidStateError: connection is closing）。
+      const invalidate = () => { if (_db === db) _db = null; };
+      db.onversionchange = () => { try { db.close(); } catch { /* noop */ } invalidate(); };
+      db.onclose = invalidate;
+      _db = db;
+      resolve(db);
     };
     req.onerror = () => reject(req.error);
+    req.onblocked = () => { /* 有其他分頁卡著升級（理論上不會，版本沒變），交給呼叫端重試 */ };
   });
 }
 
-function tx(store, mode = 'readonly') {
-  return openDB().then((db) => db.transaction(store, mode).objectStore(store));
+// 多個呼叫幾乎同時發生時，只真的開一條連線（等它） —— 不然每個呼叫都各自
+// indexedDB.open() 一次，也是常見的連線亂象來源。
+export function openDB() {
+  if (_db) return Promise.resolve(_db);
+  if (!_opening) _opening = openOnce().finally(() => { _opening = null; });
+  return _opening;
+}
+
+async function tx(store, mode = 'readonly') {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const db = await openDB();
+    try {
+      return db.transaction(store, mode).objectStore(store);
+    } catch (e) {
+      // 連線正在關閉中：丟掉舊連線、重開一條，重試一次就好（不要無限重試）
+      const closing = e && (e.name === 'InvalidStateError' || /closing|closed/i.test(e.message || ''));
+      if (attempt === 0 && closing) { _db = null; continue; }
+      throw e;
+    }
+  }
 }
 
 function wrap(request) {

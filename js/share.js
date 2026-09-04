@@ -129,21 +129,23 @@ export async function joinInvite(code) {
     // 舊版連結相容：資料本來就帶在連結裡
     await store.importRecords(p.records, { merge: true });
   } else {
-    // 新版連結：只帶群組識別碼，資料整包從伺服器拉下來（這台是新裝置，since=0）
+    // 新版連結：只帶群組識別碼，資料整包從伺服器拉下來（這台是新裝置，since=0）。
+    // 先把每一頁收集起來、最後一次寫進 IndexedDB —— 不要一頁寫一次（一個大行程
+    // 好幾百筆記錄，每頁都整包重寫一次 IndexedDB 很慢，慢的操作在手機上更容易
+    // 遇到瀏覽器把分頁切到背景、連線被回收的情況）。
     const { adapterForGroup, setCursor } = await import('./sync.js');
     const adapter = adapterForGroup(p.groupId, p.secret);
-    let since = 0, total = 0;
+    let since = 0;
+    const all = [];
     for (let guard = 0; guard < 30; guard++) {
       const res = await adapter.pull(since);
-      if (res.records && res.records.length) {
-        await store.importRecords(res.records, { merge: true });
-        total += res.records.length;
-      }
+      if (res.records && res.records.length) all.push(...res.records);
       if (typeof res.seq === 'number') since = res.seq;
       if (!res.more) break;
     }
+    if (!all.length) throw new Error('伺服器上還沒有這趟旅程的資料，請邀請人確認網路正常後再分享一次連結');
+    await store.importRecords(all, { merge: true });
     await setCursor(p.groupId, since);
-    if (!total) throw new Error('伺服器上還沒有這趟旅程的資料，請邀請人確認網路正常後再分享一次連結');
   }
   // 立刻同步一輪，把成員 / 投稿 / 照片補回來
   try { const { drain } = await import('./outbox.js'); await drain(); } catch { /* 稍後自動重試 */ }
