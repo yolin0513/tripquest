@@ -76,6 +76,7 @@ export default async function trip(tripId) {
       }, allDone ? '🎬 製作回憶影片' : `🔒 回憶影片（還差 ${prog.total - prog.done} 個）`),
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/poster`) }, '🎨 做一張行程海報'),
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
+      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/expenses`) }, '💰 分帳（誰付了、誰該還誰）'),
       h('button', { class: 'btn btn-ghost btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
       h('button', { class: 'btn btn-ghost btn-block', style: 'color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)', onclick: () => navigate(`/trip/${tripId}/sos`) }, '🆘 緊急求助（迷路、找警局醫院）'),
     ),

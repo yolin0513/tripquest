@@ -781,17 +781,19 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* ---------- 緊急求助 ---------- */
 #sosFab {
   position: fixed;
-  right: 14px;
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
-  width: 58px; height: 58px; border-radius: 50%;
+  right: 12px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
+  width: 52px; height: 52px; border-radius: 50%;
   border: 3px solid color-mix(in srgb, var(--danger) 60%, #fff);
   background: var(--danger); color: #fff;
-  font-size: 1.5rem; font-weight: 800; cursor: pointer;
-  z-index: 60;
+  font-size: 1.3rem; font-weight: 800; cursor: pointer;
+  z-index: 60; opacity: 0.82;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   display: grid; place-items: center;
+  transition: opacity 0.15s;
 }
-#sosFab:active { transform: scale(0.92); }
+#sosFab:active { transform: scale(0.92); opacity: 1; }
+#sosFab:hover { opacity: 1; }
 
 .sos h3 { font-size: 1.1rem; margin: 0 0 12px; }
 .sos-section { margin-top: 26px; }
@@ -896,3 +898,52 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .wx-day-txt { font-size: 0.8rem; color: var(--muted); }
 .wx-day-temp { margin-top: 4px; font-size: 1rem; }
 .wx-day-rain { font-size: 0.78rem; color: var(--primary); margin-top: 3px; font-weight: 700; }
+
+/* ---------- 分帳 ---------- */
+.exp-summary { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.exp-total { text-align: center; }
+.exp-total-num { font-size: 2rem; font-weight: 900; margin: 4px 0; }
+.exp-settle {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+}
+.exp-settle-txt { flex: 1; min-width: 0; }
+.exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent); }
+.exp-person { display: flex; align-items: center; gap: 12px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.exp-person-main { flex: 1; min-width: 0; }
+.exp-person-bal { font-weight: 800; font-size: 0.95rem; }
+.exp-person-bal.pos { color: var(--ok); }
+.exp-person-bal.neg { color: var(--danger); }
+.exp-item {
+  appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
+}
+.exp-item-cat { font-size: 1.5rem; flex: none; }
+.exp-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.exp-item-title { font-weight: 700; }
+.exp-item-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.exp-form .form-field { margin-bottom: 16px; }
+.numpad-row { display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; }
+.numpad-row .btn { min-width: 84px; font-size: 1.1rem; }
+.numpad-display {
+  flex: 1; background: var(--bg); border: 2px solid var(--line); border-radius: 14px;
+  display: flex; align-items: center; justify-content: flex-end; padding: 0 18px;
+  font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; min-height: 60px;
+}
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.numpad-key {
+  appearance: none; border: 2px solid var(--line); background: var(--bg-elev); color: var(--text);
+  border-radius: 14px; font-size: 1.5rem; font-weight: 800; padding: 14px 0; cursor: pointer; min-height: 56px;
+}
+.numpad-key:active { transform: scale(0.95); background: var(--bg-elev-2); }
+.numpad-del { color: var(--danger); }
+.exp-part {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+}
+.exp-part.on { border-color: var(--primary); }
+.exp-part input[type="checkbox"] { width: 26px; height: 26px; flex: none; accent-color: var(--primary); }
+.exp-part-name { flex: 1; font-weight: 600; }
+.exp-share { width: 76px; min-height: 40px; padding: 6px 8px; text-align: center; }

@@ -87,6 +87,7 @@ route('/trip/:id/plan', async ({ params }) => (await import('./views/plan.js')).
 route('/trip/:id/sos', async ({ params }) => (await import('./views/sos.js')).default(params.id));
 route('/sos', async () => (await import('./views/sos.js')).default(null));
 route('/trip/:id/weather', async ({ params }) => (await import('./views/weather.js')).default(params.id));
+route('/trip/:id/expenses', async ({ params }) => (await import('./views/expenses.js')).default(params.id));
 route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
 route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
 route('/settings', async () => (await import('./views/settings.js')).default());

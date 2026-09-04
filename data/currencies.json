@@ -1,0 +1,25 @@
+{
+  "_meta": { "note": "台灣旅客常用幣別。zero=不用小數（日圓、韓元等）。" },
+  "list": [
+    { "code": "TWD", "symbol": "NT$", "name": "新台幣", "zero": false },
+    { "code": "JPY", "symbol": "¥", "name": "日圓", "zero": true },
+    { "code": "KRW", "symbol": "₩", "name": "韓元", "zero": true },
+    { "code": "USD", "symbol": "US$", "name": "美元", "zero": false },
+    { "code": "EUR", "symbol": "€", "name": "歐元", "zero": false },
+    { "code": "HKD", "symbol": "HK$", "name": "港幣", "zero": false },
+    { "code": "CNY", "symbol": "¥", "name": "人民幣", "zero": false },
+    { "code": "THB", "symbol": "฿", "name": "泰銖", "zero": false },
+    { "code": "SGD", "symbol": "S$", "name": "新加坡幣", "zero": false },
+    { "code": "MYR", "symbol": "RM", "name": "馬來西亞幣", "zero": false },
+    { "code": "VND", "symbol": "₫", "name": "越南盾", "zero": true },
+    { "code": "PHP", "symbol": "₱", "name": "菲律賓披索", "zero": false },
+    { "code": "IDR", "symbol": "Rp", "name": "印尼盾", "zero": true },
+    { "code": "GBP", "symbol": "£", "name": "英鎊", "zero": false },
+    { "code": "AUD", "symbol": "A$", "name": "澳幣", "zero": false }
+  ],
+  "byCountry": {
+    "TW": "TWD", "JP": "JPY", "KR": "KRW", "HK": "HKD", "MO": "HKD", "CN": "CNY",
+    "TH": "THB", "SG": "SGD", "MY": "MYR", "VN": "VND", "PH": "PHP", "ID": "IDR",
+    "US": "USD", "GB": "GBP", "AU": "AUD", "FR": "EUR", "DE": "EUR", "IT": "EUR", "ES": "EUR"
+  }
+}
