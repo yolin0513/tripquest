@@ -21,7 +21,10 @@ export default function home() {
           h('p', { class: 'muted sm' }, '按下面的按鈕開一個'),
         ),
     h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => navigate('/new') }, '＋ 建立新旅程'),
-    h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('/settings') }, '用代碼加入旅伴的旅程'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: async () => {
+      // 直接跳出「貼上邀請連結」，不要只是把使用者丟到設定頁讓他自己找
+      (await import('./settings.js')).joinByCode();
+    } }, '🔗 用邀請連結加入旅伴的旅程'),
   ));
 }
 
