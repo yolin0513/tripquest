@@ -8,6 +8,7 @@
     "icons": "node scripts/make-icons.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "gallery": "node scripts/gallery.mjs",
+    "theme-posters": "node scripts/theme-posters.mjs",
     "synctest": "node scripts/synctest.mjs",
     "validate-places": "node scripts/validate-places.mjs",
     "test": "node scripts/validate-places.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"

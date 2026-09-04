@@ -688,6 +688,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qcollapse {
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--bg-elev); overflow: hidden; margin-bottom: 12px;
+  border-left: 4px solid var(--theme-accent, var(--primary));
+}
+.qc-theme {
+  display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted);
+  margin-top: 2px;
 }
 .qc-head { display: flex; align-items: stretch; }
 .qc-toggle {

@@ -1,0 +1,139 @@
+{
+  "_meta": {
+    "note": "景點類別 → 主題樣式。可擴充：新增主題就加一個 themes.<key>；調整判定就改 map。theme.js 讀這支，海報與行程頁依 theme 換色、換裝飾、換時間軸；文案語氣見 data/phrases.json 對應的 key。",
+    "version": 1
+  },
+  "map": {
+    "byName": [
+      ["溫泉|温泉|湯本|の湯|スパ|spa|地熱谷|北投親水", "onsen"],
+      ["夜市", "nightmarket"],
+      ["神社|大社|稻荷|稲荷|鳥居|寺$|寺院|廟$|宮$|祠$|大佛|禪寺|佛寺|舍利|天后|媽祖|行天", "heritage"],
+      ["城$|城跡|城趾|天守|古堡|城堡|城樓|赤崁|遺址|史蹟|古蹟|老街|古街|洋樓|紅毛|砲台|礮臺|金城|書院|林家|文武廟|孔廟|陵$|故居|紀念館", "heritage"],
+      ["海$|海邊|海岸|海濱|濱海|灣$|湾$|岸$|漁港|沙灘|海灘|海水浴|沙洲|[^半]島$|岬$|鼻頭|龍洞|野柳|奇岩|岩$|礁$|燈塔|珊瑚|潟湖|地質公園|龜山島|旗津|碼頭$|角$", "coast"],
+      ["擔仔麵|牛肉麵|拉麵|[^泡]麵$|飯$|[^醫]粥$|鍋物|火鍋|燒肉|串燒|燒烤|小吃|食堂|餐廳|餐酒|食府|海鮮|豬心|蝦捲|肉圓|碗粿|米糕|肉羹|魚湯|水果店|冰店$|豆花|甜點|咖啡館|烘焙|居酒屋|屋台|橫丁|橫町", "food"],
+      ["山$|岳$|峰$|嶺$|[^夜]林$|森林|瀑布|滝$|溪$|[^街]谷$|國家公園|自然生態|[^海]步道|林道|高原|草原|牧場|農場|花海|花園|植物園|湖$|潭$|埤$|濕地", "nature"],
+      ["樂園|遊樂園|主題樂園|動物園|水族館|海生館|海洋公園|兒童樂|親子|恐龍|樂高|disney|universal|環球影城|六福村|劍湖山|麗寶", "family"],
+      ["百貨|購物中心|商場$|商圈|outlet|奧特萊斯|免稅店|藥妝|批發|問屋|電器街|市集", "shopping"],
+      ["101|晴空塔|天空樹|鐵塔|東京鐵|tower|展望台|瞭望|觀景台|天際線|摩天輪|纜車|地標$|大樓$|[^神社]駅前|夜景", "urban"]
+    ],
+    "byTag": {
+      "nightmarket": "nightmarket",
+      "food": "food",
+      "snack": "food",
+      "culture": "heritage",
+      "nature": "nature",
+      "view": "nature",
+      "shopping": "shopping",
+      "checkin": "urban",
+      "sight": "journey"
+    },
+    "byType": {
+      "temple": "heritage", "shrine": "heritage", "castle": "heritage", "street": "heritage",
+      "market": "nightmarket", "park": "nature", "mountain": "nature", "water": "coast",
+      "museum": "urban", "station": "urban", "tower": "urban", "themepark": "family"
+    },
+    "default": "journey"
+  },
+  "themes": {
+    "journey": {
+      "label": "旅途", "emoji": "🧳", "voice": "journey",
+      "poster": {
+        "paper": "#f6efe0", "ink": "#4a3f33", "sub": "#7d6f5c", "line": "#c9b8a0",
+        "accent": "#5b8a72", "accent2": "#c98a5b", "band": "#e8dcc6",
+        "blobColors": ["#8fb59c", "#e0b07a", "#a7c4d6"], "bunting": ["#e0b07a", "#8fb59c", "#a7c4d6"],
+        "polaroidTint": "rgba(246,239,224,0)", "tilt": 6
+      },
+      "deco": ["sprig", "cloud", "house"], "timeline": "dot"
+    },
+    "nature": {
+      "label": "山林自然", "emoji": "🌿", "voice": "tranquil",
+      "poster": {
+        "paper": "#eef0e1", "ink": "#2c3a28", "sub": "#586b4e", "line": "#9cb389",
+        "accent": "#57883f", "accent2": "#86a35c", "band": "#e0e8cf",
+        "blobColors": ["#9cbf82", "#c3d6a2", "#7aa85f"], "bunting": ["#7aa85f", "#c3d6a2", "#e4d69a"],
+        "polaroidTint": "rgba(238,240,225,0.55)", "tilt": 5
+      },
+      "deco": ["sprig", "leaf", "pine", "mountain"], "timeline": "dotLeaf"
+    },
+    "coast": {
+      "label": "海濱", "emoji": "🌊", "voice": "breezy",
+      "poster": {
+        "paper": "#e9f1f2", "ink": "#1f3a43", "sub": "#4a7079", "line": "#9cc4cc",
+        "accent": "#1f83a6", "accent2": "#e6a95c", "band": "#d8ecef",
+        "blobColors": ["#8fccd8", "#bfe1e6", "#f0d9a8"], "bunting": ["#3fa3bd", "#8fccd8", "#f0d9a8"],
+        "polaroidTint": "rgba(233,241,242,0.5)", "tilt": 7
+      },
+      "deco": ["wave", "shell", "sun", "gull"], "timeline": "wave"
+    },
+    "urban": {
+      "label": "都市", "emoji": "🌆", "voice": "lively",
+      "poster": {
+        "paper": "#f4f2f7", "ink": "#241f2e", "sub": "#6a6478", "line": "#cfc7dc",
+        "accent": "#5b3df0", "accent2": "#ef5da8", "band": "#ebe6f5",
+        "blobColors": ["#c3b6f0", "#f2c1de", "#bfe0f0"], "bunting": ["#5b3df0", "#ef5da8", "#3fb0e0"],
+        "polaroidTint": "rgba(244,242,247,0)", "tilt": 3
+      },
+      "deco": ["building", "spark", "star"], "timeline": "solid"
+    },
+    "heritage": {
+      "label": "古蹟人文", "emoji": "⛩️", "voice": "still",
+      "poster": {
+        "paper": "#efe6d6", "ink": "#3d2f22", "sub": "#6e5b45", "line": "#c1a985",
+        "accent": "#9a5b3a", "accent2": "#7d6a4a", "band": "#e5d7bf",
+        "blobColors": ["#c9a878", "#b98a5e", "#d8c4a0"], "bunting": ["#9a5b3a", "#c9a878", "#7d6a4a"],
+        "polaroidTint": "rgba(239,230,214,0.6)", "tilt": 3
+      },
+      "deco": ["torii", "seigaiha", "cloudBar"], "timeline": "double"
+    },
+    "food": {
+      "label": "美食", "emoji": "🍜", "voice": "hungry",
+      "poster": {
+        "paper": "#f8ece0", "ink": "#4a2f1e", "sub": "#8a5d3d", "line": "#e0b48c",
+        "accent": "#d9702a", "accent2": "#c1352d", "band": "#f4dcc4",
+        "blobColors": ["#f0b878", "#e89060", "#f4d0a0"], "bunting": ["#d9702a", "#f0b878", "#c1352d"],
+        "polaroidTint": "rgba(248,236,224,0.5)", "tilt": 6
+      },
+      "deco": ["bowl", "steam", "chopsticks"], "timeline": "dash"
+    },
+    "onsen": {
+      "label": "溫泉", "emoji": "♨️", "voice": "cozy",
+      "poster": {
+        "paper": "#f3ecec", "ink": "#3a2e30", "sub": "#75606a", "line": "#cdb8be",
+        "accent": "#b06a7a", "accent2": "#7a8fa8", "band": "#ece0e2",
+        "blobColors": ["#d8b6c0", "#c9d3df", "#e6d2c0"], "bunting": ["#b06a7a", "#d8b6c0", "#c9d3df"],
+        "polaroidTint": "rgba(243,236,236,0.6)", "tilt": 4
+      },
+      "deco": ["steam", "leaf", "cloudBar"], "timeline": "wave"
+    },
+    "nightmarket": {
+      "label": "夜市", "emoji": "🏮", "voice": "buzzing",
+      "poster": {
+        "paper": "#f4ecdd", "ink": "#3a2a3f", "sub": "#7a5a4a", "line": "#d8b48c",
+        "accent": "#c0392b", "accent2": "#e8a13c", "band": "#efe0c8",
+        "blobColors": ["#e8a13c", "#c0392b", "#8a4f9e"], "bunting": ["#c0392b", "#e8a13c", "#8a4f9e"],
+        "polaroidTint": "rgba(244,236,221,0.5)", "tilt": 8
+      },
+      "deco": ["lantern", "star", "spark"], "timeline": "lanternString"
+    },
+    "shopping": {
+      "label": "購物", "emoji": "🛍️", "voice": "upbeat",
+      "poster": {
+        "paper": "#f7eff3", "ink": "#33202c", "sub": "#7a5a6a", "line": "#e0c0d0",
+        "accent": "#c43d80", "accent2": "#5b7fd0", "band": "#f0e0ea",
+        "blobColors": ["#eabcd6", "#c7d3f0", "#f3d6b0"], "bunting": ["#c43d80", "#eabcd6", "#5b7fd0"],
+        "polaroidTint": "rgba(247,239,243,0)", "tilt": 5
+      },
+      "deco": ["bag", "tag", "spark"], "timeline": "solid"
+    },
+    "family": {
+      "label": "親子同遊", "emoji": "🎠", "voice": "playful",
+      "poster": {
+        "paper": "#fbf1e4", "ink": "#3a2e1f", "sub": "#7a6248", "line": "#e6c79c",
+        "accent": "#e8873c", "accent2": "#3aa6b0", "band": "#f6e4cc",
+        "blobColors": ["#f4c460", "#8fd0c0", "#f0a0b8"], "bunting": ["#e8873c", "#8fd0c0", "#f0a0b8"],
+        "polaroidTint": "rgba(251,241,228,0)", "tilt": 9
+      },
+      "deco": ["balloon", "star", "sun"], "timeline": "dot"
+    }
+  }
+}

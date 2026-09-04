@@ -4,15 +4,17 @@ import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, KI
 import { navigate, back } from '../router.js';
 import { uuid, hashHue } from '../ids.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
-import { generateForTrip, templateQuests, inferType } from '../quests/generate.js';
+import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip } from '../enrich.js';
 import { activeMemberId, ensureMember } from '../claim.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
+import { loadThemes, themeForSpot, themeMeta } from '../theme.js';
 
 export default async function trip(tripId) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
+  await loadThemes().catch(() => {});
 
   setTop({
     title: t.title,
@@ -108,8 +110,13 @@ function spotSection(s, tripId) {
     else open = p.done > 0 && !allDone;
   } catch { open = p.done > 0 && !allDone; }
 
+  const tk = s.theme || themeForSpot(s);
+  const tm = themeMeta(tk);
   const chev = h('span', { class: 'qc-chev' }, open ? '▾' : '▸');
-  const sec = h('section', { class: 'qcollapse' + (open ? ' open' : '') },
+  const sec = h('section', {
+    class: 'qcollapse' + (open ? ' open' : ''),
+    style: `--theme-accent:${tm.poster.accent}`,
+  },
     h('div', { class: 'qc-head' },
       h('button', {
         class: 'qc-toggle', 'aria-expanded': String(open),
@@ -121,7 +128,8 @@ function spotSection(s, tripId) {
         },
       },
         h('span', { class: 'qc-emoji' }, s.emoji || '📍'),
-        h('span', { class: 'qc-name' }, s.name),
+        h('span', { class: 'qc-name' }, s.name,
+          h('span', { class: 'qc-theme' }, tm.emoji + ' ' + tm.label)),
         h('span', {
           class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
         }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
@@ -306,13 +314,13 @@ async function regenerate(tripId) {
   if (!await confirmDialog('會依現有景點補上任務。你改過或自訂的不會動，重複的不會重加。')) return;
   let added = 0;
   for (const s of store.spotsOf(tripId)) {
-    if (s.source === 'curated') continue;
     const existing = store.questsOf(s.id);
-    const fresh = templateQuests(s.name, s.inferredType || inferType(s.name));
+    const fresh = await themedQuestsForSpot(s, tripId);
+    let k = 0;
     for (const q of fresh) {
       if (existing.some((e) => e.title === q.title)) continue;
-      await store.put({ id: uuid(), type: 'quest', tripId, spotId: s.id, title: q.title, hint: q.hint, kind: q.kind, source: 'template', order: existing.length + added, refImage: null });
-      added++;
+      await store.put({ id: uuid(), type: 'quest', tripId, spotId: s.id, title: q.title, hint: q.hint, kind: q.kind, source: q.source || 'template', order: existing.length + k, refImage: null });
+      added++; k++;
     }
   }
   toast(added ? `補了 ${added} 個任務` : '沒有可補的');

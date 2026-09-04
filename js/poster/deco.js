@@ -78,6 +78,193 @@ export function bunting(ctx, x1, y1, x2, y2, colors) {
   ctx.restore();
 }
 
+// ---------- 主題裝飾 ----------
+export function pine(ctx, x, y, s, rot, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  for (let i = 0; i < 3; i++) {
+    const yy = -6 + i * 9, w = 14 - i * 3;
+    ctx.beginPath(); ctx.moveTo(0, yy - 12); ctx.lineTo(w, yy + 4); ctx.lineTo(-w, yy + 4); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(90,60,40,0.6)'; ctx.fillRect(-2, 16, 4, 8);
+  ctx.restore();
+}
+export function mountain(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(-26, 12); ctx.lineTo(-6, -16); ctx.lineTo(6, 0); ctx.lineTo(18, -12); ctx.lineTo(28, 12); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(-12, -6); ctx.lineTo(0, -6); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+export function wave(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  for (let r = 0; r < 3; r++) {
+    ctx.beginPath();
+    for (let i = -24; i <= 24; i += 2) ctx.lineTo(i, r * 7 + Math.sin(i / 5) * 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+export function shell(ctx, x, y, s, rot, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(0, 10);
+  for (let a = 0; a <= Math.PI; a += Math.PI / 7) ctx.lineTo(Math.cos(Math.PI - a) * 11, 10 - Math.sin(a) * 16);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 0.8;
+  for (let a = 0; a < 5; a++) { ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(Math.cos(Math.PI - a * Math.PI / 4) * 9, 10 - Math.sin(a * Math.PI / 4) * 13); ctx.stroke(); }
+  ctx.restore();
+}
+export function gull(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-12, 0); ctx.quadraticCurveTo(-4, -8, 0, 0); ctx.quadraticCurveTo(4, -8, 12, 0); ctx.stroke();
+  ctx.restore();
+}
+export function lantern(ctx, x, y, s, color, ink) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = ink || 'rgba(80,50,40,0.6)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, -14); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(0, 0, 11, 14, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = ink || 'rgba(80,50,40,0.75)';
+  ctx.fillRect(-7, -15, 14, 3); ctx.fillRect(-7, 12, 14, 3);
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 5, -12); ctx.lineTo(i * 5, 12); ctx.stroke(); }
+  ctx.restore();
+}
+export function building(ctx, x, y, s, color, lit) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  const hs = [26, 40, 18, 32];
+  let bx = -24;
+  for (const hh of hs) { ctx.fillRect(bx, -hh, 11, hh); bx += 13; }
+  ctx.fillStyle = lit || 'rgba(255,255,255,0.55)';
+  bx = -24;
+  for (const hh of hs) { for (let r = 4; r < hh - 3; r += 8) { ctx.fillRect(bx + 2, -hh + r, 3, 3); ctx.fillRect(bx + 6, -hh + r, 3, 3); } bx += 13; }
+  ctx.restore();
+}
+export function torii(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.fillRect(-16, -14, 32, 5);
+  ctx.fillRect(-13, -7, 26, 3.5);
+  ctx.fillRect(-12, -9, 4, 24);
+  ctx.fillRect(8, -9, 4, 24);
+  ctx.restore();
+}
+export function seigaiha(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+  for (let r = 4; r <= 14; r += 5) { ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 0); ctx.stroke(); }
+  ctx.restore();
+}
+export function cloudBar(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-20, 0); ctx.quadraticCurveTo(-10, -8, 0, 0); ctx.quadraticCurveTo(10, -8, 20, 0);
+  ctx.stroke();
+  ctx.restore();
+}
+export function bowl(ctx, x, y, s, color, ink) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = ink || 'rgba(80,40,20,0.5)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-8, -1); ctx.bezierCurveTo(-4, -6, 4, -6, 8, -1); ctx.stroke();
+  ctx.restore();
+}
+export function steam(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 8, 10);
+    ctx.bezierCurveTo(i * 8 - 6, 2, i * 8 + 6, -6, i * 8, -14);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+export function chopsticks(ctx, x, y, s, rot, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot || -0.5); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-14, -3); ctx.lineTo(16, -1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-14, 3); ctx.lineTo(16, 5); ctx.stroke();
+  ctx.restore();
+}
+export function bag(ctx, x, y, s, color, ink) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color; ctx.fillRect(-10, -6, 20, 18);
+  ctx.strokeStyle = ink || 'rgba(60,30,50,0.6)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(-4, -6, 4, Math.PI, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(4, -6, 4, Math.PI, 0); ctx.stroke();
+  ctx.restore();
+}
+export function tag(ctx, x, y, s, rot, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0.4); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(-4, -10); ctx.lineTo(12, -10); ctx.lineTo(12, 10); ctx.lineTo(-4, 10); ctx.lineTo(-12, 0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath(); ctx.arc(-5, 0, 2.2, 0, 7); ctx.fill();
+  ctx.restore();
+}
+export function star(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color; ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 ? 4 : 10;
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+export function balloon(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(0, 0, 10, 12, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(-3, 15); ctx.lineTo(3, 15); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(0, 15); ctx.quadraticCurveTo(4, 24, 0, 32); ctx.stroke();
+  ctx.restore();
+}
+export function spark(ctx, x, y, s, color) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(Math.cos(a) * 3, Math.sin(a) * 3); ctx.lineTo(Math.cos(a) * 9, Math.sin(a) * 9); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// theme deco 名稱 → 繪製（給 poster 呼叫；統一簽章 (ctx,x,y,scale,rot,c1,c2)）
+export const THEME_DECO = {
+  sprig: (c, x, y, s, r, a) => sprig(c, x, y, s * 1.1, r, a),
+  leaf: (c, x, y, s, r, a) => leaf(c, x, y, s * 1.4, r, a),
+  cloud: (c, x, y, s, r, a) => cloud(c, x, y, s * 0.9, a),
+  house: (c, x, y, s, r, a, b) => house(c, x, y, s * 0.9, r, a, b),
+  sun: (c, x, y, s, r, a) => sun(c, x, y, s * 0.9, a),
+  pine, mountain: (c, x, y, s, r, a) => mountain(c, x, y, s, a),
+  wave: (c, x, y, s, r, a) => wave(c, x, y, s, a),
+  shell, gull: (c, x, y, s, r, a) => gull(c, x, y, s, a),
+  lantern: (c, x, y, s, r, a, b) => lantern(c, x, y, s, a, b),
+  building: (c, x, y, s, r, a, b) => building(c, x, y, s, a, b),
+  torii: (c, x, y, s, r, a) => torii(c, x, y, s, a),
+  seigaiha: (c, x, y, s, r, a) => seigaiha(c, x, y, s, a),
+  cloudBar: (c, x, y, s, r, a) => cloudBar(c, x, y, s, a),
+  bowl: (c, x, y, s, r, a, b) => bowl(c, x, y, s, a, b),
+  steam: (c, x, y, s, r, a) => steam(c, x, y, s, a),
+  chopsticks, bag: (c, x, y, s, r, a, b) => bag(c, x, y, s, a, b),
+  tag, star: (c, x, y, s, r, a) => star(c, x, y, s, a),
+  balloon: (c, x, y, s, r, a) => balloon(c, x, y, s, a),
+  spark: (c, x, y, s, r, a) => spark(c, x, y, s, a),
+};
+
 // 一朵水彩暈染色塊（低透明度疊路徑，不用 filter）
 export function blob(ctx, x, y, r, color, seedFn) {
   ctx.save(); ctx.translate(x, y);

@@ -9,6 +9,8 @@
 //               自由輸入的景點 → 依名稱關鍵字判斷型別 → byType → 通用題保底。永不落空。
 
 import { uuid } from '../ids.js';
+import { loadThemes, themeForSpot } from '../theme.js';
+import { loadPhrases, makeCtx, composeBlurb, composeQuests } from './compose.js';
 
 let _index = null;
 let _templates = null;
@@ -149,7 +151,7 @@ function cnNum(s) {
 // ---------- 主流程 ----------
 // items: [{ placeId?, name?, day }]  —— placeId 來自階層選擇；name 來自自由輸入
 export async function generateForTrip({ tripId, items, itineraryText, region = '' }) {
-  await Promise.all([loadPlaceIndex(), loadTemplates()]);
+  await Promise.all([loadPlaceIndex(), loadTemplates(), loadThemes(), loadPhrases()]);
   const list = [...(items || [])];
   if (itineraryText) {
     for (const p of parseItinerary(itineraryText, region)) list.push({ name: p.name, region: p.region, day: p.day });
@@ -158,6 +160,7 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
   const spots = [];
   const quests = [];
   let order = 0;
+  const ctx = makeCtx(tripId);   // 同一趟共用：避免句型重複
 
   for (const it of list) {
     if (!it) continue;
@@ -167,30 +170,56 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
     if (it.placeId) { await loadAllForSearch(); place = placeById(it.placeId); }
     if (!place && it.name) place = await matchPlace(it.name, it.region || region);
 
+    let spot;
     if (place) {
-      spots.push({
+      spot = {
         id: spotId, type: 'spot', tripId, name: place.name, nameLocal: place.name,
         region: place.cityName || place.region || it.region || region,
         district: place.district || '', day, order: order++,
         lat: place.lat ?? null, lng: place.lng ?? null,
         wikiRef: place.wiki || null, commonsImg: place.img?.commons || null,
         emoji: primaryEmoji(place), blurb: place.blurb || '',
+        must: place.must || [], primary: place.primary || '',
         tags: place.tags || [], source: 'curated', placeId: place.id,
-      });
-      for (const q of questsForPlace(place)) quests.push(mkQuest(tripId, spotId, q));
+      };
     } else {
       const name = it.name || '未命名景點';
       const type = inferType(name);
-      spots.push({
+      spot = {
         id: spotId, type: 'spot', tripId, name, nameLocal: name,
         region: it.region || region, day, order: order++,
-        lat: null, lng: null, wikiRef: null, emoji: typeEmoji(type) || '📍',
-        blurb: '', tags: [], source: 'auto', inferredType: type,
-      });
-      for (const q of templateQuests(name, type)) quests.push(mkQuest(tripId, spotId, q));
+        lat: null, lng: null, wikiRef: null,
+        emoji: nameEmoji(name) || typeEmoji(type) || '📍',
+        blurb: '', must: [], tags: [], source: 'auto', inferredType: type,
+      };
     }
+
+    // 主題判定 + 依主題組文案（同一趟不重複句型）
+    spot.theme = themeForSpot(spot);
+    const themed = composeQuestSet(spot, spot.theme, ctx, place);
+    if (!spot.blurb) spot.blurb = composeBlurb(spot, spot.theme, ctx);
+    delete spot.must; delete spot.primary;   // 這兩個只是產生時用，不落地
+
+    spots.push(spot);
+    for (const q of themed) quests.push(mkQuest(tripId, spotId, q));
   }
   return { spots, quests };
+}
+
+// 人工題組（若有）優先，再補主題化任務，去重
+function composeQuestSet(spot, theme, ctx, place) {
+  const out = [];
+  if (place && Array.isArray(place.quests) && place.quests.length) {
+    place.quests.forEach((q, i) => out.push({
+      title: q.title, hint: q.hint, kind: q.type || q.kind || 'thing', source: 'curated', order: i,
+    }));
+  }
+  for (const q of composeQuests({ ...spot, must: (place && place.must) || spot.must || [] }, theme, ctx, { max: out.length ? 2 : 4 })) {
+    if (out.length >= 6) break;
+    if (out.some((o) => o.title === q.title)) continue;
+    out.push({ ...q, order: out.length });
+  }
+  return out.slice(0, 6);
 }
 
 function mkQuest(tripId, spotId, q) {
@@ -201,51 +230,32 @@ function mkQuest(tripId, spotId, q) {
   };
 }
 
-// 策展地點 → 任務
-function questsForPlace(place) {
-  const out = [];
-  if (Array.isArray(place.quests) && place.quests.length) {
-    place.quests.forEach((q, i) => out.push({ title: q.title, hint: q.hint, kind: q.type || q.kind || 'thing', source: 'curated', order: i }));
-  }
-  const t = _templates;
-  const tags = place.questSeed?.tags || place.tags || [];
-  if (out.length < 3 && t) {
-    let i = out.length;
-    for (const tag of tags) {
-      for (const q of (t.byTag[tag] || [])) {
-        if (out.length >= 4) break;
-        const title = q.title.replaceAll('{spot}', place.name);
-        if (out.some((o) => o.title === title)) continue;
-        out.push({ title, hint: q.hint.replaceAll('{spot}', place.name), kind: q.kind, source: 'template', order: i++ });
-      }
-    }
-  }
-  // 必吃清單 → 每項一個任務（最多 3 個）
-  if (Array.isArray(place.must) && t?.mustQuest) {
-    place.must.slice(0, 3).forEach((item, i) => {
-      out.push({
-        title: t.mustQuest.title.replaceAll('{item}', item).replaceAll('{spot}', place.name),
-        hint: t.mustQuest.hint.replaceAll('{item}', item).replaceAll('{spot}', place.name),
-        kind: 'food', source: 'must', order: out.length + i,
-      });
-    });
-  }
-  if (!out.length) out.push({ title: '到此一遊代表照', hint: `拍一張最能代表「我來過 ${place.name}」的照片。`, kind: 'view', source: 'generic', order: 0 });
-  return out.slice(0, 6);
+// 依主題補任務（trip.js「補齊任務」用）
+export async function themedQuestsForSpot(spot, tripId) {
+  await Promise.all([loadThemes(), loadPhrases()]);
+  const theme = spot.theme || themeForSpot(spot);
+  const ctx = makeCtx(String(tripId) + ':regen:' + spot.id);
+  return composeQuests({ ...spot, must: spot.must || [] }, theme, ctx, { max: 4 });
 }
 
 const TAG_EMOJI = { sight: '🏛️', food: '🍜', nightmarket: '🏮', snack: '🍢', checkin: '📸', culture: '🎎', nature: '🌄', shopping: '🛍️', view: '🌇' };
 const NAME_EMOJI = [
-  [/夜市/, '🏮'], [/神社|大社|稻荷|稲荷|[^海]宮$|鳥居/, '⛩️'], [/[^醫眼]城$|城堡|天守/, '🏯'],
-  [/寺$|寺院|大佛/, '🛕'], [/廟$|祠$/, '🀄'], [/塔$|101|晴空|鐵塔|tower/i, '🗼'],
-  [/公園|草原|牧場|農場/, '🌳'], [/山$|岳$|峰$/, '⛰️'], [/湖$|潭$|運河|瀑布|溪$|海$|灘$|岬$/, '🌊'],
-  [/溫泉|温泉/, '♨️'], [/水族館|美麗海/, '🐠'], [/教堂/, '⛪'], [/纜車/, '🚠'],
-  [/博物館|美術館|文物|故宮/, '🖼️'], [/老街|商店街/, '🏘️'], [/瞭望|觀景|展望/, '🔭'],
+  [/夜市/, '🏮'], [/神社|大社|稻荷|稲荷|[^海]宮$|鳥居/, '⛩️'], [/[^醫眼]城$|城堡|天守|古堡|赤崁|砲台/, '🏯'],
+  [/寺$|寺院|大佛/, '🛕'], [/廟$|祠$|天后|媽祖/, '🀄'], [/塔$|101|晴空|鐵塔|tower/i, '🗼'],
+  [/步道|林道|古道|健行/, '🥾'],
+  [/牛肉麵|拉麵|[^泡]麵$|飯$|[^醫]粥$|火鍋|燒肉|小吃|食堂|餐廳|海鮮|豬心|蝦捲|肉圓|碗粿|米糕|肉羹|魚湯|水果店|冰店$|豆花|甜點|咖啡館|烘焙/, '🍜'],
+  [/公園|草原|牧場|農場|花海|花園|植物園/, '🌳'], [/山$|岳$|峰$|嶺$/, '⛰️'], [/湖$|潭$|運河|瀑布|溪$|海$|灘$|岬$|漁港|碼頭|龍洞|鼻頭|奇岩/, '🌊'],
+  [/溫泉|温泉/, '♨️'], [/水族館|美麗海|海生館/, '🐠'], [/教堂/, '⛪'], [/纜車/, '🚠'],
+  [/博物館|美術館|文物|故宮|紀念館/, '🖼️'], [/老街|商店街/, '🏘️'], [/瞭望|觀景|展望/, '🔭'],
+  [/百貨|購物|商場|outlet/i, '🛍️'], [/樂園|遊樂園|動物園/, '🎡'],
 ];
+function nameEmoji(name) {
+  for (const [re, e] of NAME_EMOJI) if (re.test(name || '')) return e;
+  return null;
+}
 function primaryEmoji(place) {
   if (place.emoji) return place.emoji;
-  for (const [re, e] of NAME_EMOJI) if (re.test(place.name)) return e;
-  return TAG_EMOJI[place.primary] || TAG_EMOJI[(place.tags || [])[0]] || '📍';
+  return nameEmoji(place.name) || TAG_EMOJI[place.primary] || TAG_EMOJI[(place.tags || [])[0]] || '📍';
 }
 
 // ---------- 自由輸入景點：關鍵字型別判斷 ----------
@@ -258,7 +268,7 @@ export function inferType(name) {
   return null;
 }
 function typeEmoji(type) {
-  return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🏮', park: '🌳', mountain: '⛰️', water: '🌊', museum: '🖼️', street: '🏮', station: '🚉', tower: '🗼', themepark: '🎡' })[type];
+  return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🏮', park: '🌳', mountain: '🥾', water: '🌊', museum: '🖼️', street: '🏘️', station: '🚉', tower: '🗼', themepark: '🎡' })[type];
 }
 export function templateQuests(name, type) {
   if (!_templates) return [];

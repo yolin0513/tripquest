@@ -6,12 +6,14 @@ import * as store from '../store.js';
 import { blobURL } from '../photos.js';
 import * as db from '../db.js';
 import { drawParagraph, paragraphHeight, clip } from './text.js';
-import { PRESETS, CJK_STACK } from './presets.js';
+import { PRESETS, CJK_STACK, styleFor } from './presets.js';
 import * as deco from './deco.js';
+import { loadThemes, themeForSpot, themeForDay, themeForTrip, themeMeta } from '../theme.js';
 
 const W = 1240;
 const MAXH = 8000;
 const PAD = 80;
+const POLAROID_SIZES = [300, 268, 332];
 
 // ---------- 模型 ----------
 export function buildModel(tripId) {
@@ -19,9 +21,11 @@ export function buildModel(tripId) {
   const spots = store.spotsOf(tripId);
   const members = store.membersOf(trip.groupId);
   const byDay = new Map();
+  const byDaySpots = new Map();
   for (const s of spots) {
     const d = s.day || 1;
-    if (!byDay.has(d)) byDay.set(d, []);
+    if (!byDay.has(d)) { byDay.set(d, []); byDaySpots.set(d, []); }
+    byDaySpots.get(d).push(s);
     byDay.get(d).push({
       name: s.name,
       district: s.district || '',
@@ -29,14 +33,19 @@ export function buildModel(tripId) {
       startTime: s.startTime || '', endTime: s.endTime || '',
       photoHash: pickPhotoHash(s), emoji: s.emoji || '📍',
       region: s.region || '',
+      theme: s.theme || themeForSpot(s),
     });
   }
   const days = [...byDay.entries()].sort((a, b) => a[0] - b[0])
-    .map(([day, items]) => ({ day, region: items[0]?.region || trip.region || '', items }));
+    .map(([day, items]) => ({
+      day, region: items[0]?.region || trip.region || '', items,
+      theme: themeForDay(byDaySpots.get(day)),
+    }));
   return {
     title: trip.title || '我們的旅程',
     dateRange: [trip.startDate, trip.endDate].filter(Boolean).join(' – '),
     people: members.length, spotCount: spots.length, dayCount: days.length,
+    tripTheme: themeForTrip(spots),
     days,
   };
 }
@@ -85,46 +94,85 @@ function F(preset, weight, size, family) {
 }
 const DISP = (p, weight, size) => `${weight} ${size}px ${p.displayFont}, ${CJK_STACK}`;
 
-// 量測一天需要的高度
-function measureDay(ctx, p, day, isFirst) {
-  let h = 0;
-  h += isFirst ? 0 : 40;
-  h += 120; // day banner
-  for (const it of day.items) {
-    const rowH = measureRow(ctx, p, it);
-    h += rowH + 34;
-  }
-  h += 30;
-  return h;
-}
-const POLAROID_W = 300;
 const TEXT_X = PAD + 78 + 44;
-function rowTextWidth(it) {
+function rowTextWidth(it, pw) {
   return it.photoHash
-    ? (W - PAD - POLAROID_W - 28) - TEXT_X   // 文字止於拍立得左緣前
+    ? (W - PAD - pw - 28) - TEXT_X   // 文字止於拍立得左緣前
     : W - TEXT_X - PAD;
 }
-function measureRow(ctx, p, it) {
-  const textW = rowTextWidth(it);
+// 每一列的拍立得寬度：由 seed + 天 + 序號決定（量測與繪製一致）
+function rowPW(seedKey, day, ii) {
+  return POLAROID_SIZES[deco.hashStr(seedKey + ':' + day + ':' + ii) % POLAROID_SIZES.length];
+}
+function measureRow(ctx, p, it, pw) {
+  const textW = rowTextWidth(it, pw);
   let h = 14;
   if (it.startTime) h += 34;          // 時間標籤
   h += 44;                             // 名稱
   if (it.blurb) h += 20 + paragraphHeight(ctx, it.blurb, textW, F(p, 400, 27), 38, 3);
   h += 6;
-  const photoH = it.photoHash ? 306 : 0;
+  const photoH = it.photoHash ? (pw - 0) * 0.82 + 60 : 0;
   return Math.max(h, photoH);
+}
+// 量測一天需要的高度
+function measureDay(ctx, p, day, isFirst, seedKey) {
+  let h = 0;
+  h += isFirst ? 0 : 40;
+  h += 120; // day banner
+  day.items.forEach((it, ii) => {
+    h += measureRow(ctx, p, it, rowPW(seedKey, day.day, ii)) + 34;
+  });
+  h += 30;
+  return h;
+}
+
+// ---- 時間軸樣式（依主題）----
+function drawTimeline(ctx, dp, x, top, bot) {
+  ctx.save();
+  ctx.strokeStyle = dp.line; ctx.lineCap = 'round';
+  const kind = dp.timeline || 'dot';
+  if (kind === 'solid' || kind === 'lanternString') {
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke();
+  } else if (kind === 'double') {
+    ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(x - 3, top); ctx.lineTo(x - 3, bot); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 3, top); ctx.lineTo(x + 3, bot); ctx.stroke();
+  } else if (kind === 'dash') {
+    ctx.lineWidth = 3; ctx.setLineDash([12, 8]);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke(); ctx.setLineDash([]);
+  } else if (kind === 'wave') {
+    ctx.lineWidth = 2.6; ctx.beginPath();
+    for (let yy = top; yy <= bot; yy += 4) ctx.lineTo(x + Math.sin(yy / 14) * 4, yy);
+    ctx.stroke();
+  } else { // dot / dotLeaf
+    ctx.lineWidth = 3; ctx.setLineDash([2, 10]);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (kind === 'lanternString') {
+    for (let yy = top + 30; yy < bot - 10; yy += 74) deco.lantern(ctx, x, yy, 0.7, dp.accent2, dp.line);
+  }
+  ctx.restore();
+}
+
+let _decoTurn = 0;
+function scatterDeco(ctx, dp, x, y, scale, rnd, idx) {
+  const list = dp.deco && dp.deco.length ? dp.deco : ['sprig'];
+  const name = list[(idx == null ? _decoTurn++ : idx) % list.length];
+  const fn = deco.THEME_DECO[name];
+  if (fn) fn(ctx, x, y, scale, (rnd() - 0.5) * 0.6, dp.accent, dp.accent2 || dp.ink);
 }
 
 async function drawPoster(canvas, model, dayList, preset, seedKey) {
   const ctx = canvas.getContext('2d');
-  const p = preset;
+  const p = styleFor(preset, themeMeta(model.tripTheme));
   const rnd = deco.mulberry32(deco.hashStr(seedKey));
+  _decoTurn = 0;
 
   // pass 1: 量測
   ctx.textBaseline = 'alphabetic';
   let total = 220; // header
   if (model.dateRange) total += 8;
-  dayList.forEach((d, i) => { total += measureDay(ctx, p, d, i === 0); });
+  dayList.forEach((d, i) => { total += measureDay(ctx, p, d, i === 0, seedKey); });
   total += 150; // footer
   total = Math.min(total, MAXH);
 
@@ -135,24 +183,27 @@ async function drawPoster(canvas, model, dayList, preset, seedKey) {
   paintPaper(ctx, p, rnd);
 
   // 邊框裝飾（bunting）
-  if (p.decoDensity > 0.4) deco.bunting(ctx, 40, 60, W - 40, 60, p.bunting);
+  if (preset.decoDensity > 0.35) deco.bunting(ctx, 40, 60, W - 40, 60, p.bunting);
 
   let y = 150;
 
   // ---- header ----
   ctx.textAlign = 'center';
-  // 標題底的水彩暈
   deco.blob(ctx, W / 2, y - 6, 340, p.blobColors[0], rnd);
+  // 標題兩側的主題小裝飾
+  if (preset.decoDensity > 0.3) {
+    scatterDeco(ctx, p, W / 2 - 250, y - 8, 1.5, rnd);
+    scatterDeco(ctx, p, W / 2 + 250, y - 8, 1.5, rnd);
+  }
   ctx.fillStyle = p.ink;
   ctx.font = DISP(p, 700, 74);
-  ctx.fillText(clip(ctx, model.title, W - 200, ctx.font), W / 2, y);
+  ctx.fillText(clip(ctx, model.title, W - 220, ctx.font), W / 2, y);
   y += 52;
   ctx.fillStyle = p.sub;
   ctx.font = F(p, 400, 30);
   const sub = [model.dateRange, `${model.people} 人 · ${model.spotCount} 個地方`].filter(Boolean).join('　·　');
   ctx.fillText(sub, W / 2, y);
   y += 46;
-  // 分隔手繪線
   wobblyLine(ctx, W / 2 - 140, y, W / 2 + 140, y, p.line, rnd);
   y += 20;
 
@@ -160,93 +211,90 @@ async function drawPoster(canvas, model, dayList, preset, seedKey) {
   for (let di = 0; di < dayList.length; di++) {
     const d = dayList[di];
     if (di > 0) y += 40;
-    y = await drawDay(ctx, p, d, y, rnd);
+    const dp = styleFor(preset, themeMeta(d.theme));
+    y = await drawDay(ctx, p, dp, d, y, rnd, seedKey);
   }
 
   // ---- footer ----
   y = Math.min(y + 40, total - 90);
   ctx.textAlign = 'center';
-  deco.sprig(ctx, W / 2 - 90, y + 20, 1.4, -0.3, p.accent);
-  deco.sprig(ctx, W / 2 + 90, y + 20, 1.4, 0.3, p.accent);
+  scatterDeco(ctx, p, W / 2 - 96, y + 16, 1.5, rnd);
+  scatterDeco(ctx, p, W / 2 + 96, y + 16, 1.5, rnd);
   ctx.fillStyle = p.ink; ctx.font = DISP(p, 700, 40);
   ctx.fillText('謝謝這趟旅程', W / 2, y);
   ctx.fillStyle = p.sub; ctx.font = F(p, 400, 24);
   ctx.fillText('TripQuest 旅圖任務', W / 2, y + 40);
 }
 
-async function drawDay(ctx, p, d, y, rnd) {
-  // day banner
+async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
+  // day banner（用當天主題色）
   const bandY = y;
-  ctx.fillStyle = p.band;
+  ctx.fillStyle = dp.band;
   roundRect(ctx, PAD - 20, bandY - 4, W - (PAD - 20) * 2, 92, 16);
   ctx.fill();
-  deco.blob(ctx, PAD + 40, bandY + 44, 90, p.blobColors[1 % p.blobColors.length], rnd);
+  deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd);
+  // 當天主題章
+  const tm = themeMeta(d.theme);
+  ctx.textAlign = 'right'; ctx.fillStyle = dp.sub;
+  ctx.font = F(p, 700, 24);
+  ctx.fillText(`${tm.emoji} ${tm.label}`, W - PAD - 4, bandY + 52);
   ctx.textAlign = 'left';
-  ctx.fillStyle = p.accent;
+  ctx.fillStyle = dp.accent;
   ctx.font = DISP(p, 700, 56);
   ctx.fillText(`DAY ${d.day}`, PAD + 4, bandY + 58);
   const dw = ctx.measureText(`DAY ${d.day}`).width;
-  ctx.fillStyle = p.ink; ctx.font = F(p, 700, 30);
+  ctx.fillStyle = dp.ink; ctx.font = F(p, 700, 30);
   ctx.fillText(`第 ${cn(d.day)} 天${d.region ? ' · ' + d.region : ''}`, PAD + 24 + dw, bandY + 56);
   y = bandY + 92 + 26;
 
-  // 時間軸直線
   const lineX = PAD + 78;
+  const daySpan = d.items.reduce((h, it, ii) => h + measureRow(ctx, p, it, rowPW(seedKey, d.day, ii)) + 34, 0);
+  drawTimeline(ctx, dp, lineX, y - 14, y + daySpan - 20);
 
   for (let ii = 0; ii < d.items.length; ii++) {
     const it = d.items[ii];
+    const pw = rowPW(seedKey, d.day, ii);
     const rowTop = y;
-    const rowH = measureRow(ctx, p, it);
-
-    // 連接線
-    ctx.strokeStyle = p.line; ctx.lineWidth = 3;
-    ctx.setLineDash([2, 10]); ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(lineX, rowTop - 14);
-    ctx.lineTo(lineX, rowTop + rowH + 20);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const rowH = measureRow(ctx, p, it, pw);
 
     // 時間點的圓 + emoji
     ctx.fillStyle = p.paper;
     ctx.beginPath(); ctx.arc(lineX, rowTop + 18, 22, 0, 7); ctx.fill();
-    ctx.strokeStyle = p.accent; ctx.lineWidth = 3;
+    ctx.strokeStyle = dp.accent; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(lineX, rowTop + 18, 22, 0, 7); ctx.stroke();
     ctx.font = '24px ' + CJK_STACK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(it.emoji, lineX, rowTop + 19);
     ctx.textBaseline = 'alphabetic';
 
-    // 時間標籤
     const timeLabel = it.startTime ? (it.endTime ? `${it.startTime}–${it.endTime}` : it.startTime) : '';
     const textX = lineX + 44;
-    const textW = rowTextWidth(it);
+    const textW = rowTextWidth(it, pw);
     let ty = rowTop + 14;
     if (timeLabel) {
-      ctx.textAlign = 'left'; ctx.fillStyle = p.accent2;
+      ctx.textAlign = 'left'; ctx.fillStyle = dp.accent2;
       ctx.font = DISP(p, 700, 26);
       ctx.fillText(timeLabel, textX, ty + 20);
       ty += 34;
     }
-    // 名稱
     ctx.fillStyle = p.ink; ctx.font = F(p, 800, 36); ctx.textAlign = 'left';
     ctx.fillText(clip(ctx, it.name, textW, ctx.font), textX, ty + 30);
     ty += 44;
-    // 介紹
     if (it.blurb) {
       ty = drawParagraph(ctx, it.blurb, textX, ty + 30, textW, {
         font: F(p, 400, 27), color: p.sub, lineHeight: 38, maxLines: 3,
       });
     }
 
-    // 拍立得照片（右側，交錯旋轉）
+    // 拍立得照片（右側；大小交錯、傾斜依主題）
     if (it.img) {
-      const rot = ((ii % 2 ? 1 : -1) * (p.polaroid.rotate + rnd() * 3)) * Math.PI / 180;
-      polaroid(ctx, it.img, W - PAD - POLAROID_W, rowTop - 6, POLAROID_W, p, rot, it.name);
+      const jitter = (rnd() - 0.5) * 4;
+      const rot = ((ii % 2 ? 1 : -1) * (dp.tilt || 5) + jitter) * Math.PI / 180;
+      polaroid(ctx, it.img, W - PAD - pw, rowTop - 6, pw, p, rot, it.name, dp.polaroidTint);
     }
 
-    // 偶爾放一片葉子
-    if (rnd() < 0.35 * p.decoDensity) {
-      deco.sprig(ctx, PAD - 30 + rnd() * 20, rowTop + rowH + 10, 1 + rnd(), (rnd() - 0.5), p.accent);
+    // 主題裝飾：靠左邊、行底（不要每列都有）
+    if (ii % 2 === 1 && rnd() < 0.35 + 0.35 * (p.decoDensity || 0.5)) {
+      scatterDeco(ctx, dp, PAD - 32 + rnd() * 14, rowTop + rowH + 4, 0.85 + rnd() * 0.4, rnd);
     }
 
     y = rowTop + rowH + 34;
@@ -254,7 +302,7 @@ async function drawDay(ctx, p, d, y, rnd) {
   return y;
 }
 
-function polaroid(ctx, img, x, y, w, p, rot, caption) {
+function polaroid(ctx, img, x, y, w, p, rot, caption, tint) {
   const b = p.polaroid.border, bottom = p.polaroid.bottom;
   const imgW = w - b * 2;
   const imgH = imgW * 0.82;
@@ -275,6 +323,11 @@ function polaroid(ctx, img, x, y, w, p, rot, caption) {
   ctx.save();
   ctx.beginPath(); ctx.rect(-w / 2 + b, -h / 2 + b, imgW, imgH); ctx.clip();
   ctx.drawImage(img, -w / 2 + b + (imgW - dw) / 2, -h / 2 + b + (imgH - dh) / 2, dw, dh);
+  // 主題色薄暈（讓照片與整體更協調）
+  if (tint && tint !== 'rgba(0,0,0,0)') {
+    ctx.fillStyle = tint;
+    ctx.fillRect(-w / 2 + b, -h / 2 + b, imgW, imgH);
+  }
   ctx.restore();
   // 底下手寫標籤
   if (bottom > 10) {
@@ -347,6 +400,7 @@ export function presetList() {
 export async function renderPoster(tripId, { presetId = 'watercolor', onProgress } = {}) {
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();
+  await loadThemes();
   const model = buildModel(tripId);
   if (!model.days.length) throw new Error('這個行程還沒有景點');
 
@@ -380,6 +434,7 @@ export async function renderPoster(tripId, { presetId = 'watercolor', onProgress
 export async function renderPreview(canvas, tripId, presetId) {
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();
+  await loadThemes();
   const model = buildModel(tripId);
   for (const d of model.days) for (const it of d.items) it.img = it.photoHash ? await loadImg(it.photoHash.hash) : null;
   await drawPoster(canvas, model, model.days.slice(0, 2), preset, tripId + ':' + presetId + ':prev');
