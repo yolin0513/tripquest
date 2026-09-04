@@ -68,6 +68,9 @@ export default async function trip(tripId) {
       : null,
 
     h('div', { class: 'stack', style: 'margin-top:6px' },
+      (allDone || tripEnded(t)) && spots.length
+        ? h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => navigate(`/trip/${tripId}/recap`) }, '🎁 看這趟的回顧')
+        : null,
       h('button', { class: 'btn btn-soft btn-block btn-big', onclick: () => navigate(`/trip/${tripId}/people`) },
         '📸 看照片牆 / 幫旅伴按讚'),
       h('button', {
@@ -109,6 +112,11 @@ export default async function trip(tripId) {
       if (location.hash.includes(`/trip/${tripId}`) && !location.hash.includes('/spot/')) trip(tripId);
     }).catch(() => {});
   }
+}
+
+function tripEnded(t) {
+  if (!t.endDate) return false;
+  return new Date(t.endDate + 'T23:59:59') < new Date();
 }
 
 async function fillWeatherStrip(slot, tripId, trip) {

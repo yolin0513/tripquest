@@ -69,6 +69,7 @@ export default async function album(tripId) {
       ? h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doVideo }, '🎬 存成影片檔')
       : h('p', { class: 'form-hint' }, '這支手機不支援直接存影片，請用上面的相簿頁（一樣好看、一樣能傳）。'),
     h('p', { class: 'form-hint center' }, '全部都在這支手機裡做好，不會上傳。'),
+    h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:14px', onclick: () => navigate(`/trip/${tripId}/recap`) }, '🎁 看這趟的數字回顧'),
   ));
 
   let player = null, playing = false, barIv = 0;
