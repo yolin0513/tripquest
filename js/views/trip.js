@@ -68,21 +68,15 @@ export default async function trip(tripId) {
         }, '👋 告訴大家你是誰（拍照前先選一次）')
       : null,
 
+    // 全部完成 / 旅程結束 → 直接把「回顧」拉到最上面
+    (allDone || tripEnded(t)) && spots.length
+      ? h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/memories`) },
+          allDone ? '🎉 全部完成！去看回顧與回憶影片' : '🎁 旅程結束了，來看回顧')
+      : null,
+
     h('div', { class: 'stack', style: 'margin-top:6px' },
-      (allDone || tripEnded(t)) && spots.length
-        ? h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => navigate(`/trip/${tripId}/recap`) }, '🎁 看這趟的回顧')
-        : null,
-      h('button', { class: 'btn btn-soft btn-block btn-big', onclick: () => navigate(`/trip/${tripId}/people`) },
-        '📸 看照片牆 / 幫旅伴按讚'),
-      h('button', {
-        class: 'btn btn-block btn-big ' + (allDone ? 'btn-primary' : 'btn-soft is-locked'),
-        onclick: () => allDone ? navigate(`/trip/${tripId}/album`) : toast(`還有 ${prog.total - prog.done} 個任務就能做影片`),
-      }, allDone ? '🎬 製作回憶影片' : `🔒 回憶影片（還差 ${prog.total - prog.done} 個）`),
-      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/poster`) }, '🎨 做一張行程海報'),
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
-      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/expenses`) }, '💰 分帳（誰付了、誰該還誰）'),
       h('button', { class: 'btn btn-ghost btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
-      h('button', { class: 'btn btn-ghost btn-block', style: 'color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)', onclick: () => navigate(`/trip/${tripId}/sos`) }, '🆘 緊急求助（迷路、找警局醫院）'),
     ),
   );
 

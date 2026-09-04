@@ -46,8 +46,13 @@ export default async function quest(questId) {
 }
 
 function photoButton(trip, q, spot, members) {
-  const input = h('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: true, hidden: true });
-  input.addEventListener('change', async () => {
+  // 拍照（叫相機）與從相簿選（不加 capture）各一個 input，共用同一套處理
+  const camInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: true, hidden: true });
+  const libInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+  camInput.addEventListener('change', () => onPick(camInput));
+  libInput.addEventListener('change', () => onPick(libInput));
+
+  async function onPick(input) {
     const files = [...input.files];
     input.value = '';
     if (!files.length) return;
@@ -109,12 +114,15 @@ function photoButton(trip, q, spot, members) {
     if (attr.forMemberId && attr.forMemberId !== memberId) await showNewBadges(trip.id, attr.forMemberId);
     void prog0;
     quest(q.id);
-  });
+  }
 
+  const doneNow = store.isQuestDone(q.id);
   return h('div', { class: 'big-shot-btn' },
-    input,
-    h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => input.click() },
-      store.isQuestDone(q.id) ? '📷 再拍一張' : '📷 拍照'),
+    camInput, libInput,
+    h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => camInput.click() },
+      doneNow ? '📷 再拍一張' : '📷 拍照'),
+    h('button', { class: 'btn btn-soft btn-block btn-big', style: 'margin-top:10px', onclick: () => libInput.click() },
+      '🖼️ 從相簿選（可多張）'),
   );
 }
 

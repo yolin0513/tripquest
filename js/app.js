@@ -65,14 +65,49 @@ export function renderLoading() {
   mount(view, h('div', { class: 'center-fill' }, h('div', { class: 'spinner' })));
 }
 
-function syncTabs() {
-  const path = (location.hash.replace(/^#/, '') || '/').split('?')[0];
-  const active = path === '/settings' ? 'settings' : 'home';
-  document.querySelectorAll('#tabbar .tab').forEach((t) => {
-    t.classList.toggle('active', t.dataset.tab === active);
-  });
+// ---- 底部功能列（依所在位置切換：首頁層 vs 旅程層）----
+const tabbar = document.getElementById('tabbar');
+
+function currentPath() { return (location.hash.replace(/^#/, '') || '/').split('?')[0]; }
+
+function tripIdOfPath(p) {
+  let m = p.match(/^\/trip\/([^/]+)/);
+  if (m) return m[1];
+  m = p.match(/^\/quest\/([^/]+)/);
+  if (m) { const q = store.getRaw(m[1]); return q ? q.tripId : null; }
+  return null;
 }
-window.addEventListener('hashchange', syncTabs);
+
+function tabItem(icon, label, href, active) {
+  return h('a', { class: 'tab' + (active ? ' active' : ''), href: '#' + href },
+    h('span', { class: 'ti' }, icon), h('span', {}, label));
+}
+
+function renderTabs() {
+  if (!tabbar) return;
+  const p = currentPath();
+  const tid = tripIdOfPath(p);
+
+  if (tid && store.get(tid)) {
+    const base = `/trip/${tid}`;
+    const isTasks = p === base || /^\/trip\/[^/]+\/(plan|poster|weather|spot)/.test(p) || p.startsWith('/quest/');
+    const isPhotos = p === `${base}/people`;
+    const isSplit = p === `${base}/expenses`;
+    const isMem = /^\/trip\/[^/]+\/(memories|album|badges|recap)$/.test(p);
+    mount(tabbar,
+      tabItem('📋', '任務', base, isTasks),
+      tabItem('📸', '照片', `${base}/people`, isPhotos),
+      tabItem('💰', '分帳', `${base}/expenses`, isSplit),
+      tabItem('🎁', '回顧', `${base}/memories`, isMem),
+    );
+  } else {
+    mount(tabbar,
+      tabItem('🗺️', '我的旅程', '/', p === '/' || p === '/new' || p === '/join'),
+      tabItem('⚙️', '設定', '/settings', p === '/settings'),
+    );
+  }
+}
+window.addEventListener('hashchange', renderTabs);
 
 // ---- 路由表 ----
 route('/', async () => (await import('./views/home.js')).default());
@@ -90,6 +125,7 @@ route('/trip/:id/weather', async ({ params }) => (await import('./views/weather.
 route('/trip/:id/expenses', async ({ params }) => (await import('./views/expenses.js')).default(params.id));
 route('/trip/:id/badges', async ({ params }) => (await import('./views/badges.js')).default(params.id));
 route('/trip/:id/recap', async ({ params }) => (await import('./views/recap.js')).default(params.id));
+route('/trip/:id/memories', async ({ params }) => (await import('./views/memories.js')).default(params.id));
 route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
 route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
 route('/settings', async () => (await import('./views/settings.js')).default());
@@ -102,7 +138,7 @@ setNotFound(() => { navigate('/', { replace: true }); });
   await store.init();
   await initIdentity();       // 讓裝置身分與 localStorage / IndexedDB 一致
   startRouter();
-  syncTabs();
+  renderTabs();
 
   // 離線同步佇列：網路一好就自動補傳 / 補收
   import('./outbox.js').then((o) => o.startAutoDrain()).catch(() => {});

@@ -139,10 +139,19 @@ await shot('27-date-picker');
 await page.evaluate(() => [...document.querySelectorAll('.modal-card .btn')].find(b => b.textContent.includes('完成'))?.click());
 await sleep(150);
 
-// ---------- 4. 行程總覽 ----------
+// ---------- 4. 行程總覽（含底部分頁列）----------
 await go(`/#/trip/${tripId}`);
 await page.waitForSelector('.qbig');
 await shot('04-trip-overview');
+
+// ---------- 28. 底部分頁列 —— 旅程層 ----------
+await shotEl('#tabbar', '28-tabbar-trip');
+
+// ---------- 29. 「回顧」分頁 ----------
+await go(`/#/trip/${tripId}/memories`);
+await page.waitForSelector('.mem-card');
+await sleep(200);
+await shot('29-memories');
 
 // ---------- 5. 任務大圖卡（往下捲露出卡片） ----------
 await page.evaluate(() => window.scrollTo(0, 820));
@@ -172,6 +181,8 @@ const questId = await page.evaluate(async (tid) => {
 await go(`/#/quest/${questId}`);
 await page.waitForSelector('.quest-focus');
 await sleep(400);
+await page.evaluate(() => document.querySelector('.big-shot-btn')?.scrollIntoView({ block: 'center' }));
+await sleep(200);
 await shot('06-quest-detail');
 
 // ---------- 7. 完成任務的慶祝 ----------
