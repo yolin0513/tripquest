@@ -19,7 +19,10 @@ function newSecret() {
 // 分批推送——避免行程大（照片留言讚多）時整包塞進一次 POST 在慢的行動網路上逾時。
 // 每批有自己的逾時 + 最多重試 1 次；整體有個總預算，超過就放手交給 outbox 背景重試
 // （分享連結還是照樣給，不要卡住使用者）。
-async function pushAllChunked(adapter, records, { chunkSize = 150, chunkTimeoutMs = 12000, totalBudgetMs = 40000 } = {}) {
+// chunkSize 80：伺服器的 D1 資料庫一次最多處理約 100 筆寫入，這裡留餘裕（伺服器
+// 端 worker.mjs 現在也會自己再拆一次批次，這裡的分批主要是為了單一請求別太大、
+// 在慢網路上更快送完、失敗時重試的代價也更小）。
+async function pushAllChunked(adapter, records, { chunkSize = 80, chunkTimeoutMs = 12000, totalBudgetMs = 40000 } = {}) {
   const deadline = Date.now() + totalBudgetMs;
   for (let i = 0; i < records.length; i += chunkSize) {
     const chunk = records.slice(i, i + chunkSize);
