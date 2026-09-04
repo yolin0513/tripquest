@@ -22,3 +22,8 @@ scripts/_*.mjs
 
 # 自架伺服器的資料
 server/data/
+
+# Cloudflare Wrangler 本機狀態 / 機密
+.wrangler/
+.dev.vars
+workers/.wrangler/
