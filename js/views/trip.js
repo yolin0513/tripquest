@@ -119,7 +119,7 @@ export default async function trip(tripId) {
         dayNums, todayDay, allDone,
       }));
     }
-    container.append(h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:20px', onclick: () => addSpot(tripId) }, '＋ 新增景點'));
+    // 新增景點在「調整每天的行程」裡；這裡不再重複放
   }
 
   // 天氣提醒條 + 每天的天氣摘要（有座標景點、旅程還沒結束才有；背景載入）
@@ -472,7 +472,7 @@ export async function settings(tripId) {
     settingRow('旅程名稱', h('button', { class: 'btn btn-soft', onclick: async () => {
       const v = await promptDialog('旅程名稱', { value: t.title });
       if (v) { store.patch(tripId, { title: v }); toast('已更新'); settings(tripId); }
-    } }, '改名字')),
+    } }, t.title || '未命名')),
 
     settingRow('旅程日期', h('button', { class: 'btn btn-soft', onclick: async () => {
       const res = await pickDateRange({ start: t.startDate, end: t.endDate });

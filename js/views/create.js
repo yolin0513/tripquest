@@ -24,9 +24,18 @@ export default async function create() {
 
   const memberList = h('div', { class: 'chip-input' });
   const memberField = h('input', { class: 'field', type: 'text', placeholder: '打名字後按 Enter', maxlength: 16 });
-  const drawMembers = () => memberList.replaceChildren(...state.members.map((name, i) =>
+  let lastMemberDel = 0;
+  const removeMember = (name) => {
+    // 依名字（不是索引）刪，且擋掉重繪後 350ms 內的第二次觸發 —— 避免手機上一個
+    // tap 產生的殘留點擊落到「移位後」的鄰居身上，把旁邊的也一起刪掉。
+    if (Date.now() - lastMemberDel < 350) return;
+    lastMemberDel = Date.now();
+    const idx = state.members.indexOf(name);
+    if (idx > -1) { state.members.splice(idx, 1); drawMembers(); }
+  };
+  const drawMembers = () => memberList.replaceChildren(...state.members.map((name) =>
     h('span', { class: 'chip' }, name,
-      h('button', { class: 'chip-x', 'aria-label': '移除 ' + name, onclick: () => { state.members.splice(i, 1); drawMembers(); } }, '×'))));
+      h('button', { class: 'chip-x', type: 'button', 'aria-label': '移除 ' + name, onclick: () => removeMember(name) }, '×'))));
   memberField.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); addMember(memberField.value); memberField.value = ''; }
   });
@@ -160,6 +169,7 @@ export default async function create() {
   }
 
   // ---- 已選欄 ----
+  let lastPickDel = 0;
   function drawPickedBar() {
     pickedBar.hidden = state.picked.size === 0;
     if (!state.picked.size) return;
@@ -167,7 +177,11 @@ export default async function create() {
       h('span', { class: 'pb-count' }, `已選 ${state.picked.size} 個`),
       h('div', { class: 'pb-chips' }, ...[...state.picked.entries()].map(([id, v]) =>
         h('span', { class: 'chip chip-sm' }, `${v.emoji || '📍'} ${v.name}`,
-          h('button', { class: 'chip-x', onclick: () => { state.picked.delete(id); drawPickedBar(); draw(); drawSearch(); } }, '×')))),
+          h('button', { class: 'chip-x', type: 'button', onclick: () => {
+            if (Date.now() - lastPickDel < 350) return;
+            lastPickDel = Date.now();
+            state.picked.delete(id); drawPickedBar(); draw(); drawSearch();
+          } }, '×')))),
     );
   }
 
