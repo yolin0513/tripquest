@@ -153,15 +153,32 @@ await page.waitForSelector('.mem-card');
 await sleep(200);
 await shot('29-memories');
 
-// ---------- 5. 任務大圖卡（往下捲露出卡片） ----------
-await page.evaluate(() => window.scrollTo(0, 820));
+// ---------- 5. 任務大圖卡（展開一天 + 一個景點）----------
+await go(`/#/trip/${tripId}`);
+await page.waitForSelector('.daycollapse');
+await page.evaluate(() => {
+  const d1 = document.querySelector('.daycollapse[data-day="1"]');
+  if (d1 && !d1.classList.contains('open')) d1.querySelector('.dc-head').click();
+});
+await sleep(400);
+await page.evaluate(() => {
+  const sc = document.querySelector('.daycollapse.open .qcollapse');
+  if (sc && !sc.classList.contains('open')) sc.querySelector('.qc-toggle').click();
+});
+await sleep(400);
+await page.evaluate(() => document.querySelector('.daycollapse.open .qcollapse.open')?.scrollIntoView({ block: 'start' }));
 await sleep(300);
 await shot('05-task-cards');
 
-// ---------- 26. 任務清單預設折疊（部分完成）----------
+// ---------- 26. 任務清單：天 + 景點 兩層折疊 ----------
 await go(`/#/trip/${tripId}`);
-await page.waitForSelector('.qcollapse');
-await page.evaluate(() => window.scrollTo(0, 560));
+await page.waitForSelector('.daycollapse');
+await page.evaluate(() => {
+  const d1 = document.querySelector('.daycollapse[data-day="1"]');
+  if (d1 && !d1.classList.contains('open')) d1.querySelector('.dc-head').click();
+});
+await sleep(400);
+await page.evaluate(() => document.querySelector('.day-tools')?.scrollIntoView({ block: 'start' }));
 await sleep(300);
 await shot('26-tasks-collapsed');
 

@@ -21,8 +21,13 @@ export function tripForecastDays(trip, allDays) {
   if (!allDays || !allDays.length) return [];
   if (trip && trip.startDate) {
     const s = trip.startDate, e = trip.endDate || trip.startDate;
+    const start = new Date(s + 'T00:00:00');
     const picked = allDays.filter((d) => d.date >= s && d.date <= e);
-    if (picked.length) return picked.map((d, i) => ({ ...d, _tripDay: i + 1 }));
+    // _tripDay = 該日期相對出發日的第幾天（不是陣列序號，行程從過去開始也對）
+    if (picked.length) return picked.map((d) => ({
+      ...d,
+      _tripDay: Math.round((new Date(d.date + 'T00:00:00') - start) / 86400000) + 1,
+    }));
   }
   // 沒日期或超出預報範圍：給接下來 5 天
   return allDays.slice(0, 5).map((d, i) => ({ ...d, _tripDay: i + 1 }));
