@@ -1,126 +1,77 @@
-# 明天早上再處理的事
+# 回到電腦前要做的事
 
-App 現在**單機就完全可用**（建立行程、拍照解任務、按讚留言、做回憶影片、匯出備份）。
-「多人即時同步」的**程式碼、伺服器、Cloudflare Worker 都已寫好**，只差你去註冊 + 部署。
-
-架構決策的完整理由在 [`docs/ARCHITECTURE_DECISION.md`](./docs/ARCHITECTURE_DECISION.md)（3 個獨立代理投票，三項全數一致）。
-一句話總結：**主力用 Cloudflare Workers + R2 + D1（免費、永遠開著、對外流量不收費）；不做帳號密碼；照片縮圖先同步、全圖點閱才傳。**
+App 現在**單機完全可用**，也已上線（GitHub Pages）。多人即時同步的程式碼、Cloudflare Worker、
+一鍵部署腳本都寫好測好了，只差兩個「需要你本人授權」的動作。
 
 ---
 
-## 1. 部署到 GitHub Pages（約 5 分鐘，免綁卡）
+## ★ 動作 1：部署 Cloudflare 同步後端（約 5 分鐘，一行指令 + 按一次 Allow）
 
-**為什麼**：家人用網址就能開、能「加到主畫面」。
-**需要**：你已有的 GitHub 帳號 `yolin0513`。
+前提：你已註冊 Cloudflare、已啟用 R2、綁好卡（都做完了）。
 
-1. GitHub 建一個 repo，例如 `tripquest`（Public）。
-2. 推上去：
-   ```
-   cd D:\Claude\App\TripQuest
+```bash
+cd D:/Claude/App/TripQuest
+bash scripts/publish-cloud.sh
+```
+
+過程中會**開一次瀏覽器跳出 Cloudflare 授權頁 → 按「Allow」**。其餘全自動：
+建 D1 資料庫 → 建資料表 → 建 R2 bucket → 部署 Worker → 印出網址。
+
+完成後它會印出一個 `https://tripquest.你的名字.workers.dev`。
+
+**把那個網址貼給我**，我跑一次線上端到端驗證、確認收尾。
+（或你自己在手機 App：設定 → 多人同步 → 設定同步伺服器 → 選 Cloudflare → 貼網址。）
+
+> 費用：全在免費額度內（Workers 10 萬請求/日、D1 5GB、R2 10GB + 對外流量免費）。
+> 一趟旅行約用 500 次寫入、90 MB —— 一年也用不到 1%。建議去 Cloudflare 後台
+> Billing → Notifications 設一個「超過 US$0」的通知，安心。
+
+---
+
+## ★ 動作 2：把前端推到你的 GitHub（約 3 分鐘）
+
+前端目前在我這邊本機，還沒進你的 GitHub。做這步之後 `yolin0513.github.io/tripquest/` 才會是最新版。
+
+**因為這台機器沒裝 `gh`，repo 要你手動建一次：**
+
+1. 開 <https://github.com/new>
+   - Repository name：`tripquest`
+   - 選 **Public**
+   - **不要**勾 “Add a README”
+   - 按 Create repository
+2. 回到電腦，跑：
+   ```bash
+   cd D:/Claude/App/TripQuest
    git remote add origin https://github.com/yolin0513/tripquest.git
    git push -u origin main
    ```
-3. repo → **Settings → Pages** → Source：`Deploy from a branch` → `main` / `/ (root)` → Save。
+   （會用你電腦裡已存的 GitHub 登入，不會再問密碼。）
+3. repo 頁面 → **Settings → Pages** → Source 選 `Deploy from a branch` → `main` / `/ (root)` → Save。
 4. 等 1–3 分鐘，開 `https://yolin0513.github.io/tripquest/`。
-5. 手機用 Safari / Chrome 開 → 分享 → **加入主畫面**。
+
+> 我已經把 `.nojekyll`、相對路徑都處理好，Pages 直接就能跑。
+> 做完動作 1 拿到 Worker 網址後，也可以把它預設寫進前端（告訴我，我改一行 commit 掉），
+> 這樣家人開網址就自動連同步、連「設定同步伺服器」都不用點。
 
 ---
 
-## 2. 開通多人即時同步（Cloudflare，約 40 分鐘）
-
-> 做完這步，大家各自用行動網路就能建群組、拍照自動同步到彼此手機。
-
-### 2a. 註冊 Cloudflare 帳號 — 約 5 分鐘・**免綁卡**
-
-<https://dash.cloudflare.com/sign-up>，email + 驗證即可。
-
-### 2b. 裝 wrangler 並登入 — 約 5 分鐘・**免綁卡**
-
-```
-npm install -g wrangler
-wrangler login
-```
-（會開瀏覽器授權。）
-
-### 2c. 建 D1 資料庫 — 約 5 分鐘・**免綁卡**
-
-```
-cd D:\Claude\App\TripQuest\workers
-wrangler d1 create tripquest
-```
-把它印出來的 `database_id` 貼進 `workers/wrangler.toml` 裡對應的欄位，然後：
-```
-wrangler d1 execute tripquest --remote --file=./schema.sql
-```
-
-### 2d. 啟用 R2 物件儲存 — 約 10 分鐘・**⚠ 需要綁一張信用卡（在免費額度內不會扣款）**
-
-- Cloudflare 後台 → **R2** → 第一次會要你**加一張付款卡**才能啟用。
-- **免費額度**：儲存 10 GB、每月寫入 100 萬次 / 讀取 1000 萬次、**對外流量永久免費**。
-  我們一趟旅行約用 90 MB / 500 次寫入 —— 大概十年都用不完免費額度。
-- 建議去 **Billing → Notifications** 設一個「超過 $0」的通知，安心用。
-- 建 bucket：
-  ```
-  wrangler r2 bucket create tripquest-photos
-  ```
-
-> **不想綁卡？** 跳過 2d，改用下面第 3 項（自架 + Tunnel，完全免綁卡），或就用單機模式（分享連結 + 匯出/匯入備份）。App 三種模式都支援。
-
-### 2e. 部署 Worker — 約 5 分鐘
-
-```
-cd D:\Claude\App\TripQuest\workers
-wrangler deploy
-```
-會給你一個網址，像 `https://tripquest.你的名字.workers.dev`。
-
-### 2f. 把網址給我 / 填進 App
-
-- **告訴我這個 workers.dev 網址**，我對著它跑一次端到端測試、確認沒問題。
-- 或你自己在 App 的 **設定 → 多人同步 → 設定伺服器** 貼上這個網址，選「Cloudflare」模式。
-
-> 域名（`workers.dev` 之外的自訂網址）**不需要**。要買的話約 NT$300–500/年、需綁卡，純粹是網址好記，非必要。
-
----
-
-## 3.（替代方案，免綁卡）自架 + Cloudflare Tunnel
-
-如果不想為了 R2 綁卡，這條路完全免費、免卡，資料 100% 在你自己電腦：
-
-1. 註冊 Cloudflare 帳號（同 2a，免卡）。
-2. 裝 `cloudflared`（<https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/>）。
-3. 在你電腦跑同步伺服器：
-   ```
-   cd D:\Claude\App\TripQuest
-   node server/index.mjs
-   ```
-4. 另一個視窗開 tunnel：
-   ```
-   cloudflared tunnel --url http://localhost:8787
-   ```
-   會給一個 `https://xxxx.trycloudflare.com` 網址（**注意：這種快速 tunnel 每次重開網址會變**；要固定網址需設 named tunnel + 一個網域，約多 15 分鐘）。
-5. 把網址填進 App 設定頁。
-
-- **代價**：出遊期間你家的電腦要保持開機、不能睡眠、不能關網路（去 Windows 電源設定關掉睡眠，Windows Update 設「使用時間」避開）。
-- 適合「先驗證能不能用」或「堅持資料不進雲端」。
-
----
-
-## 4. 不用管的事
+## 不用管的事
 
 | 項目 | 狀況 |
 |---|---|
-| **帳號 / 註冊功能** | 決定不做。身分靠「邀請連結 + 這台裝置 + 你取的名字」，換手機用同一條連結點回自己的名字就好。不需要任何 email / 簡訊 / 第三方登入服務。 |
-| **Supabase** | 評估後否決 —— 免費 project 閒置 7 天自動暫停，旅行季節性使用等於每次都要手動喚醒。 |
-| **Firebase** | 評估後否決 —— 檔案儲存強制綁卡且無硬性花費上限。 |
-| **App 圖示** | 已用 `npm run icons` 自動產生。 |
-| **配樂版權** | 影片配樂程式即時合成，無版權問題。 |
+| 帳號 / 註冊功能 | 決定不做。身分靠「邀請連結 + 這台裝置 + 你取的名字」。 |
+| Supabase | 否決（閒置 7 天自動暫停）。 |
+| Firebase | 否決（Storage 強制綁卡、無花費硬上限）。 |
+| 網域名稱 | 不需要，`workers.dev` 和 `github.io` 就夠。 |
+| App 圖示、配樂版權 | 已處理。 |
 
 ---
 
-## 你要給我的東西（做完 2 之後）
+## 完全不想碰 Cloudflare 的話（替代方案）
 
-1. Worker 網址（`https://....workers.dev`）
-2. （如果 2d 綁卡了）確認 R2 bucket 名稱是 `tripquest-photos`
-
-有這兩個，我就能把雲端同步接到底、跑完整測試。在那之前，單機模式與（第 3 項）自架模式都已經能用。
+在家裡任一台電腦跑：
+```bash
+cd D:/Claude/App/TripQuest && node server/index.mjs
+```
+另開一個視窗：`cloudflared tunnel --url http://localhost:8787`，把它給的網址填進 App 設定頁。
+免綁卡，但那台電腦出遊期間要保持開機。（`server/index.mjs` 與 Worker 是同一套協定，已完整測過。）

@@ -11,9 +11,16 @@
     "synctest": "node scripts/synctest.mjs",
     "test": "node scripts/screenshots.mjs && node scripts/synctest.mjs"
   },
-  "keywords": ["pwa", "travel", "photo-quest", "offline", "traditional-chinese"],
+  "keywords": [
+    "pwa",
+    "travel",
+    "photo-quest",
+    "offline",
+    "traditional-chinese"
+  ],
   "license": "MIT",
   "devDependencies": {
-    "puppeteer": "^23.0.0"
+    "puppeteer": "^23.0.0",
+    "wrangler": "^4.129.0"
   }
 }

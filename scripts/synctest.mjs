@@ -1,5 +1,7 @@
-// 多人同步端到端測試：起自架伺服器，兩個獨立瀏覽器 context 當兩台手機。
-// 用法：node scripts/synctest.mjs
+// 多人同步端到端測試：兩個獨立瀏覽器 context 當兩台手機。
+// 用法：
+//   node scripts/synctest.mjs                        用本機自架伺服器 server/index.mjs
+//   node scripts/synctest.mjs --url https://...workers.dev   測已部署的 Cloudflare Worker
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -8,11 +10,21 @@ import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5194, API = 8790;
-await rm(fileURLToPath(new URL('../server/data', import.meta.url)), { recursive: true, force: true });
+let urlArg = (process.argv.find((a) => a.startsWith('--url=')) || '').split('=')[1] || '';
+const ui = process.argv.indexOf('--url');
+if (!urlArg && ui !== -1 && process.argv[ui + 1] && !process.argv[ui + 1].startsWith('--')) urlArg = process.argv[ui + 1];
+if (urlArg && !/^https?:\/\//.test(urlArg)) urlArg = '';
+const API_URL = urlArg ? urlArg.replace(/\/$/, '') : `http://localhost:${API}`;
+const SYNC_MODE = urlArg ? 'cloud' : 'lan';
 
-const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
-const api = spawn('node', ['server/index.mjs'], { cwd: ROOT, stdio: 'ignore', env: { ...process.env, PORT: String(API) } });
+let web, api;
+web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
+if (!urlArg) {
+  await rm(fileURLToPath(new URL('../server/data', import.meta.url)), { recursive: true, force: true });
+  api = spawn('node', ['server/index.mjs'], { cwd: ROOT, stdio: 'ignore', env: { ...process.env, PORT: String(API) } });
+}
 await sleep(1400);
+console.log('後端：' + API_URL + '  (' + SYNC_MODE + ')');
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 const ok = (m) => console.log('✓ ' + m);
@@ -24,9 +36,9 @@ async function device(name) {
   page.on('pageerror', (e) => console.log(`  [${name} pageerror]`, e.message));
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
-  await page.evaluate((url) => {
-    (async () => { (await import('./js/sync.js')).setConfig({ mode: 'lan', url }); })();
-  }, `http://localhost:${API}`);
+  await page.evaluate(({ url, mode }) => {
+    (async () => { (await import('./js/sync.js')).setConfig({ mode, url }); })();
+  }, { url: API_URL, mode: SYNC_MODE });
   return { ctx, page };
 }
 async function go(page, hash) { await page.goto('about:blank'); await page.goto(`http://localhost:${WEB}${hash}`, { waitUntil: 'networkidle0' }); }
@@ -121,13 +133,13 @@ try {
   ok('裝置 B 拍 1 張 + 按讚並推送');
 
   // A 再同步一次，應該看到 B 的照片與讚
-  const aPull = await A.page.evaluate(async (tid, gid) => {
+  const aPull = await A.page.evaluate(async (tid, gid, apiUrl) => {
     const { drain } = await import('./js/outbox.js');
     const sync = await import('./js/sync.js');
     const cursorBefore = await sync.getCursor(gid);
     const dr = await drain();
     const cursorAfter = await sync.getCursor(gid);
-    const raw = await fetch(`http://localhost:8790/pull?g=${gid}&since=0`, { headers: { authorization: 'Bearer ' + (await import('./js/store.js')).getRaw(gid).syncSecret } }).then(r => r.json());
+    const raw = await fetch(`${apiUrl}/pull?g=${gid}&since=0`, { headers: { authorization: 'Bearer ' + (await import('./js/store.js')).getRaw(gid).syncSecret } }).then(r => r.json());
     window.__dbg = { dr, cursorBefore, cursorAfter, serverRecs: raw.records.length, serverSubs: raw.records.filter(r => r.type === 'submission').length, serverReacts: raw.records.filter(r => r.type === 'reaction').length };
     const s = await import('./js/store.js');
     const subs = s.submissionsOfTrip(tid);
@@ -136,7 +148,7 @@ try {
     const keys = new Set(await db.allBlobKeys());
     const bThumb = subs.filter((x) => keys.has(x.thumbHash)).length;
     return { subs: subs.length, reacts, bThumb, dbg: window.__dbg };
-  }, setup.tid, setup.gid);
+  }, setup.tid, setup.gid, API_URL);
   console.log('  dbg:', JSON.stringify(aPull.dbg));
   if (aPull.subs === 3) ok('裝置 A 收到裝置 B 的照片（共 3 張）'); else fail('裝置 A 投稿數：' + aPull.subs);
   if (aPull.reacts === 1) ok('裝置 A 收到裝置 B 的讚'); else fail('裝置 A 讚數：' + aPull.reacts);
@@ -179,19 +191,17 @@ try {
   else fail('備份卡還原：' + JSON.stringify(cRes));
 
   // ---- 未授權存取應被擋 ----
-  const unauth = await A.page.evaluate(async (gid) => {
-    const r = await fetch(`http://localhost:${location.port ? '' : ''}` + '', {}).catch(() => null);
-    void r;
-    const bad = await fetch(`http://localhost:8790/pull?g=${gid}&since=0`, { headers: { authorization: 'Bearer wrongsecret000000000000000000' } });
+  const unauth = await A.page.evaluate(async (gid, apiUrl) => {
+    const bad = await fetch(`${apiUrl}/pull?g=${gid}&since=0`, { headers: { authorization: 'Bearer deadbeefdeadbeefdeadbeefdeadbeef00' } });
     return bad.status;
-  }, setup.gid);
+  }, setup.gid, API_URL);
   if (unauth === 403) ok('錯誤祕鑰被拒（403）'); else fail('未授權存取回應：' + unauth);
 
 } catch (e) {
   fail('例外：' + e.stack);
 } finally {
   await browser.close();
-  web.kill(); api.kill();
+  web.kill(); if (api) api.kill();
   await rm(fileURLToPath(new URL('../server/data', import.meta.url)), { recursive: true, force: true });
   console.log('\n同步測試結束');
 }
