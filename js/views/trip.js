@@ -93,6 +93,13 @@ export default async function trip(tripId) {
     container.append(h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:20px', onclick: () => addSpot(tripId) }, '＋ 新增景點'));
   }
 
+  // 天氣提醒條（有座標景點才顯示；背景載入）
+  if (spots.some((s) => s.lat != null)) {
+    const wxSlot = h('div', { class: 'wx-slot' });
+    container.insertBefore(wxSlot, container.querySelector('.stack')?.nextSibling || null);
+    fillWeatherStrip(wxSlot, tripId, t);
+  }
+
   render(container);
 
   // 背景補景點示意圖，回來後重繪一次
@@ -101,6 +108,42 @@ export default async function trip(tripId) {
       if (location.hash.includes(`/trip/${tripId}`) && !location.hash.includes('/spot/')) trip(tripId);
     }).catch(() => {});
   }
+}
+
+async function fillWeatherStrip(slot, tripId, trip) {
+  try {
+    const [{ destCoords, tripForecastDays }, wx, geo] = await Promise.all([
+      import('./weather.js'), import('../weather.js'), import('../geo.js'),
+    ]);
+    const dc = destCoords(tripId);
+    if (!dc) return;
+    const f = await wx.forecast(dc.lat, dc.lng);
+    if (!f) return;
+    const days = tripForecastDays(trip, f.days);
+    if (!days.length) return;
+
+    let hereTemp = null, hereName = '出發地';
+    const home = wx.getHome();
+    if (home && home.lat != null) { hereTemp = await wx.hereTempNow(home.lat, home.lng); hereName = home.name || '居住地'; }
+    else {
+      const pos = await geo.currentPosition({ timeout: 5000, maxAgeMs: 900000 }).catch(() => null);
+      if (pos) { hereTemp = await wx.hereTempNow(pos.lat, pos.lng); hereName = '你的位置'; }
+    }
+    const tips = wx.buildAdvice({ dest: { elevation: f.elevation }, destDays: days, hereTemp, hereName });
+
+    slot.replaceChildren(h('button', {
+      class: 'wx-strip', onclick: () => navigate(`/trip/${tripId}/weather`),
+    },
+      h('div', { class: 'wx-strip-days' }, ...days.slice(0, 5).map((d) => h('span', { class: 'wx-strip-day' },
+        h('span', {}, d._tripDay ? `D${d._tripDay}` : (d.date.slice(5).replace('-', '/'))),
+        h('span', { class: 'wx-strip-ic' }, wx.wxIcon(d.code)),
+        h('span', { class: 'wx-strip-t' }, `${d.tmax}°`),
+      ))),
+      tips.length
+        ? h('div', { class: 'wx-strip-tip' }, '🧳 ' + tips[0].text)
+        : h('div', { class: 'wx-strip-tip muted' }, '天氣還算舒服，點看每天預報'),
+    ));
+  } catch { /* 靜默：天氣是加分項 */ }
 }
 
 // 每個景點的任務清單：預設折疊，標題列顯示完成進度（3/5）。

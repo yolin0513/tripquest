@@ -10,6 +10,15 @@ import { myName, setMyName, exportCard, encodeCard, decodeCard, importCard } fro
 import { pendingCount } from '../outbox.js';
 import { getAIConfig, setAIConfig, aiConfigured, aiTest, aiUsage, FEATURES } from '../ai.js';
 import { getContacts, setContacts } from '../emergency.js';
+import { getHome, setHome } from '../weather.js';
+
+const HOME_CITIES = [
+  { name: '台北', lat: 25.03, lng: 121.56 }, { name: '新北', lat: 25.01, lng: 121.46 },
+  { name: '桃園', lat: 24.99, lng: 121.31 }, { name: '台中', lat: 24.15, lng: 120.67 },
+  { name: '台南', lat: 22.99, lng: 120.21 }, { name: '高雄', lat: 22.63, lng: 120.30 },
+  { name: '新竹', lat: 24.80, lng: 120.97 }, { name: '花蓮', lat: 23.98, lng: 121.60 },
+  { name: '宜蘭', lat: 24.76, lng: 121.75 }, { name: '嘉義', lat: 23.48, lng: 120.45 },
+];
 
 const AI_FEATURE_LABELS = {
   recommend: ['景點・美食一句話介紹', '內建資料庫沒有的景點，補一句在地介紹'],
@@ -60,6 +69,11 @@ export default async function settings() {
         const v = await promptDialog('你的名字', { value: myName() });
         if (v) { await setMyName(v); toast('已更新'); settings(); }
       } }, myName())),
+    h('div', { class: 'setting-row' },
+      h('div', {}, h('span', { style: 'font-weight:700' }, '居住地'),
+        h('div', { class: 'form-hint' }, '天氣提醒會用它算「比家裡冷幾度」。')),
+      h('button', { class: 'btn btn-soft', onclick: () => pickHome(settings) },
+        (getHome() && getHome().name) || '未設定')),
 
     // ---- 緊急聯絡人 ----
     h('div', { class: 'section-label' }, '緊急聯絡人'),
@@ -145,6 +159,27 @@ function checkbox(checked, onChange) {
   const el = h('input', { type: 'checkbox', checked });
   el.addEventListener('change', () => onChange(el.checked));
   return el;
+}
+
+async function pickHome(refresh) {
+  const actions = HOME_CITIES.map((c) => ({ label: c.name, value: c.name }));
+  actions.push({ label: '用目前位置（GPS）', value: '__gps' });
+  actions.push({ label: '清除', value: '__clear' });
+  actions.push({ label: '取消', value: null });
+  const pick = await modal({ title: '居住地', body: h('p', { class: 'sm muted' }, '選一個離你家最近的城市就好。'), actions });
+  if (!pick) return;
+  if (pick === '__clear') { setHome(null); toast('已清除'); return refresh(); }
+  if (pick === '__gps') {
+    toast('定位中…');
+    const { currentPosition } = await import('../geo.js');
+    const pos = await currentPosition({ timeout: 8000, maxAgeMs: 0 });
+    if (pos) { setHome({ lat: pos.lat, lng: pos.lng, name: '目前位置' }); toast('已設定'); }
+    else toast('拿不到位置，請開啟定位權限');
+    return refresh();
+  }
+  const c = HOME_CITIES.find((x) => x.name === pick);
+  if (c) { setHome({ ...c }); toast('已設定為 ' + c.name); }
+  refresh();
 }
 
 function emergencyContactEditor(refresh) {
