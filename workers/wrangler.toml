@@ -9,7 +9,7 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "tripquest"
-database_id = "FILL_ME"  # publish-cloud.sh 會自動填；或手動貼上 wrangler d1 create tripquest 印出的 database_id
+database_id = "6b841a4d-9e03-4952-8cbc-7e665690802c"
 
 [[r2_buckets]]
 binding = "PHOTOS"
