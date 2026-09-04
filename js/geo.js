@@ -74,12 +74,14 @@ export function fmtDist(m) {
   return m < 950 ? `${Math.round(m / 10) * 10} 公尺` : `${(m / 1000).toFixed(m < 9500 ? 1 : 0)} 公里`;
 }
 
-// 導航連結（交給系統地圖 App；Google Maps 通用連結，iOS/Android 都會攔截）
+// 導航連結（Google Maps 通用連結，iOS/Android 有 App 會直接喚起 App）
+// 有可讀的地名就用地名，讓使用者看到的不是一串座標；沒有才用座標。
 export function navUrl(lat, lng, label) {
-  const dest = label ? `${encodeURIComponent(label)}` : `${lat},${lng}`;
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place=${dest}`;
+  const dest = label && String(label).trim().length >= 2 ? String(label).trim() : `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
 }
 // 只顯示某個點
-export function mapUrl(lat, lng) {
-  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+export function mapUrl(lat, lng, label) {
+  const q = label && String(label).trim().length >= 2 ? String(label).trim() : `${lat},${lng}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }

@@ -202,6 +202,15 @@ await page.evaluate(() => document.querySelector('.big-shot-btn')?.scrollIntoVie
 await sleep(200);
 await shot('06-quest-detail');
 
+// ---------- 30. 用地圖帶路（景點詳情頁）----------
+const spot0 = await page.evaluate(async (tid) => (await import('./js/store.js')).spotsOf(tid)[0].id, tripId);
+await go(`/#/trip/${tripId}/spot/${spot0}`);
+await page.waitForSelector('.quest-focus-photo');
+await sleep(400);
+await page.evaluate(() => [...document.querySelectorAll('a.btn')].find(a => a.textContent.includes('用地圖'))?.scrollIntoView({ block: 'center' }));
+await sleep(200);
+await shot('30-map-navigate');
+
 // ---------- 7. 完成任務的慶祝 ----------
 await page.evaluate(async () => {
   const { celebrate } = await import('./js/ui.js');

@@ -5,6 +5,7 @@ import { navigate, back } from '../router.js';
 import { uuid } from '../ids.js';
 import { blobURL } from '../photos.js';
 import { enrichSpot } from '../enrich.js';
+import { mapsDirUrl } from '../maps.js';
 
 export default async function spot(tripId, spotId) {
   const s = store.get(spotId);
@@ -44,6 +45,8 @@ export default async function spot(tripId, spotId) {
         timeInput(s.endTime, (v) => store.patch(spotId, { endTime: v })),
       ),
     ),
+
+    mapButtons(s),
 
     h('div', { class: 'section-label' }, '這個景點的任務'),
     h('div', { class: 'stack' }, ...quests.map((q) => questRow(q, tripId, spotId))),
@@ -90,6 +93,15 @@ function questRow(q, tripId, spotId) {
       ),
     ),
   );
+}
+
+function mapButtons(s) {
+  const dir = mapsDirUrl(s);
+  if (!dir) return null;
+  return h('a', {
+    class: 'btn btn-primary btn-block btn-big', style: 'margin-top:12px; text-decoration:none',
+    href: dir, target: '_blank', rel: 'noopener',
+  }, `🧭 用地圖帶我去「${s.name}」`);
 }
 
 function timeInput(value, onChange) {

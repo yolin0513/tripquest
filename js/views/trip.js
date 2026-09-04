@@ -12,6 +12,15 @@ import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
 import { aiConfigCard } from './ai-config.js';
+import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
+
+function nextIncompleteSpot(tripId) {
+  for (const s of store.spotsOf(tripId)) {
+    const p = store.spotProgress(s.id);
+    if (p.total === 0 || p.done < p.total) return s;
+  }
+  return null;
+}
 
 const COUNTRY_NAMES = {};
 function countryName(code) { return code ? (COUNTRY_NAMES[code] || code) : ''; }
@@ -72,7 +81,7 @@ export default async function trip(tripId) {
     (allDone || tripEnded(t)) && spots.length
       ? h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/memories`) },
           allDone ? '🎉 全部完成！去看回顧與回憶影片' : '🎁 旅程結束了，來看回顧')
-      : null,
+      : nextStationButton(tripId, t, allDone),
 
     h('div', { class: 'stack', style: 'margin-top:6px' },
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
@@ -133,6 +142,22 @@ export default async function trip(tripId) {
 function tripEnded(t) {
   if (!t.endDate) return false;
   return new Date(t.endDate + 'T23:59:59') < new Date();
+}
+
+// 「用地圖帶我去下一站」
+function nextStationButton(tripId, t, allDone) {
+  if (allDone || tripEnded(t)) return null;
+  const next = nextIncompleteSpot(tripId);
+  if (!next) return null;
+  const url = mapsDirUrl(next);
+  if (!url) return null;
+  return h('a', {
+    class: 'btn btn-primary btn-block btn-big nextstn-btn',
+    href: url, target: '_blank', rel: 'noopener', style: 'margin-top:8px; text-decoration:none',
+  },
+    h('span', {}, '🧭 用地圖帶我去下一站'),
+    h('span', { class: 'nextstn-name' }, `${next.emoji || '📍'} ${next.name}`),
+  );
 }
 
 // 今天是這趟的第幾天：0 = 還沒開始、-1 = 已結束、null = 沒設日期、正整數 = 進行中
@@ -319,9 +344,20 @@ function spotSection(s, tripId) {
         onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`),
       }, '編輯'),
     ),
-    h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' }, ...quests.map((q) => questBigCard(q, s)))),
+    h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' },
+      spotMapButton(s),
+      ...quests.map((q) => questBigCard(q, s)))),
   );
   return sec;
+}
+
+function spotMapButton(s) {
+  const url = mapsSearchUrl(s);
+  if (!url) return null;
+  return h('a', {
+    class: 'btn btn-soft btn-block map-btn', href: url, target: '_blank', rel: 'noopener',
+    style: 'text-decoration:none; margin-bottom:12px',
+  }, `🗺️ 用地圖看「${s.name}」在哪裡`);
 }
 
 function questBigCard(q, spot) {
