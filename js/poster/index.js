@@ -9,6 +9,7 @@ import { drawParagraph, paragraphHeight, clip } from './text.js';
 import { PRESETS, CJK_STACK, styleFor } from './presets.js';
 import * as deco from './deco.js';
 import { loadThemes, themeForSpot, themeForDay, themeForTrip, themeMeta } from '../theme.js';
+import { aiPayload } from '../aicontent.js';
 
 const W = 1240;
 const MAXH = 8000;
@@ -36,16 +37,20 @@ export function buildModel(tripId) {
       theme: s.theme || themeForSpot(s),
     });
   }
+  const aiTx = aiPayload(tripId, 'tripText') || {};
   const days = [...byDay.entries()].sort((a, b) => a[0] - b[0])
     .map(([day, items]) => ({
       day, region: items[0]?.region || trip.region || '', items,
       theme: themeForDay(byDaySpots.get(day)),
+      aiLine: (aiTx.dayLines && aiTx.dayLines[day]) || '',
     }));
   return {
     title: trip.title || '我們的旅程',
     dateRange: [trip.startDate, trip.endDate].filter(Boolean).join(' – '),
     people: members.length, spotCount: spots.length, dayCount: days.length,
     tripTheme: themeForTrip(spots),
+    subtitle: aiTx.subtitle || '',
+    aiText: !!(aiTx.subtitle || (aiTx.dayLines && Object.keys(aiTx.dayLines).length)) || spots.some((s) => s.aiBlurb),
     days,
   };
 }
@@ -119,6 +124,7 @@ function measureDay(ctx, p, day, isFirst, seedKey) {
   let h = 0;
   h += isFirst ? 0 : 40;
   h += 120; // day banner
+  if (day.aiLine) h += 40;
   day.items.forEach((it, ii) => {
     h += measureRow(ctx, p, it, rowPW(seedKey, day.day, ii)) + 34;
   });
@@ -172,8 +178,9 @@ async function drawPoster(canvas, model, dayList, preset, seedKey) {
   ctx.textBaseline = 'alphabetic';
   let total = 220; // header
   if (model.dateRange) total += 8;
+  if (model.subtitle) total += 44;
   dayList.forEach((d, i) => { total += measureDay(ctx, p, d, i === 0, seedKey); });
-  total += 150; // footer
+  total += model.aiText ? 186 : 150; // footer
   total = Math.min(total, MAXH);
 
   canvas.width = W;
@@ -204,6 +211,11 @@ async function drawPoster(canvas, model, dayList, preset, seedKey) {
   const sub = [model.dateRange, `${model.people} 人 · ${model.spotCount} 個地方`].filter(Boolean).join('　·　');
   ctx.fillText(sub, W / 2, y);
   y += 46;
+  if (model.subtitle) {
+    ctx.fillStyle = p.ink; ctx.font = DISP(p, 700, 30);
+    ctx.fillText(clip(ctx, model.subtitle, W - 260, ctx.font), W / 2, y);
+    y += 44;
+  }
   wobblyLine(ctx, W / 2 - 140, y, W / 2 + 140, y, p.line, rnd);
   y += 20;
 
@@ -216,14 +228,13 @@ async function drawPoster(canvas, model, dayList, preset, seedKey) {
   }
 
   // ---- footer ----
-  y = Math.min(y + 40, total - 90);
+  y = Math.min(y + 40, total - (model.aiText ? 126 : 90));
   ctx.textAlign = 'center';
-  scatterDeco(ctx, p, W / 2 - 96, y + 16, 1.5, rnd);
-  scatterDeco(ctx, p, W / 2 + 96, y + 16, 1.5, rnd);
   ctx.fillStyle = p.ink; ctx.font = DISP(p, 700, 40);
   ctx.fillText('謝謝這趟旅程', W / 2, y);
   ctx.fillStyle = p.sub; ctx.font = F(p, 400, 24);
   ctx.fillText('TripQuest 旅圖任務', W / 2, y + 40);
+  if (model.aiText) ctx.fillText('✨ 文案由 AI 生成', W / 2, y + 74);
 }
 
 async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
@@ -246,6 +257,12 @@ async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
   ctx.fillStyle = dp.ink; ctx.font = F(p, 700, 30);
   ctx.fillText(`第 ${cn(d.day)} 天${d.region ? ' · ' + d.region : ''}`, PAD + 24 + dw, bandY + 56);
   y = bandY + 92 + 26;
+
+  if (d.aiLine) {
+    ctx.textAlign = 'left'; ctx.fillStyle = dp.sub; ctx.font = F(p, 400, 26);
+    ctx.fillText(clip(ctx, d.aiLine, W - PAD * 2 - 40, ctx.font), PAD + 4, y + 6);
+    y += 40;
+  }
 
   const lineX = PAD + 78;
   const daySpan = d.items.reduce((h, it, ii) => h + measureRow(ctx, p, it, rowPW(seedKey, d.day, ii)) + 34, 0);
@@ -401,6 +418,7 @@ export async function renderPoster(tripId, { presetId = 'watercolor', onProgress
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();
   await loadThemes();
+  await warmPosterAi(tripId);
   const model = buildModel(tripId);
   if (!model.days.length) throw new Error('這個行程還沒有景點');
 
@@ -430,7 +448,19 @@ export async function renderPoster(tripId, { presetId = 'watercolor', onProgress
   return out;
 }
 
-// 預覽用：畫到指定 canvas（單張、全部天數擠一起、縮小）
+// 有開 AI 才在背景把海報 / 影片共用的文案產一產（有快取就秒回）。
+// export 出去讓 poster.js 在背景先呼叫，好了再重畫一次預覽；export 本身會等它。
+export async function warmPosterAi(tripId) {
+  const trip = store.get(tripId);
+  if (!trip || !trip.aiEnabled) return false;
+  try {
+    const { ensureTripText, ensureSpotBlurbs } = await import('../aicontent.js');
+    const [a, b] = await Promise.all([ensureTripText(tripId), ensureSpotBlurbs(tripId)]);
+    return !!(a || b);
+  } catch { return false; }
+}
+
+// 預覽用：畫到指定 canvas（單張、全部天數擠一起、縮小）—— 不等 AI，用現有快取
 export async function renderPreview(canvas, tripId, presetId) {
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();

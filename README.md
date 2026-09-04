@@ -76,7 +76,9 @@
 - **金鑰只存在建立者這台手機的 IndexedDB 專用 store（`tripSecrets`）**——絕不同步給旅伴、絕不進備份、絕不進身分卡、絕不出現在邀請連結、絕不進 repo。`scripts/secret-leak-test.mjs` 斷言這點（已納入 `npm test`）。
 - 呼叫**瀏覽器直連** `api.anthropic.com`（帶 `anthropic-dangerous-direct-browser-access`）與 `texttospeech.googleapis.com`，經 TLS，**沒有任何中間伺服器**（`workers/ai.mjs` 已移除）。金鑰只在 HTTP header、永不進 prompt；輸出與錯誤訊息都會洗掉金鑰樣式字串。
 - 每個行程獨立的用量與花費上限（預設 US$2），建立者看得到、可調整。真正的硬上限是**供應商後台的 Billing 上限**——建議申請專用金鑰並設每月上限。
-- AI 產出（景點介紹句、影片旁白）走一般同步，旅伴享受得到成果、看不到也用不到金鑰。非建立者完全看不到金鑰設定。
+- **開了 AI，這些文案就自動改用 AI 生成**（沒開就用內建句型庫，一樣有差異感）：每個景點的介紹句、拍照任務的名稱與提示、行程海報的副標與每天一句話、回憶影片的片頭片尾與每天旁白與部分照片字幕、最終回顧的文案。策展好的景點資料與「必吃」項目不會被覆蓋。
+- 產一次就**快取並跟著群組同步**（`aiText` 記錄），旅伴直接看到成果、不會各自再花一次錢；行程內容沒變就不會重打。失敗或額度不足時**安靜退回內建做法**，不會卡住、不會出現英文錯誤。
+- AI 生成的文案有 **✨ 小標記**（明顯但不吵）；「設定 → AI 加值功能」看得到這台手機每個行程已用掉多少花費。旅伴看不到也用不到金鑰，非建立者完全看不到金鑰設定。
 - 「清除這個行程的金鑰」/「清除所有 AI 金鑰」按鈕；提醒本機刪除不等於停用，要另到供應商後台 Delete。
 - `index.html` 有 `Content-Security-Policy`（`script-src 'self'`）：注入的腳本一律不執行，就算頁面被 XSS 也沒有程式碼能讀 IndexedDB 送出金鑰。
 - 兩輪三代理投票的完整效益評估、計價、威脅模型見 [`docs/AI_INTEGRATION.md`](./docs/AI_INTEGRATION.md)。Instagram / Threads 抓熱門都做不到；訂閱制音樂庫不值得。
@@ -153,6 +155,7 @@ js/
   views/plan.js            總行程編輯：拖曳 / 大按鈕調整景點的天與順序
   views/memories.js        「回顧」分頁：回憶影片 / 成就徽章 / 最終回顧 / 海報 入口
   views/ai-config.js       每行程的 AI 金鑰設定卡
+  aicontent.js             AI 文案協調層（快取 + 同步 + 靜默退回內建；海報 / 影片 / 回顧 / 任務共用）
 data/places/index.json     選景點的階層骨架（國家→地區→城市→行政區）
 data/places/<city>.json    各城市的地點清單（惰性載入；schema.json 定義形狀）
 data/templates.json        規則式任務模板（型別判斷用）
@@ -190,6 +193,7 @@ python -m http.server 5174        # 或 npx serve、或 node server/index.mjs
 npm run dev          # python http.server
 npm run icons        # 重新產生 App 圖示
 npm run screenshots  # Puppeteer 冒煙測試 + 產生 screenshots/
+npm run aitest       # AI 文案：啟用→自動用 / 未啟用→內建 / 失敗→靜默退回（mock API）
 npm run synctest     # 同步端到端（本機自架後端，或 --url <workers.dev>）
 npm run livetest     # 對正式站（Pages + Worker）跑完整同步端到端
 npm run deploy-cloud # 部署 / 更新 Cloudflare 同步後端（免 WSL）

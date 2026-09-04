@@ -8,6 +8,7 @@ import * as store from './store.js';
 import * as db from './db.js';
 import { blobURL } from './photos.js';
 import { createMusic, musicFromFile } from './music.js';
+import { aiPayload } from './aicontent.js';
 
 const W = 1080, H = 1920;
 const T_INTRO = 3.2;
@@ -76,30 +77,34 @@ export async function buildTimeline(tripId) {
   const spots = store.spotsOf(tripId).filter((s) => s.lat != null && s.lng != null);
   const stats = tripStats(tripId);
 
+  // AI 文案（有開 AI 且已快取才有；沒有就整段用不到，字卡照舊）
+  const aiTx = aiPayload(tripId, 'tripText') || {};
+  const aiCaps = aiPayload(tripId, 'photoCaptions') || {};
+  const usesAi = !!(aiTx.videoIntro || aiTx.videoOutro || (aiTx.narration && Object.keys(aiTx.narration).length) || Object.keys(aiCaps).length);
+
+  for (const f of frames) if (!String(f.caption || '').trim() && aiCaps[f.hash]) f.aiCaption = aiCaps[f.hash];
+
   const segs = [];
-  segs.push({ kind: 'intro', dur: T_INTRO, trip, stats });
+  segs.push({ kind: 'intro', dur: T_INTRO, trip, stats, line: aiTx.videoIntro || '' });
 
   const byDay = new Map();
   for (const f of frames) {
     if (!byDay.has(f.day)) byDay.set(f.day, []);
     byDay.get(f.day).push(f);
   }
-  // AI 旁白（有開才有；沒有就用不到）
-  let narration = [];
-  const nrec = store.exportRecords().find((r) => r.type === 'aiText' && r.tripId === tripId && r.key === 'narration' && !r.deleted);
-  if (nrec && Array.isArray(nrec.lines)) narration = nrec.lines;
 
   const days = [...byDay.keys()].sort((a, b) => a - b);
-  days.forEach((day, di) => {
+  days.forEach((day) => {
     const dayFrames = byDay.get(day);
     const region = store.spotsOf(tripId).find((s) => s.day === day)?.region || trip.region || '';
-    segs.push({ kind: 'day', dur: T_DAY, day, region, count: dayFrames.length, narration: narration[di] || '' });
+    const nar = (aiTx.narration && aiTx.narration[day]) || (aiTx.dayLines && aiTx.dayLines[day]) || '';
+    segs.push({ kind: 'day', dur: T_DAY, day, region, count: dayFrames.length, narration: nar });
     dayFrames.forEach((fr, idx) => {
       segs.push({ kind: 'photo', dur: T_PHOTO, frame: fr, next: dayFrames[idx + 1] || null });
     });
   });
   if (spots.length >= 2) segs.push({ kind: 'map', dur: T_MAP, spots, trip });
-  segs.push({ kind: 'outro', dur: T_OUTRO, trip, stats });
+  segs.push({ kind: 'outro', dur: T_OUTRO, trip, stats, line: aiTx.videoOutro || '', ai: usesAi });
 
   // 累積起點
   let acc = 0;
@@ -160,7 +165,7 @@ function drawCaptionBar(ctx, frame, alpha) {
   ctx.fillRect(0, H * 0.60, W, H * 0.40);
 
   ctx.textAlign = 'left';
-  const title = frame.caption || frame.questTitle || frame.spotName;
+  const title = frame.caption || frame.aiCaption || frame.questTitle || frame.spotName;
   const d = new Date(frame.takenAt);
   const sub = [frame.spotName && frame.spotName !== title ? frame.spotName : '',
     frame.memberName ? '· ' + frame.memberName : '',
@@ -201,6 +206,7 @@ function drawIntro(ctx, seg, t) {
   if (range) textCenter(ctx, range, W / 2, H * 0.58, `400 42px ${FONT}`, 'rgba(255,255,255,0.75)');
   const sm = `${seg.stats.members} 個人 · ${seg.stats.spots} 個景點 · ${seg.stats.photos} 張照片`;
   textCenter(ctx, sm, W / 2, H * 0.64, `500 38px ${FONT}`, 'rgba(255,255,255,0.6)');
+  if (seg.line) textCenter(ctx, seg.line, W / 2, H * 0.71, `400 40px ${FONT}`, 'rgba(255,255,255,0.82)', W * 0.82);
   ctx.restore();
 }
 
@@ -282,11 +288,11 @@ function drawOutro(ctx, seg, t) {
   bgFill(ctx, 1);
   const p = clamp01(t / 0.7);
   ctx.save(); ctx.globalAlpha = p;
-  textCenter(ctx, '謝謝這趟旅程', W / 2, H * 0.42, `800 84px ${FONT}`, '#fff', W - 120);
+  textCenter(ctx, seg.line || '謝謝這趟旅程', W / 2, H * 0.42, `800 84px ${FONT}`, '#fff', W - 120);
   const s = seg.stats;
   textCenter(ctx, `${s.photos} 個回憶 · ${s.spots} 個景點 · ${s.members} 位旅伴`, W / 2, H * 0.5, `400 42px ${FONT}`, 'rgba(255,255,255,0.75)');
   if (s.reactions) textCenter(ctx, `互相按了 ${s.reactions} 個讚 ❤️`, W / 2, H * 0.55, `400 40px ${FONT}`, 'rgba(255,255,255,0.6)');
-  textCenter(ctx, 'TripQuest', W / 2, H * 0.66, `700 40px ${FONT}`, 'rgba(255,255,255,0.4)');
+  textCenter(ctx, 'TripQuest' + (seg.ai ? '　·　✨ 文案由 AI 生成' : ''), W / 2, H * 0.66, `700 34px ${FONT}`, 'rgba(255,255,255,0.4)');
   ctx.restore();
 }
 
@@ -383,6 +389,8 @@ export async function recordVideo(tripId, opts = {}) {
 export async function buildAlbumPage(tripId) {
   const trip = store.get(tripId);
   const slides = collectSlides(tripId);
+  const aiCaps = aiPayload(tripId, 'photoCaptions') || {};
+  for (const s of slides) if (!String(s.caption || '').trim() && aiCaps[s.hash]) s.caption = aiCaps[s.hash];
   const stats = tripStats(tripId);
   const imgs = [];
   for (const sl of slides) {

@@ -21,6 +21,14 @@ export default async function recap(tripId) {
   page.append(h('div', { class: 'center-fill', style: 'min-height:140px' }, h('div', { class: 'spinner' })));
 
   const r = await buildRecap(tripId);
+
+  // 有開 AI → 用 AI 潤飾過的文案（有快取秒回；沒開 / 失敗就用內建句子）
+  let ai = null;
+  if (trip.aiEnabled) {
+    try { ai = await import('../aicontent.js').then((m) => m.ensureRecapText(tripId, r)); }
+    catch { ai = null; }
+  }
+
   const out = h('div', { class: 'recap' });
 
   // 標題
@@ -28,6 +36,10 @@ export default async function recap(tripId) {
     h('div', { class: 'recap-title' }, r.title),
     h('div', { class: 'recap-sub' }, [r.dateRange, `${r.dayCount} 天`, `${r.people} 人`].filter(Boolean).join('　·　')),
   ));
+
+  if (ai && ai.opening) {
+    out.append(h('p', { class: 'recap-opening' }, ai.opening));
+  }
 
   // 大數字
   out.append(h('div', { class: 'recap-nums' },
@@ -42,15 +54,15 @@ export default async function recap(tripId) {
   if (r.weather) {
     out.append(h('div', { class: 'recap-line' },
       h('span', { class: 'recap-line-ic' }, '🌤️'),
-      h('span', {}, `這幾天最高 ${r.weather.hi} 度、最低 ${r.weather.lo} 度` +
-        (r.weather.rainyDays ? `，有 ${r.weather.rainyDays} 天下雨` : '，天氣不錯')),
+      h('span', {}, (ai && ai.weather) || (`這幾天最高 ${r.weather.hi} 度、最低 ${r.weather.lo} 度` +
+        (r.weather.rainyDays ? `，有 ${r.weather.rainyDays} 天下雨` : '，天氣不錯'))),
     ));
   }
 
   // 待最久 / 最多回憶
   if (r.topSpot) {
     out.append(h('div', { class: 'recap-line' }, h('span', { class: 'recap-line-ic' }, '🏆'),
-      h('span', {}, `最多回憶的地方是「${r.topSpot.name}」，拍了 ${r.topSpot.photos} 張`)));
+      h('span', {}, (ai && ai.topSpot) || `最多回憶的地方是「${r.topSpot.name}」，拍了 ${r.topSpot.photos} 張`)));
   }
   if (r.longestSpot && r.longestSpot.mins >= 60) {
     out.append(h('div', { class: 'recap-line' }, h('span', { class: 'recap-line-ic' }, '⏳'),
@@ -92,9 +104,14 @@ export default async function recap(tripId) {
       h('span', { class: 'recap-badge' }, `${b.emoji} ${b.name}`))));
   }
 
+  if (ai && (ai.opening || ai.closing)) {
+    if (ai.closing) out.append(h('p', { class: 'recap-closing' }, '「' + ai.closing + '」'));
+    out.append(h('p', { class: 'form-hint center', style: 'margin-top:4px' }, '✨ 文字由 AI 潤飾'));
+  }
+
   // 動作
   out.append(h('div', { class: 'stack', style: 'margin-top:22px' },
-    h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => exportCard(tripId, r) }, '📤 存成圖片 / 分享'),
+    h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => exportCard(tripId, r, ai) }, '📤 存成圖片 / 分享'),
     h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/album`) }, '🎬 做成回憶影片'),
     h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/poster`) }, '🎨 做一張行程海報'),
   ));
@@ -110,7 +127,7 @@ function num(ic, n, label) {
 }
 
 // ---------- 匯出回顧卡（canvas）----------
-async function exportCard(tripId, r) {
+async function exportCard(tripId, r, ai) {
   toast('產生回顧卡…');
   const theme = themeMeta(themeForTrip(store.spotsOf(tripId)));
   const p = theme.poster;
@@ -129,6 +146,10 @@ async function exportCard(tripId, r) {
   wrapText(x, r.title, W / 2, 130, W - 140, 74);
   x.fillStyle = p.sub; x.font = `400 34px "PingFang TC","Noto Sans TC",sans-serif`;
   x.fillText([r.dateRange, `${r.dayCount} 天 · ${r.people} 人`].filter(Boolean).join('　·　'), W / 2, 205);
+  if (ai && ai.opening) {
+    x.fillStyle = p.ink; x.font = `400 30px "PingFang TC","Noto Sans TC",sans-serif`;
+    wrapText(x, ai.opening, W / 2, 262, W - 180, 40);
+  }
 
   // 四宮格大數字
   const cells = [
@@ -170,8 +191,12 @@ async function exportCard(tripId, r) {
   }
 
   // 頁尾
+  if (ai && ai.closing) {
+    x.fillStyle = p.ink; x.font = `italic 400 32px "PingFang TC","Noto Sans TC",sans-serif`;
+    wrapText(x, '「' + ai.closing + '」', W / 2, H - 150, W - 180, 42);
+  }
   x.fillStyle = p.sub; x.font = `400 28px "PingFang TC",sans-serif`;
-  x.fillText('TripQuest 旅圖任務', W / 2, H - 60);
+  x.fillText('TripQuest 旅圖任務' + (ai && (ai.opening || ai.closing) ? '　·　✨ AI 潤飾' : ''), W / 2, H - 60);
 
   const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.92));
   const file = new File([blob], `${r.title}-回顧.jpg`, { type: 'image/jpeg' });
