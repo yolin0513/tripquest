@@ -26,10 +26,16 @@ export default async function join(query) {
     return;
   }
 
+  // 群組名稱預設是「<行程名> 旅伴」，跟行程名一起顯示會變成「京都三日遊 旅伴 · 京都三日遊」
+  // 這種重複又難讀的字串。名稱已經包含行程名時就只顯示行程名。
+  const groupName = String(info.group || '').trim();
+  const tripTitle = String(info.title || '行程').trim();
+  const heading = (!groupName || groupName.includes(tripTitle)) ? tripTitle : `${tripTitle}（${groupName}）`;
+
   render(h('div', { class: 'page' },
     h('div', { class: 'hero' },
       h('h2', {}, '旅伴邀請你加入'),
-      h('p', { class: 'muted lg' }, `${info.group} · ${info.title}`),
+      h('p', { class: 'muted lg' }, heading),
       h('p', { class: 'sm muted' }, `${info.spots} 個景點 · ${info.quests} 個拍照任務`),
       info.sync ? h('p', { class: 'sm muted' }, '加入後大家的照片會自動同步') : null,
     ),

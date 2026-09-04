@@ -3,9 +3,9 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast } from '../ui.js';
+import { h, toast, mount } from '../ui.js';
 import { back } from '../router.js';
-import { currentPosition, reverseGeocode, navUrl, mapUrl, fmtDist } from '../geo.js';
+import { currentPosition, reverseGeocode, navUrl, mapUrl, fmtDist, lastKnown } from '../geo.js';
 import { nearbyFacilities, KIND } from '../nearby.js';
 import { loadEmergency, emergencyFor, countryOfTrip, getContacts } from '../emergency.js';
 
@@ -25,7 +25,11 @@ export default async function sos(tripId) {
 
   // ---- 1. 走失求助卡 ----
   const companions = await collectCompanions(trip);
-  const locLine = h('div', { class: 'sos-loc' }, h('span', { class: 'spinner' }));
+  // 定位最久要等約 10 秒。緊急畫面不能只放一顆轉圈圈讓人乾等：
+  // 有上次的位置就先顯示（標明是稍早的），沒有的話至少講清楚正在做什麼、要等多久。
+  const locLine = h('div', { class: 'sos-loc' },
+    h('span', { class: 'muted' }, '📡 正在定位…（最多約 10 秒）'));
+  const cachedPos = lastKnown();
   const helpCard = h('div', { class: 'sos-help' },
     h('div', { class: 'sos-help-big' }, '我迷路了'),
     h('div', { class: 'sos-help-sub' },
@@ -63,14 +67,17 @@ export default async function sos(tripId) {
   // ---- 3. 附近設施 ----
   const nearbyBox = h('div', { class: 'sos-section' },
     h('h3', {}, '附近的警局 / 醫院 / 藥局'),
-    h('div', { class: 'center-fill', style: 'min-height:80px' }, h('div', { class: 'spinner' })),
+    h('p', { class: 'muted', style: 'padding:4px 2px' }, '正在定位、查詢附近設施…'),
   );
   page.append(nearbyBox);
+
+  // 有上次記到的位置就先畫出來，不要讓使用者在緊急時盯著空白等定位
+  if (cachedPos) drawLocLine(locLine, { ...cachedPos, stale: true });
 
   // ---- 定位 → 位置文字 + 附近設施 ----
   const pos = await currentPosition({ maxAgeMs: 120000 });
   if (!pos) {
-    locLine.replaceChildren(h('span', { class: 'muted' }, '拿不到位置。請開啟定位權限後重新整理。'));
+    mount(locLine, h('span', { class: 'muted' }, '拿不到位置。請開啟定位權限後重新整理。'));
     nearbyBox.lastChild.replaceWith(h('p', { class: 'muted' }, '需要定位才能查附近設施。'));
   } else {
     drawLocLine(locLine, pos);
@@ -87,7 +94,10 @@ export default async function sos(tripId) {
 function drawLocLine(el, pos, geo) {
   const age = Math.round((Date.now() - pos.at) / 60000);
   const coordTxt = `${pos.lat}, ${pos.lng}`;
-  el.replaceChildren(
+  // 用 mount（會濾掉 null）——replaceChildren 遇到 null 會把 "null" 這個字串當文字
+  // 塞進畫面。還沒查到地址時（離線、反向地理編碼失敗）就會在求助畫面上看到 "nullnull"，
+  // 而那正是最需要這個畫面可靠的時候。
+  mount(el,
     geo && geo.short ? h('div', { class: 'sos-addr' }, geo.short) : null,
     geo && geo.display ? h('div', { class: 'sos-addr-full' }, geo.display) : null,
     h('div', { class: 'sos-coord' }, coordTxt,

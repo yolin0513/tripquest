@@ -27,7 +27,6 @@ export default async function settings() {
   const persisted = await isPersisted();
   const usedPct = est.quota ? Math.min(100, (est.usage / est.quota) * 100) : 0;
   const prefs = getPrefs();
-  const syncCfg = getConfig();
   const pending = await pendingCount();
 
   const bundleInput = h('input', { type: 'file', accept: '.json,application/json', hidden: true });
@@ -93,24 +92,25 @@ export default async function settings() {
     ),
 
     // ---- 多人同步 ----
-    h('div', { class: 'section-label' }, '多人同步'),
+    h('div', { class: 'section-label' }, '和旅伴同步'),
     h('div', { class: 'card about' },
-      h('p', { class: 'sm' }, `目前：${modeLabel()}`),
       syncEnabled()
-        ? h('p', { class: 'form-hint' }, '大家的手機會自動同步行程、任務、照片、按讚與留言。')
-        : h('p', { class: 'form-hint' }, '尚未設定。現在用「分享連結」給旅伴任務清單、用「匯出 / 匯入備份」合併照片。設定同步後，一切自動。'),
-      syncEnabled() && pending.total ? h('p', { class: 'tag tag-todo', style: 'display:inline-block' }, `📤 ${pending.blobs} 張照片待上傳`) : null,
+        ? h('p', { class: 'sm' }, '✅ 已開啟。你和旅伴的行程、任務、照片、按讚留言會自動互相同步，不用做任何設定。')
+        : h('p', { class: 'sm' }, '⚠️ 目前是單機模式，照片不會自動同步給旅伴。可以用「分享連結」給旅伴任務清單、用「匯出 / 匯入備份」交換照片。'),
+      syncEnabled() && pending.total
+        ? h('p', { class: 'tag tag-todo', style: 'display:inline-block' }, `📤 還有 ${pending.blobs} 張照片正在上傳`)
+        : null,
       h('div', { class: 'stack', style: 'margin-top:10px' },
-        h('button', { class: 'btn btn-soft btn-block', onclick: () => configureSync(settings) },
-          syncEnabled() ? '更改伺服器設定' : '設定同步伺服器'),
         syncEnabled() ? h('button', { class: 'btn btn-primary btn-block', onclick: async () => {
           toast('同步中…');
           try { const r = await syncNow({ onProgress: (m) => toast(m) }); toast(r.skipped ? '目前是單機模式' : '同步完成'); }
           catch (e) { toast('同步失敗：' + e.message); }
           settings();
-        } }, '立即同步') : null,
+        } }, '🔄 立即同步一次') : null,
       ),
-      h('p', { class: 'form-hint' }, '伺服器可用 Cloudflare（免費，見 SETUP_TODO.md），或家人在自己電腦執行 server 資料夾。'),
+      h('p', { class: 'form-hint' }, '平常不用管它，App 會自己在背景同步。照片只有你們這群人看得到。'),
+      // 進階：一般使用者不需要動，收在摺疊裡避免誤觸把正常運作的同步改壞
+      advancedSyncRow(settings),
     ),
 
     // ---- 我的身分 ----
@@ -161,6 +161,23 @@ function checkbox(checked, onChange) {
   const el = h('input', { type: 'checkbox', checked });
   el.addEventListener('change', () => onChange(el.checked));
   return el;
+}
+
+// 同步的伺服器設定：正常情況下 App 內建就設好了，一般使用者不需要（也不該）動它——
+// 改錯會讓原本好好的同步壞掉。收在「進階」摺疊裡，需要排除問題時才展開。
+function advancedSyncRow(refresh) {
+  const wrap = h('div', { style: 'margin-top:10px' });
+  const body = h('div', { hidden: true, style: 'margin-top:10px' },
+    h('p', { class: 'form-hint' }, `目前使用：${modeLabel()}`),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: () => configureSync(refresh) }, '更改同步伺服器'),
+    h('p', { class: 'form-hint' }, '除非有人請你改，否則不用動這裡。改錯會讓和旅伴的同步停掉。'),
+  );
+  const toggle = h('button', {
+    class: 'btn btn-ghost sm-btn', style: 'width:100%',
+    onclick: () => { body.hidden = !body.hidden; toggle.textContent = body.hidden ? '⚙️ 進階設定' : '⚙️ 收起進階設定'; },
+  }, '⚙️ 進階設定');
+  wrap.append(toggle, body);
+  return wrap;
 }
 
 // 這台手機每個行程的 AI 花費（金鑰只在本機，所以只有本機看得到用量）
@@ -250,7 +267,7 @@ function emergencyContactEditor(refresh) {
   return wrap;
 }
 
-async function joinByCode() {
+export async function joinByCode() {
   const raw = await promptDialog('貼上邀請連結', { multiline: true, okLabel: '加入' });
   if (!raw) return;
   const s = raw.trim();
@@ -290,7 +307,7 @@ async function configureSync(refresh) {
       h('p', { class: 'sm muted', style: 'margin:0 0 10px' }, '選一種、貼上伺服器網址。設定完成後所有旅程自動同步。'),
       modeBtns,
       h('div', { style: 'margin-top:10px' }, urlField),
-      h('p', { class: 'form-hint' }, '沒有伺服器？看專案的 SETUP_TODO.md，Cloudflare 免費、約 40 分鐘。'),
+      h('p', { class: 'form-hint' }, '正常情況下不用改這裡——App 已經內建設定好的伺服器了。'),
     ),
     actions: [{ label: '取消', value: null }, { label: '儲存', value: 'save', primary: true }],
   });

@@ -79,14 +79,14 @@ function questRow(q, tripId, spotId) {
       h('div', { style: 'font-weight:700' }, q.title),
       q.hint ? h('div', { class: 'muted sm' }, q.hint) : null,
       h('div', { style: 'display:flex;gap:8px;margin-top:8px' },
-        h('button', { class: 'tag', style: 'cursor:pointer', onclick: async () => {
+        h('button', { class: 'tag-btn', onclick: async () => {
           const title = await promptDialog('任務名稱', { value: q.title });
           if (title === null) return;
           const hint = await promptDialog('提示', { value: q.hint || '', multiline: true });
           await store.patch(q.id, { title: title || q.title, hint: hint ?? q.hint });
           toast('已更新'); spot(tripId, spotId);
         } }, '編輯'),
-        h('button', { class: 'tag', style: 'cursor:pointer;color:var(--danger)', onclick: async () => {
+        h('button', { class: 'tag-btn danger', onclick: async () => {
           if (await confirmDialog(`刪除任務「${q.title}」？`, { danger: true, okLabel: '刪除' })) {
             for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id);
             await store.remove(q.id);

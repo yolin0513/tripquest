@@ -2,7 +2,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h } from '../ui.js';
+import { h, mount } from '../ui.js';
 import { navigate } from '../router.js';
 import { hashHue, uuid } from '../ids.js';
 import { avatar } from '../ui.js';
@@ -28,7 +28,9 @@ export default async function badges(tripId) {
     const s = statsFor(tripId, who);
     const member = members.find((m) => m.id === who);
 
-    page.replaceChildren(
+    // 用 mount（會濾掉 null）而不是 replaceChildren——後者遇到 null 會直接把字串
+    // "null" 當成文字節點塞進畫面（只有一位成員時就會看到一個莫名的 null）。
+    mount(page,
       // 成員切換
       members.length > 1
         ? h('div', { class: 'badge-who' }, ...members.map((m) =>

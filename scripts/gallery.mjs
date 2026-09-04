@@ -25,6 +25,13 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
 page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
+// js/sync.js 的 BUILT_IN 預設指向正式 Cloudflare Worker——產截圖時不要真的打過去
+// （會把示範資料寫進正式環境，也會讓截圖流程受外部網路影響）。
+await page.setRequestInterception(true);
+page.on('request', (req) => {
+  if (req.url().includes('workers.dev')) return req.abort('failed');
+  req.continue();
+});
 
 const shot = (name) => page.screenshot({ path: join(OUT, name + '.png') }).then(() => console.log('  ✓', name + '.png'));
 const shotEl = (sel, name) => page.$(sel).then((el) => el.screenshot({ path: join(OUT, name + '.png') })).then(() => console.log('  ✓', name + '.png'));
@@ -309,7 +316,12 @@ await sleep(500);
 await shot('21-share-code');
 
 // ---------- 22. 加入群組 ----------
-const shareUrl = await page.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), tripId);
+// js/sync.js 的 BUILT_IN 預設是 cloud，那樣 shareURL 產的是 j=（同步邀請）而不是
+// d=（複製一份任務清單）。這裡要的是後者的畫面，先強制單機模式再產連結。
+const shareUrl = await page.evaluate(async (tid) => {
+  (await import('./js/sync.js')).setConfig({ mode: 'local', url: '' });
+  return (await import('./js/share.js')).shareURL(tid);
+}, tripId);
 const code = shareUrl.split('d=')[1];
 await go(`/#/join?d=${code}`);
 await page.waitForSelector('.hero');
