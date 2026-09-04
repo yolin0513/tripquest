@@ -1,0 +1,52 @@
+{
+  "_meta": { "schema": 1, "city": "tw-taichung", "cityName": "台中", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "tc-gaomei", "name": "高美濕地", "district": "清水", "tags": ["nature", "checkin", "view"], "primary": "checkin",
+      "lat": 24.3120, "lng": 120.5490, "wiki": { "lang": "zh", "title": "高美濕地" }, "rank": 90, "hot": true, "src": "hand",
+      "blurb": "退潮時走上木棧道，一整片鏡面水灘倒映著風車和夕陽。",
+      "quests": [
+        { "type": "view", "title": "水面倒影 + 風車", "hint": "退潮時拍濕地水面倒映的一排白色風力發電機和天空。" },
+        { "type": "view", "title": "夕陽木棧道", "hint": "站在木棧道盡頭往夕陽方向拍。" }
+      ]
+    },
+    {
+      "id": "tc-rainbow", "name": "彩虹眷村", "district": "南屯", "tags": ["checkin", "culture"], "primary": "checkin",
+      "lat": 24.1340, "lng": 120.6100, "wiki": { "lang": "zh", "title": "彩虹眷村" }, "rank": 78, "src": "hand",
+      "blurb": "彩虹爺爺一個人把整個眷村畫滿彩色的人、鳥、字，救下了拆遷。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "tc-fengjia", "name": "逢甲夜市", "district": "西屯", "tags": ["nightmarket", "food", "snack"], "primary": "nightmarket",
+      "lat": 24.1790, "lng": 120.6470, "wiki": { "lang": "zh", "title": "逢甲夜市" }, "rank": 86, "hot": true, "src": "hand",
+      "blurb": "全台最大夜市，很多新奇小吃的發源地：大腸包小腸、可麗餅、日船章魚小丸子。",
+      "must": ["明倫蛋餅", "官芝霖大腸包小腸", "地瓜球", "紅茶臭豆腐"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "tc-park-lane", "name": "審計新村", "district": "西區", "tags": ["checkin", "food", "shopping"], "primary": "checkin",
+      "lat": 24.1490, "lng": 120.6640, "wiki": { "lang": "zh", "title": "審計新村" }, "rank": 74, "src": "hand",
+      "blurb": "老宿舍改的文創聚落，週末有手作市集，旁邊就是綠園道。",
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "tc-miyahara", "name": "宮原眼科", "district": "中區", "tags": ["food", "checkin", "shopping"], "primary": "checkin",
+      "lat": 24.1380, "lng": 120.6840, "wiki": { "lang": "zh", "title": "宮原眼科" }, "rank": 80, "src": "hand",
+      "blurb": "日治時代的眼科診所改成華麗如魔法圖書館的冰淇淋 + 糕餅店。",
+      "must": ["冰淇淋（口味超多）", "土鳳梨酥", "巧克力"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "tc-zhongshe", "name": "中社花海", "district": "后里", "tags": ["nature", "checkin"], "primary": "checkin",
+      "lat": 24.3080, "lng": 120.7180, "wiki": { "lang": "zh", "title": "后里區" }, "rank": 62, "src": "hand",
+      "blurb": "整片依季節換的花田——鬱金香、波斯菊、向日葵，可以進去拍。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    },
+    {
+      "id": "tc-wuqi", "name": "梧棲漁港", "district": "梧棲", "tags": ["food", "checkin"], "primary": "food",
+      "lat": 24.2830, "lng": 120.5350, "wiki": { "lang": "zh", "title": "台中港" }, "rank": 58, "src": "hand",
+      "blurb": "現流海鮮買了直接代客料理，也有整排炸物、烤魷魚、蚵仔煎。",
+      "questSeed": { "tags": ["food"] }
+    }
+  ]
+}

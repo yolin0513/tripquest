@@ -1,0 +1,149 @@
+{
+  "_meta": { "schema": 1, "city": "tw-taipei", "cityName": "台北", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "taipei-101", "name": "台北101", "district": "信義", "tags": ["sight", "checkin"], "primary": "sight",
+      "lat": 25.0338, "lng": 121.5645, "wiki": { "lang": "zh", "title": "台北101" }, "rank": 96, "hot": true, "src": "hand",
+      "blurb": "曾是世界第一高樓，89 樓觀景台看整個台北盆地，跨年煙火的主角。",
+      "quests": [
+        { "type": "building", "title": "101 全身照", "hint": "找個能拍到整棟的角度——象山、市府轉運站、國父紀念館前水池倒影都行。" },
+        { "type": "thing", "title": "88 樓的金色大球", "hint": "上觀景台拍那顆世界最大的風阻尼器。" },
+        { "type": "food", "title": "樓下美食街的小籠包", "hint": "B1 或 4 樓找一家，拍剛蒸好、皮薄透光的小籠包。" }
+      ]
+    },
+    {
+      "id": "taipei-shilin-nm", "name": "士林夜市", "district": "士林", "tags": ["nightmarket", "food", "checkin"], "primary": "nightmarket",
+      "lat": 25.0880, "lng": 121.5240, "wiki": { "lang": "zh", "title": "士林夜市" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "台北最大、觀光客最多的夜市，一路從地下美食街吃到陽明戲院。",
+      "must": ["大餅包小餅", "豪大大雞排", "士林大香腸", "青蛙下蛋", "生炒花枝"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "taipei-raohe-nm", "name": "饒河街夜市", "district": "松山", "tags": ["nightmarket", "food"], "primary": "nightmarket",
+      "lat": 25.0508, "lng": 121.5773, "wiki": { "lang": "zh", "title": "饒河街觀光夜市" }, "rank": 84, "src": "hand",
+      "blurb": "松山慈祐宮前一條直街，入口那攤福州胡椒餅永遠在排隊。",
+      "must": ["福州世祖胡椒餅", "陳董藥燉排骨", "紅豆餅", "麻辣鴨血"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "taipei-ningxia-nm", "name": "寧夏夜市", "district": "大同", "tags": ["nightmarket", "food", "snack"], "primary": "nightmarket",
+      "lat": 25.0565, "lng": 121.5155, "wiki": { "lang": "zh", "title": "寧夏夜市" }, "rank": 80, "src": "hand",
+      "blurb": "在地人的夜市，老台北小吃密度最高的一條，蚵仔煎、雞蛋蚵仔麵線、豬肝湯。",
+      "must": ["劉芋仔蛋黃芋餅", "圓環邊蚵仔煎", "豬肝榮仔", "方家雞肉飯"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "taipei-longshan", "name": "龍山寺", "district": "萬華", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 25.0372, "lng": 121.4999, "wiki": { "lang": "zh", "title": "艋舺龍山寺" }, "rank": 82, "src": "hand",
+      "blurb": "台北香火最旺的廟，1738 年建，求姻緣、問事業的人從早到晚沒斷過。",
+      "quests": [
+        { "type": "building", "title": "前殿的龍柱與屋簷", "hint": "拍下正面兩根蟠龍石柱，或屋頂繁複的剪黏裝飾。" },
+        { "type": "culture", "title": "有人在拜拜的畫面", "hint": "拍下香客拿香、擲筊、或在月老前排隊的樣子（別拍到臉）。" }
+      ]
+    },
+    {
+      "id": "taipei-cks", "name": "中正紀念堂", "district": "中正", "tags": ["sight", "culture"], "primary": "sight",
+      "lat": 25.0347, "lng": 121.5217, "wiki": { "lang": "zh", "title": "中正紀念堂" }, "rank": 78, "src": "hand",
+      "blurb": "白牆藍瓦的大廣場，兩廳院在兩側，衛兵交接每小時一次。",
+      "quests": [
+        { "type": "building", "title": "正堂 + 89 階", "hint": "從自由廣場牌樓那端，把主堂和前面的階梯一起拍進去。" },
+        { "type": "culture", "title": "衛兵交接", "hint": "整點回到正堂，拍儀隊操槍的定格瞬間。" }
+      ]
+    },
+    {
+      "id": "taipei-npm", "name": "國立故宮博物院", "district": "士林", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 25.1023, "lng": 121.5485, "wiki": { "lang": "zh", "title": "國立故宮博物院" }, "rank": 80, "src": "hand",
+      "blurb": "全世界最完整的中華文物收藏，翠玉白菜、肉形石是鎮館明星。",
+      "questSeed": { "tags": ["culture"] }
+    },
+    {
+      "id": "taipei-xiangshan", "name": "象山", "district": "信義", "tags": ["nature", "checkin", "view"], "primary": "checkin",
+      "lat": 25.0275, "lng": 121.5709, "wiki": { "lang": "zh", "title": "象山 (臺北市)" }, "rank": 85, "hot": true, "src": "hand",
+      "blurb": "拍 101 夜景的第一名機位，登山口爬 15 分鐘就到「六巨石」。",
+      "quests": [
+        { "type": "view", "title": "六巨石上的 101", "hint": "爬到六巨石，把 101 和整片信義區夜景一起入鏡。" },
+        { "type": "group", "title": "巨石合照", "hint": "大家輪流站上巨石，背景是城市。" }
+      ]
+    },
+    {
+      "id": "taipei-dadaocheng", "name": "大稻埕（迪化街）", "district": "大同", "tags": ["culture", "checkin", "shopping", "food"], "primary": "checkin",
+      "lat": 25.0558, "lng": 121.5100, "wiki": { "lang": "zh", "title": "大稻埕" }, "rank": 83, "hot": true, "src": "hand",
+      "blurb": "老屋改的咖啡廳、南北貨、布行擠在一條巴洛克立面的街上，年貨大街的主場。",
+      "must": ["杏仁露", "旗魚米粉湯", "永樂雞捲大王", "妙口四神湯肉包"],
+      "questSeed": { "tags": ["checkin", "culture", "food"] }
+    },
+    {
+      "id": "taipei-beitou", "name": "北投溫泉", "district": "北投", "tags": ["nature", "culture"], "primary": "nature",
+      "lat": 25.1367, "lng": 121.5065, "wiki": { "lang": "zh", "title": "北投溫泉" }, "rank": 76, "src": "hand",
+      "blurb": "捷運直達的溫泉區，地熱谷冒著硫磺煙，圖書館是森林裡的木造建築。",
+      "quests": [
+        { "type": "view", "title": "地熱谷的煙", "hint": "拍下青磺泉水面蒸騰的白煙（欄杆外別靠太近）。" },
+        { "type": "building", "title": "北投圖書館", "hint": "拍那棟得獎的綠建築木造圖書館，藏在公園樹林裡。" }
+      ]
+    },
+    {
+      "id": "taipei-maokong", "name": "貓空纜車", "district": "文山", "tags": ["checkin", "nature", "food"], "primary": "checkin",
+      "lat": 24.9683, "lng": 121.5872, "wiki": { "lang": "zh", "title": "貓空纜車" }, "rank": 74, "src": "hand",
+      "blurb": "透明地板的「貓纜之眼」水晶車廂，上山喝鐵觀音、看台北夜景。",
+      "questSeed": { "tags": ["checkin", "nature"] }
+    },
+    {
+      "id": "taipei-yongkang", "name": "永康街", "district": "大安", "tags": ["food", "snack", "shopping", "checkin"], "primary": "food",
+      "lat": 25.0327, "lng": 121.5300, "wiki": { "lang": "zh", "title": "永康街" }, "rank": 82, "src": "hand",
+      "blurb": "鼎泰豐總店、芒果冰、牛肉麵、老宅咖啡全塞在這一區小巷。",
+      "must": ["鼎泰豐小籠包", "思慕昔芒果冰", "永康牛肉麵", "度小月擔仔麵"],
+      "questSeed": { "tags": ["food", "snack"] }
+    },
+    {
+      "id": "taipei-fuhang", "name": "阜杭豆漿", "district": "中正", "tags": ["snack", "food"], "primary": "snack",
+      "lat": 25.0444, "lng": 121.5250, "wiki": { "lang": "zh", "title": "阜杭豆漿" }, "rank": 79, "hot": true, "src": "hand",
+      "blurb": "華山市場二樓，早上七點就排到樓下，招牌是厚燒餅夾蛋加油條。",
+      "questSeed": { "tags": ["snack"] }
+    },
+    {
+      "id": "taipei-huashan", "name": "華山1914文創園區", "district": "中正", "tags": ["checkin", "culture", "shopping"], "primary": "checkin",
+      "lat": 25.0442, "lng": 121.5293, "wiki": { "lang": "zh", "title": "華山1914文化創意產業園區" }, "rank": 72, "src": "hand",
+      "blurb": "日治時代的酒廠改成的展演園區，紅磚廠房 + 老煙囪 + 草地市集。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "taipei-songshan-cp", "name": "松山文創園區", "district": "信義", "tags": ["checkin", "culture"], "primary": "checkin",
+      "lat": 25.0438, "lng": 121.5606, "wiki": { "lang": "zh", "title": "松山文創園區" }, "rank": 70, "src": "hand",
+      "blurb": "老菸廠改的園區，中間一座大水池，旁邊就是伊東豊雄設計的誠品生活。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "taipei-4444", "name": "四四南村", "district": "信義", "tags": ["checkin", "culture"], "primary": "checkin",
+      "lat": 25.0322, "lng": 121.5615, "wiki": { "lang": "zh", "title": "四四南村" }, "rank": 68, "src": "hand",
+      "blurb": "101 旁邊的老眷村，低矮屋頂配後面的摩天樓，是經典的今昔同框機位。",
+      "quests": [
+        { "type": "view", "title": "老屋頂 + 101", "hint": "站在草坡上，讓眷村的黑瓦屋頂和背後的 101 一起入鏡。" }
+      ]
+    },
+    {
+      "id": "taipei-rainbow-br", "name": "彩虹橋", "district": "松山", "tags": ["checkin", "view"], "primary": "checkin",
+      "lat": 25.0517, "lng": 121.5788, "wiki": { "lang": "zh", "title": "彩虹橋 (臺北市)" }, "rank": 66, "src": "hand",
+      "blurb": "跨基隆河的紅色 S 形人行橋，入夜點燈，饒河夜市走過去就到。",
+      "questSeed": { "tags": ["checkin", "view"] }
+    },
+    {
+      "id": "taipei-linjiang-nm", "name": "臨江街夜市（通化夜市）", "district": "大安", "tags": ["nightmarket", "food"], "primary": "nightmarket",
+      "lat": 25.0300, "lng": 121.5535, "wiki": { "lang": "zh", "title": "臨江街觀光夜市" }, "rank": 72, "src": "hand",
+      "blurb": "信義區旁邊的在地夜市，石家割包、駁二滷味、以及那攤上過米其林的梁記滷肉飯。",
+      "must": ["梁記滷肉飯", "石家割包", "駱記小炒", "上海生煎包"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "taipei-ele-mtn", "name": "大安森林公園", "district": "大安", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 25.0300, "lng": 121.5357, "wiki": { "lang": "zh", "title": "大安森林公園" }, "rank": 60, "src": "hand",
+      "blurb": "市中心最大的一塊綠地，生態池有夜鷺，捷運站上蓋還有一片草坡。",
+      "questSeed": { "tags": ["nature"] }
+    },
+    {
+      "id": "taipei-tamsui-view", "name": "大佳河濱公園", "district": "中山", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 25.0770, "lng": 121.5430, "wiki": { "lang": "zh", "title": "大佳河濱公園" }, "rank": 55, "src": "hand",
+      "blurb": "基隆河邊的大草地與噴泉，租 YouBike 沿河騎，看得到圓山飯店。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    }
+  ]
+}

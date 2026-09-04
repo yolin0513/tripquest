@@ -1,0 +1,57 @@
+{
+  "_meta": { "schema": 1, "city": "tw-kaohsiung", "cityName": "高雄", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "khh-pier2", "name": "駁二藝術特區", "district": "鹽埕", "tags": ["checkin", "culture", "shopping"], "primary": "checkin",
+      "lat": 22.6200, "lng": 120.2810, "wiki": { "lang": "zh", "title": "駁二藝術特區" }, "rank": 86, "hot": true, "src": "hand",
+      "blurb": "港邊舊倉庫群改的藝術區，大型公仔、彩繪貨櫃、輕軌穿過，還有大港橋。",
+      "quests": [
+        { "type": "thing", "title": "大型裝置藝術", "hint": "找一個駁二的大型公仔或機械裝置合照。" },
+        { "type": "building", "title": "大港橋", "hint": "拍那座會旋轉開合的白色人行橋。" }
+      ]
+    },
+    {
+      "id": "khh-lotus", "name": "蓮池潭．龍虎塔", "district": "左營", "tags": ["sight", "culture", "checkin"], "primary": "sight",
+      "lat": 22.6820, "lng": 120.2930, "wiki": { "lang": "zh", "title": "蓮池潭" }, "rank": 82, "src": "hand",
+      "blurb": "湖上一整排廟宇與寶塔，招牌是「龍口進、虎口出」的龍虎塔。",
+      "quests": [
+        { "type": "building", "title": "龍虎塔", "hint": "拍那對黃身、龍頭虎口的雙塔與之字形拱橋。" }
+      ]
+    },
+    {
+      "id": "khh-cijin", "name": "旗津", "district": "旗津", "tags": ["nature", "food", "checkin"], "primary": "checkin",
+      "lat": 22.6130, "lng": 120.2670, "wiki": { "lang": "zh", "title": "旗津區" }, "rank": 78, "src": "hand",
+      "blurb": "渡輪過去的離島，海產街、黑沙灘、燈塔，租協力車環島。",
+      "must": ["旗津烤小卷", "萬二小吃部", "海之冰"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "khh-liuhe", "name": "六合夜市", "district": "新興", "tags": ["nightmarket", "food"], "primary": "nightmarket",
+      "lat": 22.6330, "lng": 120.3020, "wiki": { "lang": "zh", "title": "六合夜市" }, "rank": 72, "src": "hand",
+      "blurb": "高雄最有名的觀光夜市，海產粥、鹽蒸蝦、木瓜牛奶。",
+      "must": ["鄭老牌木瓜牛奶", "海產粥", "莊記海產粥", "烤肉之家"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "khh-ruifeng", "name": "瑞豐夜市", "district": "左營", "tags": ["nightmarket", "food", "snack"], "primary": "nightmarket",
+      "lat": 22.6660, "lng": 120.3040, "wiki": { "lang": "zh", "title": "瑞豐夜市" }, "rank": 74, "src": "hand",
+      "blurb": "在地人真的會去的夜市，攤位密、選擇多，捷運巨蛋站就到。",
+      "must": ["深海食堂", "鹹水雞", "章魚燒", "烤肉飯"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "khh-dome-light", "name": "美麗島站光之穹頂", "district": "新興", "tags": ["checkin", "sight"], "primary": "checkin",
+      "lat": 22.6314, "lng": 120.3020, "wiki": { "lang": "zh", "title": "美麗島站" }, "rank": 80, "hot": true, "src": "hand",
+      "blurb": "被選為世界最美地鐵站之一，4500 片彩色玻璃拼成的巨大圓頂。",
+      "quests": [
+        { "type": "view", "title": "光之穹頂", "hint": "站在圓頂正下方往上拍，或找對角線構圖。" }
+      ]
+    },
+    {
+      "id": "khh-monkey-mtn", "name": "壽山（柴山）", "district": "鼓山", "tags": ["nature", "view", "checkin"], "primary": "nature",
+      "lat": 22.6360, "lng": 120.2650, "wiki": { "lang": "zh", "title": "壽山" }, "rank": 62, "src": "hand",
+      "blurb": "市區旁的野生獼猴山，登龍泉寺步道上去看高雄港，注意別讓猴子搶包包。",
+      "questSeed": { "tags": ["nature", "view"] }
+    }
+  ]
+}

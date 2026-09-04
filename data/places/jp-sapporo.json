@@ -1,0 +1,50 @@
+{
+  "_meta": { "schema": 1, "city": "jp-sapporo", "cityName": "札幌", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "sap-odori", "name": "大通公園", "district": "大通", "tags": ["nature", "checkin", "food"], "primary": "checkin",
+      "lat": 43.0605, "lng": 141.3450, "wiki": { "lang": "zh", "title": "大通公園" }, "rank": 84, "src": "hand",
+      "blurb": "橫貫市中心的細長公園，一端是電視塔，冬天是雪祭、夏天是啤酒花園和玉米攤。",
+      "must": ["烤玉米", "現擠霜淇淋", "Ramen 橫丁味噌拉麵"],
+      "quests": [
+        { "type": "building", "title": "札幌電視塔", "hint": "從公園另一端把整座紅色電視塔和綠地一起拍進去。" }
+      ]
+    },
+    {
+      "id": "sap-clock", "name": "札幌市鐘樓", "district": "大通", "tags": ["culture", "checkin"], "primary": "culture",
+      "lat": 43.0628, "lng": 141.3536, "wiki": { "lang": "zh", "title": "札幌市鐘樓" }, "rank": 62, "src": "hand",
+      "blurb": "北海道開拓時代留下的白色木造鐘樓，日本最古老的塔鐘還在走。",
+      "questSeed": { "tags": ["culture", "checkin"] }
+    },
+    {
+      "id": "sap-moiwa", "name": "藻岩山夜景", "district": "藻岩山", "tags": ["nature", "view", "checkin"], "primary": "checkin",
+      "lat": 43.0270, "lng": 141.3260, "wiki": { "lang": "zh", "title": "藻岩山" }, "rank": 80, "hot": true, "src": "hand",
+      "blurb": "纜車上山看整片札幌夜景，被列為「日本新三大夜景」之一。",
+      "quests": [
+        { "type": "view", "title": "山頂的城市夜景", "hint": "在展望台拍札幌整片燈海，帶一點欄杆前的『幸福鐘』。" }
+      ]
+    },
+    {
+      "id": "sap-nijo", "name": "二条市場", "district": "大通", "tags": ["food", "snack", "shopping"], "primary": "food",
+      "lat": 43.0585, "lng": 141.3560, "wiki": { "lang": "zh", "title": "二条市場" }, "rank": 76, "src": "hand",
+      "blurb": "市中心的海鮮市場，早上來吃現做的海膽蟹肉三色丼、烤帆立貝。",
+      "must": ["海膽蟹肉丼", "烤帝王蟹腳", "現剖海膽", "鮭魚卵丼"],
+      "questSeed": { "tags": ["food", "snack"] }
+    },
+    {
+      "id": "sap-shiroi", "name": "白色戀人公園", "district": "白色戀人公園", "tags": ["checkin", "food"], "primary": "checkin",
+      "lat": 43.0900, "lng": 141.2790, "wiki": { "lang": "zh", "title": "白色戀人" }, "rank": 74, "src": "hand",
+      "blurb": "白色戀人餅乾工廠改的英式庭園園區，可以看產線、DIY 做自己的餅乾。",
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "sap-otaru", "name": "小樽運河", "district": "小樽", "tags": ["checkin", "culture", "food"], "primary": "checkin",
+      "lat": 43.1980, "lng": 141.0060, "wiki": { "lang": "zh", "title": "小樽運河" }, "rank": 85, "hot": true, "src": "hand",
+      "blurb": "石造倉庫夾著的運河，黃昏點起煤油路燈最浪漫，堺町通買玻璃、吃六花亭。",
+      "must": ["政壽司", "六花亭泡芙", "LeTAO 起司蛋糕", "北菓樓年輪蛋糕"],
+      "quests": [
+        { "type": "view", "title": "運河與煤油燈", "hint": "傍晚在淺草橋上，拍運河、石造倉庫和岸邊的路燈。" }
+      ]
+    }
+  ]
+}

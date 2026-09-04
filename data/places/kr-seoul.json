@@ -1,0 +1,60 @@
+{
+  "_meta": { "schema": 1, "city": "kr-seoul", "cityName": "首爾", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "seoul-gyeongbok", "name": "景福宮", "district": "景福宮周邊", "tags": ["sight", "culture", "checkin"], "primary": "sight",
+      "lat": 37.5796, "lng": 126.9770, "wiki": { "lang": "zh", "title": "景福宮" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "朝鮮王朝的正宮，穿韓服進去免門票，光化門前每小時有守門將換崗。",
+      "quests": [
+        { "type": "building", "title": "勤政殿", "hint": "站在品階石中軸線上，正面拍雙層屋簷的勤政殿。" },
+        { "type": "culture", "title": "韓服合照", "hint": "穿韓服進宮，拍一張與宮門的合照。" },
+        { "type": "culture", "title": "守門將換崗儀式", "hint": "光化門前的換崗儀式，拍穿傳統服飾的儀仗隊。" }
+      ]
+    },
+    {
+      "id": "seoul-bukchon", "name": "北村韓屋村", "district": "北村", "tags": ["culture", "checkin"], "primary": "checkin",
+      "lat": 37.5826, "lng": 126.9830, "wiki": { "lang": "zh", "title": "北村韓屋村" }, "rank": 84, "hot": true, "src": "hand",
+      "blurb": "景福宮和昌德宮之間的斜坡巷弄，六百年的韓屋還住著人，第八景可以拍屋瓦配首爾塔。",
+      "quests": [
+        { "type": "view", "title": "北村第八景", "hint": "在那條有名的下坡巷，拍成排的韓屋屋瓦和遠方的市景。" }
+      ]
+    },
+    {
+      "id": "seoul-myeongdong", "name": "明洞", "district": "明洞", "tags": ["shopping", "food", "snack"], "primary": "shopping",
+      "lat": 37.5637, "lng": 126.9850, "wiki": { "lang": "zh", "title": "明洞" }, "rank": 82, "src": "hand",
+      "blurb": "美妝、平價服飾、換錢所，晚上整條街是小吃攤：烤起司龍蝦、雞蛋糕、辣炒年糕。",
+      "must": ["烤起司龍蝦", "明洞餃子刀削麵", "旋風薯條", "龍蝦串"],
+      "questSeed": { "tags": ["shopping", "food"] }
+    },
+    {
+      "id": "seoul-ntower", "name": "N首爾塔（南山塔）", "district": "明洞", "tags": ["sight", "view", "checkin"], "primary": "checkin",
+      "lat": 37.5512, "lng": 126.9882, "wiki": { "lang": "zh", "title": "N首爾塔" }, "rank": 80, "src": "hand",
+      "blurb": "南山頂上的地標塔，搭纜車上去看首爾全景，欄杆上鎖滿了情人的愛情鎖。",
+      "quests": [
+        { "type": "view", "title": "從塔上看首爾", "hint": "上展望台，拍一張首爾的city view。" },
+        { "type": "thing", "title": "愛情鎖牆", "hint": "拍那面掛滿五顏六色愛情鎖的欄杆。" }
+      ]
+    },
+    {
+      "id": "seoul-hongdae", "name": "弘大", "district": "弘大", "tags": ["checkin", "shopping", "food"], "primary": "checkin",
+      "lat": 37.5560, "lng": 126.9230, "wiki": { "lang": "zh", "title": "弘益大學" }, "rank": 78, "src": "hand",
+      "blurb": "美大周邊的年輕人街區，街頭藝人在「弘大遊戲場」表演，個性小店和夜店密集。",
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "seoul-dongdaemun", "name": "東大門設計廣場（DDP）", "district": "東大門", "tags": ["checkin", "shopping", "sight"], "primary": "checkin",
+      "lat": 37.5665, "lng": 127.0090, "wiki": { "lang": "zh", "title": "東大門設計廣場" }, "rank": 72, "src": "hand",
+      "blurb": "扎哈．哈蒂設計的銀色流線建築，夜裡的 LED 玫瑰花海和外牆燈光秀。",
+      "quests": [
+        { "type": "building", "title": "DDP 的流線外牆", "hint": "拍那棟像太空船、沒有直角的銀色曲面建築。" }
+      ]
+    },
+    {
+      "id": "seoul-gwangjang", "name": "廣藏市場", "district": "東大門", "tags": ["food", "snack", "nightmarket"], "primary": "food",
+      "lat": 37.5700, "lng": 126.9998, "wiki": { "lang": "zh", "title": "廣藏市場" }, "rank": 80, "hot": true, "src": "hand",
+      "blurb": "百年傳統市場，一整排阿珠媽現煎綠豆煎餅、拌飯、生牛肉、血腸，坐板凳吃。",
+      "must": ["綠豆煎餅", "麻藥紫菜飯捲", "生拌牛肉", "血腸"],
+      "questSeed": { "tags": ["food", "snack"] }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "_meta": { "schema": 1, "city": "jp-nara", "cityName": "奈良", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "nara-park", "name": "奈良公園", "district": "奈良公園", "tags": ["nature", "checkin", "culture"], "primary": "checkin",
+      "lat": 34.6851, "lng": 135.8430, "wiki": { "lang": "zh", "title": "奈良公園" }, "rank": 90, "hot": true, "src": "hand",
+      "blurb": "上千隻放養的梅花鹿，會為了鹿仙貝向你鞠躬（然後咬你衣角）。",
+      "quests": [
+        { "type": "thing", "title": "餵鹿的一刻", "hint": "拿鹿仙貝餵鹿，拍下牠靠過來的瞬間。" },
+        { "type": "culture", "title": "會鞠躬的鹿", "hint": "拍到鹿低頭「行禮」討餅乾的畫面。" },
+        { "type": "group", "title": "和鹿一起自拍", "hint": "全員蹲下來，跟一隻鹿一起入鏡。" }
+      ]
+    },
+    {
+      "id": "nara-todaiji", "name": "東大寺", "district": "奈良公園", "tags": ["sight", "culture"], "primary": "sight",
+      "lat": 34.6890, "lng": 135.8399, "wiki": { "lang": "zh", "title": "東大寺" }, "rank": 86, "src": "hand",
+      "blurb": "世界最大的木造建築之一，裡面坐著 15 公尺高的奈良大佛，柱子底下有個能鑽過去的洞。",
+      "quests": [
+        { "type": "building", "title": "大佛殿全景", "hint": "從南大門進來的中軸線上，把整座大佛殿拍進去。" },
+        { "type": "thing", "title": "奈良大佛", "hint": "拍那尊巨大的青銅盧舍那佛（記得帶到手勢或蓮座）。" }
+      ]
+    },
+    {
+      "id": "nara-kasuga", "name": "春日大社", "district": "奈良公園", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 34.6815, "lng": 135.8483, "wiki": { "lang": "zh", "title": "春日大社" }, "rank": 76, "src": "hand",
+      "blurb": "參道兩側和迴廊掛著三千座石燈籠、銅燈籠，朱紅色的社殿藏在森林裡。",
+      "quests": [
+        { "type": "thing", "title": "成排的燈籠", "hint": "拍參道上長滿青苔的石燈籠，或迴廊裡整排的銅吊燈。" }
+      ]
+    },
+    {
+      "id": "nara-naramachi", "name": "奈良町", "district": "奈良公園", "tags": ["culture", "checkin", "food"], "primary": "checkin",
+      "lat": 34.6780, "lng": 135.8290, "wiki": { "lang": "zh", "title": "奈良町" }, "rank": 66, "src": "hand",
+      "blurb": "格子窗的江戶町家老街，門口掛著紅色的「身代り猴」布偶，賣中川政七的雜貨。",
+      "must": ["中谷堂高速麻糬", "柿葉壽司", "萬葉粥"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "nara-horyuji", "name": "法隆寺", "district": "斑鳩", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 34.6144, "lng": 135.7345, "wiki": { "lang": "zh", "title": "法隆寺" }, "rank": 64, "src": "hand",
+      "blurb": "世界現存最古老的木造建築群，1400 年的五重塔和金堂，日本第一個世界遺產。",
+      "questSeed": { "tags": ["culture", "sight"] }
+    }
+  ]
+}

@@ -3,7 +3,7 @@
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  */
-const VERSION = 'tripquest-v1.2.0';
+const VERSION = 'tripquest-v1.3.0';
 const SHELL = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [
@@ -30,6 +30,11 @@ const SHELL_ASSETS = [
   './js/music.js',
   './js/worker-image.js',
   './js/quests/generate.js',
+  './js/poster/index.js',
+  './js/poster/text.js',
+  './js/poster/deco.js',
+  './js/poster/presets.js',
+  './js/views/poster.js',
   './js/views/home.js',
   './js/views/create.js',
   './js/views/trip.js',
@@ -39,8 +44,17 @@ const SHELL_ASSETS = [
   './js/views/album.js',
   './js/views/settings.js',
   './js/views/join.js',
-  './data/curated.json',
   './data/templates.json',
+  './data/places/index.json',
+  './data/places/tw-taipei.json',
+  './data/places/tw-newtaipei.json',
+  './data/places/tw-taichung.json',
+  './data/places/tw-tainan.json',
+  './data/places/tw-kaohsiung.json',
+  './data/places/tw-hualien.json',
+  './data/places/tw-yilan.json',
+  './data/places/tw-nantou.json',
+  './data/places/tw-chiayi.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];

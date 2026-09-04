@@ -1,0 +1,45 @@
+{
+  "_meta": { "schema": 1, "city": "tw-yilan", "cityName": "宜蘭", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "yl-jiaoxi", "name": "礁溪溫泉", "district": "礁溪", "tags": ["nature", "food", "checkin"], "primary": "nature",
+      "lat": 24.8270, "lng": 121.7730, "wiki": { "lang": "zh", "title": "礁溪溫泉" }, "rank": 82, "src": "hand",
+      "blurb": "台灣少見的平地碳酸氫鈉溫泉，火車站前就有免費足湯，湯圍溝公園泡腳邊逛。",
+      "must": ["奕順軒奶凍捲", "柯氏蔥油餅", "礁溪local蔥", "甕窯雞"],
+      "questSeed": { "tags": ["nature", "food"] }
+    },
+    {
+      "id": "yl-luodong-nm", "name": "羅東夜市", "district": "羅東", "tags": ["nightmarket", "food", "snack"], "primary": "nightmarket",
+      "lat": 24.6770, "lng": 121.7690, "wiki": { "lang": "zh", "title": "羅東夜市" }, "rank": 84, "hot": true, "src": "hand",
+      "blurb": "宜蘭最強夜市，繞著中山公園一圈：包心粉圓、羊肉湯、當歸鴨、蔥餅、龍鳳腿。",
+      "must": ["包心粉圓", "阿灶伯羊肉湯", "當歸羊肉湯", "義豐蔥油派", "龍鳳腿"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "yl-taipingshan", "name": "太平山", "district": "大同", "tags": ["nature", "checkin", "view"], "primary": "nature",
+      "lat": 24.4970, "lng": 121.5350, "wiki": { "lang": "zh", "title": "太平山國家森林遊樂區" }, "rank": 78, "src": "hand",
+      "blurb": "檜木原始林、蹦蹦車、翠峰湖，還有需要泳裝入場的野溪溫泉「鳩之澤」。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    },
+    {
+      "id": "yl-toucheng", "name": "頭城老街．蘭陽博物館", "district": "頭城", "tags": ["culture", "checkin", "sight"], "primary": "checkin",
+      "lat": 24.8700, "lng": 121.8230, "wiki": { "lang": "zh", "title": "蘭陽博物館" }, "rank": 70, "src": "hand",
+      "blurb": "從海面斜插出來的單面山造型建築（蘭博），旁邊是宜蘭第一條老街。",
+      "quests": [
+        { "type": "building", "title": "蘭陽博物館的斜牆", "hint": "拍那棟像從水裡切出來、三角形斜面的深色建築。" }
+      ]
+    },
+    {
+      "id": "yl-yeliou-turtle", "name": "龜山島", "district": "頭城", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 24.8420, "lng": 121.9430, "wiki": { "lang": "zh", "title": "龜山島" }, "rank": 68, "src": "hand",
+      "blurb": "外海一座像烏龜的火山島，搭船繞島、登島，運氣好賞鯨豚、看牛奶海。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    },
+    {
+      "id": "yl-sanxing", "name": "三星蔥（青蔥文化館）", "district": "三星", "tags": ["food", "checkin"], "primary": "food",
+      "lat": 24.6640, "lng": 121.6540, "wiki": { "lang": "zh", "title": "三星鄉" }, "rank": 58, "src": "hand",
+      "blurb": "全台最有名的蔥，可以下田拔蔥、洗蔥，然後現做蔥油餅、蔥冰淇淋。",
+      "questSeed": { "tags": ["food", "checkin"] }
+    }
+  ]
+}

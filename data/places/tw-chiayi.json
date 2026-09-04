@@ -1,0 +1,48 @@
+{
+  "_meta": { "schema": 1, "city": "tw-chiayi", "cityName": "嘉義", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "cy-alishan", "name": "阿里山國家森林遊樂區", "district": "阿里山", "tags": ["nature", "sight", "checkin"], "primary": "nature",
+      "lat": 23.5100, "lng": 120.8030, "wiki": { "lang": "zh", "title": "阿里山國家風景區" }, "rank": 93, "hot": true, "src": "hand",
+      "blurb": "紅檜神木、森林小火車、祝山日出、山谷雲海——台灣最經典的高山行程。",
+      "quests": [
+        { "type": "thing", "title": "阿里山小火車", "hint": "拍紅色的森林小火車，月台上或行進中都可以。" },
+        { "type": "view", "title": "日出或雲海", "hint": "早起到祝山觀景台，拍日出或山谷裡的雲海。" },
+        { "type": "thing", "title": "神木", "hint": "站在巨大的紅檜神木旁邊，拍出它的高大。" }
+      ]
+    },
+    {
+      "id": "cy-fenqihu", "name": "奮起湖老街", "district": "阿里山", "tags": ["food", "checkin", "culture"], "primary": "checkin",
+      "lat": 23.5040, "lng": 120.6960, "wiki": { "lang": "zh", "title": "奮起湖" }, "rank": 76, "src": "hand",
+      "blurb": "阿里山鐵路中途的山中聚落，招牌是鐵路便當和現做的草仔粿、愛玉。",
+      "must": ["奮起湖鐵路便當", "草仔粿", "現炒山葵", "愛玉"],
+      "questSeed": { "tags": ["food", "checkin"] }
+    },
+    {
+      "id": "cy-hinoki", "name": "檜意森活村", "district": "東區", "tags": ["checkin", "culture", "shopping"], "primary": "checkin",
+      "lat": 23.4830, "lng": 120.4570, "wiki": { "lang": "zh", "title": "檜意森活村" }, "rank": 72, "src": "hand",
+      "blurb": "全台最大的日式木造宿舍群，28 棟檜木老屋改成店家與展館。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "cy-culture-rd", "name": "文化路夜市", "district": "西區", "tags": ["nightmarket", "food", "snack"], "primary": "nightmarket",
+      "lat": 23.4790, "lng": 120.4490, "wiki": { "lang": "zh", "title": "文化路夜市" }, "rank": 74, "src": "hand",
+      "blurb": "嘉義市中心的夜市，火雞肉飯、噴水雞肉飯、豆漿豆花、方塊酥。",
+      "must": ["噴水雞肉飯", "阿岸米糕", "銀河冰宮", "郭家雞肉飯"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "cy-turkey-rice", "name": "火雞肉飯", "district": "西區", "tags": ["food", "snack"], "primary": "food",
+      "lat": 23.4800, "lng": 120.4510, "wiki": { "lang": "zh", "title": "雞肉飯" }, "rank": 82, "hot": true, "src": "hand",
+      "blurb": "嘉義的靈魂食物：火雞肉絲鋪在飯上淋雞油醬汁，配一碗味噌湯。",
+      "must": ["劉里長雞肉飯", "民主火雞肉飯", "阿宏師雞肉飯"],
+      "questSeed": { "tags": ["food"] }
+    },
+    {
+      "id": "cy-budai", "name": "布袋高跟鞋教堂", "district": "布袋", "tags": ["checkin"], "primary": "checkin",
+      "lat": 23.3810, "lng": 120.1600, "wiki": { "lang": "zh", "title": "高跟鞋教堂" }, "rank": 55, "src": "hand",
+      "blurb": "海邊一隻藍色玻璃打造的巨大高跟鞋，旁邊的洲南鹽場可以體驗曬鹽。",
+      "questSeed": { "tags": ["checkin"] }
+    }
+  ]
+}

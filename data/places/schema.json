@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TripQuest 策展地點資料 —— per-city 檔案",
+  "description": "data/places/<cityId>.json 的形狀。index.json 另有形狀（見 build/validate 腳本）。",
+  "type": "object",
+  "required": ["_meta", "places"],
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "required": ["schema", "city"],
+      "properties": {
+        "schema": { "const": 1 },
+        "city": { "type": "string" },
+        "cityName": { "type": "string" },
+        "updated": { "type": "string", "description": "YYYY-MM" }
+      }
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "tags", "src"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name": { "type": "string" },
+          "nameEn": { "type": "string" },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "district": { "type": "string", "description": "行政區 / 區域，例：士林、嵐山" },
+          "tags": {
+            "type": "array", "minItems": 1,
+            "items": { "enum": ["sight", "food", "nightmarket", "snack", "checkin", "culture", "nature", "shopping", "view"] }
+          },
+          "primary": { "enum": ["sight", "food", "nightmarket", "snack", "checkin", "culture", "nature", "shopping", "view"] },
+          "lat": { "type": "number" },
+          "lng": { "type": "number" },
+          "wiki": {
+            "type": "object",
+            "properties": { "lang": { "type": "string" }, "title": { "type": "string" } }
+          },
+          "img": {
+            "type": "object",
+            "description": "圖片來源。commons 檔名經 Special:FilePath 於執行期解析並存進 IndexedDB blob。",
+            "properties": { "commons": { "type": "string" }, "credit": { "type": "string" } }
+          },
+          "blurb": { "type": "string", "maxLength": 60, "description": "行程海報 / 景點頁用的 1-2 句介紹" },
+          "must": { "type": "array", "items": { "type": "string" }, "description": "夜市 / 商圈的必吃清單" },
+          "rank": { "type": "integer", "minimum": 0, "maximum": 100, "description": "排序權重（越大越前面）" },
+          "hot": { "type": "boolean", "description": "精選打卡（人工判斷，非即時熱度）" },
+          "quests": {
+            "type": "array",
+            "description": "hero 景點用人工撰寫；其餘留空，由 questSeed / tags 產生",
+            "items": {
+              "type": "object",
+              "required": ["title", "hint"],
+              "properties": {
+                "id": { "type": "string" },
+                "type": { "enum": ["building", "food", "thing", "view", "culture", "group"] },
+                "title": { "type": "string" },
+                "hint": { "type": "string" }
+              }
+            }
+          },
+          "questSeed": {
+            "type": "object",
+            "properties": { "tags": { "type": "array", "items": { "type": "string" } } }
+          },
+          "src": { "enum": ["hand", "wikivoyage", "osm"], "description": "來源。build 腳本永不覆寫 src=hand 的欄位。" },
+          "lock": { "type": "array", "items": { "type": "string" }, "description": "禁止 build 腳本更新的欄位名" }
+        }
+      }
+    }
+  }
+}

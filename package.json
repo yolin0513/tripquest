@@ -9,7 +9,8 @@
     "screenshots": "node scripts/screenshots.mjs",
     "gallery": "node scripts/gallery.mjs",
     "synctest": "node scripts/synctest.mjs",
-    "test": "node scripts/screenshots.mjs && node scripts/synctest.mjs"
+    "validate-places": "node scripts/validate-places.mjs",
+    "test": "node scripts/validate-places.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs"
   },
   "keywords": [
     "pwa",

@@ -1,131 +1,194 @@
-// 任務產生 —— 三層 fallback（三位架構代理一致方案）
-//   1. 策展資料庫命中 → 直接帶入人工撰寫的高品質任務
-//   2. 未命中 → 依景點名稱關鍵字判斷型別，套規則式模板
-//   3. 一律再加通用題組當保底 → 產生結果永遠不會是空的
-// Wikipedia 補圖是「可選的線上加值」，預設關閉，永遠不在關鍵路徑上。
+// 任務產生 + 策展地點資料存取
+//
+// 資料（3 代理一致）：
+//   data/places/index.json     階層骨架（國家→地區→城市→行政區皆為按鈕；行政區只是篩選欄位）
+//   data/places/<city>.json    該城市的 flat places[]（惰性載入）
+//   data/templates.json        byTag 出題（策展地點用）+ typeRules/byType（自由輸入的景點用）
+//
+// 任務產生順序：地點有人工 quests[] → 直接用；否則依 tags 從 templates.byTag 產 + must 清單；
+//               自由輸入的景點 → 依名稱關鍵字判斷型別 → byType → 通用題保底。永不落空。
 
 import { uuid } from '../ids.js';
 
-let _curated = null;
+let _index = null;
 let _templates = null;
+const _cities = new Map();          // cityId -> places[]
+let _allLoadedForSearch = false;
 
-async function loadData() {
-  if (!_curated) _curated = await fetch('./data/curated.json').then((r) => r.json());
+const norm = (s) => String(s || '').toLowerCase()
+  .replace(/[\s　·・.,，、。！!？?「」『』（）()【】\-—_/／]+/g, '');
+
+// ---------- 載入 ----------
+export async function loadPlaceIndex() {
+  if (!_index) _index = await fetch('./data/places/index.json').then((r) => r.json());
+  return _index;
+}
+async function loadTemplates() {
   if (!_templates) _templates = await fetch('./data/templates.json').then((r) => r.json());
+  return _templates;
 }
-
-// 給「建立行程」畫面用：熱門地區與該地區的景點（讓長輩用點的、不用打字）
-export async function curatedIndex() {
-  await loadData();
-  const byRegion = new Map();
-  for (const s of _curated.spots) {
-    if (!byRegion.has(s.region)) byRegion.set(s.region, []);
-    byRegion.get(s.region).push({ id: s.id, name: s.name, region: s.region, emoji: s.emoji || spotEmoji(s), questCount: s.quests.length });
+export async function loadCity(cityId) {
+  if (_cities.has(cityId)) return _cities.get(cityId);
+  const idx = await loadPlaceIndex();
+  const meta = findCity(idx, cityId);
+  if (!meta) { _cities.set(cityId, []); return []; }
+  try {
+    const data = await fetch('./data/places/' + meta.file).then((r) => r.json());
+    const places = (data.places || []).map((p) => ({ ...p, cityId, cityName: meta.name, region: meta.regionName, emoji: primaryEmoji(p) }));
+    _cities.set(cityId, places);
+    return places;
+  } catch {
+    _cities.set(cityId, []);
+    return [];
   }
-  return [...byRegion.entries()].map(([region, spots]) => ({ region, country: spots[0] && _curated.spots.find((x) => x.id === spots[0].id)?.country, spots }));
 }
 
-export async function searchCurated(q) {
-  await loadData();
-  const n = norm(q);
-  if (n.length < 1) return [];
-  const hits = [];
-  for (const s of _curated.spots) {
-    if (s.aliases.some((a) => norm(a).includes(n)) || norm(s.name).includes(n) || norm(s.region).includes(n)) {
-      hits.push({ id: s.id, name: s.name, region: s.region, emoji: s.emoji || spotEmoji(s), questCount: s.quests.length });
+function findCity(idx, cityId) {
+  for (const c of idx.countries || []) {
+    for (const r of c.regions || []) {
+      for (const ci of r.cities || []) {
+        if (ci.id === cityId) return { ...ci, regionName: r.name, countryName: c.name };
+      }
     }
   }
-  return hits.slice(0, 12);
-}
-
-function spotEmoji(s) {
-  const t = inferTypeSync(s.name);
-  return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🍢', park: '🌳', mountain: '⛰️', water: '🌊', museum: '🖼️', street: '🏮', station: '🚉', tower: '🗼', themepark: '🎡' })[t] || '📍';
-}
-function inferTypeSync(name) {
-  if (!_templates) return null;
-  const nn = String(name || '').toLowerCase();
-  for (const rule of _templates.typeRules) if (rule.match.some((kw) => nn.includes(kw.toLowerCase()))) return rule.type;
   return null;
 }
 
-const norm = (s) => String(s || '').toLowerCase().replace(/[\s　·・.,，、。！!？?「」『』（）()【】\-—_/／]+/g, '');
+// 建立行程畫面用的階層（回傳整棵 index，畫面自己走訪）
+export async function placeHierarchy() { return loadPlaceIndex(); }
 
-// ---- 行程文字 → 景點清單 ----
-// 支援：換行分隔；一行內用 、,，;；/｜ 分隔多個景點；「第N天 / Day N」當日期標頭；
-//       「京都 清水寺」這種「地區＋景點」也會拆開。
+// 某城市的地點，依 rank 排序、可選行政區篩選
+export async function placesOfCity(cityId, district = null) {
+  const places = await loadCity(cityId);
+  const list = district ? places.filter((p) => (p.district || '') === district || (p.district || '').startsWith(district.split('（')[0])) : places;
+  return [...list].sort((a, b) => (b.rank || 0) - (a.rank || 0) || a.name.localeCompare(b.name));
+}
+
+// ---------- 搜尋（輔助用；第一次搜尋時把所有城市載進來）----------
+async function loadAllForSearch() {
+  if (_allLoadedForSearch) return;
+  const idx = await loadPlaceIndex();
+  const ids = [];
+  for (const c of idx.countries || []) for (const r of c.regions || []) for (const ci of r.cities || []) ids.push(ci.id);
+  await Promise.all(ids.map((id) => loadCity(id)));
+  _allLoadedForSearch = true;
+}
+function allLoadedPlaces() {
+  const out = [];
+  for (const arr of _cities.values()) out.push(...arr);
+  return out;
+}
+
+export async function searchPlaces(q) {
+  await loadAllForSearch();
+  const n = norm(q);
+  if (n.length < 1) return [];
+  const scored = [];
+  for (const p of allLoadedPlaces()) {
+    const hay = [p.name, p.nameEn, p.district, p.cityName, ...(p.aliases || []), ...(p.must || [])].map(norm);
+    let score = 0;
+    if (norm(p.name) === n) score = 100;
+    else if (norm(p.name).includes(n)) score = 80;
+    else if (hay.some((h) => h.includes(n))) score = 55;
+    if (score) scored.push({ ...p, _score: score + (p.rank || 0) / 10 });
+  }
+  return scored.sort((a, b) => b._score - a._score).slice(0, 20);
+}
+
+export function placeById(id) {
+  return allLoadedPlaces().find((p) => p.id === id) || null;
+}
+
+// 自由文字比對到策展地點（行程文字解析用）
+export async function matchPlace(name, cityHint = '') {
+  await loadAllForSearch();
+  const n = norm(name);
+  if (n.length < 2) return null;
+  let best = null;
+  for (const p of allLoadedPlaces()) {
+    const names = [norm(p.name), ...(p.aliases || []).map(norm)];
+    let score = 0;
+    if (names.includes(n)) score = 100;
+    else if (n.length >= 3 && names.some((x) => x.includes(n))) score = 70;
+    else if (names.some((x) => x.length >= 3 && n.includes(x))) score = 65;
+    if (score && cityHint && norm(p.cityName).includes(norm(cityHint))) score += 15;
+    if (score && (!best || score > best._s)) best = { ...p, _s: score };
+  }
+  return best && best._s >= 60 ? best : null;
+}
+
+// ---------- 行程文字解析（進階模式）----------
 export function parseItinerary(text, fallbackRegion = '') {
   const lines = String(text || '').split(/\r?\n/);
-  const spots = [];
-  let day = 0;
+  const out = [];
+  let day = 1;
   for (let line of lines) {
     line = line.trim();
     if (!line) continue;
-    const dayMatch = line.match(/^(?:第\s*([0-9一二三四五六七八九十]+)\s*天|day\s*([0-9]+)|d([0-9]+))[：:.\s-]*/i);
-    if (dayMatch) {
-      const n = dayMatch[1] || dayMatch[2] || dayMatch[3];
-      day = cnNum(n);
-      line = line.slice(dayMatch[0].length).trim();
+    const dm = line.match(/^(?:第\s*([0-9一二三四五六七八九十]+)\s*天|day\s*([0-9]+)|d([0-9]+))[：:.\s-]*/i);
+    if (dm) {
+      day = cnNum(dm[1] || dm[2] || dm[3]);
+      line = line.slice(dm[0].length).trim();
       if (!line) continue;
     }
-    const pieces = line.split(/[、,，;；/｜|]+|\s{2,}/).map((s) => s.trim()).filter(Boolean);
-    for (const piece of pieces) {
-      let region = fallbackRegion;
-      let name = piece;
-      // 「京都 清水寺」→ region=京都 name=清水寺（只在前段短、後段也有內容時）
+    for (let piece of line.split(/[、,，;；/｜|]+|\s{2,}/).map((s) => s.trim()).filter(Boolean)) {
+      let region = fallbackRegion, name = piece;
       const m = piece.match(/^(\S{2,6})\s+(\S.+)$/);
       if (m && /[一-鿿ぁ-んァ-ヶ]/.test(m[1])) { region = m[1]; name = m[2]; }
-      spots.push({ name: name.trim(), region: region.trim(), day: day || 1 });
+      out.push({ name: name.trim(), region: region.trim(), day });
     }
   }
-  return spots;
+  return out;
 }
-
 function cnNum(s) {
-  const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+  const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 十一: 11, 十二: 12 };
   if (/^\d+$/.test(s)) return parseInt(s, 10);
-  if (s in map) return map[s];
-  if (s === '十一') return 11;
-  if (s === '十二') return 12;
-  return 1;
+  return map[s] || 1;
 }
 
-// ---- 主流程 ----
-export async function generateForTrip({ tripId, itineraryText, region }) {
-  await loadData();
-  const parsed = parseItinerary(itineraryText, region);
+// ---------- 主流程 ----------
+// items: [{ placeId?, name?, day }]  —— placeId 來自階層選擇；name 來自自由輸入
+export async function generateForTrip({ tripId, items, itineraryText, region = '' }) {
+  await Promise.all([loadPlaceIndex(), loadTemplates()]);
+  const list = [...(items || [])];
+  if (itineraryText) {
+    for (const p of parseItinerary(itineraryText, region)) list.push({ name: p.name, region: p.region, day: p.day });
+  }
+
   const spots = [];
   const quests = [];
-  let spotOrder = 0;
+  let order = 0;
 
-  for (const p of parsed) {
-    if (!p.name) continue;
+  for (const it of list) {
+    if (!it) continue;
     const spotId = uuid();
-    const hit = matchCurated(p.name, p.region);
-    let spot;
-    if (hit) {
-      spot = {
-        id: spotId, type: 'spot', tripId, name: hit.name,
-        nameLocal: hit.name, region: hit.region || p.region, day: p.day, order: spotOrder++,
-        lat: hit.lat ?? null, lng: hit.lng ?? null,
-        wikiRef: hit.wiki || null, source: 'curated',
-      };
-      let qi = 0;
-      for (const q of hit.quests) {
-        quests.push(mkQuest(tripId, spotId, {
-          title: q.title, hint: q.hint, kind: q.type || q.kind, source: 'curated', order: qi++,
-        }));
-      }
+    const day = it.day || 1;
+    let place = null;
+    if (it.placeId) { await loadAllForSearch(); place = placeById(it.placeId); }
+    if (!place && it.name) place = await matchPlace(it.name, it.region || region);
+
+    if (place) {
+      spots.push({
+        id: spotId, type: 'spot', tripId, name: place.name, nameLocal: place.name,
+        region: place.cityName || place.region || it.region || region,
+        district: place.district || '', day, order: order++,
+        lat: place.lat ?? null, lng: place.lng ?? null,
+        wikiRef: place.wiki || null, commonsImg: place.img?.commons || null,
+        emoji: primaryEmoji(place), blurb: place.blurb || '',
+        tags: place.tags || [], source: 'curated', placeId: place.id,
+      });
+      for (const q of questsForPlace(place)) quests.push(mkQuest(tripId, spotId, q));
     } else {
-      const kindType = inferType(p.name);
-      spot = {
-        id: spotId, type: 'spot', tripId, name: p.name, nameLocal: p.name,
-        region: p.region, day: p.day, order: spotOrder++,
-        lat: null, lng: null, wikiRef: null, source: 'auto', inferredType: kindType,
-      };
-      for (const q of templateQuests(p.name, kindType)) quests.push(mkQuest(tripId, spotId, q));
+      const name = it.name || '未命名景點';
+      const type = inferType(name);
+      spots.push({
+        id: spotId, type: 'spot', tripId, name, nameLocal: name,
+        region: it.region || region, day, order: order++,
+        lat: null, lng: null, wikiRef: null, emoji: typeEmoji(type) || '📍',
+        blurb: '', tags: [], source: 'auto', inferredType: type,
+      });
+      for (const q of templateQuests(name, type)) quests.push(mkQuest(tripId, spotId, q));
     }
-    spots.push(spot);
   }
   return { spots, quests };
 }
@@ -134,46 +197,66 @@ function mkQuest(tripId, spotId, q) {
   return {
     id: uuid(), type: 'quest', tripId, spotId,
     title: q.title, hint: q.hint, kind: q.kind || 'thing',
-    source: q.source || 'template', order: q.order ?? 0,
-    refImage: null,
+    source: q.source || 'template', order: q.order ?? 0, refImage: null,
   };
 }
 
-export function matchCurated(name, region) {
-  if (!_curated) return null;
-  const n = norm(name);
-  if (n.length < 2) return null;
-  let best = null;
-  for (const s of _curated.spots) {
-    for (const a of s.aliases) {
-      const an = norm(a);
-      if (!an) continue;
-      let score = 0;
-      if (an === n) score = 100;
-      else if (n.length >= 3 && an.includes(n)) score = 70;
-      else if (an.length >= 3 && n.includes(an)) score = 65;
-      if (score && region && norm(s.region).includes(norm(region))) score += 10;
-      if (score && (!best || score > best.score)) best = { ...s, score };
+// 策展地點 → 任務
+function questsForPlace(place) {
+  const out = [];
+  if (Array.isArray(place.quests) && place.quests.length) {
+    place.quests.forEach((q, i) => out.push({ title: q.title, hint: q.hint, kind: q.type || q.kind || 'thing', source: 'curated', order: i }));
+  }
+  const t = _templates;
+  const tags = place.questSeed?.tags || place.tags || [];
+  if (out.length < 3 && t) {
+    let i = out.length;
+    for (const tag of tags) {
+      for (const q of (t.byTag[tag] || [])) {
+        if (out.length >= 4) break;
+        const title = q.title.replaceAll('{spot}', place.name);
+        if (out.some((o) => o.title === title)) continue;
+        out.push({ title, hint: q.hint.replaceAll('{spot}', place.name), kind: q.kind, source: 'template', order: i++ });
+      }
     }
   }
-  return best && best.score >= 60 ? best : null;
+  // 必吃清單 → 每項一個任務（最多 3 個）
+  if (Array.isArray(place.must) && t?.mustQuest) {
+    place.must.slice(0, 3).forEach((item, i) => {
+      out.push({
+        title: t.mustQuest.title.replaceAll('{item}', item).replaceAll('{spot}', place.name),
+        hint: t.mustQuest.hint.replaceAll('{item}', item).replaceAll('{spot}', place.name),
+        kind: 'food', source: 'must', order: out.length + i,
+      });
+    });
+  }
+  if (!out.length) out.push({ title: '到此一遊代表照', hint: `拍一張最能代表「我來過 ${place.name}」的照片。`, kind: 'view', source: 'generic', order: 0 });
+  return out.slice(0, 6);
 }
 
+const TAG_EMOJI = { sight: '🏛️', food: '🍜', nightmarket: '🏮', snack: '🍢', checkin: '📸', culture: '🎎', nature: '🌄', shopping: '🛍️', view: '🌇' };
+function primaryEmoji(place) {
+  if (place.emoji) return place.emoji;
+  return TAG_EMOJI[place.primary] || TAG_EMOJI[(place.tags || [])[0]] || '📍';
+}
+
+// ---------- 自由輸入景點：關鍵字型別判斷 ----------
 export function inferType(name) {
   if (!_templates) return null;
   const n = String(name || '').toLowerCase();
-  for (const rule of _templates.typeRules) {
+  for (const rule of _templates.typeRules || []) {
     if (rule.match.some((kw) => n.includes(kw.toLowerCase()))) return rule.type;
   }
   return null;
 }
-
+function typeEmoji(type) {
+  return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🏮', park: '🌳', mountain: '⛰️', water: '🌊', museum: '🖼️', street: '🏮', station: '🚉', tower: '🗼', themepark: '🎡' })[type];
+}
 export function templateQuests(name, type) {
   if (!_templates) return [];
   const fill = (t) => ({ ...t, hint: t.hint.replaceAll('{spot}', name), title: t.title.replaceAll('{spot}', name) });
-  const byType = (type && _templates.byType[type]) ? _templates.byType[type].map(fill) : [];
-  const generic = _templates.generic.map(fill);
-  // 型別題組優先，補到至少 3 題、最多 5 題
+  const byType = (type && _templates.byType?.[type]) ? _templates.byType[type].map(fill) : [];
+  const generic = (_templates.generic || []).map(fill);
   const out = [...byType];
   for (const g of generic) {
     if (out.length >= 4) break;
@@ -182,7 +265,7 @@ export function templateQuests(name, type) {
   return out.slice(0, 5).map((q, i) => ({ ...q, source: 'template', order: i }));
 }
 
-// ---- 可選：Wikipedia 補圖（預設關閉，需使用者在行程設定開啟）----
+// ---------- 可選：Wikipedia 補圖（enrich.js 也會用）----------
 export async function enrichSpotFromWiki(spot) {
   const title = spot.wikiRef?.title || spot.name;
   const lang = spot.wikiRef?.lang || 'zh';
@@ -190,15 +273,11 @@ export async function enrichSpotFromWiki(spot) {
     const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
     const res = await fetch(url, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const data = await res.json();
+    const d = await res.json();
     return {
-      thumb: data.thumbnail?.source || null,
-      extract: data.extract || '',
-      lat: data.coordinates?.lat ?? null,
-      lng: data.coordinates?.lon ?? null,
-      wikiUrl: data.content_urls?.desktop?.page || null,
+      thumb: d.thumbnail?.source || null, extract: d.extract || '',
+      lat: d.coordinates?.lat ?? null, lng: d.coordinates?.lon ?? null,
+      wikiUrl: d.content_urls?.desktop?.page || null,
     };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }

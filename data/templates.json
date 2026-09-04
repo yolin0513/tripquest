@@ -1,8 +1,49 @@
 {
   "_meta": {
-    "note": "策展資料庫沒收錄的景點，用這裡的規則式模板產任務。先用關鍵字判斷景點型別，再取對應題組 + 通用題組。{spot} 會替換成景點名稱。",
-    "version": 1
+    "note": "沒有人工題組的地點，用這裡產任務。byTag 依策展資料的 tags 出題（優先）；typeRules/byType 依景點名稱關鍵字判斷型別（自由輸入的景點用）。{spot} 會替換成地點名稱。",
+    "version": 2
   },
+  "byTag": {
+    "sight": [
+      { "kind": "building", "title": "{spot} 代表建築", "hint": "拍下 {spot} 最主要、最好認的那棟建築或地標，站遠一點把整體帶進去。" },
+      { "kind": "view", "title": "最上相的角度", "hint": "找一個最能代表「我到過 {spot}」的角度拍一張。" },
+      { "kind": "group", "title": "全員合照", "hint": "找路人或用自拍棒，全員在 {spot} 一起入鏡。" }
+    ],
+    "nightmarket": [
+      { "kind": "food", "title": "現吃一攤", "hint": "在 {spot} 挑一攤現做小吃，拍下剛入手熱騰騰的樣子。" },
+      { "kind": "thing", "title": "最有氣勢的攤位", "hint": "拍下 {spot} 裡擺得最澎湃、或看板最浮誇的一攤。" },
+      { "kind": "view", "title": "人潮縱深", "hint": "站在 {spot} 的通道中央，拍出攤販一路排下去的縱深感。" }
+    ],
+    "food": [
+      { "kind": "food", "title": "招牌那一道", "hint": "點 {spot} 最有名的一道菜，拍它上桌、還冒煙的樣子。" },
+      { "kind": "thing", "title": "店裡的樣子", "hint": "拍一張 {spot} 的店面、招牌、或老闆在忙的畫面。" }
+    ],
+    "snack": [
+      { "kind": "food", "title": "經典小吃", "hint": "買一份 {spot}，拍它最好吃的那個瞬間（切開、淋醬、剛起鍋）。" }
+    ],
+    "checkin": [
+      { "kind": "view", "title": "打卡經典角度", "hint": "拍出 {spot} 最有名、大家都會拍的那個畫面。" },
+      { "kind": "group", "title": "打卡合照", "hint": "全員在 {spot} 的地標前一起入鏡。" },
+      { "kind": "thing", "title": "一個小細節", "hint": "拍 {spot} 一個容易被忽略、但你覺得有意思的小東西。" }
+    ],
+    "culture": [
+      { "kind": "building", "title": "主體建築", "hint": "拍下 {spot} 最主要的一棟建築，帶到屋簷或裝飾細節。" },
+      { "kind": "culture", "title": "在這裡發生的事", "hint": "拍下有人在 {spot} 參拜、看展、或體驗傳統活動的畫面（別拍到臉）。" }
+    ],
+    "nature": [
+      { "kind": "view", "title": "代表性一景", "hint": "拍下 {spot} 最開闊、最上相的一片風景。" },
+      { "kind": "thing", "title": "近距離的細節", "hint": "拍一個貼近自然的特寫：水、岩石、植物、光影或動物。" }
+    ],
+    "view": [
+      { "kind": "view", "title": "眺望的畫面", "hint": "在 {spot} 的觀景點拍一張開闊的城市或山海風景。" },
+      { "kind": "view", "title": "夜景 / 日落", "hint": "傍晚或入夜後回來，拍 {spot} 燈光亮起或夕陽的樣子。" }
+    ],
+    "shopping": [
+      { "kind": "view", "title": "商圈街景", "hint": "拍一張能代表 {spot} 熱鬧氣氛的街景。" },
+      { "kind": "thing", "title": "戰利品", "hint": "把在 {spot} 買到的東西擺好，拍一張。" }
+    ]
+  },
+  "mustQuest": { "kind": "food", "title": "必吃：{item}", "hint": "在 {spot} 找到「{item}」，拍下入手的樣子。" },
   "typeRules": [
     { "type": "temple",   "match": ["寺", "院", "廟", "temple", "てら", "じ"] },
     { "type": "shrine",   "match": ["神社", "大社", "宮", "shrine", "じんじゃ", "稲荷", "稻荷"] },

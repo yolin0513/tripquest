@@ -1,0 +1,101 @@
+{
+  "_meta": {
+    "schema": 1,
+    "updated": "2026-09",
+    "note": "選景點畫面的階層骨架。國家→地區→城市→行政區皆為按鈕；行政區只是篩選標籤（同一個 city 檔案內），不另外抓檔。city.file 命中才載入 data/places/<file>。"
+  },
+  "countries": [
+    {
+      "id": "TW", "name": "台灣", "emoji": "🇹🇼",
+      "regions": [
+        {
+          "id": "tw-north", "name": "北部",
+          "cities": [
+            { "id": "tw-taipei", "name": "台北", "emoji": "🏙️", "file": "tw-taipei.json",
+              "districts": ["信義", "大安", "中正", "萬華", "大同", "士林", "北投", "文山", "松山", "中山"] },
+            { "id": "tw-newtaipei", "name": "新北", "emoji": "⛩️", "file": "tw-newtaipei.json",
+              "districts": ["瑞芳（九份）", "淡水", "平溪", "野柳", "烏來", "鶯歌", "十分"] }
+          ]
+        },
+        {
+          "id": "tw-central", "name": "中部",
+          "cities": [
+            { "id": "tw-taichung", "name": "台中", "emoji": "🌈", "file": "tw-taichung.json",
+              "districts": ["西區", "中區", "北屯", "西屯", "清水", "后里", "霧峰"] },
+            { "id": "tw-nantou", "name": "南投", "emoji": "🌊", "file": "tw-nantou.json",
+              "districts": ["魚池（日月潭）", "信義", "仁愛（清境）", "竹山"] }
+          ]
+        },
+        {
+          "id": "tw-south", "name": "南部",
+          "cities": [
+            { "id": "tw-tainan", "name": "台南", "emoji": "🏛️", "file": "tw-tainan.json",
+              "districts": ["中西區", "安平", "東區", "北區", "鹽水", "後壁", "官田"] },
+            { "id": "tw-kaohsiung", "name": "高雄", "emoji": "🚢", "file": "tw-kaohsiung.json",
+              "districts": ["鹽埕", "鼓山", "前鎮", "苓雅", "旗津", "新興", "左營"] },
+            { "id": "tw-chiayi", "name": "嘉義", "emoji": "🌄", "file": "tw-chiayi.json",
+              "districts": ["阿里山", "東區", "西區", "民雄"] }
+          ]
+        },
+        {
+          "id": "tw-east", "name": "東部",
+          "cities": [
+            { "id": "tw-hualien", "name": "花蓮", "emoji": "⛰️", "file": "tw-hualien.json",
+              "districts": ["秀林（太魯閣）", "花蓮市", "壽豐", "吉安", "瑞穗", "豐濱"] },
+            { "id": "tw-yilan", "name": "宜蘭", "emoji": "🍜", "file": "tw-yilan.json",
+              "districts": ["宜蘭市", "礁溪", "羅東", "蘇澳", "五結", "頭城"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "JP", "name": "日本", "emoji": "🇯🇵",
+      "regions": [
+        {
+          "id": "jp-kanto", "name": "關東",
+          "cities": [
+            { "id": "jp-tokyo", "name": "東京", "emoji": "🗼", "file": "jp-tokyo.json",
+              "districts": ["淺草", "澀谷", "新宿", "銀座", "上野", "秋葉原", "原宿", "台場", "築地", "池袋"] }
+          ]
+        },
+        {
+          "id": "jp-kansai", "name": "關西",
+          "cities": [
+            { "id": "jp-kyoto", "name": "京都", "emoji": "⛩️", "file": "jp-kyoto.json",
+              "districts": ["東山", "嵐山", "伏見", "金閣寺周邊", "祇園", "京都駅", "宇治"] },
+            { "id": "jp-osaka", "name": "大阪", "emoji": "🍢", "file": "jp-osaka.json",
+              "districts": ["難波・道頓堀", "梅田", "大阪城", "新世界", "天保山", "USJ"] },
+            { "id": "jp-nara", "name": "奈良", "emoji": "🦌", "file": "jp-nara.json",
+              "districts": ["奈良公園", "西之京", "斑鳩"] }
+          ]
+        },
+        {
+          "id": "jp-hokkaido", "name": "北海道",
+          "cities": [
+            { "id": "jp-sapporo", "name": "札幌", "emoji": "🍺", "file": "jp-sapporo.json",
+              "districts": ["大通", "薄野", "白色戀人公園", "藻岩山", "小樽"] }
+          ]
+        },
+        {
+          "id": "jp-okinawa", "name": "沖繩",
+          "cities": [
+            { "id": "jp-okinawa", "name": "沖繩本島", "emoji": "🐠", "file": "jp-okinawa.json",
+              "districts": ["那霸", "美麗海", "北谷", "南部", "恩納"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "KR", "name": "韓國", "emoji": "🇰🇷",
+      "regions": [
+        {
+          "id": "kr-seoul-area", "name": "首爾圈",
+          "cities": [
+            { "id": "kr-seoul", "name": "首爾", "emoji": "🏯", "file": "kr-seoul.json",
+              "districts": ["明洞", "景福宮周邊", "弘大", "北村", "東大門", "梨泰院", "汝矣島"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

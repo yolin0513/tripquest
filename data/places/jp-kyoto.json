@@ -1,0 +1,99 @@
+{
+  "_meta": { "schema": 1, "city": "jp-kyoto", "cityName": "京都", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "kyoto-kiyomizu", "name": "清水寺", "district": "東山", "tags": ["sight", "culture", "checkin"], "primary": "sight",
+      "lat": 34.9948, "lng": 135.7850, "wiki": { "lang": "zh", "title": "清水寺" }, "rank": 97, "hot": true, "src": "hand",
+      "blurb": "懸空的木造舞台是京都的門面，778 年就有，一根釘子都沒用。",
+      "quests": [
+        { "type": "building", "title": "清水舞台", "hint": "拍那個懸空的大平台，最好帶到下方交錯的木柱。" },
+        { "type": "building", "title": "朱紅仁王門", "hint": "入口那座鮮豔的紅色大門，站遠一點整座拍進去。" },
+        { "type": "culture", "title": "音羽瀑布三道水", "hint": "拍遊客拿長柄杓接山泉水的畫面。" },
+        { "type": "view", "title": "產寧坂遠望八坂塔", "hint": "在往清水寺的坡道上，捕捉遠方的五重塔。" }
+      ]
+    },
+    {
+      "id": "kyoto-fushimi", "name": "伏見稻荷大社", "district": "伏見", "tags": ["sight", "culture", "checkin"], "primary": "sight",
+      "lat": 34.9671, "lng": 135.7727, "wiki": { "lang": "zh", "title": "伏見稻荷大社" }, "rank": 96, "hot": true, "src": "hand",
+      "blurb": "上千座朱紅鳥居連成的隧道爬上稻荷山，凌晨去人最少。",
+      "quests": [
+        { "type": "building", "title": "千本鳥居隧道", "hint": "站在鳥居隧道正中央，往前拍出無限延伸感。" },
+        { "type": "thing", "title": "叼鑰匙的狐狸石像", "hint": "找一尊嘴裡叼著稻穗或鑰匙的狐狸使者。" },
+        { "type": "food", "title": "稻荷壽司", "hint": "參道邊買一份豆皮包的稻荷壽司。" }
+      ]
+    },
+    {
+      "id": "kyoto-kinkakuji", "name": "金閣寺", "district": "金閣寺周邊", "tags": ["sight", "culture"], "primary": "sight",
+      "lat": 35.0394, "lng": 135.7292, "wiki": { "lang": "zh", "title": "鹿苑寺" }, "rank": 94, "hot": true, "src": "hand",
+      "blurb": "整棟貼金箔的三層樓閣立在鏡湖池上，晴天倒影最漂亮。",
+      "quests": [
+        { "type": "building", "title": "鏡湖池倒影金閣", "hint": "從正面池畔拍金色樓閣與水面倒影。" },
+        { "type": "thing", "title": "屋頂的金鳳凰", "hint": "放大拍屋頂那隻展翅的鳳凰。" },
+        { "type": "food", "title": "抹茶配金箔和菓子", "hint": "在茶席來一份抹茶配金箔點心。" }
+      ]
+    },
+    {
+      "id": "kyoto-arashiyama", "name": "嵐山竹林", "district": "嵐山", "tags": ["nature", "sight", "checkin"], "primary": "checkin",
+      "lat": 35.0170, "lng": 135.6717, "wiki": { "lang": "zh", "title": "嵐山" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "高聳竹子夾成的綠色隧道，配渡月橋和保津川的山景。",
+      "quests": [
+        { "type": "view", "title": "竹林小徑", "hint": "抬頭拍高聳竹林形成的綠色隧道。" },
+        { "type": "building", "title": "渡月橋", "hint": "以背後的山景為襯，拍橫跨桂川的渡月橋。" }
+      ]
+    },
+    {
+      "id": "kyoto-gion", "name": "祇園．花見小路", "district": "祇園", "tags": ["culture", "checkin", "food"], "primary": "checkin",
+      "lat": 35.0037, "lng": 135.7752, "wiki": { "lang": "zh", "title": "祇園" }, "rank": 86, "src": "hand",
+      "blurb": "石板路兩側的木造茶屋，傍晚偶爾遇得到趕場的舞妓（別追拍）。",
+      "must": ["都路里抹茶聖代", "祇園徳屋蕨餅", "壹錢洋食"],
+      "questSeed": { "tags": ["checkin", "culture", "food"] }
+    },
+    {
+      "id": "kyoto-nishiki", "name": "錦市場", "district": "京都駅", "tags": ["food", "snack", "shopping"], "primary": "food",
+      "lat": 35.0050, "lng": 135.7649, "wiki": { "lang": "zh", "title": "錦市場" }, "rank": 84, "src": "hand",
+      "blurb": "四百年的「京都的廚房」，一條窄街塞滿醃菜、豆乳甜甜圈、玉子燒、烤海鮮。",
+      "must": ["三木雞卵玉子燒", "こんなもんじゃ豆乳甜甜圈", "打田漬物", "烤和牛串"],
+      "questSeed": { "tags": ["food", "snack"] }
+    },
+    {
+      "id": "kyoto-nijo", "name": "二条城", "district": "京都駅", "tags": ["sight", "culture"], "primary": "culture",
+      "lat": 35.0142, "lng": 135.7480, "wiki": { "lang": "zh", "title": "二條城" }, "rank": 78, "src": "hand",
+      "blurb": "德川家康的京都居城，走廊會發出「鶯鳴」聲防刺客，二之丸庭園很有看頭。",
+      "questSeed": { "tags": ["culture", "sight"] }
+    },
+    {
+      "id": "kyoto-ginkakuji", "name": "銀閣寺", "district": "東山", "tags": ["sight", "culture", "nature"], "primary": "sight",
+      "lat": 35.0270, "lng": 135.7982, "wiki": { "lang": "zh", "title": "慈照寺" }, "rank": 80, "src": "hand",
+      "blurb": "沒有貼銀，但白砂堆的「銀沙灘」和苔庭是侘寂美學的教科書，接哲學之道。",
+      "questSeed": { "tags": ["sight", "nature"] }
+    },
+    {
+      "id": "kyoto-philosopher", "name": "哲學之道", "district": "東山", "tags": ["nature", "checkin"], "primary": "checkin",
+      "lat": 35.0263, "lng": 135.7947, "wiki": { "lang": "zh", "title": "哲學之道" }, "rank": 74, "src": "hand",
+      "blurb": "沿小運河的兩公里步道，春天整條櫻花隧道，秋天換成紅葉。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    },
+    {
+      "id": "kyoto-yasaka", "name": "八坂神社", "district": "祇園", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 35.0036, "lng": 135.7785, "wiki": { "lang": "zh", "title": "八坂神社" }, "rank": 76, "src": "hand",
+      "blurb": "祇園盡頭的朱紅樓門，夜裡舞殿掛滿一圈點亮的紙燈籠。",
+      "quests": [
+        { "type": "building", "title": "西樓門", "hint": "拍那座面對四条通的朱紅色樓門。" },
+        { "type": "thing", "title": "舞殿的燈籠", "hint": "入夜後拍舞殿四周掛滿、寫著店家名的紙燈籠。" }
+      ]
+    },
+    {
+      "id": "kyoto-uji", "name": "宇治．平等院", "district": "宇治", "tags": ["sight", "culture", "food"], "primary": "sight",
+      "lat": 34.8894, "lng": 135.8078, "wiki": { "lang": "zh", "title": "平等院" }, "rank": 72, "src": "hand",
+      "blurb": "十円硬幣上的鳳凰堂，旁邊的宇治是抹茶的原鄉，中村藤吉的抹茶蕎麥麵必吃。",
+      "must": ["中村藤吉抹茶蕎麥麵", "伊藤久右衛門抹茶聖代", "抹茶糰子"],
+      "questSeed": { "tags": ["sight", "food"] }
+    },
+    {
+      "id": "kyoto-pontocho", "name": "先斗町", "district": "祇園", "tags": ["food", "checkin"], "primary": "food",
+      "lat": 35.0055, "lng": 135.7708, "wiki": { "lang": "zh", "title": "先斗町" }, "rank": 70, "src": "hand",
+      "blurb": "鴨川邊只容一人通過的燈籠小巷，夏天餐廳架出「川床」在河上用餐。",
+      "questSeed": { "tags": ["food", "checkin"] }
+    }
+  ]
+}

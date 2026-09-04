@@ -1,0 +1,49 @@
+{
+  "_meta": { "schema": 1, "city": "tw-nantou", "cityName": "南投", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "nt-sunmoonlake", "name": "日月潭", "district": "魚池（日月潭）", "tags": ["nature", "sight", "checkin"], "primary": "nature",
+      "lat": 23.8500, "lng": 120.9150, "wiki": { "lang": "zh", "title": "日月潭" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "台灣最大的高山湖，環潭自行車道被 CNN 選為全球十大最美，向山遊客中心是清水模建築。",
+      "must": ["阿婆茶葉蛋", "日月潭紅茶", "涵碧樓下午茶"],
+      "quests": [
+        { "type": "view", "title": "湖景一張", "hint": "在向山、伊達邵碼頭或水社壩，拍開闊的湖面。" },
+        { "type": "thing", "title": "湖上的船", "hint": "拍一艘遊艇劃過水面、或停在碼頭的樣子。" },
+        { "type": "food", "title": "阿婆茶葉蛋", "hint": "伊達邵買一顆用香菇滷的茶葉蛋。" }
+      ]
+    },
+    {
+      "id": "nt-wenwu", "name": "文武廟", "district": "魚池（日月潭）", "tags": ["culture", "view"], "primary": "culture",
+      "lat": 23.8760, "lng": 120.9280, "wiki": { "lang": "zh", "title": "日月潭文武廟" }, "rank": 70, "src": "hand",
+      "blurb": "居高臨下的宮殿式大廟，前面一對全台最大的朱紅石獅，可俯瞰日月潭。",
+      "questSeed": { "tags": ["culture", "view"] }
+    },
+    {
+      "id": "nt-cingjing", "name": "清境農場", "district": "仁愛（清境）", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 24.0570, "lng": 121.1620, "wiki": { "lang": "zh", "title": "清境農場" }, "rank": 84, "hot": true, "src": "hand",
+      "blurb": "海拔 1700 公尺的高山草原，綿羊在坡上吃草、看得到雲海，還有紐西蘭式剪羊毛秀。",
+      "quests": [
+        { "type": "view", "title": "青青草原的羊", "hint": "拍綿羊在綠色斜坡上吃草、遠方是山的畫面。" },
+        { "type": "view", "title": "高空觀景步道", "hint": "走在懸空的天空步道上，拍腳下的山谷。" }
+      ]
+    },
+    {
+      "id": "nt-hehuan", "name": "合歡山", "district": "仁愛（清境）", "tags": ["nature", "view", "checkin"], "primary": "nature",
+      "lat": 24.1420, "lng": 121.2750, "wiki": { "lang": "zh", "title": "合歡山" }, "rank": 80, "src": "hand",
+      "blurb": "公路開得到的 3000 公尺高山，主峰步道好走，是台灣最容易的百岳與觀星點。",
+      "questSeed": { "tags": ["nature", "view"] }
+    },
+    {
+      "id": "nt-checheng", "name": "車埕車站", "district": "水里", "tags": ["checkin", "culture"], "primary": "checkin",
+      "lat": 23.8330, "lng": 120.8710, "wiki": { "lang": "zh", "title": "車埕車站" }, "rank": 64, "src": "hand",
+      "blurb": "集集線的終點，木業歷史加一座被山包圍的木造車站與貯木池，很好拍。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "nt-monster", "name": "妖怪村（溪頭）", "district": "鹿谷", "tags": ["checkin", "nature", "food"], "primary": "checkin",
+      "lat": 23.6720, "lng": 120.7950, "wiki": { "lang": "zh", "title": "溪頭自然教育園區" }, "rank": 60, "src": "hand",
+      "blurb": "溪頭森林入口的日式主題村，掛滿紅燈籠和天狗面具，賣咬人貓麵包。",
+      "questSeed": { "tags": ["checkin", "food"] }
+    }
+  ]
+}

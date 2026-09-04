@@ -1,0 +1,63 @@
+{
+  "_meta": { "schema": 1, "city": "tw-hualien", "cityName": "花蓮", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "hualien-taroko", "name": "太魯閣國家公園", "district": "秀林（太魯閣）", "tags": ["nature", "sight", "checkin"], "primary": "nature",
+      "lat": 24.1580, "lng": 121.4900, "wiki": { "lang": "zh", "title": "太魯閣國家公園" }, "rank": 95, "hot": true, "src": "hand",
+      "blurb": "立霧溪切出來的大理石峽谷，燕子口、九曲洞、砂卡礑步道，抬頭是懸崖。",
+      "quests": [
+        { "type": "view", "title": "大理石峽谷", "hint": "在燕子口或九曲洞，拍高聳的大理石峽谷壁。" },
+        { "type": "thing", "title": "溪水的顏色", "hint": "拍立霧溪那種特別的藍綠色溪水。" },
+        { "type": "building", "title": "紅色的橋", "hint": "拍峽谷裡任一座朱紅色的橋（普渡橋、慈母橋都行）。" }
+      ]
+    },
+    {
+      "id": "hualien-qingshui", "name": "清水斷崖", "district": "秀林（太魯閣）", "tags": ["nature", "checkin", "view"], "primary": "checkin",
+      "lat": 24.2200, "lng": 121.6550, "wiki": { "lang": "zh", "title": "清水斷崖" }, "rank": 88, "hot": true, "src": "hand",
+      "blurb": "垂直插進太平洋的千米岩壁，公路貼著海崖走，也能搭獨木舟從海上看。",
+      "quests": [
+        { "type": "view", "title": "斷崖與海的漸層", "hint": "在觀景台拍崖壁、公路和太平洋那道藍色漸層。" }
+      ]
+    },
+    {
+      "id": "hualien-qixingtan", "name": "七星潭", "district": "花蓮市", "tags": ["nature", "checkin"], "primary": "checkin",
+      "lat": 24.0280, "lng": 121.6250, "wiki": { "lang": "zh", "title": "七星潭" }, "rank": 82, "src": "hand",
+      "blurb": "月牙形的礫石海灣，浪把石頭捲得沙沙響，天氣好看得到中央山脈。",
+      "quests": [
+        { "type": "view", "title": "礫石灘與海灣弧線", "hint": "拍那道月牙形的海岸線，帶一點腳邊的鵝卵石。" },
+        { "type": "group", "title": "堆石頭合照", "hint": "全員一起堆一座小石塔，拍下來。" }
+      ]
+    },
+    {
+      "id": "hualien-dongdamen", "name": "東大門夜市", "district": "花蓮市", "tags": ["nightmarket", "food"], "primary": "nightmarket",
+      "lat": 23.9760, "lng": 121.6110, "wiki": { "lang": "zh", "title": "東大門夜市" }, "rank": 78, "src": "hand",
+      "blurb": "花蓮最大的夜市，原住民烤肉、公正街包子的分店、棺材板、炸彈蔥油餅。",
+      "must": ["第一家烤肉", "炸彈蔥油餅", "官財板", "液香扁食"],
+      "questSeed": { "tags": ["nightmarket", "food"] }
+    },
+    {
+      "id": "hualien-liyu", "name": "鯉魚潭", "district": "壽豐", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 23.9280, "lng": 121.5060, "wiki": { "lang": "zh", "title": "鯉魚潭 (花蓮縣)" }, "rank": 68, "src": "hand",
+      "blurb": "花東縱谷裡最大的湖，租腳踏車環潭一圈 5 公里，也可以踩天鵝船。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    },
+    {
+      "id": "hualien-guangfu", "name": "光復糖廠", "district": "壽豐", "tags": ["food", "checkin"], "primary": "food",
+      "lat": 23.6640, "lng": 121.4210, "wiki": { "lang": "zh", "title": "花蓮糖廠" }, "rank": 62, "src": "hand",
+      "blurb": "停產的老糖廠改成園區，招牌是自製的枝仔冰和日式木造宿舍群。",
+      "questSeed": { "tags": ["food", "checkin"] }
+    },
+    {
+      "id": "hualien-ruisui", "name": "瑞穗牧場", "district": "瑞穗", "tags": ["nature", "food", "checkin"], "primary": "checkin",
+      "lat": 23.4700, "lng": 121.3670, "wiki": { "lang": "zh", "title": "瑞穗鄉" }, "rank": 64, "src": "hand",
+      "blurb": "一片綠草地上放養乳牛，喝現擠鮮奶、吃鮮奶饅頭，背景是海岸山脈。",
+      "questSeed": { "tags": ["nature", "food"] }
+    },
+    {
+      "id": "hualien-shitiping", "name": "石梯坪", "district": "豐濱", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 23.4880, "lng": 121.5100, "wiki": { "lang": "zh", "title": "石梯坪" }, "rank": 66, "src": "hand",
+      "blurb": "海蝕形成的階梯狀岩台和壺穴，可以走在岩石上看浪打上來，也是潛點。",
+      "questSeed": { "tags": ["nature", "checkin"] }
+    }
+  ]
+}

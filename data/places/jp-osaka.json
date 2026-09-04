@@ -1,0 +1,78 @@
+{
+  "_meta": { "schema": 1, "city": "jp-osaka", "cityName": "大阪", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "osaka-dotonbori", "name": "道頓堀", "district": "難波・道頓堀", "tags": ["food", "checkin", "snack"], "primary": "checkin",
+      "lat": 34.6687, "lng": 135.5013, "wiki": { "lang": "zh", "title": "道頓堀" }, "rank": 96, "hot": true, "src": "hand",
+      "blurb": "固力果跑跑人、會動的螃蟹、運河兩岸的霓虹，大阪「吃到倒」的中心。",
+      "must": ["章魚燒", "大阪燒", "串炸", "金龍拉麵", "會津屋章魚燒"],
+      "quests": [
+        { "type": "thing", "title": "固力果跑跑人看板", "hint": "在戎橋上拍那面經典的 Glico 霓虹跑者廣告。" },
+        { "type": "thing", "title": "會動的螃蟹招牌", "hint": "かに道楽 門口那隻巨大的機械螃蟹。" },
+        { "type": "food", "title": "章魚燒", "hint": "現買一盒剛起鍋、撒滿柴魚片的章魚燒。" },
+        { "type": "food", "title": "大阪燒", "hint": "鐵板上現煎的大阪燒，拍它淋醬撒海苔粉的樣子。" }
+      ]
+    },
+    {
+      "id": "osaka-castle", "name": "大阪城", "district": "大阪城", "tags": ["sight", "culture"], "primary": "sight",
+      "lat": 34.6873, "lng": 135.5259, "wiki": { "lang": "zh", "title": "大阪城" }, "rank": 90, "hot": true, "src": "hand",
+      "blurb": "豐臣秀吉的城，綠瓦金飾的天守閣立在寬闊的護城河與石垣中間。",
+      "quests": [
+        { "type": "building", "title": "天守閣全景", "hint": "從西之丸庭園或本丸廣場，把整座天守閣拍進去。" },
+        { "type": "thing", "title": "巨石「蛸石」", "hint": "找到本丸櫻門旁那塊超大的城牆巨石。" }
+      ]
+    },
+    {
+      "id": "osaka-usj", "name": "日本環球影城", "district": "USJ", "tags": ["checkin", "sight"], "primary": "checkin",
+      "lat": 34.6656, "lng": 135.4323, "wiki": { "lang": "zh", "title": "日本環球影城" }, "rank": 88, "hot": true, "src": "hand",
+      "blurb": "哈利波特的活米村、任天堂世界的庫巴城堡，小小兵一大堆。",
+      "questSeed": { "tags": ["checkin"] }
+    },
+    {
+      "id": "osaka-shinsekai", "name": "新世界．通天閣", "district": "新世界", "tags": ["food", "checkin", "snack"], "primary": "checkin",
+      "lat": 34.6524, "lng": 135.5063, "wiki": { "lang": "zh", "title": "新世界 (大阪)" }, "rank": 82, "src": "hand",
+      "blurb": "昭和感爆棚的老街區，通天閣底下整排串炸店，看板浮誇到不行。",
+      "must": ["だるま串炸", "元祖串かつ", "冰淇淋菠蘿麵包"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "osaka-kuromon", "name": "黑門市場", "district": "難波・道頓堀", "tags": ["food", "snack", "shopping"], "primary": "food",
+      "lat": 34.6648, "lng": 135.5063, "wiki": { "lang": "zh", "title": "黑門市場" }, "rank": 80, "src": "hand",
+      "blurb": "「大阪的廚房」，現烤和牛握壽司、現開海膽、河豚、超大草莓。",
+      "must": ["現烤和牛串", "石橋鮪魚丼", "黑門三平", "現切哈密瓜"],
+      "questSeed": { "tags": ["food", "snack"] }
+    },
+    {
+      "id": "osaka-umeda-sky", "name": "梅田藍天大廈．空中庭園", "district": "梅田", "tags": ["sight", "view", "checkin"], "primary": "checkin",
+      "lat": 34.7053, "lng": 135.4903, "wiki": { "lang": "zh", "title": "梅田藍天大廈" }, "rank": 76, "src": "hand",
+      "blurb": "兩棟樓頂端連在一起的環形觀景台，夕陽到夜景的過場最美。",
+      "questSeed": { "tags": ["view", "checkin"] }
+    },
+    {
+      "id": "osaka-shitennoji", "name": "四天王寺", "district": "新世界", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 34.6544, "lng": 135.5165, "wiki": { "lang": "zh", "title": "四天王寺" }, "rank": 66, "src": "hand",
+      "blurb": "聖德太子建的日本最古老官寺，中心伽藍的五重塔可以爬。",
+      "questSeed": { "tags": ["culture"] }
+    },
+    {
+      "id": "osaka-nakazakicho", "name": "中崎町", "district": "梅田", "tags": ["checkin", "food", "shopping"], "primary": "checkin",
+      "lat": 34.7080, "lng": 135.5030, "wiki": { "lang": "zh", "title": "中崎町" }, "rank": 74, "hot": true, "src": "hand",
+      "blurb": "梅田旁的老屋改造區，一整片文青咖啡廳、二手店、彩繪牆。",
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "osaka-tempozan", "name": "天保山大摩天輪．海遊館", "district": "天保山", "tags": ["sight", "checkin", "nature"], "primary": "checkin",
+      "lat": 34.6555, "lng": 135.4290, "wiki": { "lang": "zh", "title": "海遊館" }, "rank": 70, "src": "hand",
+      "blurb": "世界級的水族館，中間一缸養著鯨鯊；旁邊的大摩天輪坐上去看大阪灣。",
+      "questSeed": { "tags": ["checkin", "sight"] }
+    },
+    {
+      "id": "osaka-sumiyoshi", "name": "住吉大社", "district": "新世界", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 34.6126, "lng": 135.4933, "wiki": { "lang": "zh", "title": "住吉大社" }, "rank": 64, "src": "hand",
+      "blurb": "全日本住吉神社的總本社，入口那座陡到像半圓的朱紅太鼓橋是招牌。",
+      "quests": [
+        { "type": "building", "title": "反橋（太鼓橋）", "hint": "拍那座陡峭、幾乎半圓形的朱紅色拱橋，帶到水面倒影。" }
+      ]
+    }
+  ]
+}

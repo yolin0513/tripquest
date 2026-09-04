@@ -27,3 +27,7 @@ server/data/
 .wrangler/
 .dev.vars
 workers/.wrangler/
+
+# 地點資料建置腳本的原始擷取（可重新產生）
+data/_raw/
+data/places/_staging/

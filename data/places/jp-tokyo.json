@@ -1,0 +1,90 @@
+{
+  "_meta": { "schema": 1, "city": "jp-tokyo", "cityName": "東京", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "tokyo-sensoji", "name": "淺草寺", "district": "淺草", "tags": ["sight", "culture", "checkin"], "primary": "sight",
+      "lat": 35.7148, "lng": 139.7967, "wiki": { "lang": "zh", "title": "淺草寺" }, "rank": 95, "hot": true, "src": "hand",
+      "blurb": "東京最老的寺，雷門大燈籠、仲見世商店街、後面就是晴空塔。",
+      "must": ["人形燒", "淺草きびだんご", "花月堂菠蘿麵包", "浅草メンチ炸肉餅"],
+      "quests": [
+        { "type": "building", "title": "雷門大燈籠", "hint": "站在雷門正下方，抬頭拍那顆寫著「雷門」的巨大紅燈籠。" },
+        { "type": "view", "title": "仲見世商店街", "hint": "從雷門往寶藏門方向，拍整條紅底商店街的縱深。" },
+        { "type": "view", "title": "同框晴空塔", "hint": "在附近找一個能把晴空塔和傳統街景一起入鏡的角度。" }
+      ]
+    },
+    {
+      "id": "tokyo-shibuya-x", "name": "澀谷十字路口", "district": "澀谷", "tags": ["checkin", "sight"], "primary": "checkin",
+      "lat": 35.6595, "lng": 139.7005, "wiki": { "lang": "zh", "title": "澀谷站前十字路口" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "全世界最忙的行人穿越道，一次上千人交錯，SHIBUYA SKY 俯瞰最猛。",
+      "quests": [
+        { "type": "view", "title": "行人全向通行", "hint": "從高處（SHIBUYA SKY 或星巴克二樓）俯拍人潮同時穿越的瞬間。" },
+        { "type": "thing", "title": "忠犬八公銅像", "hint": "和八公像合照，排隊的話拍排隊人龍也行。" }
+      ]
+    },
+    {
+      "id": "tokyo-skytree", "name": "東京晴空塔", "district": "淺草", "tags": ["sight", "checkin", "view"], "primary": "sight",
+      "lat": 35.7101, "lng": 139.8107, "wiki": { "lang": "zh", "title": "東京晴空塔" }, "rank": 88, "src": "hand",
+      "blurb": "634 公尺，世界最高的塔，晚上有不同顏色的點燈。",
+      "quests": [
+        { "type": "building", "title": "塔的全身照", "hint": "退到夠遠的地方，把整座塔從頭到腳拍進去。" },
+        { "type": "view", "title": "從觀景台看城市", "hint": "上展望台，拍一張東京的city view。" },
+        { "type": "thing", "title": "夜間點燈", "hint": "入夜後回來，拍晴空塔點燈的樣子。" }
+      ]
+    },
+    {
+      "id": "tokyo-meiji", "name": "明治神宮", "district": "原宿", "tags": ["culture", "nature", "sight"], "primary": "culture",
+      "lat": 35.6764, "lng": 139.6993, "wiki": { "lang": "zh", "title": "明治神宮" }, "rank": 84, "src": "hand",
+      "blurb": "原宿站旁一片人造森林裡的神社，巨大的檜木鳥居、整排彩繪清酒桶。",
+      "quests": [
+        { "type": "building", "title": "巨大的木製鳥居", "hint": "參道上那座高大的檜木鳥居，站遠一點拍。" },
+        { "type": "thing", "title": "整排的清酒桶", "hint": "拍參道旁堆得整齊、色彩繽紛的清酒桶牆。" }
+      ]
+    },
+    {
+      "id": "tokyo-tsukiji", "name": "築地場外市場", "district": "築地", "tags": ["food", "snack", "shopping"], "primary": "food",
+      "lat": 35.6655, "lng": 139.7707, "wiki": { "lang": "zh", "title": "築地市場" }, "rank": 85, "hot": true, "src": "hand",
+      "blurb": "內市場搬去豐洲了，但場外還在，早上來吃現開海膽、玉子燒、鮪魚壽司。",
+      "must": ["丸武玉子燒", "現開海膽", "松露玉子燒三明治", "築地山長炸物"],
+      "questSeed": { "tags": ["food", "snack"] }
+    },
+    {
+      "id": "tokyo-akihabara", "name": "秋葉原", "district": "秋葉原", "tags": ["shopping", "checkin"], "primary": "checkin",
+      "lat": 35.6987, "lng": 139.7730, "wiki": { "lang": "zh", "title": "秋葉原" }, "rank": 80, "src": "hand",
+      "blurb": "電器街變成動漫聖地，整棟的扭蛋、模型、女僕咖啡發傳單。",
+      "questSeed": { "tags": ["shopping", "checkin"] }
+    },
+    {
+      "id": "tokyo-shinjuku-gyoen", "name": "新宿御苑", "district": "新宿", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 35.6852, "lng": 139.7100, "wiki": { "lang": "zh", "title": "新宿御苑" }, "rank": 76, "src": "hand",
+      "blurb": "摩天樓包圍的大花園，日式、英式、法式庭園各一區，賞櫻名所。",
+      "questSeed": { "tags": ["nature"] }
+    },
+    {
+      "id": "tokyo-teamlab", "name": "teamLab Planets", "district": "台場", "tags": ["checkin", "culture"], "primary": "checkin",
+      "lat": 35.6486, "lng": 139.7900, "wiki": { "lang": "zh", "title": "teamLab" }, "rank": 86, "hot": true, "src": "hand",
+      "blurb": "赤腳走進去的沉浸式數位藝術，鏡面水池、發光花房，怎麼拍都夢幻。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "tokyo-ueno", "name": "上野公園．阿美橫町", "district": "上野", "tags": ["culture", "food", "shopping", "nature"], "primary": "checkin",
+      "lat": 35.7141, "lng": 139.7744, "wiki": { "lang": "zh", "title": "上野恩賜公園" }, "rank": 74, "src": "hand",
+      "blurb": "博物館群 + 動物園 + 賞櫻大道，橋下的阿美橫町是海鮮乾貨與平價藥妝街。",
+      "must": ["みなとや藥菓子", "二木の菓子", "阿美橫丁海鮮丼"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "tokyo-ginza", "name": "銀座", "district": "銀座", "tags": ["shopping", "checkin"], "primary": "checkin",
+      "lat": 35.6717, "lng": 139.7650, "wiki": { "lang": "zh", "title": "銀座" }, "rank": 72, "src": "hand",
+      "blurb": "最貴的一區，週末中央通變成步行者天國，和光大鐘是地標。",
+      "questSeed": { "tags": ["shopping", "checkin"] }
+    },
+    {
+      "id": "tokyo-tower", "name": "東京鐵塔", "district": "銀座", "tags": ["sight", "checkin", "view"], "primary": "sight",
+      "lat": 35.6586, "lng": 139.7454, "wiki": { "lang": "zh", "title": "東京鐵塔" }, "rank": 78, "src": "hand",
+      "blurb": "紅白相間的 333 公尺鐵塔，從增上寺前拍它配寺廟屋簷最經典。",
+      "quests": [
+        { "type": "building", "title": "增上寺 + 鐵塔", "hint": "在增上寺前，讓寺廟的屋簷和後面的紅色鐵塔一起入鏡。" }
+      ]
+    }
+  ]
+}

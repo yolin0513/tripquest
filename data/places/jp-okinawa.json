@@ -1,0 +1,52 @@
+{
+  "_meta": { "schema": 1, "city": "jp-okinawa", "cityName": "沖繩本島", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "oki-churaumi", "name": "沖繩美麗海水族館", "district": "美麗海", "tags": ["sight", "checkin", "nature"], "primary": "sight",
+      "lat": 26.6944, "lng": 127.8779, "wiki": { "lang": "zh", "title": "沖繩美麗海水族館" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "亞洲數一數二的水族館，「黑潮之海」大水槽裡養著鯨鯊和鬼蝠魟。",
+      "quests": [
+        { "type": "thing", "title": "黑潮之海大水槽", "hint": "拍鯨鯊或鬼蝠魟游過整面巨大玻璃的畫面（用人當比例尺）。" }
+      ]
+    },
+    {
+      "id": "oki-kokusai", "name": "國際通", "district": "那霸", "tags": ["shopping", "food", "checkin"], "primary": "checkin",
+      "lat": 26.2140, "lng": 127.6870, "wiki": { "lang": "zh", "title": "國際通" }, "rank": 82, "src": "hand",
+      "blurb": "那霸市中心 1.6 公里的購物大街，紅型雜貨、泡盛、鹽味點心，鑽進牧志公設市場吃海鮮。",
+      "must": ["牧志市場代客料理", "琉球茶房", "鹽屋雪鹽霜淇淋", "豬肉蛋飯糰"],
+      "questSeed": { "tags": ["shopping", "food"] }
+    },
+    {
+      "id": "oki-shuri", "name": "首里城", "district": "那霸", "tags": ["culture", "sight"], "primary": "culture",
+      "lat": 26.2170, "lng": 127.7190, "wiki": { "lang": "zh", "title": "首里城" }, "rank": 78, "src": "hand",
+      "blurb": "琉球王國的宮殿，2019 年大火後正殿正在重建，守禮門和石城牆仍值得看。",
+      "quests": [
+        { "type": "building", "title": "守禮門", "hint": "拍那座紅色、寫著「守禮之邦」的牌坊式木門。" }
+      ]
+    },
+    {
+      "id": "oki-cape", "name": "萬座毛", "district": "恩納", "tags": ["nature", "view", "checkin"], "primary": "checkin",
+      "lat": 26.5040, "lng": 127.8500, "wiki": { "lang": "zh", "title": "萬座毛" }, "rank": 76, "src": "hand",
+      "blurb": "像大象鼻子的海蝕崖，崖上一片草原，底下是透明的珊瑚礁海。",
+      "quests": [
+        { "type": "view", "title": "象鼻岩", "hint": "拍那塊形狀像大象鼻子的隆起岩石，帶到下方的藍綠色海水。" }
+      ]
+    },
+    {
+      "id": "oki-american", "name": "美國村", "district": "北谷", "tags": ["checkin", "shopping", "food"], "primary": "checkin",
+      "lat": 26.3160, "lng": 127.7590, "wiki": { "lang": "zh", "title": "美濱美國村" }, "rank": 74, "hot": true, "src": "hand",
+      "blurb": "海邊的美式主題購物區，彩色摩天輪、塗鴉牆、日落海堤，吃塔可飯和大漢堡。",
+      "must": ["塔可飯 (Taco Rice)", "Blue Seal 冰淇淋", "美式漢堡"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "oki-kouri", "name": "古宇利島", "district": "美麗海", "tags": ["nature", "checkin"], "primary": "nature",
+      "lat": 26.7020, "lng": 128.0180, "wiki": { "lang": "zh", "title": "古宇利島" }, "rank": 80, "hot": true, "src": "hand",
+      "blurb": "一條 2 公里的跨海大橋接上去的小島，兩側是清澈到發光的「古宇利藍」。",
+      "quests": [
+        { "type": "view", "title": "古宇利大橋", "hint": "在橋頭或高處，拍那條筆直穿過藍綠色海面的跨海大橋。" },
+        { "type": "thing", "title": "心形岩", "hint": "在Tinu海灘找到那兩塊自然形成的愛心形礁石。" }
+      ]
+    }
+  ]
+}

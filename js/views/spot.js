@@ -35,6 +35,16 @@ export default async function spot(tripId, spotId) {
       } }, '改名字'),
     ),
 
+    h('div', { class: 'switch-row' },
+      h('div', {}, h('div', { style: 'font-weight:700' }, '安排的時間'),
+        h('div', { class: 'form-hint' }, '選填。填了行程海報會顯示時間軸（例：11:00–13:00）。')),
+      h('div', { style: 'display:flex;gap:6px;align-items:center' },
+        timeInput(s.startTime, (v) => store.patch(spotId, { startTime: v })),
+        h('span', { class: 'muted' }, '–'),
+        timeInput(s.endTime, (v) => store.patch(spotId, { endTime: v })),
+      ),
+    ),
+
     h('div', { class: 'section-label' }, '這個景點的任務'),
     h('div', { class: 'stack' }, ...quests.map((q) => questRow(q, tripId, spotId))),
 
@@ -80,6 +90,12 @@ function questRow(q, tripId, spotId) {
       ),
     ),
   );
+}
+
+function timeInput(value, onChange) {
+  const el = h('input', { type: 'time', class: 'field', style: 'min-height:44px;padding:8px;width:110px', value: value || '' });
+  el.addEventListener('change', () => onChange(el.value));
+  return el;
 }
 
 async function addQuest(tripId, spotId) {

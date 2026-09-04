@@ -1,0 +1,84 @@
+{
+  "_meta": { "schema": 1, "city": "tw-tainan", "cityName": "台南", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "tainan-chihkan", "name": "赤崁樓", "district": "中西區", "tags": ["sight", "culture"], "primary": "sight",
+      "lat": 22.9977, "lng": 120.2026, "wiki": { "lang": "zh", "title": "赤崁樓" }, "rank": 88, "hot": true, "src": "hand",
+      "blurb": "荷蘭人蓋的普羅民遮城遺址，上面接了兩座中式閣樓，前面一排石龜馱碑。",
+      "quests": [
+        { "type": "building", "title": "文昌閣紅樓", "hint": "拍中式閣樓建築與前方九座御龜碑。" },
+        { "type": "culture", "title": "老榕樹與古井", "hint": "拍院子裡盤根錯節的老榕，或那口紅毛井。" }
+      ]
+    },
+    {
+      "id": "tainan-anping", "name": "安平古堡", "district": "安平", "tags": ["sight", "culture"], "primary": "sight",
+      "lat": 23.0016, "lng": 120.1608, "wiki": { "lang": "zh", "title": "安平古堡" }, "rank": 85, "src": "hand",
+      "blurb": "台灣第一座城，熱蘭遮城的斑駁磚牆還在，旁邊白色瞭望台可以爬上去看港。",
+      "quests": [
+        { "type": "building", "title": "古堡瞭望台", "hint": "爬上白色瞭望台，拍安平港和舊聚落屋頂。" },
+        { "type": "thing", "title": "老牆的榕樹根", "hint": "找那面被榕樹氣根抓住的荷蘭時代古牆。" }
+      ]
+    },
+    {
+      "id": "tainan-anping-tree", "name": "安平樹屋", "district": "安平", "tags": ["checkin", "culture", "nature"], "primary": "checkin",
+      "lat": 23.0028, "lng": 120.1617, "wiki": { "lang": "zh", "title": "安平樹屋" }, "rank": 80, "hot": true, "src": "hand",
+      "blurb": "廢棄的德記洋行倉庫被百年榕樹整棟吞掉，樹根從天花板垂下來，超好拍。",
+      "questSeed": { "tags": ["checkin", "nature"] }
+    },
+    {
+      "id": "tainan-shennong", "name": "神農街", "district": "中西區", "tags": ["checkin", "culture", "food"], "primary": "checkin",
+      "lat": 22.9975, "lng": 120.1963, "wiki": { "lang": "zh", "title": "神農街" }, "rank": 82, "src": "hand",
+      "blurb": "保存最完整的清代老街，狹窄街屋改成小酒館、藝廊、選物店，入夜點燈。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "tainan-hayashi", "name": "林百貨", "district": "中西區", "tags": ["checkin", "shopping", "culture"], "primary": "checkin",
+      "lat": 22.9925, "lng": 120.2019, "wiki": { "lang": "zh", "title": "林百貨" }, "rank": 78, "src": "hand",
+      "blurb": "1932 年的「五層樓仔」，全台僅存的商用電梯，頂樓有神社。",
+      "quests": [
+        { "type": "building", "title": "轉角的圓弧立面", "hint": "拍那棟米色、轉角圓弧、有整排小窗的老百貨外觀。" },
+        { "type": "culture", "title": "頂樓的神社", "hint": "上頂樓拍那座小小的、留有機槍掃射彈痕的空襲遺跡神社。" }
+      ]
+    },
+    {
+      "id": "tainan-guohua", "name": "國華街", "district": "中西區", "tags": ["food", "snack"], "primary": "food",
+      "lat": 22.9968, "lng": 120.1998, "wiki": { "lang": "zh", "title": "國華街" }, "rank": 87, "hot": true, "src": "hand",
+      "blurb": "台南小吃一條龍：牛肉湯、蝦仁飯、碗粿、魚羹、水果冰，走一趟吃十攤。",
+      "must": ["富盛號碗粿", "邱家小卷米粉", "阿松割包", "金得春捲", "江水號八寶冰"],
+      "questSeed": { "tags": ["food", "snack"] }
+    },
+    {
+      "id": "tainan-beef-soup", "name": "台南牛肉湯", "district": "中西區", "tags": ["food", "snack"], "primary": "food",
+      "lat": 22.9908, "lng": 120.2020, "wiki": { "lang": "zh", "title": "牛肉湯" }, "rank": 84, "src": "hand",
+      "blurb": "清晨現宰溫體牛，滾湯一沖就上桌，配肉燥飯是台南人的早餐。",
+      "must": ["六千牛肉湯", "文章牛肉湯", "阿村牛肉湯", "康樂街牛肉湯"],
+      "questSeed": { "tags": ["food"] }
+    },
+    {
+      "id": "tainan-coffin", "name": "棺材板", "district": "中西區", "tags": ["snack", "food"], "primary": "snack",
+      "lat": 22.9928, "lng": 120.2050, "wiki": { "lang": "zh", "title": "棺材板" }, "rank": 72, "src": "hand",
+      "blurb": "厚片吐司炸過挖空、灌進濃湯再蓋回去，沙卡里巴的老味道。",
+      "questSeed": { "tags": ["snack"] }
+    },
+    {
+      "id": "tainan-blueprint", "name": "藍晒圖文創園區", "district": "南區", "tags": ["checkin", "shopping"], "primary": "checkin",
+      "lat": 22.9840, "lng": 120.2060, "wiki": { "lang": "zh", "title": "藍晒圖文創園區" }, "rank": 68, "src": "hand",
+      "blurb": "老宿舍群的牆上畫滿藍白線條的立體錯視塗鴉，晚上打燈。",
+      "questSeed": { "tags": ["checkin"] }
+    },
+    {
+      "id": "tainan-jingzaijiao", "name": "井仔腳瓦盤鹽田", "district": "北門", "tags": ["nature", "checkin"], "primary": "checkin",
+      "lat": 23.2010, "lng": 120.1050, "wiki": { "lang": "zh", "title": "井仔腳瓦盤鹽田" }, "rank": 74, "hot": true, "src": "hand",
+      "blurb": "現存最老的鹽田，一格格瓦盤在夕陽下反光成粉紫色，可以下去體驗曬鹽。",
+      "quests": [
+        { "type": "view", "title": "夕陽下的鹽田格子", "hint": "傍晚拍一格格鹽田的倒影與堆起的白色鹽堆。" }
+      ]
+    },
+    {
+      "id": "tainan-qigu", "name": "七股鹽山", "district": "七股", "tags": ["nature", "checkin"], "primary": "checkin",
+      "lat": 23.1470, "lng": 120.0970, "wiki": { "lang": "zh", "title": "七股鹽山" }, "rank": 66, "src": "hand",
+      "blurb": "兩座爬得上去的巨大白色鹽山，附近的黑面琵鷺保護區冬天有上千隻。",
+      "questSeed": { "tags": ["checkin", "nature"] }
+    }
+  ]
+}

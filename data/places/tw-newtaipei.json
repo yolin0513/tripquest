@@ -1,0 +1,60 @@
+{
+  "_meta": { "schema": 1, "city": "tw-newtaipei", "cityName": "新北", "updated": "2026-09" },
+  "places": [
+    {
+      "id": "ntpc-jiufen", "name": "九份老街", "district": "瑞芳（九份）", "tags": ["checkin", "food", "culture"], "primary": "checkin",
+      "lat": 25.1097, "lng": 121.8443, "wiki": { "lang": "zh", "title": "九份" }, "rank": 92, "hot": true, "src": "hand",
+      "blurb": "山城石階、紅燈籠、阿妹茶樓，傍晚點燈後最有《神隱少女》那個氣氛。",
+      "must": ["芋圓", "草仔粿", "魚丸羹", "護理長的店滷味"],
+      "quests": [
+        { "type": "building", "title": "豎崎路紅燈籠階梯", "hint": "傍晚點燈後，從階梯下往上拍紅燈籠與茶樓。" },
+        { "type": "food", "title": "芋圓", "hint": "來一碗現煮的綜合芋圓，拍它Q彈的樣子。" },
+        { "type": "view", "title": "老街盡頭的海景", "hint": "在觀景平台拍山城與基隆嶼海景。" }
+      ]
+    },
+    {
+      "id": "ntpc-shifen", "name": "十分老街．瀑布", "district": "十分", "tags": ["checkin", "nature", "culture"], "primary": "checkin",
+      "lat": 25.0410, "lng": 121.7750, "wiki": { "lang": "zh", "title": "十分老街" }, "rank": 84, "hot": true, "src": "hand",
+      "blurb": "火車貼著老街開過去，大家在鐵軌上放天燈；走 15 分鐘有「台灣尼加拉瓜」十分瀑布。",
+      "quests": [
+        { "type": "culture", "title": "放天燈的瞬間", "hint": "拍天燈剛離手、飄向鐵軌上方天空的畫面。" },
+        { "type": "view", "title": "十分瀑布", "hint": "拍那道寬闊的簾幕狀瀑布，帶一點水氣彩虹更好。" }
+      ]
+    },
+    {
+      "id": "ntpc-tamsui", "name": "淡水老街．漁人碼頭", "district": "淡水", "tags": ["checkin", "food", "nature"], "primary": "checkin",
+      "lat": 25.1680, "lng": 121.4390, "wiki": { "lang": "zh", "title": "淡水區" }, "rank": 82, "src": "hand",
+      "blurb": "河口的夕陽、情人橋、阿給和魚酥，捷運直達的半日遊經典路線。",
+      "must": ["淡水阿給", "魚丸", "阿婆鐵蛋", "許義魚酥"],
+      "questSeed": { "tags": ["checkin", "food"] }
+    },
+    {
+      "id": "ntpc-yehliu", "name": "野柳地質公園", "district": "野柳", "tags": ["nature", "sight", "checkin"], "primary": "nature",
+      "lat": 25.2060, "lng": 121.6900, "wiki": { "lang": "zh", "title": "野柳" }, "rank": 80, "hot": true, "src": "hand",
+      "blurb": "海蝕風化出來的女王頭、燭台石、蕈狀岩，像月球表面的一片海岬。",
+      "quests": [
+        { "type": "thing", "title": "女王頭", "hint": "排隊拍那顆脖子越來越細的女王頭（不要摸）。" },
+        { "type": "view", "title": "蕈狀岩石林", "hint": "拍一整片頭大身體細的蘑菇狀岩石。" }
+      ]
+    },
+    {
+      "id": "ntpc-pingxi", "name": "平溪老街", "district": "平溪", "tags": ["checkin", "culture"], "primary": "checkin",
+      "lat": 25.0250, "lng": 121.7380, "wiki": { "lang": "zh", "title": "平溪老街" }, "rank": 72, "src": "hand",
+      "blurb": "依山而建、火車從屋頂高度開過的老街，也是放天燈的起點。",
+      "questSeed": { "tags": ["checkin", "culture"] }
+    },
+    {
+      "id": "ntpc-wulai", "name": "烏來", "district": "烏來", "tags": ["nature", "culture", "food"], "primary": "nature",
+      "lat": 24.8650, "lng": 121.5510, "wiki": { "lang": "zh", "title": "烏來區" }, "rank": 70, "src": "hand",
+      "blurb": "泰雅族部落 + 溫泉 + 瀑布，坐台車進去，吃山豬肉香腸配馬告。",
+      "must": ["山豬肉香腸", "馬告香腸", "小米麻糬", "溪蝦"],
+      "questSeed": { "tags": ["nature", "food"] }
+    },
+    {
+      "id": "ntpc-yingge", "name": "鶯歌老街", "district": "鶯歌", "tags": ["shopping", "culture", "checkin"], "primary": "culture",
+      "lat": 24.9550, "lng": 121.3540, "wiki": { "lang": "zh", "title": "鶯歌老街" }, "rank": 60, "src": "hand",
+      "blurb": "台灣的陶瓷重鎮，整條街都是碗盤、茶具、手拉坏體驗。",
+      "questSeed": { "tags": ["shopping", "culture"] }
+    }
+  ]
+}
