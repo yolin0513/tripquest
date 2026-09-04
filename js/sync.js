@@ -1,114 +1,105 @@
-// 多人同步層 —— 可插拔
-// v1 只有 LocalAdapter（不連任何伺服器；靠「任務代碼」與「完整備份」在裝置間傳）。
-// 之後補雲端 / 自架伺服器時，實作同一組介面即可，不動 store.js / 畫面。
+// 多人同步層 —— 可插拔，與後端無關
 //
-// SyncAdapter 介面：
-//   id                                 唯一識別
-//   label                              顯示名稱
-//   async status()   -> { ok, detail } 目前是否可用
-//   async push(records)                把本機中繼資料送出（不含照片 blob）
-//   async pull(sinceMs) -> records[]   取回他人的更新
-//   async putBlob(hash, blob)          （選配）上傳一張照片
-//   async getBlob(hash) -> Blob|null   （選配）下載一張照片
+// 三種模式（設定頁一鍵切換）：
+//   local  不連線；靠「邀請連結（任務清單）」與「匯出 / 匯入備份（照片）」
+//   lan    自架 server/index.mjs（＋ Cloudflare Tunnel 打外網）
+//   cloud  Cloudflare Worker（workers/worker.mjs）
+// lan 與 cloud 的協定完全一樣，只差網址。
+//
+// 每個群組帶自己的 128-bit 祕鑰（group.syncSecret），放在邀請連結的 #fragment。
+// 同步游標由「伺服器指派的序號」決定（不是客戶端時鐘），存在 IndexedDB meta。
+//
+// SyncAdapter（每個群組一個）：
+//   health()                     -> bool
+//   push(records)                -> { seq, wrote }
+//   pull(sinceSeq)               -> { records, seq, more }
+//   hasBlob(hash)                -> bool          （PUT 前先問，避免重傳）
+//   putBlob(hash, blob)          -> void
+//   getBlob(hash)                -> Blob | null
 
-import * as store from './store.js';
 import * as db from './db.js';
 
 const CFG_KEY = 'tripquest.sync';
 
 export function getConfig() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch { return {}; }
+  try { return { mode: 'local', url: '', ...JSON.parse(localStorage.getItem(CFG_KEY) || '{}') }; }
+  catch { return { mode: 'local', url: '' }; }
 }
 export function setConfig(cfg) {
-  try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg || {})); } catch { /* noop */ }
+  try { localStorage.setItem(CFG_KEY, JSON.stringify({ mode: 'local', url: '', ...cfg })); } catch { /* noop */ }
+}
+export function syncEnabled() {
+  const c = getConfig();
+  return (c.mode === 'lan' || c.mode === 'cloud') && !!c.url;
+}
+export function modeLabel() {
+  return { local: '單機（用邀請連結 / 備份檔）', lan: '自架伺服器', cloud: 'Cloudflare' }[getConfig().mode] || '單機';
 }
 
-// ---- 本機（預設，不連線）----
-const LocalAdapter = {
-  id: 'local',
-  label: '單機（用代碼 / 備份檔分享）',
-  async status() { return { ok: true, detail: '照片與資料只存在這台裝置' }; },
-  async push() { /* no-op */ },
-  async pull() { return []; },
-};
+function base() { return getConfig().url.replace(/\/$/, ''); }
 
-// ---- 自架 LAN 伺服器（server/ 目錄，node server/index.mjs）----
-// 不需要註冊任何服務；填入電腦在區網的網址即可（例：http://192.168.0.10:8787）。
-function LanAdapter(baseUrl) {
-  const base = baseUrl.replace(/\/$/, '');
+// 每個群組一個 adapter
+export function adapterForGroup(groupId, secret) {
+  const q = `?g=${encodeURIComponent(groupId)}`;
+  const H = { authorization: 'Bearer ' + secret };
+  const b = base();
+  const timeout = (ms) => (AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
   return {
-    id: 'lan',
-    label: '自架伺服器',
-    async status() {
-      try {
-        const r = await fetch(base + '/health', { signal: AbortSignal.timeout(4000) });
-        return r.ok ? { ok: true, detail: base } : { ok: false, detail: '連不上（HTTP ' + r.status + '）' };
-      } catch (e) { return { ok: false, detail: '連不上：' + (e.message || e) }; }
+    async health() {
+      try { const r = await fetch(b + '/health', { signal: timeout(5000) }); return r.ok; }
+      catch { return false; }
     },
     async push(records) {
-      await fetch(base + '/push', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+      const r = await fetch(b + '/push' + q, {
+        method: 'POST', headers: { ...H, 'content-type': 'application/json' },
         body: JSON.stringify({ records }),
       });
+      if (!r.ok) throw new Error('push ' + r.status);
+      return r.json();
     },
-    async pull(sinceMs = 0) {
-      const r = await fetch(base + '/pull?since=' + sinceMs);
-      if (!r.ok) return [];
-      const j = await r.json();
-      return j.records || [];
+    async pull(since = 0) {
+      const r = await fetch(b + '/pull' + q + '&since=' + since, { headers: H });
+      if (!r.ok) throw new Error('pull ' + r.status);
+      return r.json();
+    },
+    async hasBlob(hash) {
+      try {
+        const r = await fetch(b + '/blob/' + hash + q, { method: 'HEAD', headers: H, signal: timeout(8000) });
+        return r.status === 200;
+      } catch { return false; }
     },
     async putBlob(hash, blob) {
-      await fetch(base + '/blob/' + hash, { method: 'PUT', body: blob });
+      const r = await fetch(b + '/blob/' + hash + q, {
+        method: 'PUT', headers: { ...H, 'x-content-type': blob.type || 'image/jpeg' }, body: blob,
+      });
+      if (!r.ok) throw new Error('putBlob ' + r.status);
     },
     async getBlob(hash) {
-      const r = await fetch(base + '/blob/' + hash);
-      return r.ok ? await r.blob() : null;
+      const r = await fetch(b + '/blob/' + hash + q, { headers: H });
+      return r.ok ? r.blob() : null;
     },
   };
 }
 
-export function activeAdapter() {
-  const cfg = getConfig();
-  if (cfg.mode === 'lan' && cfg.url) return LanAdapter(cfg.url);
-  return LocalAdapter;
+// 測試一個網址通不通（設定頁用）
+export async function testConnection(url) {
+  try {
+    const r = await fetch(url.replace(/\/$/, '') + '/health', { signal: AbortSignal.timeout?.(6000) });
+    if (!r.ok) return { ok: false, detail: 'HTTP ' + r.status };
+    return { ok: true };
+  } catch (e) { return { ok: false, detail: e.message || String(e) }; }
 }
 
-// 一輪同步：推本機中繼資料 → 拉他人的 → 合併 → 補缺的照片
+// 同步游標（每個群組一個伺服器序號）
+export async function getCursor(groupId) {
+  return Number(await db.metaGet('seq:' + groupId) || 0);
+}
+export async function setCursor(groupId, seq) {
+  await db.metaSet('seq:' + groupId, seq);
+}
+
+// 手動觸發一輪完整同步（設定頁「立即同步」用）
 export async function syncNow({ onProgress } = {}) {
-  const a = activeAdapter();
-  if (a.id === 'local') return { skipped: true };
-  const p = (m) => onProgress && onProgress(m);
-
-  p('上傳資料…');
-  const mine = store.exportRecords().filter((r) => r.type !== 'blobmeta');
-  await a.push(mine);
-
-  p('下載更新…');
-  const since = Number(localStorage.getItem('tripquest.sync.since') || 0);
-  const incoming = await a.pull(since);
-  if (incoming.length) await store.importRecords(incoming, { merge: true });
-
-  if (a.getBlob) {
-    p('同步照片…');
-    const needed = new Set();
-    for (const r of store.exportRecords()) {
-      if (r.type === 'submission') { needed.add(r.photoHash); needed.add(r.thumbHash); }
-    }
-    const have = new Set(await db.allBlobKeys());
-    let n = 0;
-    for (const hash of needed) {
-      if (!hash) continue;
-      if (!have.has(hash)) {
-        const blob = await a.getBlob(hash).catch(() => null);
-        if (blob) { await db.putBlob({ hash, blob, bytes: blob.size, kind: 'photo' }); n++; }
-      } else if (a.putBlob) {
-        const entry = await db.getBlob(hash);
-        if (entry) await a.putBlob(hash, entry.blob).catch(() => {});
-      }
-    }
-    p(`同步了 ${n} 張照片`);
-  }
-
-  localStorage.setItem('tripquest.sync.since', String(Date.now()));
-  return { ok: true, pulled: incoming.length };
+  const { drain } = await import('./outbox.js');
+  return drain({ onProgress, force: true });
 }

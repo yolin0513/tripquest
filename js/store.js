@@ -15,6 +15,28 @@ const state = {
 const listeners = new Set();
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit() { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } }
+// 供 outbox 在背景下載 / 合併後通知畫面重繪
+export function notifyExternalChange() { emit(); }
+
+function groupIdOfRecord(rec) {
+  if (!rec) return null;
+  if (rec.type === 'group') return rec.id;
+  if (rec.groupId) return rec.groupId;
+  if (rec.tripId) { const t = state.byId.get(rec.tripId); return t && t.groupId; }
+  if (rec.submissionId) { const s = state.byId.get(rec.submissionId); return s ? groupIdOfRecord(s) : null; }
+  return null;
+}
+
+// 有設定同步時，把異動排進 outbox（延遲載入避免循環相依）。
+// 回傳 promise —— 呼叫端 await 之後再 drain 才不會漏。
+async function queueSync(kind, rec) {
+  try {
+    const o = await import('./outbox.js');
+    if (kind === 'submission') { await o.onSubmission(rec); return; }
+    const gid = groupIdOfRecord(rec);
+    if (gid) await o.enqueuePush(gid);
+  } catch (e) { console.warn('queueSync', e); }
+}
 
 export async function init() {
   if (state.ready) return;
@@ -37,6 +59,7 @@ export async function put(rec) {
   state.byId.set(rec.id, rec);
   await db.putRecord(rec);
   emit();
+  if (rec.type !== 'submission') await queueSync('push', rec);
   return rec;
 }
 
@@ -48,6 +71,8 @@ export async function patch(id, changes) {
   state.byId.set(id, next);
   await db.putRecord(next);
   emit();
+  // 內部旗標（_enriched / _wikiTried 等）不值得觸發同步
+  if (!Object.keys(changes).every((k) => k.startsWith('_'))) await queueSync('push', next);
   return next;
 }
 
@@ -75,6 +100,7 @@ export async function toggleReaction(submissionId, actorId, emoji = '❤️') {
     await db.putRecord(rec);
   }
   emit();
+  await queueSync('push', sub);
 }
 
 export async function addComment(submissionId, actorId, text) {
@@ -87,6 +113,7 @@ export async function addComment(submissionId, actorId, text) {
   state.byId.set(rec.id, rec);
   await db.putRecord(rec);
   emit();
+  await queueSync('push', rec);
   return rec;
 }
 
@@ -126,18 +153,30 @@ export async function addSubmission(sub) {
   state.byId.set(sub.id, sub);
   await db.putRecord(sub);
   emit();
+  await queueSync('submission', sub);
   return sub;
 }
 
-// 移除一張投稿（例如拍壞了）。投稿本身不可變，所以用一筆「撤回標記」記錄覆蓋顯示層。
-// 為了 v1 簡單：直接硬刪投稿記錄 + 清掉沒人用到的 blob。多裝置同步是 v2 才接，屆時改為 retraction 記錄。
+// 移除一張投稿（例如拍壞了）。投稿本身不可變（append-only），所以寫一筆「撤回」記錄
+// 覆蓋顯示層 —— 硬刪的話，聯集合併時會在其他裝置復活。
 export async function deleteSubmission(id) {
   const sub = state.byId.get(id);
   if (!sub || sub.type !== 'submission') return;
-  state.byId.delete(id);
-  await db.deleteRecordHard(id);
+  const rec = {
+    id: uuid(), type: 'retraction', tripId: sub.tripId, submissionId: id,
+    createdAt: Date.now(), deviceId: deviceId(),
+  };
+  state.byId.set(rec.id, rec);
+  await db.putRecord(rec);
   await gcBlobs([sub.photoHash, sub.thumbHash]);
   emit();
+  await queueSync('push', rec);
+}
+
+function retractedIds() {
+  const s = new Set();
+  for (const r of state.byId.values()) if (r.type === 'retraction') s.add(r.submissionId);
+  return s;
 }
 
 // 清掉不再被任何投稿參照的 blob
@@ -179,11 +218,13 @@ export function questsOfTrip(tripId) {
   return list().filter((r) => r.type === 'quest' && r.tripId === tripId && alive(r));
 }
 export function submissionsOf(questId) {
-  return list().filter((r) => r.type === 'submission' && r.questId === questId)
+  const gone = retractedIds();
+  return list().filter((r) => r.type === 'submission' && r.questId === questId && !gone.has(r.id))
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 export function submissionsOfTrip(tripId) {
-  return list().filter((r) => r.type === 'submission' && r.tripId === tripId)
+  const gone = retractedIds();
+  return list().filter((r) => r.type === 'submission' && r.tripId === tripId && !gone.has(r.id))
     .sort((a, b) => (a.takenAt || a.createdAt) - (b.takenAt || b.createdAt));
 }
 
@@ -206,12 +247,39 @@ export function spotProgress(spotId) {
 export function exportRecords() {
   return list();
 }
+
+// ---------- 同步用 ----------
+// 有設定同步祕鑰的群組
+export function syncedGroups() {
+  return list().filter((r) => r.type === 'group' && r.syncSecret && !r.deleted);
+}
+
+// 某個群組相關的所有記錄（含墓碑，要送出去）
+export function exportGroup(groupId) {
+  const tripIds = new Set(list().filter((r) => r.type === 'trip' && r.groupId === groupId).map((r) => r.id));
+  return list().filter((r) => {
+    if (r.id === groupId) return true;
+    if (r.groupId === groupId) return true;           // member
+    if (r.tripId && tripIds.has(r.tripId)) return true; // spot / quest / submission / reaction / comment
+    return false;
+  });
+}
+
+// 依照片雜湊找出它屬於哪個群組（延遲下載全圖用）
+export function groupForHash(hash) {
+  const sub = list().find((r) => r.type === 'submission' && (r.photoHash === hash || r.thumbHash === hash));
+  if (!sub) return null;
+  const trip = state.byId.get(sub.tripId);
+  const group = trip && state.byId.get(trip.groupId);
+  return group && group.syncSecret ? group : null;
+}
 export async function importRecords(incoming, { merge = true } = {}) {
   for (const inc of incoming) {
     const cur = state.byId.get(inc.id);
     if (!cur) { state.byId.set(inc.id, inc); continue; }
     if (!merge) { state.byId.set(inc.id, inc); continue; }
-    if (inc.type === 'submission' || inc.type === 'reaction' || inc.type === 'comment') continue; // 只新增；已存在就跳過
+    // append-only：已存在就跳過
+    if (['submission', 'reaction', 'comment', 'retraction', 'memberClaim'].includes(inc.type)) continue;
     // 後寫入者勝，deviceId 決勝
     const incWins = (inc.updatedAt || 0) > (cur.updatedAt || 0) ||
       ((inc.updatedAt || 0) === (cur.updatedAt || 0) && String(inc.deviceId) > String(cur.deviceId));

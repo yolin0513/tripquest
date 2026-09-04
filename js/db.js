@@ -4,7 +4,7 @@
 //   blobs   — 照片二進位，以 SHA-256 內容雜湊定址，永遠不進同步 payload
 
 const DB_NAME = 'tripquest';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let _db = null;
 
@@ -24,6 +24,14 @@ export function openDB() {
       }
       if (!db.objectStoreNames.contains('blobs')) {
         db.createObjectStore('blobs', { keyPath: 'hash' });
+      }
+      // v2：離線同步佇列（outbox）+ 本機專屬 meta（身分、游標；永不同步）
+      if (!db.objectStoreNames.contains('outbox')) {
+        const o = db.createObjectStore('outbox', { keyPath: 'id' });
+        o.createIndex('byNextAt', 'nextAt', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('meta')) {
+        db.createObjectStore('meta', { keyPath: 'key' });
       }
       void e;
     };
@@ -82,6 +90,29 @@ export async function deleteBlob(hash) {
   return wrap((await tx('blobs', 'readwrite')).delete(hash));
 }
 
+// ---- meta（本機專屬鍵值，例如身分、同步游標；不會進同步）----
+export async function metaGet(key) {
+  const r = await wrap((await tx('meta')).get(key));
+  return r ? r.value : null;
+}
+export async function metaSet(key, value) {
+  return wrap((await tx('meta', 'readwrite')).put({ key, value }));
+}
+
+// ---- outbox（離線同步佇列）----
+export async function outboxAll() {
+  return wrap((await tx('outbox')).getAll());
+}
+export async function outboxPut(entry) {
+  return wrap((await tx('outbox', 'readwrite')).put(entry));
+}
+export async function outboxDelete(id) {
+  return wrap((await tx('outbox', 'readwrite')).delete(id));
+}
+export async function outboxGet(id) {
+  return wrap((await tx('outbox')).get(id));
+}
+
 // ---- 維運 ----
 export async function estimate() {
   if (navigator.storage && navigator.storage.estimate) {
@@ -107,7 +138,7 @@ export async function isPersisted() {
 
 export async function wipeAll() {
   const db = await openDB();
-  await Promise.all(['records', 'blobs'].map((name) =>
+  await Promise.all(['records', 'blobs', 'outbox', 'meta'].map((name) =>
     wrap(db.transaction(name, 'readwrite').objectStore(name).clear())
   ));
 }

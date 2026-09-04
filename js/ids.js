@@ -24,10 +24,10 @@ export function deviceId() {
 }
 
 export function deviceName() {
-  return localStorage.getItem(DEVICE_NAME_KEY) || '我的手機';
+  return localStorage.getItem(DEVICE_NAME_KEY) || '我';
 }
 export function setDeviceName(name) {
-  localStorage.setItem(DEVICE_NAME_KEY, String(name || '').slice(0, 40) || '我的手機');
+  localStorage.setItem(DEVICE_NAME_KEY, String(name || '').slice(0, 40) || '我');
 }
 
 // 短邀請碼 / 任務代碼：給人唸的，去掉易混字元

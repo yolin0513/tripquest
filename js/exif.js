@@ -85,9 +85,10 @@ function parseTiff(view, start) {
       if (tag === 4) lng = readRational(o) + readRational(o + 8) / 60 + readRational(o + 16) / 3600;
     });
     if (lat != null && lng != null && isFinite(lat) && isFinite(lng)) {
+      // 只留小數 3 位（~110 公尺）——足以標出地標，但標不到住家門口
       out.gps = {
-        lat: +( (latRef === 'S' ? -lat : lat).toFixed(5) ),
-        lng: +( (lngRef === 'W' ? -lng : lng).toFixed(5) ),
+        lat: +( (latRef === 'S' ? -lat : lat).toFixed(3) ),
+        lng: +( (lngRef === 'W' ? -lng : lng).toFixed(3) ),
       };
     }
   }

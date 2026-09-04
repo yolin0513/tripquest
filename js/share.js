@@ -7,6 +7,25 @@
 import * as store from './store.js';
 import * as db from './db.js';
 import { uuid } from './ids.js';
+import { getConfig, setConfig, syncEnabled } from './sync.js';
+
+// 128-bit 群組祕鑰（放在邀請連結的 #fragment，永不進伺服器紀錄）
+function newSecret() {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+export async function ensureGroupSync(groupId) {
+  const g = store.getRaw(groupId);
+  if (!g) return null;
+  const cfg = getConfig();
+  const patch = {};
+  if (!g.syncSecret) patch.syncSecret = newSecret();
+  if (cfg.url && g.syncUrl !== cfg.url) patch.syncUrl = cfg.url;
+  if (Object.keys(patch).length) await store.patch(groupId, patch);
+  return store.getRaw(groupId);
+}
 
 // ---------- 壓縮工具 ----------
 async function gzip(str) {
@@ -54,9 +73,56 @@ export async function makeShareCode(tripId) {
 }
 
 export async function shareURL(tripId) {
-  const code = await makeShareCode(tripId);
   const base = location.href.split('#')[0];
+  // 有設定同步 → 產生「加入同一個群組」的邀請；否則退回「複製一份任務清單」
+  if (syncEnabled()) {
+    const trip = store.get(tripId);
+    const group = await ensureGroupSync(trip.groupId);
+    const spots = store.spotsOf(tripId);
+    const quests = store.questsOfTrip(tripId);
+    const members = store.membersOf(trip.groupId);
+    const payload = {
+      v: 2, kind: 'sync',
+      url: getConfig().url,
+      groupId: group.id, secret: group.syncSecret, tripId,
+      title: trip.title, startDate: trip.startDate, endDate: trip.endDate,
+      // 帶真實記錄（用真 id），讓朋友立刻能玩，同步再補其餘（照片 / 投稿 / 讚）
+      records: [
+        { id: group.id, type: 'group', name: group.name, syncSecret: group.syncSecret, syncUrl: group.syncUrl, updatedAt: group.updatedAt, deviceId: group.deviceId },
+        { id: trip.id, type: 'trip', groupId: group.id, title: trip.title, startDate: trip.startDate, endDate: trip.endDate, region: trip.region || '', allowGeo: !!trip.allowGeo, allowWiki: trip.allowWiki !== false, updatedAt: trip.updatedAt, deviceId: trip.deviceId },
+        ...members.map((m) => ({ id: m.id, type: 'member', groupId: group.id, displayName: m.displayName, updatedAt: m.updatedAt, deviceId: m.deviceId })),
+        ...spots.map((s) => ({ id: s.id, type: 'spot', tripId, name: s.name, nameLocal: s.name, region: s.region, day: s.day, order: s.order, lat: s.lat ?? null, lng: s.lng ?? null, heroHash: s.heroHash || null, emoji: s.emoji || null, source: s.source, updatedAt: s.updatedAt, deviceId: s.deviceId })),
+        ...quests.map((q) => ({ id: q.id, type: 'quest', tripId, spotId: q.spotId, title: q.title, hint: q.hint, kind: q.kind, order: q.order, source: q.source, updatedAt: q.updatedAt, deviceId: q.deviceId })),
+      ],
+    };
+    return `${base}#/join?j=${await gzip(JSON.stringify(payload))}`;
+  }
+  const code = await makeShareCode(tripId);
   return `${base}#/join?d=${code}`;
+}
+
+// ---------- 同步邀請 ----------
+export async function peekInvite(code) {
+  const p = JSON.parse(await gunzip(code));
+  if (p.kind !== 'sync') throw new Error('邀請格式不符');
+  const spots = (p.records || []).filter((r) => r.type === 'spot').length;
+  const quests = (p.records || []).filter((r) => r.type === 'quest').length;
+  const grp = (p.records || []).find((r) => r.type === 'group');
+  return { sync: true, group: grp?.name || '旅伴', title: p.title || '行程', spots, quests, url: p.url };
+}
+
+export async function joinInvite(code) {
+  const p = JSON.parse(await gunzip(code));
+  if (p.kind !== 'sync') throw new Error('邀請格式不符');
+  // 設定同步後端（若本機還沒設）
+  if (p.url && getConfig().mode === 'local') {
+    setConfig({ mode: p.url.includes('workers.dev') ? 'cloud' : 'lan', url: p.url });
+  }
+  // 用真實 id 建立 / 合併群組與行程骨架
+  await store.importRecords(p.records || [], { merge: true });
+  // 立刻同步一輪，把成員 / 投稿 / 照片補回來
+  try { const { drain } = await import('./outbox.js'); await drain(); } catch { /* 稍後自動重試 */ }
+  return p.tripId;
 }
 
 export async function peekShareCode(code) {

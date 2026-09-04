@@ -7,6 +7,7 @@ import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import { generateForTrip, templateQuests, inferType } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip } from '../enrich.js';
+import { activeMemberId, ensureMember } from '../claim.js';
 
 export default async function trip(tripId) {
   const t = store.get(tripId);
@@ -41,6 +42,14 @@ export default async function trip(tripId) {
 
     members.length ? h('div', { class: 'avatars pad-x', style: 'margin:12px 0' },
       ...members.map((m) => avatar(m.displayName, hashHue(m.id)))) : null,
+
+    // 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
+    (store.getRaw(t.groupId)?.syncSecret && !activeMemberId(tripId) && members.length > 1)
+      ? h('button', {
+          class: 'btn btn-soft btn-block', style: 'border-color:var(--primary)',
+          onclick: async () => { await ensureMember(tripId, { force: true }); trip(tripId); },
+        }, '👋 告訴大家你是誰（拍照前先選一次）')
+      : null,
 
     h('div', { class: 'stack', style: 'margin-top:6px' },
       h('button', { class: 'btn btn-soft btn-block btn-big', onclick: () => navigate(`/trip/${tripId}/people`) },
@@ -158,9 +167,18 @@ export function settings(tripId) {
   setTop({ title: '旅程設定' });
 
   const geoToggle = h('input', { type: 'checkbox', checked: !!t.allowGeo });
-  geoToggle.addEventListener('change', () => {
-    store.patch(tripId, { allowGeo: geoToggle.checked });
-    toast(geoToggle.checked ? '之後的照片會記錄位置（只存本機）' : '已停止記錄位置');
+  geoToggle.addEventListener('change', async () => {
+    await store.patch(tripId, { allowGeo: geoToggle.checked });
+    if (!geoToggle.checked) {
+      // 關閉時，把已存的座標清掉（回頭尊重意願）
+      let n = 0;
+      for (const sub of store.submissionsOfTrip(tripId)) {
+        if (sub.gps) { const raw = store.getRaw(sub.id); raw.gps = null; const { putRecord } = await import('../db.js'); await putRecord(raw); n++; }
+      }
+      toast(n ? `已停止記錄位置，並清除 ${n} 張既有座標` : '已停止記錄位置');
+    } else {
+      toast('之後匯入的照片會記錄位置（只存本機、約 110 公尺精度）');
+    }
   });
 
   const wikiToggle = h('input', { type: 'checkbox', checked: t.allowWiki !== false });

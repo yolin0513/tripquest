@@ -3,6 +3,7 @@ import * as store from '../store.js';
 import { h, toast, confirmDialog, promptDialog, celebrate, KIND_META } from '../ui.js';
 import { navigate } from '../router.js';
 import { importPhoto, blobURL } from '../photos.js';
+import { ensureMember } from '../claim.js';
 
 export default async function quest(questId) {
   const q = store.get(questId);
@@ -51,15 +52,13 @@ function photoButton(trip, q, spot, members) {
     if (!files.length) return;
 
     // 「我是誰」：每個旅程問一次就記住
-    let memberId = store.getActiveMember(trip.id);
-    if (memberId && !store.getRaw(memberId)) memberId = null;
-    if (!memberId && members.length > 1) {
-      memberId = await pickMember(members);
-      if (memberId === undefined) return;
-      if (memberId) store.setActiveMember(trip.id, memberId);
-    } else if (!memberId) {
+    let memberId;
+    if (members.length <= 1) {
       memberId = members[0]?.id || null;
       if (memberId) store.setActiveMember(trip.id, memberId);
+    } else {
+      memberId = await ensureMember(trip.id);
+      if (!memberId) return;
     }
 
     const wasDone = store.isQuestDone(q.id);
@@ -106,24 +105,6 @@ function photoButton(trip, q, spot, members) {
     h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => input.click() },
       store.isQuestDone(q.id) ? '📷 再拍一張' : '📷 拍照'),
   );
-}
-
-function pickMember(members) {
-  return new Promise((resolve) => {
-    const done = (v) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
-    const onKey = (e) => { if (e.key === 'Escape') done(undefined); };
-    const card = h('div', { class: 'modal-card' },
-      h('h2', { class: 'modal-title' }, '這張是誰拍的？'),
-      h('p', { class: 'sm muted', style: 'margin:-6px 0 12px' }, '選一次就好，之後這個旅程都記住'),
-      h('div', { class: 'member-pick' },
-        ...members.map((m) => h('button', { class: 'btn btn-soft btn-block btn-big', onclick: () => done(m.id) }, m.displayName)),
-        h('button', { class: 'btn btn-ghost btn-block', onclick: () => done(null) }, '先不指定'),
-      ),
-    );
-    const overlay = h('div', { class: 'modal-overlay', onclick: (e) => { if (e.target === overlay) done(undefined); } }, card);
-    document.getElementById('modalRoot').append(overlay);
-    document.addEventListener('keydown', onKey);
-  });
 }
 
 async function paintGrid(grid, questId) {

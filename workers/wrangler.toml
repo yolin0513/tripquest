@@ -1,0 +1,19 @@
+name = "tripquest"
+main = "worker.mjs"
+compatibility_date = "2024-11-01"
+
+# 這個 Worker 是純同步 API（/health /push /pull /blob）。
+# App 本身留在 GitHub Pages；Worker 送 CORS 標頭，跨網域呼叫沒問題。
+# 驗證是靠邀請祕鑰（bearer token），不是靠同源。
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tripquest"
+database_id = "貼上 wrangler d1 create tripquest 印出的 database_id"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "tripquest-photos"
+
+[vars]
+MAX_BLOB_BYTES = "15000000"

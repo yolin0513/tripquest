@@ -10,8 +10,24 @@ const MAX_EDGE = 1600;
 const THUMB_EDGE = 320;
 const QUALITY = 0.82;
 
+// WebP 只在瀏覽器「確實」能編碼時才用（Safari 舊版 toBlob 會默默吐 PNG，1600px PNG ~3MB）
+let _fmt = null;
+async function pickFormat() {
+  if (_fmt) return _fmt;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 8;
+    const blob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.8));
+    _fmt = blob && blob.type === 'image/webp' ? { mime: 'image/webp', q: 0.80, tq: 0.75 } : { mime: 'image/jpeg', q: QUALITY, tq: 0.72 };
+  } catch {
+    _fmt = { mime: 'image/jpeg', q: QUALITY, tq: 0.72 };
+  }
+  return _fmt;
+}
+
 let _worker = null;
 let _workerBroken = false;
+let _askedPersist = false;
 const _pending = new Map();
 
 function worker() {
@@ -32,19 +48,19 @@ function worker() {
   }
 }
 
-function compressInWorker(blob) {
+function compressInWorker(blob, fmt) {
   const w = worker();
   if (!w) return Promise.reject(new Error('no worker'));
   const id = uuid();
   return new Promise((resolve, reject) => {
     _pending.set(id, (res) => (res.ok ? resolve(res) : reject(new Error(res.error))));
-    w.postMessage({ id, blob, maxEdge: MAX_EDGE, thumbEdge: THUMB_EDGE, quality: QUALITY });
+    w.postMessage({ id, blob, maxEdge: MAX_EDGE, thumbEdge: THUMB_EDGE, mime: fmt.mime, quality: fmt.q, thumbQuality: fmt.tq });
     setTimeout(() => { if (_pending.has(id)) { _pending.delete(id); reject(new Error('timeout')); } }, 20000);
   });
 }
 
 // 主執行緒退路（無 Worker / OffscreenCanvas 時）
-async function compressOnMain(blob) {
+async function compressOnMain(blob, fmt) {
   const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' }).catch(() => loadViaImg(blob));
   const enc = async (maxEdge, q) => {
     const scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
@@ -53,11 +69,14 @@ async function compressOnMain(blob) {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = hh;
     canvas.getContext('2d').drawImage(bmp, 0, 0, w, hh);
-    const out = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', q));
+    let out = await new Promise((res) => canvas.toBlob(res, fmt.mime, q));
+    if (!out || (fmt.mime !== 'image/jpeg' && out.type !== fmt.mime)) {
+      out = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', QUALITY)); // 保險：不支援就退回 JPEG
+    }
     return { blob: out, w, h: hh };
   };
-  const photo = await enc(MAX_EDGE, QUALITY);
-  const thumb = await enc(THUMB_EDGE, 0.72);
+  const photo = await enc(MAX_EDGE, fmt.q);
+  const thumb = await enc(THUMB_EDGE, fmt.tq);
   return { ok: true, photo: photo.blob, thumb: thumb.blob, w: photo.w, h: photo.h };
 }
 
@@ -82,12 +101,19 @@ async function storeBlob(blob, kind) {
 export async function importPhoto(file, opts) {
   if (!file || !file.type.startsWith('image/')) throw new Error('不是圖片檔');
   const exif = await readExif(file);
+  const fmt = await pickFormat();
 
   let comp;
   try {
-    comp = await compressInWorker(file);
+    comp = await compressInWorker(file, fmt);
   } catch {
-    comp = await compressOnMain(file);
+    comp = await compressOnMain(file, fmt);
+  }
+
+  // 有內容時才要求持久化許可（此時系統較願意給、使用者也有情境）
+  if (!_askedPersist) {
+    _askedPersist = true;
+    db.requestPersist().catch(() => {});
   }
 
   const photo = await storeBlob(comp.photo, 'photo');
@@ -113,14 +139,47 @@ export async function importPhoto(file, opts) {
 
 // blob URL 快取（縮圖 / 大圖顯示用），避免重複 createObjectURL
 const _urlCache = new Map();
+const _fetching = new Map();
+
+// 全圖延遲下載：本機沒有、但屬於已同步群組時，需要顯示才去伺服器抓
+async function lazyFetch(hash) {
+  if (_fetching.has(hash)) return _fetching.get(hash);
+  const p = (async () => {
+    try {
+      const group = store.groupForHash(hash);
+      if (!group) return null;
+      const sync = await import('./sync.js');
+      if (!sync.syncEnabled()) return null;
+      const adapter = sync.adapterForGroup(group.id, group.syncSecret);
+      const blob = await adapter.getBlob(hash);
+      if (blob && blob.size) {
+        await db.putBlob({ hash, blob, bytes: blob.size, kind: 'photo' });
+        return blob;
+      }
+    } catch { /* ignore */ }
+    return null;
+  })();
+  _fetching.set(hash, p);
+  p.finally(() => _fetching.delete(hash));
+  return p;
+}
+
 export async function blobURL(hash) {
   if (!hash) return '';
   if (_urlCache.has(hash)) return _urlCache.get(hash);
-  const entry = await db.getBlob(hash);
-  if (!entry) return '';
+  let entry = await db.getBlob(hash);
+  if (!entry) {
+    const blob = await lazyFetch(hash);
+    if (!blob) return '';
+    entry = { blob };
+  }
   const url = URL.createObjectURL(entry.blob);
   _urlCache.set(hash, url);
   return url;
+}
+
+export async function hasLocal(hash) {
+  return !!(await db.getBlob(hash));
 }
 export function revokeAll() {
   for (const url of _urlCache.values()) URL.revokeObjectURL(url);

@@ -131,6 +131,10 @@ export default async function create() {
       for (const s of spots) await store.put(s);
       for (const q of quests) await store.put(q);
 
+      // 有設定同步 → 幫這個新群組配一把祕鑰，之後分享出去就是「加入同一個群組」
+      const { syncEnabled } = await import('../sync.js');
+      if (syncEnabled()) { const { ensureGroupSync } = await import('../share.js'); await ensureGroupSync(groupId); }
+
       toast(`建立了 ${spots.length} 個景點、${quests.length} 個任務`);
       navigate(`/trip/${tripId}`, { replace: true });
       enrichTrip(tripId).catch(() => {}); // 背景補景點示意圖

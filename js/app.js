@@ -2,9 +2,9 @@
 
 import { route, setNotFound, startRouter, navigate, currentRoute } from './router.js';
 import * as store from './store.js';
-import { requestPersist } from './db.js';
 import { mount, h, toast } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
+import { initIdentity } from './identity.js';
 
 const view = document.getElementById('view');
 const backBtn = document.getElementById('backBtn');
@@ -80,15 +80,12 @@ setNotFound(() => { navigate('/', { replace: true }); });
   applyPrefs();
   renderLoading();
   await store.init();
-  requestPersist(); // 盡量請系統別在 7 天沒開就清掉資料
+  await initIdentity();       // 讓裝置身分與 localStorage / IndexedDB 一致
   startRouter();
   syncTabs();
 
-  // 若已設定自架伺服器，開啟時在背景同步一次
-  import('./sync.js').then(async ({ activeAdapter, syncNow }) => {
-    if (activeAdapter().id === 'local') return;
-    try { await syncNow(); } catch { /* 靜默 */ }
-  });
+  // 離線同步佇列：網路一好就自動補傳 / 補收
+  import('./outbox.js').then((o) => o.startAutoDrain()).catch(() => {});
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

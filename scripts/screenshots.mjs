@@ -121,7 +121,7 @@ try {
       total: Math.round(timeline.total),
       albumKB: Math.round(album.size / 1024),
       days: (txt.match(/class="day"/g) || []).length,
-      hasImg: txt.includes('data:image/jpeg;base64'),
+      hasImg: /data:image\/(jpeg|webp|png);base64/.test(txt),
     };
   }, tripId);
   if (tl.hasImg && tl.days === 3 && tl.kinds.includes('map') && tl.kinds.includes('intro') && tl.kinds.includes('outro'))
