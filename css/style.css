@@ -414,6 +414,8 @@ button.card { appearance: none; font: inherit; }
   border: 0; border-radius: 12px; padding: 0 16px; min-height: 46px;
 }
 .update-go:active { transform: scale(0.96); }
+.update-go:disabled { opacity: 0.72; }
+.update-bar[data-busy] { border-color: var(--muted); }
 .update-later {
   appearance: none; flex: none; cursor: pointer;
   background: none; border: 0; color: var(--muted);
