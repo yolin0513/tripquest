@@ -95,9 +95,13 @@ function tabItem(icon, label, href, active) {
   const el = h('a', { class: 'tab' + (active ? ' active' : ''), href: '#' + href },
     h('span', { class: 'ti' }, icon), h('span', {}, label));
   // 已經在這一頁時再按同一個分頁 → 回到最上面。
-  // 切到別的分頁維持原本行為（router 會還原那一頁上次看到哪裡）。
+  //
+  // 判斷「已經在這一頁」一定要比對**完整網址**，不能用 active。
+  // active 的意思是「現在在這個分頁的區域裡」—— 在景點頁、任務詳情、調整行程、
+  // 海報、天氣頁時，「任務」都是 active，但那時候按「任務」是要**回到任務清單**。
+  // 用 active 判斷會把那些頁面的返回路徑整個擋掉，人就被困在子頁面出不來。
   el.addEventListener('click', (e) => {
-    if (!active) return;
+    if ((location.hash || '#/') !== '#' + href) return;   // 不是同一頁 → 照常導覽
     e.preventDefault();
     if (window.scrollY <= 4) return;     // 已經在最上面就什麼都不做，不要莫名跳一下
     smoothScrollTo(0);
