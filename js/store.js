@@ -144,6 +144,31 @@ export function setActiveMember(tripId, memberId) {
   try { localStorage.setItem('tripquest.me.' + tripId, memberId); } catch { /* noop */ }
 }
 
+// ---------- 「我現在在哪一站」----------
+// 只存本機、不同步：一家人可能分頭行動，爸爸還在夜市、女兒已經走到下一站，
+// 把這個同步出去會讓別人的畫面被硬拉走。這是「我的視角」，不是行程資料。
+//
+// 會自動失效：指定的景點完成之後就不再算數，「下一站」自動往後推，
+// 使用者不會被困在一個自己設過就忘了的狀態裡。
+const HERE = (tripId) => 'tripquest.here.' + tripId;
+
+export function getHereSpot(tripId) {
+  let id = null;
+  try { id = localStorage.getItem(HERE(tripId)); } catch { return null; }
+  if (!id) return null;
+  const s = get(id);
+  if (!s || s.tripId !== tripId) { clearHereSpot(tripId); return null; }
+  const p = spotProgress(id);
+  if (p.total > 0 && p.done === p.total) { clearHereSpot(tripId); return null; }  // 完成就放手
+  return id;
+}
+export function setHereSpot(tripId, spotId) {
+  try { localStorage.setItem(HERE(tripId), spotId); } catch { /* noop */ }
+}
+export function clearHereSpot(tripId) {
+  try { localStorage.removeItem(HERE(tripId)); } catch { /* noop */ }
+}
+
 // PhotoSubmission 專用：直接新增，不走 stamp 的可變語意
 export async function addSubmission(sub) {
   sub.id = sub.id || uuid();

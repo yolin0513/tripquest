@@ -360,6 +360,55 @@ button.card { appearance: none; font: inherit; }
 .nextstn-name { font-size: 0.95rem; font-weight: 700; opacity: 0.92; }
 .map-btn { font-size: 1rem; }
 
+/* 「換一站」：人到了景點常常不會當下就拍照，那個景點就一直算沒完成，
+   自動判斷會永遠指著同一個地方 —— 所以要讓他自己講現在在哪。 */
+.nextstn { display: block; }
+.nextstn-plain {
+  display: flex; flex-direction: column; gap: 4px; align-items: center;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; font-weight: 800; line-height: 1.3;
+}
+.nextstn-switch {
+  appearance: none; display: block; width: 100%; margin-top: 8px;
+  background: none; border: 0; color: var(--muted);
+  font: inherit; font-weight: 700; font-size: 0.95rem;
+  padding: 12px; min-height: 46px; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.nextstn-switch:active { color: var(--text); }
+
+.here-pick {
+  appearance: none; display: flex; align-items: center; gap: 12px; width: 100%;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--bg-elev); border: 2px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 8px; min-height: var(--tap);
+}
+.here-pick.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 15%, transparent); }
+.here-pick:active { transform: scale(0.99); }
+.here-pick-emoji { font-size: 1.5rem; flex: none; }
+.here-pick-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.here-pick-name { font-weight: 800; line-height: 1.3; }
+.here-pick-tick { flex: none; color: var(--primary); font-weight: 900; font-size: 1.2rem; }
+
+/* 標出「現在這一站」 */
+.qcollapse.is-here { border-color: var(--primary); }
+.qc-here {
+  display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 24%, transparent);
+  color: var(--text); font-size: 0.76rem; font-weight: 800; vertical-align: middle;
+}
+
+/* ---------- 照片牆的排序與篩選 ---------- */
+.wall-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.wall-chip {
+  appearance: none; cursor: pointer; font: inherit;
+  border: 2px solid var(--line); background: var(--bg-elev); color: var(--text);
+  border-radius: 14px; padding: 10px 14px; font-weight: 700; font-size: 0.95rem;
+  min-height: 46px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wall-chip:active { transform: scale(0.96); }
+.wall-chip.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 20%, transparent); }
+
 /* ---------- 大任務卡（長輩主視覺） ---------- */
 /* 卡片本身不是按鈕了：上半部（圖＋文字）點了看照片，下半部是加照片的兩顆大按鈕。
    加照片的按鈕必須直接在卡片上 —— 藏在任何一層裡面長輩就找不到。 */

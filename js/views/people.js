@@ -10,13 +10,58 @@ import { openTagger } from '../phototag.js';
 
 const REACTIONS = ['❤️', '👍', '😍', '👏'];
 
+// 排序方式。預設「最新的在前」：旅途中打開照片牆，最常見的是想看剛剛拍了什麼。
+const SORTS = [
+  { id: 'new', label: '🕘 最新的在前' },
+  { id: 'old', label: '🕗 最舊的在前' },
+  { id: 'spot', label: '📍 照行程順序' },
+  { id: 'person', label: '👥 照人分' },
+];
+const VIEW_KEY = (tripId) => 'tripquest.wall.' + tripId;
+
+function loadView(tripId) {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY(tripId)) || '{}');
+    return { sort: SORTS.some((s) => s.id === v.sort) ? v.sort : 'new', spot: v.spot || '', untagged: !!v.untagged };
+  } catch { return { sort: 'new', spot: '', untagged: false }; }
+}
+function saveView(tripId, v) {
+  try { localStorage.setItem(VIEW_KEY(tripId), JSON.stringify(v)); } catch { /* noop */ }
+}
+
+// 排序與篩選都在這裡，畫面只負責顯示
+function arrange(all, view, tripId) {
+  const spotOrder = new Map();
+  store.spotsOf(tripId).forEach((s, i) => spotOrder.set(s.id, i));
+  const spotOf = (sub) => {
+    const q = store.getRaw(sub.questId);
+    return q ? q.spotId : null;
+  };
+
+  let list = all.slice();
+  if (view.spot) list = list.filter((s) => spotOf(s) === view.spot);
+  if (view.untagged) list = list.filter((s) => !store.isPhotoTagged(s));
+
+  const at = (s) => s.takenAt || s.createdAt || 0;
+  if (view.sort === 'old') list.sort((a, b) => at(a) - at(b));
+  else if (view.sort === 'spot') {
+    list.sort((a, b) => (spotOrder.get(spotOf(a)) ?? 999) - (spotOrder.get(spotOf(b)) ?? 999) || at(a) - at(b));
+  } else if (view.sort === 'person') {
+    const name = (s) => {
+      const id = shooterOf(s);
+      return (id && store.getRaw(id)?.displayName) || s.byDevice || '';
+    };
+    list.sort((a, b) => name(a).localeCompare(name(b), 'zh-Hant') || at(b) - at(a));
+  } else list.sort((a, b) => at(b) - at(a));           // 預設：最新的在前
+  return { list, spotOf };
+}
+
 export default async function people(tripId) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '照片牆' });
 
   const members = store.membersOf(t.groupId);
-  const subs = [...store.submissionsOfTrip(tripId)].reverse(); // 新的在前
   const prog = store.tripProgress(tripId);
   const page = h('div', { class: 'page' });
 
@@ -62,17 +107,73 @@ export default async function people(tripId) {
     ));
   }
 
+  // ---------- 排序與篩選 ----------
+  const view = loadView(tripId);
+  const { list: subs, spotOf } = arrange(allSubs, view, tripId);
+
+  if (allSubs.length) {
+    const apply = (patch) => { saveView(tripId, { ...view, ...patch }); people(tripId); };
+
+    // 排序
+    page.append(h('div', { class: 'section-label' }, '排序'));
+    page.append(h('div', { class: 'wall-chips' }, ...SORTS.map((s) => h('button', {
+      class: 'wall-chip' + (view.sort === s.id ? ' on' : ''),
+      onclick: () => apply({ sort: s.id }),
+    }, s.label))));
+
+    // 只看某個景點（附張數）
+    const counts = new Map();
+    for (const s of allSubs) {
+      const sid = spotOf(s);
+      if (sid) counts.set(sid, (counts.get(sid) || 0) + 1);
+    }
+    const spotsWithPhotos = store.spotsOf(tripId).filter((s) => counts.get(s.id));
+    if (spotsWithPhotos.length > 1) {
+      page.append(h('div', { class: 'section-label' }, '只看哪個景點'));
+      page.append(h('div', { class: 'wall-chips' },
+        h('button', {
+          class: 'wall-chip' + (view.spot ? '' : ' on'),
+          onclick: () => apply({ spot: '' }),
+        }, `全部（${allSubs.length}）`),
+        ...spotsWithPhotos.map((s) => h('button', {
+          class: 'wall-chip' + (view.spot === s.id ? ' on' : ''),
+          onclick: () => apply({ spot: view.spot === s.id ? '' : s.id }),
+        }, `${s.emoji || '📍'} ${s.name}（${counts.get(s.id)}）`)),
+      ));
+    }
+
+    // 只看未標記（多人才有意義）
+    if (members.length > 1 && (untagged.length || view.untagged)) {
+      page.append(h('div', { class: 'wall-chips', style: 'margin-top:10px' },
+        h('button', {
+          class: 'wall-chip' + (view.untagged ? ' on' : ''),
+          onclick: () => apply({ untagged: !view.untagged }),
+        }, `🏷️ 只看未標記（${untagged.length}）`)));
+    }
+  }
+
   // 照片動態
-  page.append(h('div', { class: 'section-label' }, subs.length ? '大家拍的照片' : '還沒有照片'));
-  if (!subs.length) {
+  const filtered = !!(view.spot || view.untagged);
+  page.append(h('div', { class: 'section-label' },
+    !allSubs.length ? '還沒有照片'
+      : (filtered ? `符合的照片（${subs.length} / ${allSubs.length}）` : '大家拍的照片')));
+
+  if (!allSubs.length) {
     page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'),
       h('button', { class: 'btn btn-primary', onclick: () => back(`/trip/${tripId}`) }, '回任務清單')));
+  } else if (!subs.length) {
+    page.append(h('div', { class: 'empty' },
+      h('p', {}, '這個條件下沒有照片'),
+      h('button', {
+        class: 'btn btn-primary',
+        onclick: () => { saveView(tripId, { ...view, spot: '', untagged: false }); people(tripId); },
+      }, '看全部照片')));
   }
 
   render(page);
 
   for (const sub of subs) {
-    page.append(await feedItem(sub, tripId, allSubs, members.length > 1));
+    page.append(await feedItem(sub, tripId, subs, members.length > 1));
   }
 }
 

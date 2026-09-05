@@ -24,6 +24,15 @@ function nextIncompleteSpot(tripId) {
   return null;
 }
 
+// 「現在這一站」：使用者手動指定的優先，沒指定就照順序找第一個還沒完成的。
+// 會這樣做是因為：人到了景點常常不會當下就上傳照片，那個景點就一直算「沒完成」，
+// 機械式地找第一個未完成的話，「帶我去下一站」會永遠卡在同一個地方。
+function currentSpot(tripId) {
+  const manual = store.getHereSpot(tripId);      // 完成後會自動失效，不會困住
+  if (manual) return store.get(manual);
+  return nextIncompleteSpot(tripId);
+}
+
 const COUNTRY_NAMES = {};
 function countryName(code) { return code ? (COUNTRY_NAMES[code] || code) : ''; }
 async function pickCountry(tripId) {
@@ -126,9 +135,11 @@ export default async function trip(tripId, { fresh = false } = {}) {
       ));
     }
 
+    const hereId = store.getHereSpot(tripId);
+    const hereDay = hereId ? (store.get(hereId)?.day || 1) : null;
     for (const day of dayNums) {
       container.append(dayCollapse(day, byDay.get(day), tripId, t, {
-        dayNums, todayDay, allDone,
+        dayNums, todayDay, allDone, hereDay, hereId,
       }));
     }
     // 新增景點在「調整每天的行程」裡；這裡不再重複放
@@ -148,7 +159,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
   // 所以等它填完（或最多等 700ms）再捲，不然捲到一半畫面又被推走。
   if (fresh) {
     Promise.race([wxReady, new Promise((r) => setTimeout(r, 700))])
-      .then(() => scrollToToday(container, dayForToday(t)))
+      .then(() => scrollToToday(container, dayForToday(t), store.getHereSpot(tripId)))
       .catch(() => {});
   }
 
@@ -179,13 +190,21 @@ function tripEnded(t) {
 //   3. 今天那一列本來就看得到就不動
 //   4. 只捲到「第 N 天」的標題列，不捲進任務深處，他才知道自己在哪一天
 //   5. 設定可以整個關掉
-function scrollToToday(container, todayDay) {
-  if (!(todayDay > 0)) return;
+function scrollToToday(container, todayDay, hereId) {
+  if (!hereId && !(todayDay > 0)) return;
   if (navRestoredScroll()) return;
   if (getPrefs().autoScroll === false) return;
 
-  const sec = container.querySelector(`.daycollapse[data-day="${todayDay}"]`);
-  const head = sec && (sec.querySelector('.dc-head') || sec);
+  // 有指定「現在這一站」就捲到那一站；否則捲到今天那一天的標題列
+  let head = null;
+  if (hereId) {
+    const sp = container.querySelector(`.qcollapse[data-spot="${CSS.escape(hereId)}"]`);
+    head = sp && (sp.querySelector('.qc-head') || sp);
+  }
+  if (!head) {
+    const sec = container.querySelector(`.daycollapse[data-day="${todayDay}"]`);
+    head = sec && (sec.querySelector('.dc-head') || sec);
+  }
   if (!head) return;
 
   const topH = document.getElementById('topbar')?.offsetHeight || 60;
@@ -232,20 +251,94 @@ function smoothScrollTo(top) {
   requestAnimationFrame(step);
 }
 
-// 「用地圖帶我去下一站」
+// 「用地圖帶我去下一站」＋「換一站」
 function nextStationButton(tripId, t, allDone) {
   if (allDone || tripEnded(t)) return null;
-  const next = nextIncompleteSpot(tripId);
+  const next = currentSpot(tripId);
   if (!next) return null;
+  const manual = !!store.getHereSpot(tripId);
   const url = mapsDirUrl(next);
-  if (!url) return null;
-  return h('a', {
+
+  const nav = url ? h('a', {
     class: 'btn btn-primary btn-block btn-big nextstn-btn',
-    href: url, target: '_blank', rel: 'noopener', style: 'margin-top:8px; text-decoration:none',
+    href: url, target: '_blank', rel: 'noopener', style: 'text-decoration:none',
   },
-    h('span', {}, '🧭 用地圖帶我去下一站'),
+    h('span', {}, manual ? '🧭 用地圖帶我去這一站' : '🧭 用地圖帶我去下一站'),
+    h('span', { class: 'nextstn-name' }, `${next.emoji || '📍'} ${next.name}`),
+  ) : h('div', { class: 'nextstn-plain' },
+    h('span', {}, manual ? '📍 現在這一站' : '📍 下一站'),
     h('span', { class: 'nextstn-name' }, `${next.emoji || '📍'} ${next.name}`),
   );
+
+  return h('div', { class: 'nextstn', style: 'margin-top:8px' },
+    nav,
+    h('button', { class: 'nextstn-switch', onclick: () => pickHereSpot(tripId) },
+      manual ? '不是這一站？換一站' : '換一站'),
+  );
+}
+
+// 選「現在在哪一站」。也提供「自動」把手動狀態關掉，不會被困住。
+async function pickHereSpot(tripId) {
+  const spots = store.spotsOf(tripId);
+  if (!spots.length) return;
+  const manual = store.getHereSpot(tripId);
+  const byDay = new Map();
+  for (const s of spots) {
+    const d = s.day || 1;
+    if (!byDay.has(d)) byDay.set(d, []);
+    byDay.get(d).push(s);
+  }
+
+  const res = await new Promise((resolve) => {
+    const ov = h('div', { class: 'modal-overlay', onclick: (e) => { if (e.target === ov) close(null); } });
+    const close = (v) => { ov.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+
+    const body = h('div', {},
+      h('p', { class: 'sm muted', style: 'margin:0 0 12px' },
+        '到了景點還沒拍照也沒關係，直接告訴 App 你現在在哪裡就好。'));
+    for (const [day, list] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
+      body.append(h('div', { class: 'section-label', style: 'margin:14px 2px 8px' }, `第 ${day} 天`));
+      for (const s of list) {
+        const p = store.spotProgress(s.id);
+        const done = p.total > 0 && p.done === p.total;
+        body.append(h('button', {
+          class: 'here-pick' + (manual === s.id ? ' on' : ''),
+          onclick: () => close(s.id),
+        },
+          h('span', { class: 'here-pick-emoji' }, s.emoji || '📍'),
+          h('span', { class: 'here-pick-main' },
+            h('span', { class: 'here-pick-name' }, s.name),
+            h('span', { class: 'muted sm' }, p.total ? (done ? '✓ 已完成' : `完成 ${p.done}/${p.total}`) : '還沒有任務'),
+          ),
+          manual === s.id ? h('span', { class: 'here-pick-tick' }, '✓') : null,
+        ));
+      }
+    }
+
+    ov.append(h('div', { class: 'modal-card', role: 'dialog', 'aria-modal': 'true' },
+      h('h2', { class: 'modal-title' }, '你現在在哪一站？'),
+      h('div', { class: 'modal-body' }, body),
+      h('div', { class: 'modal-actions' },
+        h('button', { class: 'btn', onclick: () => close('auto') }, '自動（照順序）'),
+        h('button', { class: 'btn', onclick: () => close(null) }, '取消'),
+      ),
+    ));
+    document.getElementById('modalRoot').append(ov);
+    document.addEventListener('keydown', onKey);
+  });
+  if (res === null) return;
+
+  // 換站時把折疊狀態清掉，新的預設（只展開這一站）才會生效 ——
+  // 不然使用者會覺得「我明明選了，畫面卻沒反應」
+  try {
+    for (const s of spots) localStorage.removeItem('tripquest.spotOpen.' + s.id);
+    for (const d of byDay.keys()) localStorage.removeItem(`tripquest.dayOpen.${tripId}.${d}`);
+  } catch { /* noop */ }
+
+  if (res === 'auto') { store.clearHereSpot(tripId); toast('改成自動照順序'); }
+  else { store.setHereSpot(tripId, res); toast(`現在這一站：${store.get(res)?.name || ''}`); }
+  trip(tripId, { fresh: true });
 }
 
 // 今天是這趟的第幾天：0 = 還沒開始、-1 = 已結束、null = 沒設日期、正整數 = 進行中
@@ -278,9 +371,11 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
   const dayDone = dp.total > 0 && dp.done === dp.total;
   const dstr = dayDate(t, day);
 
-  // 預設展開規則
+  // 預設展開規則。使用者手動指定「現在這一站」時，那一天最優先 ——
+  // 他自己講的，比日期推算準。
   let dflt;
-  if (ctx.allDone) dflt = false;
+  if (ctx.hereDay) dflt = day === ctx.hereDay;
+  else if (ctx.allDone) dflt = false;
   else if (ctx.todayDay == null || ctx.todayDay === 0) dflt = day === ctx.dayNums[0];   // 沒設日期 / 還沒開始 → 只開第一天
   else if (ctx.todayDay === -1) dflt = false;                                            // 已結束 → 全收
   else dflt = day === ctx.todayDay;                                                      // 進行中 → 只開今天
@@ -324,7 +419,7 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
       chev,
     ),
     h('div', { class: 'dc-body' },
-      h('div', { class: 'dc-inner' }, ...daySpots.map((s) => spotSection(s, tripId)))),
+      h('div', { class: 'dc-inner' }, ...daySpots.map((s) => spotSection(s, tripId, ctx.hereId)))),
   );
   sec._wxSpan = wxSpan;
   return sec;
@@ -383,10 +478,11 @@ async function fillWeather(slot, container, tripId, trip) {
 
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，
 // 做完的自動讓位。使用者自己點過的展開／收合永遠優先（存 localStorage）。
-function spotSection(s, tripId) {
+function spotSection(s, tripId, hereId) {
   const quests = store.questsOf(s.id);
   const p = store.spotProgress(s.id);
   const allDone = p.total > 0 && p.done === p.total;
+  const isHere = !!hereId && hereId === s.id;
 
   const openKey = 'tripquest.spotOpen.' + s.id;
   let open;
@@ -394,14 +490,16 @@ function spotSection(s, tripId) {
     const stored = localStorage.getItem(openKey);
     if (stored === '1') open = true;
     else if (stored === '0') open = false;
+    // 有指定「現在這一站」時只展開那一站，其他收起來
+    else if (hereId) open = isHere;
     else open = !allDone;
-  } catch { open = !allDone; }
+  } catch { open = hereId ? isHere : !allDone; }
 
   const tk = s.theme || themeForSpot(s);
   const tm = themeMeta(tk);
   const chev = h('span', { class: 'qc-chev' }, open ? '▾' : '▸');
   const sec = h('section', {
-    class: 'qcollapse' + (open ? ' open' : ''),
+    class: 'qcollapse' + (open ? ' open' : '') + (isHere ? ' is-here' : ''),
     dataset: { spot: s.id },
     style: `--theme-accent:${tm.poster.accent}`,
   },
@@ -417,6 +515,7 @@ function spotSection(s, tripId) {
       },
         h('span', { class: 'qc-emoji' }, s.emoji || '📍'),
         h('span', { class: 'qc-name' }, s.name,
+          isHere ? h('span', { class: 'qc-here' }, '📍 現在這一站') : null,
           h('span', { class: 'qc-theme' }, tm.emoji + ' ' + tm.label)),
         h('span', {
           class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
