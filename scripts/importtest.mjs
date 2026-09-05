@@ -263,6 +263,100 @@ try {
   yes(!stripped.after, '重繪之後 GPS 標記不見了（送出去的不會帶位置）');
   yes(stripped.hasShrink, 'import.js 真的走重繪這條路');
 
+  // ---------- 13. 使用者的真實行程表：從貼上到建立完整走一遍 ----------
+  // 這份是長輩實際貼進來的 Google 地圖行程匯出（33 行、3 天、含 emoji 店名、
+  // 關鍵字堆疊、備案、HH時MM分 停留）。三個真 bug 都是它抓到的。
+  {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const RAW = readFileSync(fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url)), 'utf8');
+
+    await page.goto(`http://localhost:${WEB}/#/new`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.page.form');
+    await page.evaluate(() => { document.querySelector('details').open = true; });
+    await sleep(150);
+    await clickText('button', '匯入行程表');
+    await page.waitForSelector('.imp-src', { timeout: 5000 });
+    await clickText('.imp-src', '直接打字');
+    await page.waitForSelector('textarea.mono', { timeout: 5000 });
+    await page.evaluate((t) => {
+      const ta = [...document.querySelectorAll('textarea')].pop();
+      ta.value = t;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }, RAW);
+    await clickText('.modal-actions .btn', '讀讀看');
+    await page.waitForSelector('.imp-row', { timeout: 8000 });
+    await sleep(1500);                       // 等策展比對跑完
+
+    const rows = await page.$$eval('.imp-row', (els) => els.map((e) => ({
+      n: e.querySelector('.imp-name').value,
+      d: e.querySelector('.imp-day-sel').value,
+      s: e.querySelector('.imp-stay').value,
+      on: e.querySelector('.imp-chk').checked,
+      badge: e.querySelector('.imp-badge').textContent.trim(),
+      warn: (e.querySelector('.imp-warn') || {}).textContent || '',
+    })));
+    const R = (n) => rows.find((x) => x.n === n);
+    eq(rows.length, 32, '真實資料：確認畫面列出 32 筆');
+    eq(R('白雲山鹿') && R('白雲山鹿').s, '60', '真實資料：01時00分 在下拉裡顯示得出來');
+    eq(R('香草菲菲 芳香植物博物館') && R('香草菲菲 芳香植物博物館').s, '187', '真實資料：187 分不在預設選項也不會變「不設定」');
+    eq(R('山風民宿hillstay') && R('山風民宿hillstay').s, '72', '真實資料：72 分同上');
+    const stayLabels = await page.$$eval('.imp-stay', (els) => els.map((e) => e.selectedOptions[0].textContent));
+    yes(stayLabels.includes('3.1 小時') && stayLabels.includes('1.2 小時'), '真實資料：非預設值有補成選項並顯示');
+    yes(R('羅東觀光夜市') && R('羅東觀光夜市').badge === '✓', '真實資料：羅東觀光夜市對到策展的「羅東夜市」');
+    yes(!rows.some((x) => x.warn.includes('資料庫')), '真實資料：沒對到策展資料不再標成警告');
+    eq(rows.filter((x) => x.on).length, 28, '真實資料：預設勾 28 個（家 ×2、備案 ×2 不勾）');
+    yes(R('家') && !R('家').on && R('家').warn.includes('出發'), '真實資料：「家」預設不勾且有說明');
+
+    const titleBefore = await page.$eval('input.field[type=text]', (e) => e.value);
+    await clickText('.modal-actions .btn', '就這樣建立');
+    await page.waitForFunction(() => document.querySelector('.imp-bar') && !document.querySelector('.imp-bar').hidden, { timeout: 6000 });
+    const titleAfter = await page.$eval('input.field[type=text]', (e) => e.value);
+    eq(titleBefore, '', '真實資料：建立前旅程名稱是空的');
+    eq(titleAfter, '宜蘭遊', '真實資料：旅程名稱自動填成「宜蘭遊」');
+
+    await clickText('button.btn-primary', '產生拍照任務');
+    await page.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 20000 });
+    await page.waitForSelector('.qcollapse', { timeout: 20000 });
+
+    const made = await page.evaluate(async () => {
+      const s = await import('./js/store.js');
+      const tid = location.hash.split('/')[2];
+      const spots = s.spotsOf(tid).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+      return {
+        tid,
+        n: spots.length,
+        days: [...new Set(spots.map((x) => x.day))],
+        noQuest: spots.filter((x) => s.questsOf(x.id).length === 0).map((x) => x.name),
+        quests: s.questsOfTrip(tid).length,
+        curated: spots.filter((x) => x.source === 'curated').map((x) => x.name),
+        withGeo: spots.filter((x) => x.lat != null).length,
+        firstDay1: spots.filter((x) => x.day === 1).map((x) => `${x.startMin}`),
+        title: s.get(tid).title,
+        noHome: !spots.some((x) => x.name === '家'),
+      };
+    });
+    eq(made.n, 28, '真實資料：建立 28 個景點');
+    eq(made.title, '宜蘭遊', '真實資料：旅程真的叫「宜蘭遊」');
+    yes(made.noHome, '真實資料：沒有把「家」建成景點');
+    eq(String(made.days), '1,2,3', '真實資料：分成 3 天');
+    eq(made.noQuest.length, 0, `真實資料：每個景點都出了任務（共 ${made.quests} 個）`, made.noQuest.join('、'));
+    yes(made.curated.includes('羅東夜市'), `真實資料：羅東觀光夜市套用了策展資料（${made.curated.join('、') || '無'}）`);
+    yes(made.withGeo >= 1, '真實資料：對到策展的景點帶了座標（地圖導航可用）');
+    const asc = made.firstDay1.map(Number);
+    yes(asc.every((v, i) => i === 0 || v >= asc[i - 1]), '真實資料：第 1 天照時間排序');
+
+    // 示意圖：自由輸入的景點也要能走維基查圖這條路（這裡不連網，
+    // 只確認 enrich 認得這些景點、不會因為缺欄位就直接放棄）
+    const enrichable = await page.evaluate(async () => {
+      const s = await import('./js/store.js');
+      const { needsEnrich } = await import('./js/enrich.js');
+      const tid = location.hash.split('/')[2];
+      return typeof needsEnrich === 'function' ? needsEnrich(tid) : null;
+    });
+    yes(enrichable !== false, '真實資料：這些景點會進入補示意圖的流程');
+  }
+
   yes(errs.length === 0, '整個流程沒有 JS 例外', errs.join(' | '));
 } catch (e) {
   fail('流程中斷：' + e.message + '\n' + (e.stack || ''));

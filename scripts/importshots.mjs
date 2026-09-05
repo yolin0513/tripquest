@@ -1,12 +1,17 @@
 // 匯入行程表流程的截圖（node scripts/importshots.mjs）
+//
+// 素材用 scripts/fixtures/yilan.txt —— 使用者實際貼進來的那份 Google 地圖行程匯出。
+// 用真實資料截圖才看得到真的會發生的事（備案、分店後綴、HH時MM分、關鍵字堆疊）。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = fileURLToPath(new URL('../screenshots/_import', import.meta.url));
+const RAW = readFileSync(fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url)), 'utf8');
 const WEB = 5241;
 await mkdir(OUT, { recursive: true });
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
@@ -18,7 +23,7 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
 let n = 0;
 const shot = async (name) => {
   await sleep(320);
-  const f = `${OUT}/v1.36-${String(++n).padStart(2, '0')}-${name}.png`;
+  const f = `${OUT}/v1.37-${String(++n).padStart(2, '0')}-${name}.png`;
   await page.screenshot({ path: f });
   console.log('✓ ' + f.split(/[\\/]/).pop());
 };
@@ -27,12 +32,15 @@ const clickText = (sel, text) => page.evaluate((s, t) => {
   if (el) el.click();
   return !!el;
 }, sel, text);
+const scrollBody = (frac) => page.evaluate((f) => {
+  const b = document.querySelector('.modal-body');
+  b.scrollTop = Math.round((b.scrollHeight - b.clientHeight) * f);
+}, frac);
 
 try {
   await page.goto(`http://localhost:${WEB}/#/new`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.page.form');
   await page.evaluate(() => {
-    document.querySelector('input.field[type=text]').value = '關西家族旅行';
     document.querySelector('details').open = true;
     document.querySelector('details').scrollIntoView({ block: 'center' });
   });
@@ -44,55 +52,48 @@ try {
 
   await clickText('.imp-src', '直接打字');
   await page.waitForSelector('textarea.mono');
-  await page.evaluate(() => {
+  await page.evaluate((t) => {
     const ta = [...document.querySelectorAll('textarea')].pop();
-    ta.value = ['【第1天】大阪',
-      '09:00 大阪城 停留2小時',
-      '12:00 午餐：道頓堀',
-      '14:00 - 16:30 心齋橋商店街',
-      '19:00 通天閣',
-      '【第2天】京都',
-      '09:00 伏見稻荷大社 約1.5小時',
-      '11:30 清水寺（搭公車 約20分鐘）',
-      '14:00 金閣寺',
-      '16:00 錦市場 步行10分鐘',
-      '18:30'].join('\n');
+    ta.value = t;
     ta.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  }, RAW);
   await shot('paste-text');
 
   await clickText('.modal-actions .btn', '讀讀看');
   await page.waitForSelector('.imp-row');
-  await sleep(900);                       // 等策展地點庫比對完，「✓ 認得」才會出現
+  await sleep(1600);                      // 等策展地點庫比對完，「✓」才會出現
   await shot('confirm-top');
 
-  // 用比例捲，不要寫死像素 —— 內容不夠長時寫死的數字會直接捲到底，
-  // 拍出跟下一張一模一樣的圖
-  await page.evaluate(() => {
-    const b = document.querySelector('.modal-body');
-    b.scrollTop = Math.round((b.scrollHeight - b.clientHeight) * 0.45);
-  });
+  await scrollBody(0.16);
+  await shot('confirm-stay');             // 一小時以上的停留有正確帶進來
+
+  await scrollBody(0.45);
   await shot('confirm-middle');
 
-  await page.evaluate(() => { document.querySelector('.modal-body').scrollTop = 99999; });
-  await shot('confirm-unreadable');
+  await scrollBody(0.78);
+  await shot('confirm-day3');
+
+  await scrollBody(1);
+  await shot('confirm-bottom');
 
   await clickText('.modal-actions .btn', '就這樣建立');
   await page.waitForFunction(() => document.querySelector('.imp-bar') && !document.querySelector('.imp-bar').hidden);
-  await page.evaluate(() => document.querySelector('.imp-bar').scrollIntoView({ block: 'center' }));
-  await shot('imported-bar');
+  await page.evaluate(() => {
+    document.querySelector('input.field[type=text]').scrollIntoView({ block: 'center' });
+  });
+  await shot('title-filled');             // 旅程名稱被自動填成「宜蘭遊」
 
   await clickText('button.btn-primary', '產生拍照任務');
-  await page.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 15000 });
-  await sleep(1200);
+  await page.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 30000 });
+  await page.waitForSelector('.qcollapse', { timeout: 30000 });
+  await sleep(1500);
   await shot('trip-result');
 
-  // 捲到景點清單，看得到匯入的時間標在每個景點上
   await page.evaluate(() => {
     const el = [...document.querySelectorAll('.daycollapse')][0];
     if (el && !el.classList.contains('open')) el.querySelector('.dc-head').click();
   });
-  await sleep(400);
+  await sleep(500);
   await page.evaluate(() => {
     const el = [...document.querySelectorAll('.daycollapse')][0];
     if (el) el.scrollIntoView({ block: 'start' });
@@ -105,7 +106,6 @@ try {
   await page.waitForSelector('.page.form');
   await page.evaluate(async () => {
     const { modal, h } = await import('./js/ui.js');
-    // 直接叫出 noKeyHelp 的內容（無頭瀏覽器沒有真的檔案挑選器，繞過選檔那一步）
     modal({
       title: '照片需要文字辨識',
       body: h('div', {},

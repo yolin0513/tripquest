@@ -20,6 +20,8 @@ const TRANSIT = /步行|走路|徒步|車程|路程|搭車|搭乘|開車|騎車|
 const CN_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 十一: 11, 十二: 12, 兩: 2, 半: 0.5 };
 
 // 不是景點、但也不要默默丟掉的行（預設不建立，讓使用者可以勾回來）
+// 起點與終點的「家」不是要去拍照的地方
+const HOME = /^(?:家|我家|住家|回家|自宅|出發地|自家)$/;
 const NON_SPOT = /^(?:check\s*-?\s*in|check\s*-?\s*out|入住|退房|集合|解散|出發|返程|回程|自由活動|休息|睡覺|洗澡|待補|待訂|機場接送|搭機|起飛|降落|回飯店)/i;
 // 從行尾／行首剝掉的雜訊
 const NOISE = [
@@ -126,12 +128,50 @@ function leadingTime(line) {
   return { start, end, approx: false, rest };
 }
 
-// 明寫的停留時長
+// 停留時長的各種寫法。**順序有意義：一定要長的先試**。
+//
+// 這裡踩過一次很痛的雷：原本只認「數字＋單位」，遇到「03時07分」會match到「07分」，
+// 於是存進去 7 分鐘 —— 不是「讀不出來」而是**默默存了錯的數字**，畫面上看起來
+// 一切正常。「01時00分」更巧，match 到「00分」= 0，被當成無效丟掉變「不設定」。
+// 同一個 bug 的兩種面貌，一種看得出來、一種看不出來。
+const DUR = [
+  // 01時00分 / 1時30分 / 1小時30分 / 1 小時 30 分鐘 / 1h30m
+  [/(\d{1,2})\s*(?:小時|時|hrs|hr|h)\s*(\d{1,2})\s*(?:分鐘|分|min|m)?(?![:：\d])/i, (a, b) => +a * 60 + +b],
+  // 1.5小時 / 一個半小時 / 兩小時 / 3 hrs
+  [/(\d+(?:\.\d+)?|一個半|半|[一二兩三四五六七八九十]+)\s*(?:小時|hrs|hr|h)(?![a-z])/i, (a) => Math.round(hrNum(a) * 60)],
+  // 90分鐘 / 30分 / 45min
+  [/(\d{1,3})\s*(?:分鐘|分|min)(?![a-z])/i, (a) => +a],
+  // 停留 01:00 —— 只有在「停留／待」後面才算，不然會吃到時刻
+  [/(?:停留|待)\s*(?:約|大約)?\s*(\d{1,2})\s*[:：]\s*(\d{2})/, (a, b) => +a * 60 + +b],
+];
+
+function hrNum(s) {
+  if (s === '一個半') return 1.5;
+  if (s === '半') return 0.5;
+  const n = cnNum(s);
+  return n == null ? 0 : n;
+}
+
+// 回傳 { min, raw }；min 可以是 0（「停留 00時00分」是明確寫的 0，不是「沒寫」）
+export function parseDuration(text) {
+  const s = String(text || '');
+  for (const [re, calc] of DUR) {
+    const m = s.match(re);
+    if (!m) continue;
+    const mins = Math.round(calc(m[1], m[2]));
+    if (!Number.isFinite(mins) || mins < 0 || mins > 24 * 60) continue;
+    return { min: mins, raw: m[0].trim(), index: m.index };
+  }
+  return null;
+}
+
+// 明寫的停留時長（含「這到底是停留還是路程」的判斷）
 function explicitDuration(line) {
   // 「步行10分鐘」「車程1小時」講的是路上，不是停留 —— 先擋掉，不然會把交通時間
   // 當成停留時間，而且名字還會被剖一半留下「步行」兩個字。
-  let m = line.match(/(?:停留|待|約|大約)?\s*([0-9]+(?:\.[0-9]+)?|半|一個半|一|兩|二|三|四|五)\s*(小時|hrs|hr|h|分鐘|分|min)/i);
-  if (!m) return null;
+  const m0 = parseDuration(line);
+  if (!m0) return null;
+  const m = { 0: m0.raw, index: m0.index };
   const before = line.slice(0, m.index);
   // 明寫「停留 N」就是停留，不管前面講了什麼交通工具
   const explicit = /^\s*(?:停留|待)/.test(m[0]) || /(?:停留|待)\s*(?:約|大約)?\s*$/.test(before);
@@ -142,18 +182,58 @@ function explicitDuration(line) {
       before.lastIndexOf('，'), before.lastIndexOf(','), before.lastIndexOf('、')) + 1;
     if (TRANSIT.test(before.slice(cut))) return null;
   }
-  let n = m[1] === '一個半' ? 1.5 : (m[1] === '半' ? 0.5 : cnNum(m[1]));
-  if (n == null) return null;
-  const unit = m[2].toLowerCase();
-  const mins = /小時|hr|hrs|h/.test(unit) ? Math.round(n * 60) : Math.round(n);
-  if (mins <= 0 || mins > 12 * 60) return null;
-  return { min: mins, raw: m[0].trim() };
+  return { min: m0.min, raw: m0.raw };
+}
+
+// 店名的關鍵字堆疊：「玉里橋頭臭豆腐 礁溪店-礁溪美食 礁溪小吃 礁溪必吃 礁溪臭豆腐 礁溪restaurant」
+// 這種是 Google 地圖商家為了搜尋而塞的，不是店名。
+// 判準：同一個 2～3 字的詞在名字裡出現 3 次以上 → 從第二次出現的地方切掉。
+// 這比列黑名單通用（不用預先知道是哪個地名），而且短名字不會被誤傷。
+function cutStuffing(s) {
+  const t = s.trim();
+  // 門檻刻意抓緊。一開始用「重複 3 次」，結果把「金丹早餐(原力行早餐)(早餐備案)」
+  // 的「早餐」當成堆疊，砍成「金丹早餐(原力行」—— 正常店名重複兩三次很常見，
+  // 真正的關鍵字堆疊是重複四次以上。
+  if (t.length < 20) return t;
+  for (const len of [3, 2]) {
+    const count = new Map();
+    for (let i = 0; i + len <= t.length; i++) {
+      const k = t.slice(i, i + len);
+      if (!/^[\p{L}\p{N}]+$/u.test(k)) continue;
+      count.set(k, (count.get(k) || 0) + 1);
+    }
+    for (const [k, c] of count) {
+      if (c < 4) continue;
+      const second = t.indexOf(k, t.indexOf(k) + 1);
+      if (second > 3) return t.slice(0, second).trim();
+    }
+  }
+  return t;
+}
+
+// 把時長那一段整組拿掉。只砍掉 dur.raw 的話，「(停留 01時00分)」會留下一個
+// 空殼「(停留 )」黏在名字後面，然後把真正的註記擠掉。
+function stripDurationPhrase(rest, raw) {
+  const i = rest.indexOf(raw);
+  if (i < 0) return rest;
+  const open = Math.max(rest.lastIndexOf('(', i), rest.lastIndexOf('（', i));
+  const close = rest.indexOf(')', i + raw.length);
+  // 括號裡除了時長只剩「停留／待／約」→ 整組是時長註記，可以整組砍
+  if (open >= 0 && close > open && /^\s*(?:停留|待|約|大約)?\s*$/.test(rest.slice(open + 1, i))) {
+    return rest.slice(0, open) + ' ' + rest.slice(close + 1);
+  }
+  // 沒有括號時，「停留」這個字要跟著數字一起走 ——
+  // 只砍「2小時」會留下「淡水老街 停留」這種景點名字
+  const head = rest.slice(0, i).replace(/\s*(?:停留|待|約|大約)\s*$/, '');
+  return head + ' ' + rest.slice(i + raw.length);
 }
 
 function cleanName(s) {
   let t = s;
   for (const re of NOISE) t = t.replace(re, ' ');
   t = t
+    .replace(/\p{Extended_Pictographic}️?/gu, '')   // 店名裡的 emoji（🌋🐓）不是名字的一部分
+    .replace(/^[\s\-|·]+/, '')                           // 行首的破折號（「-玉里橋頭臭豆腐…」）
     .replace(/[（(][^）)]{0,20}[）)]\s*$/, ' ')     // 尾巴的括號註記（晚餐自理）(自費)
     .replace(/[（(]\s*[）)]/g, ' ')
     .replace(/\s*(?:集合|解散)\s*$/, '')
@@ -165,7 +245,38 @@ function cleanName(s) {
   // 「午餐：一蘭拉麵」→ 留「一蘭拉麵」；「午餐（自理）」→ 空
   const colon = t.match(/^(?:午餐|晚餐|早餐|中餐|用餐|吃飯)\s*[：:]\s*(.+)$/);
   if (colon) t = colon[1].trim();
+  // 「｜」後面通常是廣告詞（「火山爆發雞礁溪總店｜宜蘭烤雞美食餐廳」）
+  const bar = t.indexOf('|');
+  if (bar > 1) t = t.slice(0, bar).trim();
+  t = cutStuffing(t).replace(/[：:\-|·，,。;；\s]+$/, '').trim();
   return t;
+}
+
+// 旅程標題。兩種來源：
+//   1. 明寫的標籤（「行程名稱：宜蘭遊」）—— 整份任何位置都認
+//   2. 表頭區（第一個天標記／第一個有時間的行之前）長得像行程名的一行
+// 第 2 種刻意只看表頭：真正的景點不會出現在那裡。而且整份完全沒有結構
+//（沒有天標記也沒有時間）時就不猜，不然「清水寺／金閣寺」的第一行會被吃掉。
+const TITLE_LABEL = /^(?:行程名稱|行程標題|旅程名稱|旅程標題|旅程|行程|標題|title|trip)\s*[:：]\s*(.+)$/i;
+const TITLE_LOOK = /(?:[0-9０-９一二三四五六七八九十]+\s*[日天]\s*(?:[0-9一二三四五六七八九十]+\s*夜)?\s*遊|之旅|遊記|[一-龥]{2,10}遊$|旅行$|行$)/;
+
+function extractTitle(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].text.match(TITLE_LABEL);
+    if (m && m[1].trim()) return { title: m[1].trim().slice(0, 40), at: i };
+  }
+  // 表頭區有多長？
+  let head = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    const d = dayMark(lines[i].text);
+    if (d || leadingTime(d ? lines[i].text.slice(d.len).trim() : lines[i].text)) { head = i; break; }
+  }
+  if (head === 0 || head === lines.length) return null;   // 沒有表頭，或整份沒結構 → 不猜
+  for (let i = 0; i < head; i++) {
+    const t = lines[i].text.trim();
+    if (t.length >= 2 && t.length <= 30 && TITLE_LOOK.test(t)) return { title: t.slice(0, 40), at: i };
+  }
+  return null;
 }
 
 // 一行裡有兩個以上的時間 → 整張表被壓成一行了，用時間當界線重切。
@@ -234,9 +345,13 @@ export function parseItinerary(text) {
     return !!leadingTime(d ? x.text.slice(d.len).trim() : x.text);
   });
 
-  for (const { text: line0, raw } of lines) {
+  const titleHit = extractTitle(lines);
+
+  for (let li = 0; li < lines.length; li++) {
+    const { text: line0, raw } = lines[li];
     let line = line0.trim();
     if (!line) continue;
+    if (titleHit && li === titleHit.at) continue;      // 這行是旅程名稱，不是景點
 
     if (dateOnlyLine(line)) { if (items.length) day += 1; sawDayMark = true; continue; }
 
@@ -252,7 +367,7 @@ export function parseItinerary(text) {
     const t = leadingTime(line);
     let rest = t ? t.rest : line;
     const dur = explicitDuration(rest);
-    if (dur) rest = rest.replace(dur.raw, ' ');
+    if (dur) rest = stripDurationPhrase(rest, dur.raw);
 
     // 沒有時間資訊時才拆多景點，有時間的話拆了會讓時間對不上
     const pieces = t ? [rest] : rest.split(/[、，,→>＞]+/).map((s) => s.trim()).filter(Boolean);
@@ -260,15 +375,25 @@ export function parseItinerary(text) {
     for (const piece of pieces) {
       const name = cleanName(piece);
       if (!name) { unparsed.push(raw); continue; }
-      const skip = NON_SPOT.test(name);
+      // 「（早餐備案）」「（午餐備案）」是備而不用的，跟起點終點的「家」一樣，
+      // 建成拍照景點只會讓清單變髒。預設不勾，但留在畫面上讓人可以勾回來。
+      const backup = /備案|備選|候補|plan\s*b/i.test(piece) || /備案/.test(raw);
+      const home = HOME.test(name);
+      const skip = NON_SPOT.test(name) || backup || home;
+
       let stay = dur ? dur.min : null;
       if (!stay && t && t.end != null && t.end > t.start) stay = t.end - t.start;
+      const zeroStay = !!dur && dur.min === 0;
+      if (zeroStay) stay = null;
 
       const w = [];
       if (t && t.approx) w.push('時間是我猜的');
       if (!t) w.push('這一行沒有時間');
+      if (backup) w.push('看起來是備案，預設不建立');
+      if (home) w.push('看起來是出發／回家的地方，預設不建立');
+      if (zeroStay && !backup) w.push('原本寫停留 0 分鐘');
       if (name.length > 18) w.push('名字有點長，可能夾到別的字');
-      if (name.length < 2) w.push('名字太短');
+      if (name.length < 2 && !home && !backup) w.push('名字太短');
 
       items.push({
         id: 'imp' + items.length,
@@ -293,13 +418,22 @@ export function parseItinerary(text) {
   const remap = new Map(seen.map((d, i) => [d, i + 1]));
   for (const it of items) it.day = remap.get(it.day);
 
-  return { items, warnings, unparsed };
+  // 同名的地方出現不只一次（住兩晚的飯店最常見）—— 不擅自刪，但要講出來
+  const times = new Map();
+  for (const it of items) times.set(it.name, (times.get(it.name) || 0) + 1);
+  for (const it of items) {
+    if (times.get(it.name) > 1) it.warnings.push('這個地方出現不只一次');
+  }
+
+  const title = titleHit ? titleHit.title : '';
+  if (title) warnings.push(`旅程名稱讀到「${title}」，會幫你填進去`);
+  return { items, warnings, unparsed, title };
 }
 
 // AI 看圖／看 PDF 回來的列，轉成跟規則式解析一模一樣的形狀。
 // 兩條路匯流成同一種資料，確認畫面才只需要寫一套；而且 AI 也會出錯
 // （把「下午 1:00」寫成 01:00、把飯店當景點），所以同樣要過這裡的守門。
-export function fromRows(rows) {
+export function fromRows(rows, title = '') {
   const items = [];
   const warnings = [];
   const hhmm = (v) => {
@@ -337,10 +471,11 @@ export function fromRows(rows) {
     });
   }
   if (bad) warnings.push(`有 ${bad} 筆沒有名字，我跳過了`);
+  if (title) warnings.push(`旅程名稱讀到「${title}」，會幫你填進去`);
   const seen = [...new Set(items.map((x) => x.day))].sort((a, b) => a - b);
   const remap = new Map(seen.map((d, i) => [d, i + 1]));
   for (const it of items) it.day = remap.get(it.day);
-  return { items, warnings, unparsed: [] };
+  return { items, warnings, unparsed: [], title };
 }
 
 export function fmtTime(min) {
@@ -364,7 +499,10 @@ export async function annotate(items, cityHint = '') {
     try {
       const hit = await matchPlace(it.name, cityHint);
       if (hit) { it.matched = hit.name; it.emoji = hit.emoji || '📍'; }
-      else it.warnings = [...(it.warnings || []), '不在我的景點資料庫裡，請確認名字對不對'];
+      // 沒對到**不是問題**，不要標警告。策展資料庫只收熱門景點，一趟真實行程
+      // 大部分的店家本來就不在裡面；自由輸入的景點照樣會出任務、照樣會去維基
+      // 找示意圖。把正常情況標成橘色警告，整個畫面會變成一片橘，
+      // 真正需要看的那兩三筆反而被淹掉。
     } catch { /* 靜默 */ }
   }
   return items;

@@ -101,18 +101,45 @@ export function placeById(id) {
   return allLoadedPlaces().find((p) => p.id === id) || null;
 }
 
+// 分店後綴。比對時要拿掉（「奕順軒 礁溪店」跟「奕順軒」是同一家），
+// 但**只在比對時**拿掉 —— 景點名字保留分店，導航才會帶到對的那一家。
+const BRANCH = /[\s\-]*[一-龥]{0,4}(?:總店|本店|旗艦店|創始店|分店|門市|店)$/;
+
+// 策展名是不是輸入的「子序列」，而且只差幾個字。
+// 「羅東夜市」⊂「羅東觀光夜市」（中間插了「觀光」兩個字）—— 這種在台灣地名
+// 很常見（觀光／國家／市立…），純子字串比對抓不到。
+// 插入字數抓緊：給錯的策展資料會連帶給錯的示意圖與任務，比沒對到更糟。
+function looseHit(curated, input) {
+  if (curated.length < 3 || input.length <= curated.length) return false;
+  const gap = input.length - curated.length;
+  if (gap > 2) return false;
+  if (curated.length < 4 && gap > 1) return false;
+  let i = 0;
+  for (const ch of input) if (ch === curated[i]) i++;
+  return i === curated.length;
+}
+
 // 自由文字比對到策展地點（行程文字解析用）
 export async function matchPlace(name, cityHint = '') {
   await loadAllForSearch();
   const n = norm(name);
   if (n.length < 2) return null;
+  const nb = norm(String(name).replace(BRANCH, ''));      // 去掉分店後綴的版本
+  const tries = nb && nb !== n && nb.length >= 2 ? [n, nb] : [n];
+
   let best = null;
   for (const p of allLoadedPlaces()) {
     const names = [norm(p.name), ...(p.aliases || []).map(norm)];
     let score = 0;
-    if (names.includes(n)) score = 100;
-    else if (n.length >= 3 && names.some((x) => x.includes(n))) score = 70;
-    else if (names.some((x) => x.length >= 3 && n.includes(x))) score = 65;
+    for (const q of tries) {
+      let s = 0;
+      if (names.includes(q)) s = 100;
+      else if (q.length >= 3 && names.some((x) => x.includes(q))) s = 70;
+      else if (names.some((x) => x.length >= 3 && q.includes(x))) s = 65;
+      else if (names.some((x) => looseHit(x, q))) s = 64;
+      if (q !== n) s -= 3;                                 // 要去掉分店才對到的，稍微降一點
+      score = Math.max(score, s);
+    }
     if (score && cityHint && norm(p.cityName).includes(norm(cityHint))) score += 15;
     if (score && (!best || score > best._s)) best = { ...p, _s: score };
   }

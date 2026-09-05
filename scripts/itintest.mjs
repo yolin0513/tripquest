@@ -7,7 +7,9 @@
 // 最重要的一組是「壓成一行」：那種輸入不會報錯，會安靜地生出一個
 // 名字超長的垃圾景點，整趟就這樣毀掉。所以它有獨立的斷言。
 
-import { parseItinerary, fromRows, normalize, fmtTime, fmtStay } from '../js/itinerary.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parseItinerary, fromRows, normalize, fmtTime, fmtStay, parseDuration } from '../js/itinerary.js';
 
 let pass = 0;
 const ok = (m) => { pass++; console.log('✓ ' + m); };
@@ -264,6 +266,101 @@ const spot = (r, n) => r.items.find((i) => i.name === n);
   const r = parseItinerary('第1天 清水寺、金閣寺\n第2天 大阪城');
   eq(r.items.length, 3, '無時間的行程：天標記後面照樣當景點讀');
   eq(names(r).join(','), '清水寺,金閣寺,大阪城', '無時間的行程：三個都在');
+}
+
+// ---------- 14. 停留時長的各種寫法 ----------
+// 「03時07分」原本會 match 到「07分」→ 存進 7 分鐘。不是讀不出來，是**默默存錯**。
+{
+  const cases = [
+    ['01時00分', 60], ['03時07分', 187], ['11時00分', 660], ['00時20分', 20], ['00時00分', 0],
+    ['01時12分', 72], ['1小時30分', 90], ['1.5小時', 90], ['90分鐘', 90], ['30分', 30],
+    ['1h30m', 90], ['2h', 120], ['一個半小時', 90], ['兩小時', 120], ['停留 01:00', 60],
+    ['約20分鐘', 20], ['3 hrs', 180], ['45min', 45],
+  ];
+  for (const [s, want] of cases) {
+    const got = parseDuration(s);
+    eq(got && got.min, want, `時長「${s}」= ${want} 分`);
+  }
+  eq(parseDuration('沒有時長'), null, '沒有時長時回 null');
+}
+
+// ---------- 15. 旅程標題 ----------
+{
+  const r = parseItinerary('行程名稱：宜蘭遊\n\n第1天\n09:00 羅東夜市');
+  eq(r.title, '宜蘭遊', '「行程名稱：宜蘭遊」讀成標題');
+  eq(r.items.length, 1, '標題那一行不會變成景點');
+  eq(names(r).join(','), '羅東夜市', '只剩真正的景點');
+}
+{
+  for (const [line, want] of [['旅程：京都五日', '京都五日'], ['標題: 北海道之旅', '北海道之旅'], ['Trip: Tokyo 2026', 'Tokyo 2026']]) {
+    const r = parseItinerary(`${line}\n第1天\n09:00 甲地`);
+    eq(r.title, want, `標題寫法「${line.split(/[:：]/)[0]}」讀得出來`);
+  }
+}
+{
+  // 沒有標籤時，只認表頭區長得像行程名的一行
+  const r = parseItinerary('京都三日遊\n第1天\n09:00 清水寺');
+  eq(r.title, '京都三日遊', '表頭的「京都三日遊」當標題');
+  eq(r.items.length, 1, '不會變成景點');
+}
+{
+  // 沒有結構時不要亂猜 —— 第一行是真的景點
+  const r = parseItinerary('清水寺\n金閣寺\n伏見稻荷');
+  eq(r.title, '', '整份沒有天標記也沒有時間時不猜標題');
+  eq(r.items.length, 3, '第一行仍然是景點');
+}
+{
+  // 真正的景點不會被當標題：它有時間、也不在表頭
+  const r = parseItinerary('第1天\n09:00 宜蘭傳藝中心\n11:00 羅東夜市');
+  eq(r.title, '', '有時間的景點行不會被當標題');
+  eq(r.items.length, 2, '兩個景點都在');
+}
+
+// ---------- 16. 使用者的真實行程表（宜蘭遊）----------
+// 這份是長輩實際貼進來的 Google 地圖行程匯出，抓到三個真 bug 才有這一節。
+{
+  const raw = readFileSync(fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url)), 'utf8');
+  const r = parseItinerary(raw);
+  const g = (n) => r.items.find((x) => x.name === n);
+
+  eq(r.title, '宜蘭遊', '真實資料：讀到旅程名稱');
+  eq(r.items.length, 32, '真實資料：32 筆（33 行扣掉標題）');
+  eq(r.unparsed.length, 0, '真實資料：沒有讀不懂的行');
+  eq(new Set(r.items.map((x) => x.day)).size, 3, '真實資料：3 天');
+
+  // 一小時以上的停留（原本全掛）
+  eq(g('白雲山鹿').stayMin, 60, '真實資料：01時00分 = 60 分');
+  eq(g('香草菲菲 芳香植物博物館').stayMin, 187, '真實資料：03時07分 = 187 分（原本存成 7）');
+  eq(g('山風民宿hillstay').stayMin, 72, '真實資料：01時12分 = 72 分（原本存成 12）');
+  eq(r.items.filter((x) => x.day === 3)[0].stayMin, 660, '真實資料：11時00分 = 660 分');
+  eq(g('東南蜜餞舖').stayMin, 20, '真實資料：00時20分 = 20 分');
+
+  // 店名清理
+  yes(g('火山爆發雞礁溪總店'), '真實資料：emoji 與「｜」後面的廣告詞清掉了');
+  yes(g('玉里橋頭臭豆腐 礁溪店'), '真實資料：關鍵字堆疊切掉了');
+  yes(g('石頭鄉燜烤玉米-羅東總店'), '真實資料：「（看清楚店名再評論）」清掉了');
+  yes(g('火烤碳香-真珠玉米'), '真實資料：尾巴的「(羅東店)」清掉了');
+  yes(g('金丹早餐(原力行早餐)'), '真實資料：正常的括號別名不會被誤切');
+  yes(!r.items.some((x) => /停留|時\d|分\)/.test(x.name)), '真實資料：沒有景點名字夾到「停留」殘骸');
+
+  // 預設不建立的那幾筆
+  const homes = r.items.filter((x) => x.name === '家');
+  eq(homes.length, 2, '真實資料：兩筆「家」');
+  yes(homes.every((x) => !x.include), '真實資料：「家」預設不勾');
+  const backups = r.items.filter((x) => (x.warnings || []).some((w) => w.includes('備案')));
+  eq(backups.length, 2, '真實資料：兩筆備案');
+  yes(backups.every((x) => !x.include), '真實資料：備案預設不勾');
+  eq(r.items.filter((x) => x.include).length, 28, '真實資料：預設建立 28 個');
+
+  // 提示
+  yes(g('雲居溫泉會館').warnings.some((w) => w.includes('0 分鐘')), '真實資料：停留 0 分鐘有提示');
+  yes(g('羅東觀光夜市'), '真實資料：羅東觀光夜市在清單裡');
+  const dup = r.items.filter((x) => (x.warnings || []).some((w) => w.includes('不只一次')));
+  yes(dup.length >= 4, '真實資料：住兩晚的飯店與「家」標出重複');
+
+  // 時間順序
+  const d1 = r.items.filter((x) => x.day === 1).map((x) => x.startMin);
+  yes(d1.every((v, i) => i === 0 || v >= d1[i - 1]), '真實資料：第 1 天的時間是遞增的');
 }
 
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

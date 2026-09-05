@@ -211,8 +211,14 @@ export default async function create() {
     if (!res) return;
     state.imported = res.items;
     if (res.usedAi) aiChk.checked = true;      // 已經有金鑰了，順手把 AI 加值打開
+    // 行程表上寫了名字就幫他填 —— 但不覆蓋他自己已經打好的
+    let filled = '';
+    if (res.title && !titleField.value.trim()) {
+      titleField.value = res.title;
+      filled = `，旅程名稱填「${res.title}」`;
+    }
     drawImported();
-    toast(`讀到 ${res.items.length} 個景點`);
+    toast(`讀到 ${res.items.length} 個景點` + filled);
   } }, '📋 匯入行程表（照片／PDF／文字）');
 
   const advDetails = h('details', {},

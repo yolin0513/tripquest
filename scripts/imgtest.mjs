@@ -282,6 +282,37 @@ try {
   if (wikiCalls === 0) ok('行程設定關掉「景點示意圖」就完全不對外連線');
   else fail(`關掉了還打了 ${wikiCalls} 次`);
 
+  // ---------- 店名裡剛好有真實條目的字，不可以拿那個條目的圖 ----------
+  // 「火山爆發雞礁溪總店」是宜蘭一家烤雞店。曾經有一版為了提高命中率，
+  // 搜尋前先拿掉分店後綴（→「火山爆發雞」），結果抓到冰島 Eyjafjallajökull
+  // 的火山灰照片 —— related() 認為「火山爆發雞」包含「火山爆發」所以算相關。
+  // 命中率多一個、但那一個是長輩會在炸雞任務上看到一座火山。
+  const V = await dev();
+  const volTid = await V.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const { generateForTrip } = await import('./js/quests/generate.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'v' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '誤配圖測試', region: '宜蘭', allowWiki: true });
+    const { spots, quests } = await generateForTrip({
+      tripId: tid, region: '宜蘭',
+      items: [{ name: '火山爆發雞礁溪總店', day: 1 }, { name: '大佛牛排', day: 1 }],
+    });
+    for (const x of spots) await s.put(x);
+    for (const x of quests) await s.put(x);
+    return tid;
+  });
+  await openTrip(V, volTid, 9000);
+  const vol = await V.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const tid = location.hash.split('/')[2];
+    return s.spotsOf(tid).map((x) => ({ name: x.name, url: x.heroUrl || '', src: x.heroSource || '' }));
+  });
+  const wrong = vol.filter((x) => /volcan|eyjafjal|ash|steak|buddha/i.test(x.url));
+  if (!wrong.length) ok(`店名含真實條目關鍵字時不會亂配圖（${vol.map((x) => x.name + (x.url ? '有圖' : '無圖')).join('、')}）`);
+  else fail('抓到不相干的圖：' + JSON.stringify(wrong));
+
   console.log('\n示意圖測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

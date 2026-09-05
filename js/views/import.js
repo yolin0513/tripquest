@@ -50,7 +50,7 @@ export default async function openImport({ cityHint = '' } = {}) {
 
   const confirmed = await confirmItems(parsed, cityHint);
   if (!confirmed) return null;
-  return { items: confirmed, usedAi };
+  return { items: confirmed, usedAi, title: parsed.title || '' };
 }
 
 // ---------- 步驟 1：選來源 ----------
@@ -335,7 +335,7 @@ async function confirmItems(parsed, cityHint) {
     const name = h('input', { class: 'imp-in imp-name', type: 'text', value: it.name, placeholder: '景點名稱', maxlength: 40 });
     name.addEventListener('input', () => {
       it.name = name.value;
-      it.warnings = (it.warnings || []).filter((w) => !w.includes('名字') && !w.includes('資料庫'));
+      it.warnings = (it.warnings || []).filter((w) => !w.includes('名字'));
       redrawWarn(); tally();
     });
 
