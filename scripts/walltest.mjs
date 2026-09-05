@@ -330,23 +330,17 @@ try {
   if (wall.filterLabel === '全部照片') ok('預設顯示「全部照片」');
   else fail('預設篩選標籤不對：' + wall.filterLabel);
 
-  await page.evaluate(() => document.querySelector('.wall-ctl-icon').click());
-  await page.waitForSelector('.pick-row');
-  await sleep(450);
-  const sortMenu = await page.evaluate(() => ({
-    rows: document.querySelectorAll('.pick-row').length,
-    current: document.querySelector('.pick-row.on')?.textContent || '',
-    small: [...document.querySelectorAll('.pick-row')].filter((b) => b.getBoundingClientRect().height < 44).length,
-    fits: (() => { const c = document.querySelector('.modal-card').getBoundingClientRect(); return c.top >= -1 && c.bottom <= window.innerHeight + 1; })(),
-  }));
-  if (sortMenu.rows === 4) ok('排序選單有 4 種（最新／最舊／照行程順序／照人分）');
-  else fail('排序選項數不對：' + sortMenu.rows);
-  if (/最新的在前/.test(sortMenu.current)) ok('預設是「最新的在前」');
-  else fail('預設排序不對：' + sortMenu.current);
-  if (sortMenu.small === 0 && sortMenu.fits) ok('排序選單的選項夠大、不會超出螢幕');
-  else fail('排序選單有問題：' + JSON.stringify(sortMenu));
-  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '取消').click());
-  await sleep(300);
+  const sortBtn = await page.evaluate(() => {
+    const b = document.querySelector('.wall-ctl-sort');
+    const r = b.getBoundingClientRect();
+    return { text: b.textContent.trim(), h: Math.round(r.height), aria: b.getAttribute('aria-label') };
+  });
+  if (/最新在前/.test(sortBtn.text)) ok(`排序是「按一下就換」的切換鈕，按鈕上直接寫現在是哪一種：「${sortBtn.text}」`);
+  else fail('排序鈕文字不對：' + sortBtn.text);
+  if (sortBtn.h >= 44) ok(`排序鈕觸控區 ${sortBtn.h}px`);
+  else fail('排序鈕太小：' + sortBtn.h);
+  if (/點一下換/.test(sortBtn.aria || '')) ok('排序鈕有講清楚按了會怎樣（給讀螢幕的人）');
+  else fail('aria-label 不清楚：' + sortBtn.aria);
 
   await page.evaluate(() => document.querySelector('.wall-ctl').click());
   await page.waitForSelector('.pick-row');
@@ -362,12 +356,12 @@ try {
   // 排序真的有效
   const order = async () => page.evaluate(() => [...document.querySelectorAll('.feed-item .fi-what')].map((e) => e.textContent).filter((t) => t.includes('任務')));
   const newest = await order();
-  await page.evaluate(() => document.querySelector('.wall-ctl-icon').click());
-  await page.waitForSelector('.pick-row');
-  await sleep(400);
-  await page.evaluate(() => [...document.querySelectorAll('.pick-row')].find((b) => b.textContent.includes('最舊的在前')).click());
+  await page.evaluate(() => document.querySelector('.wall-ctl-sort').click());
   await page.waitForSelector('.feed-item');
   await sleep(1400);
+  const flipped = await page.evaluate(() => document.querySelector('.wall-ctl-sort').textContent.trim());
+  if (/最舊在前/.test(flipped)) ok(`按一下就切換到「${flipped}」（不用開選單）`);
+  else fail('切換後文字沒變：' + flipped);
   const oldest = await order();
   const reversed = newest.length > 1 && newest.length === oldest.length
     && newest.every((x, i) => x === oldest[oldest.length - 1 - i]);
@@ -396,7 +390,7 @@ try {
   const remembered = await page.evaluate(() => ({
     items: document.querySelectorAll('.feed-item').length,
     label: document.querySelector('.wall-ctl-label')?.textContent || '',
-    sortMarked: document.querySelector('.wall-ctl-icon')?.classList.contains('on'),
+    sortMarked: document.querySelector('.wall-ctl-sort')?.classList.contains('on'),
   }));
   if (remembered.items === 2 && /羅東夜市/.test(remembered.label) && remembered.sortMarked) {
     ok(`下次進來維持上次的排序與篩選（下拉「${remembered.label}」、排序圖示有標記）`);

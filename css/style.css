@@ -424,11 +424,11 @@ button.card { appearance: none; font: inherit; }
    壓成一行：標題 + 景點下拉 + 排序小圖示。景點一多的時候，一整排 chips 會把
    畫面吃掉一大半，照片反而變成配角。 */
 .wall-bar {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   margin: 26px 2px 10px;
 }
 .wall-bar-title {
-  flex: 1; min-width: 0;
+  flex: 1 1 5em; min-width: 0;
   font-size: 0.9rem; font-weight: 800; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -444,7 +444,8 @@ button.card { appearance: none; font: inherit; }
 .wall-ctl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wall-ctl-chev { flex: none; color: var(--muted); font-size: 0.8rem; }
 .wall-ctl.on .wall-ctl-chev { color: var(--text); }
-.wall-ctl-icon { min-width: 46px; justify-content: center; font-size: 1.15rem; padding: 0 10px; }
+/* 排序只有新／舊兩種，做成「按一下就換」的切換鈕，按鈕上直接寫現在是哪一種 */
+.wall-ctl-sort { padding: 0 12px; }
 
 /* 通用的「挑一個」大按鈕清單（chooseFrom） */
 .pick-row {
