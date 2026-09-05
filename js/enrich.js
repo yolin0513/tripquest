@@ -22,7 +22,8 @@ import { sha256Hex } from './ids.js';
 
 const THUMB = 640;          // 景點示意圖寬度（.quest-focus-photo 最大用到 240px 高）
 const DISH_THUMB = 480;     // 美食示意圖小一點就夠
-export const ENRICH_VERSION = 2;   // 改抓法時 +1，舊行程會自動重抓
+const POOL_THUMB = 480;     // 同景點其他任務的備用圖，小一點省空間
+export const ENRICH_VERSION = 3;   // 改抓法時 +1，舊行程會自動重抓
 
 const inFlight = new Map();
 
@@ -57,20 +58,53 @@ function attrOf(ii) {
   };
 }
 
+// 圖示、剪貼畫、地圖、標誌一律不要。它們比佔位設計更廉價，長輩看了只會覺得敷衍。
+const BAD_IMG = new RegExp([
+  'icon', 'logo', 'clip[\\s_-]?art', 'symbol', 'emoji', 'noun[\\s_-]?project', 'pictogram',
+  'silhouette', 'diagram', 'schema', 'chart', 'infographic', 'illustration', 'drawing',
+  'sketch', 'cartoon', 'vector', 'svg', 'stub', 'placeholder', 'coat[\\s_-]of[\\s_-]arms',
+  'flag[\\s_-]of', 'seal[\\s_-]of', 'map[\\s_-]of', '\\bmaps?\\b', '\\bflags?\\b', '\\blogos?\\b',
+  'crest', 'emblem', 'banner', 'signature', 'font', 'typeface',
+].join('|'), 'i');
+
+// 回傳 null＝這張不能用；否則附一個分數，之後挑分數最高的
 function imgOf(page) {
   const ii = page && page.imageinfo && page.imageinfo[0];
   if (!ii) return null;
   const url = ii.thumburl || ii.url;
-  if (!url || /\.svg($|\?)/i.test(url)) return null;
-  return { url, attr: attrOf(ii), title: page.title || '' };
+  if (!url) return null;
+
+  const name = decodeURIComponent(String(page.title || '')).replace(/^File:/i, '');
+  const cats = (page.categories || []).map((c) => c.title.replace(/^Category:/, '')).join(' ');
+  const mime = ii.mime || '';
+
+  // 向量圖一律排除（含副檔名與 MIME 兩種判法）
+  if (/svg|postscript|pdf/i.test(mime) || /\.(svg|pdf|eps)($|\?)/i.test(url)) return null;
+  if (BAD_IMG.test(name) || BAD_IMG.test(cats)) return null;
+
+  const w = ii.width || 0, hh = ii.height || 0;
+  if (w && hh && (w < 320 || hh < 200)) return null;         // 太小的幾乎都是圖示
+  if (w && hh && (w / hh > 4 || hh / w > 4)) return null;    // 細長條通常是橫幅或色卡
+
+  // 分數只當「微調」用，不能蓋過搜尋相關度：Commons 搜「包心粉圓」的第一名就是那道甜點，
+  // 第三名是同名文學獎的頒獎合照（解析度高很多）。純比畫質會挑到完全不相干的照片。
+  let score = 0;
+  if (mime === 'image/jpeg') score += 2;                     // 真實照片幾乎都是 JPEG
+  else if (mime === 'image/png') score -= 2;                 // PNG 比較常是圖表 / 標題圖 / 去背圖
+  if (w >= 800) score += 1;
+  if (/photograph|photos? (taken|by|of)|flickr|camera|DSLR/i.test(cats)) score += 2;
+
+  return { url, attr: attrOf(ii), title: name, mime, score, w, h: hh };
 }
 
 // Commons 上某個檔案：一次拿到指定寬度的網址 + 作者與授權
+const II = 'url|extmetadata|mime|size';     // mime/size 用來分辨真實照片與圖示
+
 async function commonsFile(file, width = THUMB) {
   const name = String(file || '').replace(/^File:/i, '');
   if (!name) return null;
   const d = await api('commons.wikimedia.org', {
-    prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: String(width),
+    prop: 'imageinfo|categories', iiprop: II, iiurlwidth: String(width), cllimit: '30',
     titles: 'File:' + name,
   });
   const page = d && d.query && d.query.pages && d.query.pages[0];
@@ -78,24 +112,31 @@ async function commonsFile(file, width = THUMB) {
   return imgOf(page);
 }
 
-async function commonsSearch(term, width, limit = 8) {
+// 搜尋相關度為主、畫質為輔：rank 是 Commons 的相關度排名，score 只能把一張圖往前
+// 推一兩名，不能讓第八名跳到第一名。
+const byRelevance = (a, b) => (a.rank - a.score / 3) - (b.rank - b.score / 3);
+
+async function commonsSearch(term, width, limit = 10) {
   const d = await api('commons.wikimedia.org', {
     generator: 'search', gsrsearch: `${term} filetype:bitmap`, gsrnamespace: '6', gsrlimit: String(limit),
-    prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: String(width),
+    prop: 'imageinfo|categories', iiprop: II, iiurlwidth: String(width), cllimit: '30',
   });
   const pages = (d && d.query && d.query.pages) || [];
   pages.sort((a, b) => (a.index || 99) - (b.index || 99));
-  return pages.map(imgOf).filter(Boolean);
+  return pages.map((p, i) => { const g = imgOf(p); if (g) g.rank = i; return g; })
+    .filter(Boolean).sort(byRelevance);
 }
 
 // 該座標附近的公開照片（景點名稱查不到時的退路）
 async function commonsNear(lat, lng, width, radius = 700) {
   const d = await api('commons.wikimedia.org', {
     generator: 'geosearch', ggscoord: `${lat}|${lng}`, ggsradius: String(radius),
-    ggslimit: '12', ggsnamespace: '6',
-    prop: 'imageinfo', iiprop: 'url|extmetadata', iiurlwidth: String(width),
+    ggslimit: '20', ggsnamespace: '6',
+    prop: 'imageinfo|categories', iiprop: II, iiurlwidth: String(width), cllimit: '30',
   });
-  return ((d && d.query && d.query.pages) || []).map(imgOf).filter(Boolean);
+  // 座標搜尋沒有「相關度」可言（就是附近的照片），這裡純比畫質
+  return ((d && d.query && d.query.pages) || []).map(imgOf).filter(Boolean)
+    .sort((a, b) => b.score - a.score);
 }
 
 // 某語言維基的頁面：圖檔名 + 座標 + 摘要一次拿
@@ -189,22 +230,35 @@ async function takeWikiImage(page, width = THUMB) {
     const c = await commonsFile(page.file, width);
     if (c) {
       const hash = await storeImage(c.url);
-      if (hash) return { hash, attr: c.attr };
+      if (hash) return { hash, attr: c.attr, url: c.url };
     }
   }
   if (page.thumb) {
     const hash = await storeImage(page.thumb);
-    if (hash) return { hash, attr: { author: '', license: '', licenseUrl: '', page: '' } };
+    if (hash) return { hash, attr: { author: '', license: '', licenseUrl: '', page: '' }, url: page.thumb };
   }
   return null;
 }
 
 async function takeCandidates(list) {
-  for (const c of list.slice(0, 4)) {
+  for (const c of list.slice(0, 5)) {
     const hash = await storeImage(c.url);
-    if (hash) return { hash, attr: c.attr };
+    if (hash) return { hash, attr: c.attr, url: c.url };
   }
   return null;
+}
+
+// 同一個景點的每個任務不要都長一樣：從已經查到的候選裡多存幾張備用。
+// 用的是同一次查詢的結果，不會多打 API。
+async function takePool(list, want, skipUrl) {
+  const out = [];
+  for (const c of list) {
+    if (out.length >= want) break;
+    if (!c.url || c.url === skipUrl) continue;
+    const hash = await storeImage(c.url);
+    if (hash) out.push({ hash, attr: c.attr, url: c.url });
+  }
+  return out;
 }
 
 // ---------- 美食：找「該道菜」的通用照片 ----------
@@ -225,6 +279,11 @@ const DISH_WORDS = [
   '割包', '香腸', '米粉', '扁食', '餛飩', '蔥油餅', '茶葉蛋', '木瓜牛奶', '滷味', '魚丸',
   '小卷', '紅茶', '綠茶', '青茶', '魚酥', '芋圓', '貢丸', '花枝', '蝦捲', '潤餅', '蚵嗲',
   '米苔目', '肉羹', '麵線', '豬血糕', '下午茶', '珍珠', '芒果冰', '鵝肉', '鴨肉',
+  // 夜市小吃（羅東、士林、逢甲那一類；店名前綴多，靠這些詞抽出料理本身）
+  '包心粉圓', '粉圓', '羊肉湯', '羊肉', '當歸鴨', '當歸', '龍鳳腿', '蔥油派', '蔥餅',
+  '四神湯', '藥燉排骨', '排骨酥', '雞捲', '芋餅', '八寶冰', '牛肉湯', '奶凍捲',
+  '炸雞排', '地瓜球', '雞蛋糕', '紅豆餅', '麻糬', '豆花', '燒仙草', '青蛙下蛋', '愛玉冰',
+  '肉圓', '筒仔米糕', '肉燥飯', '控肉飯', '爌肉飯', '虱目魚', '牛雜', '大腸麵線', '蚵仔麵線',
   // 韓國
   '泡菜', '烤肉', '拌飯', '辣炒年糕', '人蔘雞', '炸雞', '飯捲', '部隊鍋', '冷麵',
   // 泛用（含食材，放最後才比較不會蓋掉更精確的詞）
@@ -258,25 +317,32 @@ function dishTerms(rawTitle) {
   return { safe, loose };
 }
 
-// 匯出給涵蓋率量測用
-export async function dishImage(rawTitle) {
+// 食物照幾乎都是 JPEG；PNG 在 Commons 上多半是書封、標題圖、去背素材
+// （實測「蔥油派」就撈到一張寫著「中國菜」的標題圖）。
+const photosOnly = (list) => list.filter((x) => x.mime === 'image/jpeg');
+
+// avoid：同一個景點裡別的任務已經用掉的圖，換下一張，免得整排長一樣
+export async function dishImage(rawTitle, { avoid } = {}) {
   const terms = dishTerms(rawTitle);
   if (!terms) return null;
+  const skip = avoid instanceof Set ? avoid : new Set();
+  const pick = (list) => takeCandidates(photosOnly(list).filter((x) => !skip.has(x.url)));
 
   // 料理名：Commons 搜圖 + 維基條目圖（多數料理都有條目，且條目圖通常最具代表性）
   for (const q of terms.safe) {
-    const got = await takeCandidates(await commonsSearch(q, DISH_THUMB));
-    if (got) return { hash: got.hash, attr: got.attr, source: 'commons:dish', generic: true };
-    const w = await wikiSearch('zh', q, { strict: false });
+    const got = await pick(await commonsSearch(q, DISH_THUMB));
+    if (got) return { hash: got.hash, attr: got.attr, url: got.url, source: 'commons:dish', generic: true };
+    // 這裡要 strict：放寬的話「蔥油派」會撈到條目「中國菜」的標題圖
+    const w = await wikiSearch('zh', q, { strict: true });
     if (w) {
       const gw = await takeWikiImage(w, DISH_THUMB);
-      if (gw) return { hash: gw.hash, attr: gw.attr, source: 'wiki:dish', generic: true };
+      if (gw && !skip.has(gw.url)) return { hash: gw.hash, attr: gw.attr, url: gw.url, source: 'wiki:dish', generic: true };
     }
   }
   // 原字串只拿去 Commons 搜圖：拿店名去搜維基條目容易撈到毫不相干、又剛好有圖的條目
   for (const q of terms.loose) {
-    const got = await takeCandidates(await commonsSearch(q, DISH_THUMB));
-    if (got) return { hash: got.hash, attr: got.attr, source: 'commons:dish', generic: true };
+    const got = await pick(await commonsSearch(q, DISH_THUMB));
+    if (got) return { hash: got.hash, attr: got.attr, url: got.url, source: 'commons:dish', generic: true };
   }
   return null;
 }
@@ -300,12 +366,14 @@ async function _enrich(spot) {
     let got = null;
     let source = null;
 
+    let pool = [];      // 同一景點的其他任務要用的備用圖（同一次查詢的候選，不多打 API）
+
     // 1. 策展資料指定的 Commons 圖
     if (!spot.heroHash && spot.commonsImg) {
       const c = await commonsFile(spot.commonsImg);
       if (c) {
         const hash = await storeImage(c.url);
-        if (hash) { got = { hash, attr: c.attr }; source = 'curated'; }
+        if (hash) { got = { hash, attr: c.attr, url: c.url }; source = 'curated'; }
       }
     }
 
@@ -359,10 +427,19 @@ async function _enrich(spot) {
 
     // 4. 座標附近的 Commons 照片
     const lat = spot.lat ?? patch.lat, lng = spot.lng ?? patch.lng;
-    if (!spot.heroHash && !got && lat != null && lng != null) {
-      const near = await commonsNear(lat, lng, THUMB);
-      got = await takeCandidates(near);
-      if (got) source = 'commons:geo';
+    let near = null;
+    if (lat != null && lng != null && (!got || !spot.heroHash)) {
+      near = await commonsNear(lat, lng, POOL_THUMB);
+      if (!spot.heroHash && !got) {
+        got = await takeCandidates(near);
+        if (got) source = 'commons:geo';
+      }
+    }
+
+    // 同一景點的任務不要都用同一張：從剛剛那批候選再存幾張（不多打 API）
+    const needPool = Math.min(3, Math.max(0, store.questsOf(spot.id).length - 1));
+    if (got && needPool && near && near.length) {
+      pool = await takePool(near, needPool, got.url);
     }
 
     // 刻意不做「拿景點名去 Commons 關鍵字搜尋」這一步：實測 155 個真實地名一次都沒靠它
@@ -372,7 +449,9 @@ async function _enrich(spot) {
     if (got) {
       patch.heroHash = got.hash;
       patch.heroAttr = got.attr;
+      patch.heroUrl = got.url || '';       // 存網址：旅伴的手機同步到記錄後才能自己抓圖
       patch.heroSource = source;
+      patch.heroPool = pool.map((x) => ({ hash: x.hash, url: x.url, attr: x.attr }));
       patch._noHero = false;
       patch._enrichV = ENRICH_VERSION;
     } else if (spot.heroHash) {
@@ -390,7 +469,7 @@ async function _enrich(spot) {
 }
 
 // 美食任務的示意圖（每個任務自己一張，不跟景點共用）
-export async function enrichFoodQuest(quest) {
+export async function enrichFoodQuest(quest, { avoid } = {}) {
   if (!quest || quest.kind !== 'food') return quest;
   if (quest._enrichV >= ENRICH_VERSION) return quest;
   if (offline()) return quest;
@@ -399,9 +478,10 @@ export async function enrichFoodQuest(quest) {
     const patch = {};
     const net0 = netHits;
     try {
-      const got = await dishImage(quest.title);
+      const got = await dishImage(quest.title, { avoid });
       if (got) {
-        patch.refHash = got.hash; patch.refAttr = got.attr; patch.refGeneric = true;
+        patch.refHash = got.hash; patch.refAttr = got.attr; patch.refUrl = got.url || '';
+        patch.refGeneric = true;
         patch._enrichV = ENRICH_VERSION;
       } else if (netHits > net0) {
         patch._enrichV = ENRICH_VERSION;     // 問過了就是沒有
@@ -429,6 +509,9 @@ export async function enrichTrip(tripId, { force = false, onProgress } = {}) {
 
   const tell = (type, id) => { try { onProgress && onProgress({ type, id }); } catch { /* 畫面的錯不能影響補圖 */ } };
 
+  // 先修「有記錄但本機沒圖」的（同步過來的旅程一定會遇到）
+  await repairImages(tripId, tell).catch(() => {});
+
   for (const s of store.spotsOf(tripId)) {
     const stale = (s._enrichV || 0) < ENRICH_VERSION;
     if (!stale && !force) continue;
@@ -438,12 +521,25 @@ export async function enrichTrip(tripId, { force = false, onProgress } = {}) {
     if (offline()) return;                                  // 中途斷網就停，剩下的下次再補
     await new Promise((r) => setTimeout(r, 200));
   }
+  // 同一個景點裡已經用掉的圖，換下一張（例：「阿灶伯羊肉湯」和「當歸羊肉湯」
+  // 都會抽到「羊肉湯」，不擋的話整排都是同一碗）
+  const usedBySpot = new Map();
+  for (const q of store.questsOfTrip(tripId)) {
+    if (q.refUrl) {
+      if (!usedBySpot.has(q.spotId)) usedBySpot.set(q.spotId, new Set());
+      usedBySpot.get(q.spotId).add(q.refUrl);
+    }
+  }
   for (const q of store.questsOfTrip(tripId)) {
     if (q.kind !== 'food') continue;
     const stale = (q._enrichV || 0) < ENRICH_VERSION;
     if (!stale && !force) continue;
     if (force) await store.patch(q.id, { _enrichV: 0 });
-    await enrichFoodQuest(store.getRaw(q.id));
+    if (!usedBySpot.has(q.spotId)) usedBySpot.set(q.spotId, new Set());
+    const avoid = usedBySpot.get(q.spotId);
+    await enrichFoodQuest(store.getRaw(q.id), { avoid });
+    const after = store.getRaw(q.id);
+    if (after && after.refUrl) avoid.add(after.refUrl);
     tell('quest', q.id);
     if (offline()) return;
     await new Promise((r) => setTimeout(r, 200));
@@ -451,12 +547,50 @@ export async function enrichTrip(tripId, { force = false, onProgress } = {}) {
 }
 
 // ---------- 給畫面用 ----------
-// 這個任務要顯示哪一張示意圖：自己拍的 > 該道菜的通用照 > 景點照 > （null → 主題色塊）
+// 這個任務要顯示哪一張示意圖：自己拍的 > 該道菜的通用照 > 景點照（同一景點的不同任務
+// 輪流用不同張）> （null → 主題色塊）
 export function refImageFor(quest, spot, ownHash) {
   if (ownHash) return { hash: ownHash, own: true };
   if (quest && quest.refHash) return { hash: quest.refHash, attr: quest.refAttr, generic: true };
-  if (spot && spot.heroHash) return { hash: spot.heroHash, attr: spot.heroAttr };
-  return null;
+  if (!spot || !spot.heroHash) return null;
+
+  const pool = Array.isArray(spot.heroPool) ? spot.heroPool.filter((x) => x && x.hash) : [];
+  if (!pool.length || !quest) return { hash: spot.heroHash, attr: spot.heroAttr, url: spot.heroUrl };
+
+  // 依這個任務在景點裡的順序輪流，同一個任務每次都拿到同一張（不會跳來跳去）
+  const list = [{ hash: spot.heroHash, attr: spot.heroAttr, url: spot.heroUrl }, ...pool];
+  const idx = Math.max(0, store.questsOf(spot.id).findIndex((q) => q.id === quest.id));
+  return list[idx % list.length];
+}
+
+// 同步過來的旅程：記錄有 heroHash，但圖是存在別人手機的 IndexedDB 裡、不會跟著同步。
+// 這時要用記錄裡的網址自己補抓一次，否則畫面會退成佔位圖、還留著別人的授權標示。
+async function repairImages(tripId, tell) {
+  for (const s of store.spotsOf(tripId)) {
+    if (!s.heroHash || await db.getBlob(s.heroHash)) continue;
+    if (s.heroUrl) {
+      const hash = await storeImage(s.heroUrl);
+      if (hash) {
+        if (hash !== s.heroHash) await store.patch(s.id, { heroHash: hash });
+        tell('spot', s.id);
+        continue;
+      }
+    }
+    // 沒存網址（v1.26 之前寫的記錄）→ 整個重抓一次
+    await store.patch(s.id, { _enrichV: 0, _noHero: false, heroHash: null, heroAttr: null });
+  }
+  for (const q of store.questsOfTrip(tripId)) {
+    if (!q.refHash || await db.getBlob(q.refHash)) continue;
+    if (q.refUrl) {
+      const hash = await storeImage(q.refUrl);
+      if (hash) {
+        if (hash !== q.refHash) await store.patch(q.id, { refHash: hash });
+        tell('quest', q.id);
+        continue;
+      }
+    }
+    await store.patch(q.id, { _enrichV: 0, refHash: null, refAttr: null });
+  }
 }
 
 // 圖片出處：Wikimedia 多是 CC 授權，要標作者與授權條款。

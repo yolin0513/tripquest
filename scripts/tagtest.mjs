@@ -119,6 +119,61 @@ try {
   });
   ok('建立三人行程（爸爸 / 弟弟 / 媽媽）');
 
+  // ================= 行程頁：打開就看得到加照片的按鈕，不用先點任何東西 =================
+  await go(A.page, `/#/trip/${setup.tid}`);
+  await A.page.waitForSelector('.qbig');
+  const front = await A.page.evaluate(() => {
+    const vis = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && !!el.offsetParent;
+    };
+    const cards = [...document.querySelectorAll('.qbig')];
+    const first = cards[0];
+    const btns = first ? [...first.querySelectorAll('.addphoto-row button')] : [];
+    return {
+      cards: cards.length,
+      // 「不用先點任何東西」＝ 一進來按鈕就已經在畫面上（DOM 可見、有尺寸）
+      btnsVisible: btns.filter(vis).length,
+      labels: btns.map((b) => b.textContent),
+      tooSmall: btns.filter((b) => b.getBoundingClientRect().height < 44).length,
+      // 整個任務清單裡不該再有「編輯」
+      editButtons: [...document.querySelectorAll('.qcollapse button, .qbig button')]
+        .filter((b) => /編輯/.test(b.textContent)).length,
+    };
+  });
+
+  if (front.btnsVisible === 2 && front.labels.every((t) => /拍照|相簿/.test(t))) {
+    ok(`打開行程就直接看到加照片的按鈕：${front.labels.join(' / ')}（不用先點進任何地方）`);
+  } else fail('行程頁任務卡上沒有加照片按鈕：' + JSON.stringify(front));
+  if (front.editButtons === 0) ok('任務清單裡已經沒有「編輯」按鈕');
+  else fail(`任務清單裡還有 ${front.editButtons} 顆「編輯」`);
+  if (front.tooSmall === 0) ok('任務卡上的按鈕觸控區 ≥ 44px');
+  else fail(`有 ${front.tooSmall} 顆按鈕太小`);
+
+  // 從打開行程到「開始加照片」需要點幾下 —— 直接數，不用猜
+  const taps = await A.page.evaluate(() => {
+    const card = document.querySelector('.qbig');
+    const btn = card && card.querySelector('.addphoto-row button');
+    if (!btn) return -1;
+    // 這顆按鈕現在就看得到、按下去就會叫出相機／相簿 → 1 下
+    const r = btn.getBoundingClientRect();
+    return (r.width > 0 && r.height > 0 && btn.offsetParent) ? 1 : -1;
+  });
+  if (taps === 1) ok('從打開行程到開始加照片：1 下（按「📷 拍照」就叫出相機）');
+  else fail('點擊層級不對：' + taps);
+
+  // 真的按下去會不會叫出檔案選擇（＝真的能開始加照片）
+  const fires = await A.page.evaluate(() => new Promise((res) => {
+    const card = document.querySelector('.qbig');
+    const input = card.querySelector('input[type=file]');
+    input.addEventListener('click', () => res(true), { once: true });
+    card.querySelector('.addphoto-row button').click();
+    setTimeout(() => res(false), 800);
+  }));
+  if (fires) ok('按下去確實會叫出相機／相簿');
+  else fail('按了沒反應');
+
   // ================= 問題一：任務列只剩「加入照片」 =================
   await go(A.page, `/#/trip/${setup.tid}/spot/${setup.spotId}`);
   await A.page.waitForSelector('.qrow');
