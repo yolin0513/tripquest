@@ -150,7 +150,8 @@ const spot = (r, n) => r.items.find((i) => i.name === n);
 `);
   yes(names(r).includes('一蘭拉麵'), '用餐：「午餐：一蘭拉麵」取出店名');
   const ci = r.items.find((i) => /check\s*in/i.test(i.name));
-  yes(ci && ci.include === false, 'Check in：預設不建立景點（但保留讓人勾回來）');
+  yes(ci && ci.include === true, 'Check in：照樣列出來、預設也勾（要不要建立由使用者決定）');
+  yes(ci && ci.warnings.some((w) => w.includes('行程安排')), 'Check in：但有講「這看起來是行程安排，不是景點」');
   const dinner = r.items.find((i) => i.name === '晚餐');
   yes(!dinner || dinner.include !== undefined, '晚餐（自理）：沒有店名不會變成怪景點');
 }
@@ -219,7 +220,8 @@ const spot = (r, n) => r.items.find((i) => i.name === n);
   eq(spot(r, '弘大').startMin, null, 'AI 列：99:99 這種壞時間丟掉不採用');
   yes(r.warnings.some((w) => w.includes('沒有名字')), 'AI 列：有回報跳過幾筆');
   const co = r.items.find((i) => /check\s*out/i.test(i.name));
-  yes(co && co.include === false, 'AI 列：Check out 一樣不建立景點');
+  yes(co && co.include === true, 'AI 列：Check out 一樣不排除');
+  yes(co && co.warnings.some((w) => w.includes('行程安排')), 'AI 列：但一樣有提示');
 }
 
 // ---------- 12. 邊界 ----------
@@ -339,18 +341,21 @@ const spot = (r, n) => r.items.find((i) => i.name === n);
   yes(g('火山爆發雞礁溪總店'), '真實資料：emoji 與「｜」後面的廣告詞清掉了');
   yes(g('玉里橋頭臭豆腐 礁溪店'), '真實資料：關鍵字堆疊切掉了');
   yes(g('石頭鄉燜烤玉米-羅東總店'), '真實資料：「（看清楚店名再評論）」清掉了');
-  yes(g('火烤碳香-真珠玉米'), '真實資料：尾巴的「(羅東店)」清掉了');
-  yes(g('金丹早餐(原力行早餐)'), '真實資料：正常的括號別名不會被誤切');
+  yes(g('火烤碳香-真珠玉米(羅東店)'), '真實資料：「(羅東店)」是分店資訊，保留（不是註記）');
+  yes(g('金丹早餐(原力行早餐)'), '真實資料：別名「(原力行早餐)」留著，只剝掉「（早餐備案）」那組');
   yes(!r.items.some((x) => /停留|時\d|分\)/.test(x.name)), '真實資料：沒有景點名字夾到「停留」殘骸');
 
-  // 預設不建立的那幾筆
+  // 一個都不排除 —— 判斷錯的時候，使用者要先發現「怎麼少了一個」才救得回來，
+  // 那比多一筆難處理得多。全部列出來、全部預設勾，只把理由講出來。
   const homes = r.items.filter((x) => x.name === '家');
-  eq(homes.length, 2, '真實資料：兩筆「家」');
-  yes(homes.every((x) => !x.include), '真實資料：「家」預設不勾');
+  eq(homes.length, 2, '真實資料：兩筆「家」都在');
+  yes(homes.every((x) => x.include), '真實資料：「家」照樣預設勾');
+  yes(homes.every((x) => x.warnings.some((w) => w.includes('出發'))), '真實資料：但有說明這是出發／回家的地方');
   const backups = r.items.filter((x) => (x.warnings || []).some((w) => w.includes('備案')));
-  eq(backups.length, 2, '真實資料：兩筆備案');
-  yes(backups.every((x) => !x.include), '真實資料：備案預設不勾');
-  eq(r.items.filter((x) => x.include).length, 28, '真實資料：預設建立 28 個');
+  eq(backups.length, 2, '真實資料：兩筆備案都在');
+  yes(backups.every((x) => x.include), '真實資料：備案照樣預設勾');
+  eq(r.items.filter((x) => x.include).length, 32, '真實資料：32 筆全部預設建立，一個都不排除');
+  eq(r.items.length, 32, '真實資料：一行都沒有被丟掉');
 
   // 提示
   yes(g('雲居溫泉會館').warnings.some((w) => w.includes('0 分鐘')), '真實資料：停留 0 分鐘有提示');

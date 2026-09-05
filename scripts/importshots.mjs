@@ -23,7 +23,7 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
 let n = 0;
 const shot = async (name) => {
   await sleep(320);
-  const f = `${OUT}/v1.37-${String(++n).padStart(2, '0')}-${name}.png`;
+  const f = `${OUT}/v1.38-${String(++n).padStart(2, '0')}-${name}.png`;
   await page.screenshot({ path: f });
   console.log('✓ ' + f.split(/[\\/]/).pop());
 };

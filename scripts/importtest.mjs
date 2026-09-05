@@ -297,7 +297,7 @@ try {
       warn: (e.querySelector('.imp-warn') || {}).textContent || '',
     })));
     const R = (n) => rows.find((x) => x.n === n);
-    eq(rows.length, 32, '真實資料：確認畫面列出 32 筆');
+    eq(rows.length, 32, '真實資料：確認畫面列出全部 32 筆，一行都沒丟');
     eq(R('白雲山鹿') && R('白雲山鹿').s, '60', '真實資料：01時00分 在下拉裡顯示得出來');
     eq(R('香草菲菲 芳香植物博物館') && R('香草菲菲 芳香植物博物館').s, '187', '真實資料：187 分不在預設選項也不會變「不設定」');
     eq(R('山風民宿hillstay') && R('山風民宿hillstay').s, '72', '真實資料：72 分同上');
@@ -305,8 +305,9 @@ try {
     yes(stayLabels.includes('3.1 小時') && stayLabels.includes('1.2 小時'), '真實資料：非預設值有補成選項並顯示');
     yes(R('羅東觀光夜市') && R('羅東觀光夜市').badge === '✓', '真實資料：羅東觀光夜市對到策展的「羅東夜市」');
     yes(!rows.some((x) => x.warn.includes('資料庫')), '真實資料：沒對到策展資料不再標成警告');
-    eq(rows.filter((x) => x.on).length, 28, '真實資料：預設勾 28 個（家 ×2、備案 ×2 不勾）');
-    yes(R('家') && !R('家').on && R('家').warn.includes('出發'), '真實資料：「家」預設不勾且有說明');
+    eq(rows.filter((x) => x.on).length, 32, '真實資料：32 筆全部預設勾選，一個都不排除');
+    yes(R('家') && R('家').on && R('家').warn.includes('出發'), '真實資料：「家」照樣勾，但有說明它是出發／回家的地方');
+    yes(R('金丹早餐(原力行早餐)') && R('金丹早餐(原力行早餐)').on, '真實資料：備案照樣勾，別名也留著');
 
     const titleBefore = await page.$eval('input.field[type=text]', (e) => e.value);
     await clickText('.modal-actions .btn', '就這樣建立');
@@ -336,9 +337,9 @@ try {
         noHome: !spots.some((x) => x.name === '家'),
       };
     });
-    eq(made.n, 28, '真實資料：建立 28 個景點');
+    eq(made.n, 32, '真實資料：建立 32 個景點（原文有幾筆就建幾筆）');
     eq(made.title, '宜蘭遊', '真實資料：旅程真的叫「宜蘭遊」');
-    yes(made.noHome, '真實資料：沒有把「家」建成景點');
+    yes(!made.noHome, '真實資料：「家」也照建（使用者若不要，確認畫面自己取消勾選）');
     eq(String(made.days), '1,2,3', '真實資料：分成 3 天');
     eq(made.noQuest.length, 0, `真實資料：每個景點都出了任務（共 ${made.quests} 個）`, made.noQuest.join('、'));
     yes(made.curated.includes('羅東夜市'), `真實資料：羅東觀光夜市套用了策展資料（${made.curated.join('、') || '無'}）`);

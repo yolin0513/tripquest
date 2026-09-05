@@ -228,15 +228,33 @@ function stripDurationPhrase(rest, raw) {
   return head + ' ' + rest.slice(i + raw.length);
 }
 
+// 尾巴的括號**只有在明顯是註記時**才剝掉。
+// 「(原力行早餐)」是別名、「(羅東店)」是分店，那些都是識別資訊要留著；
+// 「（看清楚店名再評論）」「（早餐備案）」才是註記。分不出來的一律保留原文 ——
+// 清理過頭讓名字失真，比留著一點雜訊更麻煩。
+const NOTE_PAREN = /備案|備選|候補|自理|自費|自由活動|自由行動|可選|選擇性|暫定|待定|待訂|看清楚|評論|參考|建議|視情況|臨時|替代|集合|解散|導覽|plan\s*b/i;
+
+// 一組一組從右邊剝，碰到不是註記的就停。
+// 整串一起判斷會出事：「金丹早餐(原力行早餐)（早餐備案）」只因為後面那組有
+// 「備案」兩個字，就連前面的別名「(原力行早餐)」一起丟掉。
+function stripNoteParens(tail) {
+  let t = tail;
+  for (;;) {
+    const m = t.match(/[（(][^）)]{0,20}[）)]\s*$/);
+    if (!m || !NOTE_PAREN.test(m[0])) break;
+    t = t.slice(0, m.index);
+  }
+  return t ? t + ' ' : ' ';
+}
+
 function cleanName(s) {
   let t = s;
   for (const re of NOISE) t = t.replace(re, ' ');
   t = t
     .replace(/\p{Extended_Pictographic}️?/gu, '')   // 店名裡的 emoji（🌋🐓）不是名字的一部分
     .replace(/^[\s\-|·]+/, '')                           // 行首的破折號（「-玉里橋頭臭豆腐…」）
-    .replace(/[（(][^）)]{0,20}[）)]\s*$/, ' ')     // 尾巴的括號註記（晚餐自理）(自費)
+    .replace(/(?:[（(][^）)]{0,20}[）)]\s*)+$/, stripNoteParens)
     .replace(/[（(]\s*[）)]/g, ' ')
-    .replace(/\s*(?:集合|解散)\s*$/, '')
     .replace(/^\s*(?:到|前往|抵達)\s*/, '')
     .replace(/^[：:\-|·　\s]+/, '')
     .replace(/[：:\-|·，,。;；\s]+$/, '')
@@ -373,13 +391,21 @@ export function parseItinerary(text) {
     const pieces = t ? [rest] : rest.split(/[、，,→>＞]+/).map((s) => s.trim()).filter(Boolean);
 
     for (const piece of pieces) {
-      const name = cleanName(piece);
-      if (!name) { unparsed.push(raw); continue; }
-      // 「（早餐備案）」「（午餐備案）」是備而不用的，跟起點終點的「家」一樣，
-      // 建成拍照景點只會讓清單變髒。預設不勾，但留在畫面上讓人可以勾回來。
+      let name = cleanName(piece);
+      if (!name) {
+        // 清理把名字清光了 → 退回原文。真的一個字都沒有（只有時間的行）才算看不懂。
+        const back = piece.replace(/^[s-|·：:]+/, '').replace(/[s-|·：:，,。]+$/, '').trim();
+        if (!/[p{L}p{N}]/u.test(back)) { unparsed.push(raw); continue; }
+        name = back;
+      }
+      // **一個都不排除。** 早期版本會把備案、起點終點的「家」、Check in 這類
+      // 預設不勾，但那是替使用者做決定 —— 而我們判斷錯的時候，他要先發現
+      // 「咦怎麼少了一個」才救得回來，那比多一筆難處理得多。
+      // 改成全部列出來、全部預設勾選，只把「我為什麼覺得這筆特別」講出來，
+      // 確認畫面本來就可以逐項取消勾選與編輯。
       const backup = /備案|備選|候補|plan\s*b/i.test(piece) || /備案/.test(raw);
       const home = HOME.test(name);
-      const skip = NON_SPOT.test(name) || backup || home;
+      const chore = NON_SPOT.test(name);
 
       let stay = dur ? dur.min : null;
       if (!stay && t && t.end != null && t.end > t.start) stay = t.end - t.start;
@@ -389,11 +415,12 @@ export function parseItinerary(text) {
       const w = [];
       if (t && t.approx) w.push('時間是我猜的');
       if (!t) w.push('這一行沒有時間');
-      if (backup) w.push('看起來是備案，預設不建立');
-      if (home) w.push('看起來是出發／回家的地方，預設不建立');
-      if (zeroStay && !backup) w.push('原本寫停留 0 分鐘');
+      if (backup) w.push('原文寫的是備案');
+      if (home) w.push('這是出發／回家的地方');
+      if (chore) w.push('這看起來是行程安排，不是景點');
+      if (zeroStay) w.push('原本寫停留 0 分鐘');
       if (name.length > 18) w.push('名字有點長，可能夾到別的字');
-      if (name.length < 2 && !home && !backup) w.push('名字太短');
+      if (name.length < 2 && !home) w.push('名字太短');
 
       items.push({
         id: 'imp' + items.length,
@@ -403,8 +430,8 @@ export function parseItinerary(text) {
         stayMin: stay,
         stayGuess: !dur && !(t && t.end != null),
         timeApprox: !!(t && t.approx),
-        include: !skip,
-        kind: skip ? 'other' : 'spot',
+        include: true,
+        kind: (backup || home || chore) ? 'other' : 'spot',
         raw, warnings: w,
       });
     }
@@ -459,13 +486,14 @@ export function fromRows(rows, title = '') {
     if (start == null) w.push('這一筆沒有時間');
     if (name.length > 18) w.push('名字有點長，可能夾到別的字');
     if (r.uncertain) w.push('這一筆 AI 自己也不太確定');
+    if (NON_SPOT.test(name)) w.push('這看起來是行程安排，不是景點');
 
     items.push({
       id: 'ai' + items.length, day, name,
       startMin: start, endMin: end, stayMin: stay,
       stayGuess: !(Number.isFinite(+r.stayMin) && +r.stayMin > 0) && !(start != null && end != null),
       timeApprox: !!r.approx,
-      include: !NON_SPOT.test(name),
+      include: true,                                  // 一個都不排除，見上面 parseItinerary 的說明
       kind: NON_SPOT.test(name) ? 'other' : 'spot',
       raw: String(r.raw || name), warnings: w,
     });
