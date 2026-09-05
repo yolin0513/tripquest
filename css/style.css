@@ -368,6 +368,10 @@ button.card { appearance: none; font: inherit; }
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px; font-weight: 800; line-height: 1.3;
 }
+.nextstn-by {
+  text-align: center; color: var(--muted); font-size: 0.85rem; font-weight: 600;
+  margin-top: 8px;
+}
 .nextstn-switch {
   appearance: none; display: block; width: 100%; margin-top: 8px;
   background: none; border: 0; color: var(--muted);
