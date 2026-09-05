@@ -90,9 +90,13 @@ export default async function trip(tripId, { fresh = false } = {}) {
       : null,
 
     // 全部完成 / 旅程結束 → 直接把「回顧」拉到最上面
+    // 旅程結束／全部完成時給回顧入口，但「帶我去下一站」還是要留著 ——
+    // 回程日過了照片還沒補完的情況很常見，那時候一樣需要導航與「換一站」。
     (allDone || tripEnded(t)) && spots.length
-      ? h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/memories`) },
-          allDone ? '🎉 全部完成！去看回顧與回憶影片' : '🎁 旅程結束了，來看回顧')
+      ? h('div', {},
+          h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/memories`) },
+            allDone ? '🎉 全部完成！去看回顧與回憶影片' : '🎁 旅程結束了，來看回顧'),
+          nextStationButton(tripId, t, allDone))
       : nextStationButton(tripId, t, allDone),
 
     h('div', { class: 'stack', style: 'margin-top:6px' },
@@ -272,9 +276,11 @@ function smoothScrollTo(top) {
 
 // 「用地圖帶我去下一站」＋「換一站」
 function nextStationButton(tripId, t, allDone) {
-  if (allDone || tripEnded(t)) return null;
+  // 不看「旅程結束了沒」——回程日過了但照片還沒補完是很常見的，人也可能還在路上。
+  // 只要還有下一站（自動推導或使用者指定）就給按鈕；全部拍完了 currentSpot 自然回 null。
   const next = currentSpot(tripId);
   if (!next) return null;
+  void allDone;
   const manual = !!store.getHereSpot(tripId);
   const url = mapsDirUrl(next);
 

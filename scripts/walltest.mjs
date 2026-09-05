@@ -31,6 +31,18 @@ const go = async (hash) => {
 };
 
 try {
+  // 兩個獨立 context 當兩台手機，走真的同步伺服器
+  const dev = async (name) => {
+    const ctx = await browser.createBrowserContext();
+    const pg = await ctx.newPage();
+    await pg.setViewport({ width: 390, height: 844 });
+    pg.on('pageerror', (e) => { console.log(`  [${name} pageerror]`, e.message); process.exitCode = 1; });
+    await pg.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.hero');
+    await pg.evaluate((u) => { (async () => { (await import('./js/sync.js')).setConfig({ mode: 'lan', url: u }); })(); }, `http://localhost:${API}`);
+    return pg;
+  };
+  const drain = (pg) => pg.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
   // 3 個景點、各 2 個任務；只有第 1 個景點有照片（第 2、3 個都還沒完成）
   const setup = await page.evaluate(async () => {
     const s = await import('./js/store.js');
@@ -195,6 +207,103 @@ try {
   if (advanced.name.includes('幾米公園')) ok(`自動往下推進到還沒完成的那一站（${advanced.name.trim()}）`);
   else fail('沒有往下推進：' + JSON.stringify(advanced));
 
+  // ================= 使用者實測踩到的：選一個「已經拍完」的景點 =================
+  // v1.31 的規則是「完成就自動放手」，結果使用者挑一個已經拍完的地方（想再回去、
+  // 或人就站在那裡要導航）時，設定會被默默忽略，畫面看起來就像按了沒反應。
+  const D = await dev('D');
+  const dz = await D.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const { importPhoto } = await import('./js/photos.js');
+    const gid = uuid(), tid = uuid(), mid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: mid, type: 'member', groupId: gid, displayName: '阿明' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '已完成景點', region: '宜蘭', allowWiki: false });
+    const ids = [];
+    for (let i = 0; i < 3; i++) {
+      const sid = uuid();
+      await s.put({ id: sid, type: 'spot', tripId: tid, name: `站${i + 1}`, emoji: '📍', day: 1, order: i });
+      await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: sid, title: `任務${i}`, kind: 'thing', order: 0 });
+      ids.push(sid);
+    }
+    const mk = () => { const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+      c.getContext('2d').fillRect(0, 0, 300, 200); return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8)); };
+    for (const q of s.questsOf(ids[0])) {
+      await importPhoto(new File([await mk()], 'x.jpg', { type: 'image/jpeg' }), { tripId: tid, questId: q.id, memberId: mid, allowGeo: false });
+    }
+    s.setActiveMember(tid, mid);
+    await s.setHereSpot(tid, ids[0], { id: mid, name: '阿明' });     // 指定已經拍完的「站1」
+    return { tid, done: ids[0], next: ids[1] };
+  });
+  const doneCase = await D.evaluate(async (z) => {
+    const s = await import('./js/store.js');
+    return { here: s.getHereSpot(z.tid), want: z.done };
+  }, dz);
+  if (doneCase.here === dz.done) ok('指定一個「已經拍完」的景點：會照使用者的選擇，不會被默默忽略');
+  else fail('選了已完成的景點卻被忽略：' + JSON.stringify(doneCase));
+
+  // 但「設定之後才完成」仍然要自動往下推進（不能因此困住）
+  await D.evaluate(async (z) => {
+    const s = await import('./js/store.js');
+    const { importPhoto } = await import('./js/photos.js');
+    await s.setHereSpot(z.tid, z.next, null);
+    const mk = () => { const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+      c.getContext('2d').fillRect(0, 0, 300, 200); return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8)); };
+    const mem = s.membersOf(s.get(z.tid).groupId)[0];
+    for (const q of s.questsOf(z.next)) {
+      await importPhoto(new File([await mk()], 'y.jpg', { type: 'image/jpeg' }), { tripId: z.tid, questId: q.id, memberId: mem.id, allowGeo: false });
+    }
+  }, dz);
+  const stillAdvances = await D.evaluate(async (z) => (await import('./js/store.js')).getHereSpot(z.tid), dz);
+  if (stillAdvances === null) ok('「設定之後才完成」的仍然自動往下推進（不會被困住）');
+  else fail('設定後完成卻沒推進：' + stillAdvances);
+
+  // ================= 旅程已結束／還沒出發，一樣要能指定與捲動 =================
+  for (const [label, offset] of [['已結束（回程日過了）', -14], ['還沒出發', 7]]) {
+    const E = await dev('E');
+    const ez = await E.evaluate(async (off) => {
+      const s = await import('./js/store.js');
+      const { uuid } = await import('./js/ids.js');
+      const iso = (d) => { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + d);
+        const q = (n) => String(n).padStart(2, '0');
+        return `${x.getFullYear()}-${q(x.getMonth() + 1)}-${q(x.getDate())}`; };
+      const gid = uuid(), tid = uuid();
+      await s.put({ id: gid, type: 'group', name: 'g' });
+      await s.put({ id: tid, type: 'trip', groupId: gid, title: '日期測試', region: '宜蘭', allowWiki: false, startDate: iso(off), endDate: iso(off + 2) });
+      const ids = [];
+      for (let i = 0; i < 6; i++) {
+        const sid = uuid();
+        await s.put({ id: sid, type: 'spot', tripId: tid, name: `站${i + 1}`, emoji: '📍', day: Math.floor(i / 2) + 1, order: i });
+        for (let k = 0; k < 2; k++) await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: sid, title: `t${i}-${k}`, kind: 'thing', order: k });
+        ids.push(sid);
+      }
+      return { tid, last: ids[5] };
+    }, offset);
+
+    await E.goto('about:blank');
+    await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}`, { waitUntil: 'networkidle0' });
+    await E.waitForSelector('.qbig');
+    await sleep(1200);
+    const hasSwitch = await E.evaluate(() => !!document.querySelector('.nextstn-switch'));
+    if (hasSwitch) ok(`${label}：仍然有「帶我去下一站」與「換一站」`);
+    else fail(`${label}：按鈕整個不見了，根本沒辦法指定`);
+
+    await E.evaluate(async (z) => {
+      const s = await import('./js/store.js');
+      await s.setHereSpot(z.tid, z.last, null);
+    }, ez);
+    await E.goto('about:blank');
+    await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}`, { waitUntil: 'networkidle0' });
+    await E.waitForSelector('.qbig');
+    await sleep(1800);
+    const r = await E.evaluate(() => ({
+      scrollY: Math.round(window.scrollY),
+      openDays: [...document.querySelectorAll('.daycollapse.open')].map((e) => e.dataset.day),
+    }));
+    if (r.scrollY > 100 && r.openDays.length === 1 && r.openDays[0] === '3') ok(`${label}：重新打開仍會展開第 3 天並捲到位（${r.scrollY}px）`);
+    else fail(`${label}：沒有捲動或展開錯誤：${JSON.stringify(r)}`);
+  }
+
   // ================= 照片牆的排序與篩選 =================
   await go(`/#/trip/${setup.tid}/people`);
   await page.waitForSelector('.wall-chips');
@@ -272,18 +381,6 @@ try {
   else fail('未標記篩選不對：' + JSON.stringify(untag));
 
   // ================= 「現在這一站」要同步給整個群組 =================
-  // 兩個獨立 context 當兩台手機，走真的同步伺服器
-  const dev = async (name) => {
-    const ctx = await browser.createBrowserContext();
-    const pg = await ctx.newPage();
-    await pg.setViewport({ width: 390, height: 844 });
-    pg.on('pageerror', (e) => { console.log(`  [${name} pageerror]`, e.message); process.exitCode = 1; });
-    await pg.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
-    await pg.waitForSelector('.hero');
-    await pg.evaluate((u) => { (async () => { (await import('./js/sync.js')).setConfig({ mode: 'lan', url: u }); })(); }, `http://localhost:${API}`);
-    return pg;
-  };
-  const drain = (pg) => pg.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
 
   const A = await dev('A');
   const shared = await A.evaluate(async () => {
