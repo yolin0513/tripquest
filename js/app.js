@@ -126,7 +126,9 @@ window.addEventListener('hashchange', renderTabs);
 route('/', async () => (await import('./views/home.js')).default());
 route('/new', async () => (await import('./views/create.js')).default());
 route('/join', async ({ query }) => (await import('./views/join.js')).default(query));
-route('/trip/:id', async ({ params }) => (await import('./views/trip.js')).default(params.id));
+// fresh 只有「真的導覽到這一頁」時才是 true —— 頁面內部自己重繪（補完景點圖、AI 文案
+// 回來）不算，不然畫面會在使用者看到一半時又自己捲一次。
+route('/trip/:id', async ({ params, fresh }) => (await import('./views/trip.js')).default(params.id, { fresh }));
 route('/trip/:id/settings', async ({ params }) => (await import('./views/trip.js')).settings(params.id));
 route('/trip/:id/people', async ({ params }) => (await import('./views/people.js')).default(params.id));
 route('/trip/:id/album', async ({ params }) => (await import('./views/album.js')).default(params.id));

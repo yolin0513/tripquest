@@ -1,7 +1,8 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, KIND_META } from '../ui.js';
-import { navigate, back } from '../router.js';
+import { navigate, back, navRestoredScroll } from '../router.js';
+import { getPrefs } from '../prefs.js';
 import { uuid, hashHue } from '../ids.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
@@ -34,7 +35,7 @@ async function pickCountry(tripId) {
   if (pick) { await store.patch(tripId, { country: pick }); toast('已設定'); settings(tripId); }
 }
 
-export default async function trip(tripId) {
+export default async function trip(tripId, { fresh = false } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   await loadThemes().catch(() => {});
@@ -123,13 +124,22 @@ export default async function trip(tripId) {
   }
 
   // 天氣提醒條 + 每天的天氣摘要（有座標景點、旅程還沒結束才有；背景載入）
+  let wxReady = Promise.resolve();
   if (spots.some((s) => s.lat != null) && !tripEnded(t)) {
     const wxSlot = h('div', { class: 'wx-slot' });
     container.insertBefore(wxSlot, container.querySelector('.stack')?.nextSibling || null);
-    fillWeather(wxSlot, container, tripId, t);
+    wxReady = fillWeather(wxSlot, container, tripId, t);
   }
 
   render(container);
+
+  // 進來時把「今天」帶到眼前。天氣條是後來才填的、會把下面的內容往下推，
+  // 所以等它填完（或最多等 700ms）再捲，不然捲到一半畫面又被推走。
+  if (fresh) {
+    Promise.race([wxReady, new Promise((r) => setTimeout(r, 700))])
+      .then(() => scrollToToday(container, dayForToday(t)))
+      .catch(() => {});
+  }
 
   // 背景補景點示意圖，回來後重繪一次
   if (t.allowWiki !== false && spots.some((s) => !s._enriched)) {
@@ -150,6 +160,66 @@ export default async function trip(tripId) {
 function tripEnded(t) {
   if (!t.endDate) return false;
   return new Date(t.endDate + 'T23:59:59') < new Date();
+}
+
+// ---------- 進入旅程頁時自動捲到「今天」 ----------
+// 刻意保守，長輩最怕畫面自己亂跳：
+//   1. 只有旅程「進行中」才動（還沒出發、已結束都不動）
+//   2. 回到看過的畫面不動（返回、底部分頁切回來）—— router 已經還原他原本捲到哪裡
+//   3. 今天那一列本來就看得到就不動
+//   4. 只捲到「第 N 天」的標題列，不捲進任務深處，他才知道自己在哪一天
+//   5. 設定可以整個關掉
+function scrollToToday(container, todayDay) {
+  if (!(todayDay > 0)) return;
+  if (navRestoredScroll()) return;
+  if (getPrefs().autoScroll === false) return;
+
+  const sec = container.querySelector(`.daycollapse[data-day="${todayDay}"]`);
+  const head = sec && (sec.querySelector('.dc-head') || sec);
+  if (!head) return;
+
+  const topH = document.getElementById('topbar')?.offsetHeight || 60;
+  const tabH = document.getElementById('tabbar')?.offsetHeight || 76;
+  const r = head.getBoundingClientRect();
+  if (r.top >= topH && r.bottom <= window.innerHeight - tabH) return;   // 本來就看得到
+
+  const target = Math.max(0, window.scrollY + r.top - topH - 10);
+  if (Math.abs(target - window.scrollY) < 24) return;
+  smoothScrollTo(target);
+}
+
+function smoothScrollTo(top) {
+  // 尊重系統／App 的「減少動態效果」：直接跳過去，不做動畫
+  if (document.documentElement.classList.contains('reduce-motion')) {
+    window.scrollTo(0, top);
+    return;
+  }
+  const from = window.scrollY;
+  const dist = top - from;
+  const dur = 320;                       // 要快：長輩不喜歡畫面慢慢飄
+  const t0 = performance.now();
+  let cancelled = false;
+
+  // 使用者一碰畫面就讓給他，不要跟他搶
+  const stop = () => { cancelled = true; };
+  const opts = { passive: true };
+  window.addEventListener('touchstart', stop, opts);
+  window.addEventListener('wheel', stop, opts);
+  window.addEventListener('keydown', stop);
+  const cleanup = () => {
+    window.removeEventListener('touchstart', stop, opts);
+    window.removeEventListener('wheel', stop, opts);
+    window.removeEventListener('keydown', stop);
+  };
+
+  const step = (now) => {
+    if (cancelled) { cleanup(); return; }
+    const p = Math.min(1, (now - t0) / dur);
+    window.scrollTo(0, from + dist * (1 - Math.pow(1 - p, 3)));   // ease-out
+    if (p < 1) requestAnimationFrame(step);
+    else cleanup();
+  };
+  requestAnimationFrame(step);
 }
 
 // 「用地圖帶我去下一站」
@@ -301,26 +371,21 @@ async function fillWeather(slot, container, tripId, trip) {
   } catch { /* 靜默：天氣是加分項 */ }
 }
 
-// 每個景點的任務清單：預設折疊，標題列顯示完成進度（3/5）。
-// 展開時機：有任務剛完成 → 自動展開；使用者點擊 → 展開/收合並記住。
+// 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，
+// 做完的自動讓位。使用者自己點過的展開／收合永遠優先（存 localStorage）。
 function spotSection(s, tripId) {
   const quests = store.questsOf(s.id);
   const p = store.spotProgress(s.id);
   const allDone = p.total > 0 && p.done === p.total;
 
   const openKey = 'tripquest.spotOpen.' + s.id;
-  const seenKey = 'tripquest.spotSeen.' + s.id;
   let open;
   try {
-    const seen = +(localStorage.getItem(seenKey) || 0);
-    const justCompleted = p.done > seen;
-    localStorage.setItem(seenKey, String(p.done));
     const stored = localStorage.getItem(openKey);
-    if (justCompleted && !allDone) open = true;
-    else if (stored === '1') open = true;
+    if (stored === '1') open = true;
     else if (stored === '0') open = false;
-    else open = p.done > 0 && !allDone;
-  } catch { open = p.done > 0 && !allDone; }
+    else open = !allDone;
+  } catch { open = !allDone; }
 
   const tk = s.theme || themeForSpot(s);
   const tm = themeMeta(tk);

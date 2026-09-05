@@ -12,6 +12,22 @@ let depth = 0;
 // 記住每一步是哪個畫面，方便判斷 fallback
 const trail = [];
 
+// 捲動位置記憶：回到這個 session 造訪過的畫面時，還原他原本看到哪裡。
+// 長輩最怕畫面自己亂跳 —— 從照片牆回到旅程頁，應該回到原本那一段，不是彈回最上面、
+// 更不該又自己捲一次。
+//
+// 判斷「回來」不看返回鍵：底部分頁列切來切去（任務→分帳→任務）也是回來，但那不會被
+// history 認成 back。改成只要這個 session 記得這一頁的位置就還原，記不得才算第一次進來。
+const scrollMemory = new Map();
+let curRaw = '/';
+let restoredScroll = false;   // 這一次 resolve 有沒有還原捲動位置，view 可以讀
+
+// 同步寫就好：scroll 事件本來就每幀最多一次，而且延到 rAF 會寫到換頁後的新網址上
+function rememberScroll() { scrollMemory.set(curRaw, window.scrollY); }
+
+// 給畫面判斷「這次是不是回到舊畫面」（是的話就別自作主張捲動）
+export function navRestoredScroll() { return restoredScroll; }
+
 export function route(pattern, handler) {
   // pattern 例：'/trip/:id/spot/:spotId'
   const keys = [];
@@ -68,16 +84,24 @@ function parse(hash) {
 let gen = 0;
 async function resolve() {
   const my = ++gen;
-  const { path, query } = parse();
+  const { raw, path, query } = parse();
+  const restore = scrollMemory.has(raw) ? scrollMemory.get(raw) : null;
+  restoredScroll = restore != null;
+  curRaw = raw;
+
   for (const r of routes) {
     const m = path.match(r.rx);
     if (m) {
       const params = {};
       r.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1])));
       current = { path, params, query, pattern: r.pattern };
-      window.scrollTo(0, 0);
-      try { await r.handler({ params, query, path }); } catch (e) { console.error(e); }
-      void my;
+      if (restore == null) window.scrollTo(0, 0);
+      try { await r.handler({ params, query, path, fresh: true }); } catch (e) { console.error(e); }
+      if (restore != null) {
+        window.scrollTo(0, restore);
+        // 有些畫面會在 render 之後才把內容補進來（照片、天氣條），再校正一次
+        requestAnimationFrame(() => { if (my === gen) window.scrollTo(0, restore); });
+      }
       return;
     }
   }
@@ -101,6 +125,7 @@ function onHashChange() {
 
 export function startRouter() {
   window.addEventListener('hashchange', onHashChange);
+  window.addEventListener('scroll', rememberScroll, { passive: true });
   const { raw } = parse();
   if (!location.hash) { location.replace('#/'); trail.push('/'); }
   else trail.push(raw);

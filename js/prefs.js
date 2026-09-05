@@ -2,7 +2,7 @@
 // 長輩友善的核心之一——字可以調大、對比可以拉高。
 
 const KEY = 'tripquest.prefs';
-const DEFAULTS = { fs: 'm', contrast: 'normal', reduceMotion: false };
+const DEFAULTS = { fs: 'm', contrast: 'normal', reduceMotion: false, autoScroll: true };
 
 let prefs = load();
 
