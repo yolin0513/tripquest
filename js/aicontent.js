@@ -240,7 +240,7 @@ export async function ensureSpotQuests(tripId) {
 // payload: { [photoHash]: caption }
 export async function ensurePhotoCaptions(tripId) {
   const gone = new Set(store.exportRecords().filter((r) => r.type === 'retraction').map((r) => r.submissionId));
-  const subs = store.submissionsOfTrip(tripId).filter((s) => !gone.has(s.id) && !String(s.caption || '').trim());
+  const subs = store.submissionsOfTrip(tripId).filter((s) => !gone.has(s.id) && !store.photoCaption(s).trim());
   const seen = new Set();
   const targets = [];
   for (const s of subs) {
@@ -248,7 +248,8 @@ export async function ensurePhotoCaptions(tripId) {
     seen.add(s.photoHash);
     const q = store.getRaw(s.questId);
     const spot = q ? store.getRaw(q.spotId) : null;
-    const member = s.memberId ? store.getRaw(s.memberId) : null;
+    const tag = store.photoTag(s);
+    const member = tag.photographerId ? store.getRaw(tag.photographerId) : null;
     targets.push({ hash: s.photoHash, quest: q?.title || '', spot: spot?.name || '', who: member?.displayName || '', day: spot?.day || 1 });
   }
   if (targets.length < 2) return null;

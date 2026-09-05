@@ -4,8 +4,29 @@ import * as store from './store.js';
 import * as db from './db.js';
 import { myDeviceId } from './identity.js';
 
-// 一張投稿的「完成歸屬」：代拍就算幫的人完成
-export function creditOf(sub) { return sub.forMemberId || sub.memberId || null; }
+// 照片的歸屬一律走 store.photoTag()，事後標記改了這裡就跟著變（統計即時重算）。
+
+// 完成歸屬：標記過就以標記的拍攝者為準；沒標記過的舊資料維持原本的代拍規則
+export function creditOf(sub) {
+  const t = store.photoTag(sub);
+  if (t.explicit) return t.photographerId || sub.memberId || null;
+  return sub.forMemberId || sub.memberId || null;
+}
+
+// 這張是誰拍的
+export function shooterOf(sub) {
+  const t = store.photoTag(sub);
+  return (t.explicit ? t.photographerId : null) || sub.memberId || null;
+}
+
+// 照片裡有誰
+export function subjectsOf(sub) { return store.photoTag(sub).subjectIds; }
+
+// 「幫別人拍」：我按的快門、而照片裡有別人（舊資料則看代拍欄位）
+export function helpedOthers(sub, memberId) {
+  if (sub.forMemberId && sub.forMemberId !== memberId) return true;
+  return subjectsOf(sub).some((id) => id && id !== memberId);
+}
 
 function retractedSet() {
   const s = new Set();
@@ -30,9 +51,9 @@ export function statsFor(tripId, memberId) {
     questCredit.get(s.questId).add(c);
   }
   const doneByMe = quests.filter((q) => questCredit.get(q.id)?.has(memberId));
-  const mySubs = subs.filter((s) => s.memberId === memberId);
-  const forOthers = mySubs.filter((s) => s.forMemberId && s.forMemberId !== memberId);
-  const inPhotos = subs.filter((s) => Array.isArray(s.subjectIds) && s.subjectIds.includes(memberId));
+  const mySubs = subs.filter((s) => shooterOf(s) === memberId);
+  const forOthers = mySubs.filter((s) => helpedOthers(s, memberId));
+  const inPhotos = subs.filter((s) => subjectsOf(s).includes(memberId));
 
   // 同一天完成數
   const byDay = {};
@@ -96,8 +117,8 @@ export const BADGES = [
   { id: 'first', emoji: '🎬', name: '初次登場', desc: '完成第一個拍照任務', check: (s) => s.doneCount >= 1 },
   { id: 'daily3', emoji: '☀️', name: '一日三響', desc: '同一天完成 3 個以上的任務', check: (s) => s.maxInDay >= 3 },
   { id: 'foodie', emoji: '🍜', name: '美食獵人', desc: '完成這趟所有「美食」類任務', check: (s) => s.foodTotal >= 2 && s.foodDone >= s.foodTotal },
-  { id: 'helper', emoji: '🎁', name: '神隊友', desc: '幫別人代拍過照片', check: (s) => s.forOthersCount >= 1 },
-  { id: 'helper5', emoji: '🤝', name: '最佳攝影師', desc: '幫別人代拍 5 張以上', check: (s) => s.forOthersCount >= 5 },
+  { id: 'helper', emoji: '🎁', name: '神隊友', desc: '幫旅伴拍過照片（照片裡有別人）', check: (s) => s.forOthersCount >= 1 },
+  { id: 'helper5', emoji: '🤝', name: '最佳攝影師', desc: '幫旅伴拍過 5 張以上', check: (s) => s.forOthersCount >= 5 },
   { id: 'earlybird', emoji: '🐓', name: '早鳥', desc: '出發第一天就完成任務', check: (s) => s.earlyBird },
   { id: 'nightowl', emoji: '🌙', name: '夜貓子', desc: '拍過晚上（19 點後）的照片', check: (s) => s.nightOwl },
   { id: 'star', emoji: '🌟', name: '眾星拱月', desc: '被標記在 5 張以上的照片裡', check: (s) => s.inPhotosCount >= 5 },

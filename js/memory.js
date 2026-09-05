@@ -31,9 +31,10 @@ export function collectSlides(tripId) {
     seen.add(s.photoHash);
     const quest = store.getRaw(s.questId);
     const spot = quest ? store.getRaw(quest.spotId) : null;
-    const member = s.memberId ? store.getRaw(s.memberId) : null;
+    const tag = store.photoTag(s);
+    const member = tag.photographerId ? store.getRaw(tag.photographerId) : null;
     out.push({
-      hash: s.photoHash, caption: s.caption || '',
+      hash: s.photoHash, caption: tag.caption || '',
       questTitle: quest?.title || '', spotName: spot?.name || '',
       day: spot?.day || 1, spotOrder: spot?.order ?? 0, spotId: spot?.id || 'x',
       memberName: member?.displayName || '',

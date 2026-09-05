@@ -2,7 +2,7 @@
 
 import * as store from './store.js';
 import { haversine } from './geo.js';
-import { creditOf, earnedBadges, BADGES } from './badges.js';
+import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges, BADGES } from './badges.js';
 import { KIND_META } from './ui.js';
 
 function retracted() {
@@ -51,13 +51,13 @@ export async function buildRecap(tripId) {
   // 每個人
   const perMember = members.map((m) => {
     const credited = new Set(subs.filter((s) => creditOf(s) === m.id).map((s) => s.questId));
-    const shot = subs.filter((s) => s.memberId === m.id);
+    const shot = subs.filter((s) => shooterOf(s) === m.id);
     return {
       id: m.id, name: m.displayName,
       done: credited.size,
       shot: shot.length,
-      helped: shot.filter((s) => s.forMemberId && s.forMemberId !== m.id).length,
-      inPhotos: subs.filter((s) => Array.isArray(s.subjectIds) && s.subjectIds.includes(m.id)).length,
+      helped: shot.filter((s) => helpedOthers(s, m.id)).length,
+      inPhotos: subs.filter((s) => subjectsOf(s).includes(m.id)).length,
       social: [...reactions, ...comments].filter((r) => r.actorId === m.id).length,
       badges: earnedBadges(tripId, m.id).length,
     };

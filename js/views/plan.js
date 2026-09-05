@@ -7,7 +7,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, promptDialog } from '../ui.js';
+import { h, mount, toast, promptDialog, confirmDialog } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
@@ -92,17 +92,76 @@ export default async function plan(tripId) {
       onclick: () => nudge(s, 1),
     }, '▼');
 
+    const box = h('div', { class: 'plan-quests', hidden: true });
+    const toggle = h('button', {
+      class: 'plan-mini', onclick: () => { box.hidden = !box.hidden; label(); },
+    });
+    const label = () => {
+      toggle.textContent = (box.hidden ? '✏️ 改任務' : '▾ 收起任務') + `（${store.questsOf(s.id).length}）`;
+    };
+    fillQuestBox(box, s, label);
+    label();
+
     return h('div', { class: 'plan-row', dataset: { id: s.id } },
-      h('button', { class: 'plan-handle', 'aria-label': '拖曳排序' }, '☰'),
-      h('div', { class: 'plan-main' },
-        h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
-        timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
-        h('div', { class: 'plan-row-actions' },
-          h('button', { class: 'plan-mini', onclick: () => moveDay(s) }, '換天'),
-          h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) }, '編輯/刪除'),
+      h('div', { class: 'plan-row-top' },
+        h('button', { class: 'plan-handle', 'aria-label': '拖曳排序' }, '☰'),
+        h('div', { class: 'plan-main' },
+          h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
+          timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
+          h('div', { class: 'plan-row-actions' },
+            h('button', { class: 'plan-mini', onclick: () => moveDay(s) }, '換天'),
+            toggle,
+            h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) }, '景點設定'),
+          ),
         ),
+        h('div', { class: 'plan-updown' }, up, down),
       ),
-      h('div', { class: 'plan-updown' }, up, down),
+      box,
+    );
+  }
+
+  // 任務層級的編輯 / 刪除 / 新增 —— 景點頁把這些拿掉了（長輩會誤按），全部集中到這裡。
+  // 只重繪這一塊，不整頁重畫，不然每改一筆展開的任務清單就收起來了。
+  function fillQuestBox(box, s, onCountChange) {
+    const redraw = () => { fillQuestBox(box, s, onCountChange); onCountChange(); };
+    const qs = store.questsOf(s.id);
+    mount(box,
+      ...(qs.length ? qs.map((q) => {
+        const n = store.submissionsOf(q.id).length;
+        return h('div', { class: 'pq-row' },
+          h('div', { class: 'pq-main' },
+            h('div', { class: 'pq-title' }, q.title),
+            q.hint ? h('div', { class: 'muted sm' }, q.hint) : null,
+            n ? h('div', { class: 'muted sm' }, `已有 ${n} 張照片`) : null,
+          ),
+          h('div', { class: 'pq-btns' },
+            h('button', { class: 'tag-btn', onclick: async () => {
+              const title = await promptDialog('任務名稱', { value: q.title });
+              if (title === null) return;
+              const hint = await promptDialog('提示（可留空）', { value: q.hint || '', multiline: true });
+              await store.patch(q.id, { title: title || q.title, hint: hint ?? q.hint });
+              toast('已更新'); redraw();
+            } }, '編輯'),
+            h('button', { class: 'tag-btn danger', onclick: async () => {
+              const msg = n ? `刪除任務「${q.title}」？它的 ${n} 張照片也會一起刪除。` : `刪除任務「${q.title}」？`;
+              if (!await confirmDialog(msg, { danger: true, okLabel: '刪除' })) return;
+              for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id);
+              await store.remove(q.id);
+              toast('已刪除'); redraw();
+            } }, '刪除'),
+          ),
+        );
+      }) : [h('p', { class: 'muted sm', style: 'margin:4px 2px 10px' }, '這個景點還沒有任務')]),
+      h('button', { class: 'btn btn-soft btn-block', onclick: async () => {
+        const title = await promptDialog('要拍什麼？', { placeholder: '例：找到那隻招財貓', okLabel: '下一步' });
+        if (!title) return;
+        const hint = await promptDialog('提示（可留空）', { placeholder: '拍成怎樣算完成？', multiline: true, okLabel: '新增' }) || '';
+        await store.put({
+          id: uuid(), type: 'quest', tripId, spotId: s.id, title, hint,
+          kind: 'custom', source: 'custom', order: store.questsOf(s.id).length, refImage: null,
+        });
+        toast('已新增'); redraw();
+      } }, '＋ 新增任務'),
     );
   }
 

@@ -1,11 +1,12 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, avatar } from '../ui.js';
+import { h, avatar, toast } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
 import { ensureMember, activeMemberId } from '../claim.js';
-import { creditOf, earnedBadges } from '../badges.js';
+import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges } from '../badges.js';
+import { openTagger } from '../phototag.js';
 
 const REACTIONS = ['❤️', '👍', '😍', '👏'];
 
@@ -19,14 +20,14 @@ export default async function people(tripId) {
   const prog = store.tripProgress(tripId);
   const page = h('div', { class: 'page' });
 
-  // 每個人的進度
+  // 每個人的進度（歸屬一律走標記，改標記後回到這頁就是新數字）
   page.append(h('div', { class: 'section-label' }, `大家一起完成了 ${prog.done} / ${prog.total}`));
   const allSubs = store.submissionsOfTrip(tripId);
   for (const m of members) {
     const credited = new Set(allSubs.filter((s) => creditOf(s) === m.id).map((s) => s.questId));
-    const shot = allSubs.filter((s) => s.memberId === m.id);
-    const forOthers = shot.filter((s) => s.forMemberId && s.forMemberId !== m.id).length;
-    const inPhotos = allSubs.filter((s) => Array.isArray(s.subjectIds) && s.subjectIds.includes(m.id)).length;
+    const shot = allSubs.filter((s) => shooterOf(s) === m.id);
+    const forOthers = shot.filter((s) => helpedOthers(s, m.id)).length;
+    const inPhotos = allSubs.filter((s) => subjectsOf(s).includes(m.id)).length;
     const ratio = prog.total ? credited.size / prog.total : 0;
     const bCount = earnedBadges(tripId, m.id).length;
     page.append(h('div', { class: 'people-row' },
@@ -43,6 +44,24 @@ export default async function people(tripId) {
   }
   page.append(h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/badges`) }, '🏅 看成就徽章'));
 
+  // 還沒標記的照片 —— 不吵，但看得到，一按就進連續標記
+  const untagged = store.untaggedPhotos(tripId);
+  if (untagged.length) {
+    page.append(h('button', {
+      class: 'untag-cta',
+      onclick: async () => {
+        const first = untagged[0];
+        if (await openTagger(tripId, first.id, allSubs)) people(tripId);
+      },
+    },
+      h('span', { class: 'untag-cta-main' },
+        h('span', { style: 'font-weight:800' }, `還有 ${untagged.length} 張沒標記`),
+        h('span', { class: 'muted sm' }, '標一下照片裡有誰，統計和徽章會更準'),
+      ),
+      h('span', {}, '›'),
+    ));
+  }
+
   // 照片動態
   page.append(h('div', { class: 'section-label' }, subs.length ? '大家拍的照片' : '還沒有照片'));
   if (!subs.length) {
@@ -53,31 +72,41 @@ export default async function people(tripId) {
   render(page);
 
   for (const sub of subs) {
-    page.append(await feedItem(sub, tripId));
+    page.append(await feedItem(sub, tripId, allSubs, members.length > 1));
   }
 }
 
-async function feedItem(sub, tripId) {
+async function feedItem(sub, tripId, allSubs, multi) {
   const quest = store.getRaw(sub.questId);
   const spot = quest ? store.getRaw(quest.spotId) : null;
-  const author = sub.memberId ? store.getRaw(sub.memberId) : null;
   const url = await blobURL(sub.photoHash);
 
-  const forM = sub.forMemberId ? store.getRaw(sub.forMemberId) : null;
-  const subjects = Array.isArray(sub.subjectIds)
-    ? sub.subjectIds.map((id) => store.getRaw(id)?.displayName).filter(Boolean) : [];
+  const shooter = shooterOf(sub);
+  const author = shooter ? store.getRaw(shooter) : null;
+  const subjects = subjectsOf(sub).map((id) => store.getRaw(id)?.displayName).filter(Boolean);
+  const caption = store.photoCaption(sub);
+  const needsTag = multi && !store.isPhotoTagged(sub);
 
   const item = h('div', { class: 'feed-item' });
   item.append(h('div', { class: 'fi-head' },
-    avatar(author?.displayName || '?', hashHue(sub.memberId || sub.deviceId || 'x')),
-    h('div', {},
-      h('div', { class: 'fi-who' }, (author?.displayName || sub.byDevice || '旅伴')
-        + (forM ? ` 幫 ${forM.displayName} 拍` : '')),
+    avatar(author?.displayName || '?', hashHue(shooter || sub.deviceId || 'x')),
+    h('div', { style: 'min-width:0' },
+      h('div', { class: 'fi-who' }, (author?.displayName || sub.byDevice || '旅伴') + ' 拍的'),
       h('div', { class: 'fi-what' }, [spot?.name, quest?.title].filter(Boolean).join(' · ')),
       subjects.length ? h('div', { class: 'fi-what' }, '📸 ' + subjects.join('、')) : null,
+      caption ? h('div', { class: 'fi-what' }, caption) : null,
     ),
   ));
-  item.append(h('img', { class: 'fi-photo', src: url, alt: '', loading: 'lazy' }));
+
+  // 點照片 → 標記畫面（也能在那裡加說明、刪除）
+  const photoWrap = h('button', {
+    class: 'fi-photo-btn',
+    onclick: async () => { if (await openTagger(tripId, sub.id, allSubs)) people(tripId); },
+  },
+    h('img', { class: 'fi-photo', src: url, alt: caption || '', loading: 'lazy' }),
+    needsTag ? h('span', { class: 'untag-dot' }, '未標記') : null,
+  );
+  item.append(photoWrap);
 
   const actions = h('div', { class: 'fi-actions' });
   const commentsBox = h('div', { class: 'fi-comments' });
@@ -120,7 +149,7 @@ function commentAdder(sub, tripId, redraw) {
     const text = field.value.trim();
     if (!text) return;
     const actor = await ensureMember(tripId);
-    if (!actor) return;
+    if (!actor) { toast('先選一下你是誰'); return; }
     await store.addComment(sub.id, actor, text);
     field.value = '';
     redraw();
