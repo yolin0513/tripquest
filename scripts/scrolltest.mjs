@@ -348,6 +348,93 @@ try {
   if (stillAuto > 100) ok(`沒有干擾原本的自動捲動（打開行程仍捲到指定那一站，${stillAuto}px）`);
   else fail('自動捲動被影響了：' + stillAuto);
 
+  // ================= 底部分頁導覽：完整矩陣 =================
+  // v1.35 出過大包：判斷「已經在這一頁」用了 active（＝在這個分頁的「區域」裡），
+  // 結果在景點頁／任務詳情按「任務」會被 preventDefault 擋掉，人困在子頁面出不來。
+  // 所以這裡不是測捲動，而是測最基本的一件事：按了分頁有沒有真的切過去。
+  const N = await device();
+  const tidN = await seed(N.page, { startOffset: -1, dayCount: 2, spotsPerDay: 2, complete: [[1, 0]] });
+  const ids = await N.page.evaluate(async (t) => {
+    const s = await import('./js/store.js');
+    const sp = s.spotsOf(t)[0];
+    return { spot: sp.id, quest: s.questsOf(sp.id)[0].id };
+  }, tidN);
+
+  const marker = () => N.page.evaluate(() => ({
+    hash: location.hash,
+    what: document.querySelector('.qbig') ? '任務清單'
+      : document.querySelector('.qrow') ? '景點頁'
+      : document.querySelector('.quest-focus') ? '任務詳情'
+      : document.querySelector('.people-row, .wall-bar') ? '照片牆'
+      : document.querySelector('.exp-summary, .exp-total, .exp-form, .exp-item, .numpad') ? '分帳'
+      : document.querySelector('.mem-card') ? '回顧'
+      : document.querySelector('.hero') ? '我的旅程'
+      : document.querySelector('.seg') ? '設定' : '?',
+  }));
+  const goHash = async (hash) => {
+    await N.page.goto('about:blank');
+    await N.page.goto(`http://localhost:${WEB}/${hash}`, { waitUntil: 'networkidle0' });
+    await sleep(1300);
+  };
+  const tapTab = async (name) => {
+    await N.page.evaluate((n) => {
+      const el = [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes(n));
+      if (el) el.click();
+    }, name);
+    await sleep(1300);
+    return marker();
+  };
+
+  // 旅程層：6 個起點 × 4 顆分頁
+  const tripStarts = [
+    ['任務清單', `#/trip/${tidN}`],
+    ['照片牆', `#/trip/${tidN}/people`],
+    ['分帳', `#/trip/${tidN}/expenses`],
+    ['回顧', `#/trip/${tidN}/memories`],
+    ['景點頁', `#/trip/${tidN}/spot/${ids.spot}`],
+    ['任務詳情', `#/quest/${ids.quest}`],
+  ];
+  // 網址才是「有沒有真的切過去」的鐵證；內容標記另外檢查（分帳頁沒資料時是空狀態，
+  // 沒有可靠的標記，所以那一頁只驗網址）
+  const wantHash = {
+    任務: `#/trip/${tidN}`, 照片: `#/trip/${tidN}/people`,
+    分帳: `#/trip/${tidN}/expenses`, 回顧: `#/trip/${tidN}/memories`,
+  };
+  const wantWhat = { 任務: '任務清單', 照片: '照片牆', 回顧: '回顧' };
+  let bad = [];
+  for (const [from, hash] of tripStarts) {
+    for (const tab of ['任務', '照片', '分帳', '回顧']) {
+      await goHash(hash);
+      const got = await tapTab(tab);
+      if (got.hash !== wantHash[tab]) bad.push(`${from} →按「${tab}」→ 網址是 ${got.hash}`);
+      else if (wantWhat[tab] && got.what !== wantWhat[tab]) bad.push(`${from} →按「${tab}」→ 畫面是 ${got.what}`);
+    }
+  }
+  if (!bad.length) ok(`旅程層分頁導覽完整矩陣 ${tripStarts.length}×4＝24 種組合都正確切換`);
+  else fail(`分頁導覽壞了 ${bad.length} 種：` + bad.join(' ｜ '));
+
+  // 首頁層：2 個起點 × 2 顆分頁
+  bad = [];
+  for (const [from, hash] of [['我的旅程', '#/'], ['設定', '#/settings']]) {
+    for (const [tab, expect] of [['我的旅程', '我的旅程'], ['設定', '設定']]) {
+      await goHash(hash);
+      const got = await tapTab(tab);
+      if (got.what !== expect) bad.push(`${from} →按「${tab}」→ 竟然是 ${got.what}`);
+    }
+  }
+  if (!bad.length) ok('首頁層分頁導覽 2×2＝4 種組合都正確');
+  else fail('首頁層分頁壞了：' + bad.join('、'));
+
+  // 「已在該分頁再按一次」不可以把導覽擋掉 —— 只在網址完全相同時才算
+  await goHash(`#/trip/${tidN}/spot/${ids.spot}`);
+  const tabState = await N.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')]
+    .map((a) => a.textContent.replace(/[^一-龥]/g, '') + (a.classList.contains('active') ? '*' : '')));
+  const backToList = await tapTab('任務');
+  if (/任務\*/.test(tabState.join('')) && backToList.what === '任務清單') {
+    ok('在景點頁時「任務」雖然是亮的，按下去仍然回得到任務清單（不是只捲動）');
+  } else fail(`景點頁回不去：${JSON.stringify(tabState)} → ${backToList.what}`);
+
+
   console.log('\n折疊與自動捲動測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
