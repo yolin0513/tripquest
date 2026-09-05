@@ -179,6 +179,39 @@ try {
   if (reopened && reopened.open) ok('手動展開的「已完成」景點，重進仍展開');
   else fail('手動展開沒被記住：' + JSON.stringify(reopened));
 
+  // ================= E2. 「全部展開 / 全部收合」要兩層一起 =================
+  const E2 = await device();
+  const tidE2 = await seed(E2.page, { startOffset: -1, dayCount: 3, complete: [[1, 0]] });
+  await openTrip(E2.page, tidE2);
+  await E2.page.evaluate(() => [...document.querySelectorAll('.day-tool-btn')].find((b) => b.textContent.includes('全部展開')).click());
+  await sleep(250);
+  const allOpen = await snapshot(E2.page);
+  if (allOpen.days.every((d) => d.open) && allOpen.spots.every((s) => s.open)) ok(`全部展開：${allOpen.days.length} 天、${allOpen.spots.length} 個景點都展開`);
+  else fail('全部展開沒有兩層一起：' + JSON.stringify({ days: openDays(allOpen), spots: allOpen.spots.map((s) => s.open) }));
+
+  await E2.page.evaluate(() => [...document.querySelectorAll('.day-tool-btn')].find((b) => b.textContent.includes('全部收合')).click());
+  await sleep(250);
+  const allShut = await snapshot(E2.page);
+  if (allShut.days.every((d) => !d.open) && allShut.spots.every((s) => !s.open)) ok('全部收合：兩層都收合');
+  else fail('全部收合沒有兩層一起：' + JSON.stringify({ days: openDays(allShut), spots: allShut.spots.map((s) => s.open) }));
+
+  // 收合後重進，狀態要留著（不會被預設值蓋回去）
+  await openTrip(E2.page, tidE2);
+  const afterReload = await snapshot(E2.page);
+  if (afterReload.days.every((d) => !d.open) && afterReload.spots.every((s) => !s.open)) ok('全部收合後重新進入：仍是收合的（沒有被預設值蓋掉）');
+  else fail('全部收合的狀態沒留住：' + JSON.stringify({ days: openDays(afterReload), spots: afterReload.spots.map((s) => s.open) }));
+
+  // 再單獨點開一個景點，只有它變（記憶不會互相污染）
+  await E2.page.evaluate(() => {
+    document.querySelector('.daycollapse[data-day="1"] .dc-head').click();
+    document.querySelectorAll('.qcollapse')[0].querySelector('.qc-toggle').click();
+  });
+  await sleep(200);
+  await openTrip(E2.page, tidE2);
+  const oneOpen = await snapshot(E2.page);
+  if (oneOpen.spots.filter((s) => s.open).length === 1 && oneOpen.spots[0].open) ok('全部收合後單獨點開一個景點：只有那一個是展開的');
+  else fail('個別選擇被污染：' + JSON.stringify(oneOpen.spots.map((s) => s.open)));
+
   // ================= F. 按返回回來：不捲動、還原原本位置 =================
   const F = await device();
   const tidF = await seed(F.page, { startOffset: -1, dayCount: 3 });

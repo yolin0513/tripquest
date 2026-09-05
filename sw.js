@@ -1,9 +1,9 @@
-/* TripQuest Service Worker
+﻿/* TripQuest Service Worker
  * - App shell（HTML/CSS/JS/data JSON）：install 時預快取，之後 stale-while-revalidate
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  */
-const VERSION = 'tripquest-v1.25.0';
+const VERSION = 'tripquest-v1.26.0';
 const SHELL = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [
