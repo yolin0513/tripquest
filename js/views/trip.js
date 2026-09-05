@@ -151,12 +151,9 @@ export default async function trip(tripId, { fresh = false } = {}) {
       .catch(() => {});
   }
 
-  // 背景補景點示意圖，回來後重繪一次
-  if (t.allowWiki !== false && needsEnrich(tripId)) {
-    enrichTrip(tripId).then(() => {
-      if (location.hash.includes(`/trip/${tripId}`) && !location.hash.includes('/spot/')) trip(tripId);
-    }).catch(() => {});
-  }
+  // 背景補示意圖。抓好一張就把那一張換上去，不整頁重畫 —— 大行程要抓一分鐘，
+  // 整頁重畫會讓使用者看到一半的畫面突然跳掉。
+  if (t.allowWiki !== false && needsEnrich(tripId)) startEnrich(tripId);
 
   // 有開 AI → 背景自動產生 / 更新行程表與任務文案（有快取就秒回、沒開就不會進來）
   if (t.aiEnabled && spots.length) {
@@ -435,6 +432,47 @@ function spotSection(s, tripId) {
   return sec;
 }
 
+// ---------- 背景補示意圖 ----------
+// 舊行程（v1.25 以前建立的）不用做任何事：`needsEnrich()` 看的是每個景點的 `_enrichV`，
+// 舊資料沒有這個欄位就算 0，所以下次打開行程頁自然會補。使用者什麼都不用設定。
+let enriching = null;
+
+function startEnrich(tripId) {
+  if (enriching === tripId) return;              // 同一趟不要同時跑兩份
+  if (!navigator.onLine) {
+    // 沒網路就安靜等著，連上再補（一次性，別累積一堆 listener）
+    const onBack = () => {
+      window.removeEventListener('online', onBack);
+      if (location.hash.includes(`/trip/${tripId}`)) startEnrich(tripId);
+    };
+    window.addEventListener('online', onBack);
+    return;
+  }
+  enriching = tripId;
+  enrichTrip(tripId, {
+    onProgress: ({ type, id }) => {
+      if (!location.hash.includes(`/trip/${tripId}`)) return;
+      if (type === 'spot') for (const q of store.questsOf(id)) repaintQuestPhoto(q.id);
+      else repaintQuestPhoto(id);
+    },
+  }).catch(() => {}).finally(() => { enriching = null; });
+}
+
+// 只換那一張卡的圖，不動其他 DOM
+function repaintQuestPhoto(questId) {
+  const el = document.querySelector(`.qbig-photo[data-q="${CSS.escape(questId)}"]`);
+  if (!el) return;
+  const q = store.getRaw(questId);
+  if (!q) return;
+  const sp = store.getRaw(q.spotId);
+  const subs = store.submissionsOf(questId);
+  el.querySelector('.img-credit')?.remove();
+  el.classList.remove('is-placeholder', 'has-img');
+  el.style.backgroundImage = '';
+  paintRef(el, refImageFor(q, sp, subs[0] && (subs[0].thumbHash || subs[0].photoHash)),
+    sp ? (sp.theme || themeForSpot(sp)) : 'journey', q.spotId);
+}
+
 // 把示意圖畫上去。抓不到圖（或 blob 被清掉）一律用主題色塊，不留一塊空白。
 export function paintRef(el, pick, themeKey, seed) {
   const placeholder = () => {
@@ -469,7 +507,7 @@ function questBigCard(q, spot, themeKey) {
   const km = KIND_META[q.kind] || KIND_META.thing;
   const likeCount = subs.reduce((n, s) => n + store.reactionsOf(s.id).length, 0);
 
-  const photo = h('div', { class: 'qbig-photo' },
+  const photo = h('div', { class: 'qbig-photo', dataset: { q: q.id } },
     h('span', { class: 'qbig-emoji' }, km.icon),
     done ? h('span', { class: 'qbig-check' }, '✓') : null,
   );

@@ -26,6 +26,11 @@ export const ENRICH_VERSION = 2;   // 改抓法時 +1，舊行程會自動重抓
 
 const inFlight = new Map();
 
+// 成功收到 Wikimedia 回應的次數。用來分辨「查了但沒有」與「根本連不上」——
+// 沒網路時如果也標成「這個景點沒有圖」，之後有網路就永遠不會再補了。
+let netHits = 0;
+const offline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
 // ---------- Wikimedia API ----------
 async function api(host, params) {
   try {
@@ -34,9 +39,10 @@ async function api(host, params) {
       action: 'query', format: 'json', formatversion: '2', origin: '*', ...params,
     }).toString();
     const r = await fetch(u.toString(), { headers: { accept: 'application/json' } });
+    netHits++;                       // 有回應就算連得上（就算內容是「查無此頁」）
     if (!r.ok) return null;
     return await r.json();
-  } catch { return null; }
+  } catch { return null; }           // 連不上：netHits 不動
 }
 
 const stripTags = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
@@ -95,21 +101,25 @@ async function commonsNear(lat, lng, width, radius = 700) {
 // 某語言維基的頁面：圖檔名 + 座標 + 摘要一次拿
 async function wikiPage(lang, title) {
   const d = await api(`${lang}.wikipedia.org`, {
-    prop: 'pageimages|coordinates|extracts',
+    prop: 'pageimages|coordinates|extracts|pageprops',
     piprop: 'thumbnail|name', pithumbsize: String(THUMB),
     colimit: '1', exintro: '1', explaintext: '1', exsentences: '2',
-    redirects: '1', titles: title,
+    ppprop: 'disambiguation', redirects: '1', titles: title,
   });
   const page = d && d.query && d.query.pages && d.query.pages[0];
   if (!page || page.missing) return null;
   const co = page.coordinates && page.coordinates[0];
+  // 消歧義頁（例：中文維基的「金閣寺」是消歧義，真正的條目叫「鹿苑寺」）。
+  // 它沒有圖，而且摘要是「金閣寺可以指：」—— 那句話不能拿去當景點介紹。
+  const disambig = !!(page.pageprops && 'disambiguation' in page.pageprops);
   return {
     title: page.title,
-    file: page.pageimage || null,
-    thumb: (page.thumbnail && page.thumbnail.source) || null,
+    file: disambig ? null : (page.pageimage || null),
+    thumb: disambig ? null : ((page.thumbnail && page.thumbnail.source) || null),
     lat: co ? co.lat : null,
     lng: co ? co.lon : null,
-    extract: page.extract || '',
+    extract: disambig ? '' : (page.extract || ''),
+    disambig,
   };
 }
 
@@ -128,15 +138,18 @@ function related(query, title) {
 
 // strict：景點要檢查搜到的條目跟名字沾不沾得上邊（給錯的地點照片會誤導）。
 // 美食則刻意不檢查 —— 找「該道菜」的通用照本來就是要找相近的料理，而且畫面會標「示意圖」。
-async function wikiSearch(lang, term, { strict = true } = {}) {
+async function wikiSearch(lang, term, { strict = true, skip = '' } = {}) {
   const d = await api(`${lang}.wikipedia.org`, {
     generator: 'search', gsrsearch: term, gsrlimit: '3', gsrnamespace: '0',
-    prop: 'pageimages|extracts', piprop: 'thumbnail|name', pithumbsize: String(THUMB),
-    exintro: '1', explaintext: '1', exsentences: '2',
+    prop: 'pageimages|extracts|pageprops', piprop: 'thumbnail|name', pithumbsize: String(THUMB),
+    ppprop: 'disambiguation', exintro: '1', explaintext: '1', exsentences: '2',
   });
   const pages = ((d && d.query && d.query.pages) || []).slice();
   pages.sort((a, b) => (a.index || 99) - (b.index || 99));
-  const p = pages.find((x) => x.thumbnail && (!strict || related(term, x.title)));
+  const p = pages.find((x) => x.thumbnail
+    && x.title !== skip
+    && !(x.pageprops && 'disambiguation' in x.pageprops)
+    && (!strict || related(term, x.title)));
   if (!p) return null;
   return { title: p.title, file: p.pageimage || null, thumb: p.thumbnail.source, extract: p.extract || '' };
 }
@@ -265,6 +278,7 @@ export async function enrichSpot(spot) {
   if (!spot) return spot;
   if (spot._enrichV >= ENRICH_VERSION && spot.heroHash) return spot;
   if (spot._enrichV >= ENRICH_VERSION && spot._noHero) return spot;   // 上次也真的找不到，別每次重打
+  if (offline()) return spot;                                          // 沒網路就安靜略過，不留下任何標記
   if (inFlight.has(spot.id)) return inFlight.get(spot.id);
   const p = _enrich(spot).finally(() => inFlight.delete(spot.id));
   inFlight.set(spot.id, p);
@@ -272,7 +286,8 @@ export async function enrichSpot(spot) {
 }
 
 async function _enrich(spot) {
-  const patch = { _enriched: true, _enrichV: ENRICH_VERSION };
+  const patch = { _enriched: true };
+  const net0 = netHits;
   try {
     let got = null;
     let source = null;
@@ -316,10 +331,15 @@ async function _enrich(spot) {
       }
     }
 
-    // 3. 查不到條目 → 站內搜尋（「清水寺 本堂」會帶到「清水寺」；也吃得下上層地名）
-    if (!spot.heroHash && !got && !page) {
+    // 3. 查不到條目、或查到的是消歧義頁 → 站內搜尋
+    //    （「清水寺 本堂」會帶到「清水寺」；「金閣寺」的消歧義會帶到「鹿苑寺」）
+    if (!spot.heroHash && !got && (!page || page.disambig)) {
       for (const lg of [lang0, 'ja', 'en']) {
-        const s = await wikiSearch(lg, spot.name);
+        // 消歧義代表這個詞是真的存在、只是有多個條目，這時放寬相關性檢查照著搜尋排序走
+        const s = await wikiSearch(lg, spot.name, {
+          strict: !(page && page.disambig),
+          skip: page ? page.title : '',
+        });
         if (!s) continue;
         if (!spot.blurb && !patch.blurb && s.extract) patch.blurb = trimExtract(s.extract);
         got = await takeWikiImage(s);
@@ -344,9 +364,15 @@ async function _enrich(spot) {
       patch.heroAttr = got.attr;
       patch.heroSource = source;
       patch._noHero = false;
-    } else if (!spot.heroHash) {
-      patch._noHero = true;      // 畫面改用主題色塊佔位，不留白
+      patch._enrichV = ENRICH_VERSION;
+    } else if (spot.heroHash) {
+      patch._enrichV = ENRICH_VERSION;
+    } else if (netHits > net0) {
+      // 真的問過了、就是沒有 → 記下來，畫面用主題色塊佔位，也不用每次重打 API
+      patch._noHero = true;
+      patch._enrichV = ENRICH_VERSION;
     }
+    // 一次都沒連上（飛航模式、國外沒網路）→ 什麼都不標，下次有網路再補
   } catch { /* 靜默：示意圖是加分項，抓不到不能影響任何流程 */ }
 
   await store.patch(spot.id, patch).catch(() => {});
@@ -357,14 +383,22 @@ async function _enrich(spot) {
 export async function enrichFoodQuest(quest) {
   if (!quest || quest.kind !== 'food') return quest;
   if (quest._enrichV >= ENRICH_VERSION) return quest;
+  if (offline()) return quest;
   if (inFlight.has(quest.id)) return inFlight.get(quest.id);
   const p = (async () => {
-    const patch = { _enrichV: ENRICH_VERSION };
+    const patch = {};
+    const net0 = netHits;
     try {
       const got = await dishImage(quest.title);
-      if (got) { patch.refHash = got.hash; patch.refAttr = got.attr; patch.refGeneric = true; }
+      if (got) {
+        patch.refHash = got.hash; patch.refAttr = got.attr; patch.refGeneric = true;
+        patch._enrichV = ENRICH_VERSION;
+      } else if (netHits > net0) {
+        patch._enrichV = ENRICH_VERSION;     // 問過了就是沒有
+      }
+      // 連不上就不標，下次有網路再補
     } catch { /* 靜默 */ }
-    await store.patch(quest.id, patch).catch(() => {});
+    if (Object.keys(patch).length) await store.patch(quest.id, patch).catch(() => {});
     return store.getRaw(quest.id);
   })().finally(() => inFlight.delete(quest.id));
   inFlight.set(quest.id, p);
@@ -376,27 +410,33 @@ function trimExtract(s, max = 40) {
   return (first.length > max ? first.slice(0, max) + '…' : first) || '';
 }
 
-// 一次補齊整個行程（背景執行，逐一以免打爆對方）
-export async function enrichTrip(tripId, { force = false } = {}) {
+// 一次補齊整個行程。背景漸進執行：一個一個抓、中間留間隔不打爆對方，
+// 每抓完一個就 onProgress 通知畫面把那一張補上去（不用整頁重畫）。
+export async function enrichTrip(tripId, { force = false, onProgress } = {}) {
   const trip = store.get(tripId);
   if (!trip || (trip.allowWiki === false && !force)) return;
+  if (offline()) return;
+
+  const tell = (type, id) => { try { onProgress && onProgress({ type, id }); } catch { /* 畫面的錯不能影響補圖 */ } };
 
   for (const s of store.spotsOf(tripId)) {
     const stale = (s._enrichV || 0) < ENRICH_VERSION;
-    if (stale || force) {
-      if (force) await store.patch(s.id, { _enrichV: 0, _noHero: false });
-      await enrichSpot(store.getRaw(s.id));
-      await new Promise((r) => setTimeout(r, 200));
-    }
+    if (!stale && !force) continue;
+    if (force) await store.patch(s.id, { _enrichV: 0, _noHero: false });
+    await enrichSpot(store.getRaw(s.id));
+    tell('spot', s.id);
+    if (offline()) return;                                  // 中途斷網就停，剩下的下次再補
+    await new Promise((r) => setTimeout(r, 200));
   }
   for (const q of store.questsOfTrip(tripId)) {
     if (q.kind !== 'food') continue;
     const stale = (q._enrichV || 0) < ENRICH_VERSION;
-    if (stale || force) {
-      if (force) await store.patch(q.id, { _enrichV: 0 });
-      await enrichFoodQuest(store.getRaw(q.id));
-      await new Promise((r) => setTimeout(r, 200));
-    }
+    if (!stale && !force) continue;
+    if (force) await store.patch(q.id, { _enrichV: 0 });
+    await enrichFoodQuest(store.getRaw(q.id));
+    tell('quest', q.id);
+    if (offline()) return;
+    await new Promise((r) => setTimeout(r, 200));
   }
 }
 
