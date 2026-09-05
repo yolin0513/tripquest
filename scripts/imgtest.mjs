@@ -32,14 +32,15 @@ try {
     const { uuid } = await import('./js/ids.js');
     const gid = uuid(), tid = uuid();
     await s.put({ id: gid, type: 'group', name: '圖片測試' });
-    await s.put({ id: tid, type: 'trip', groupId: gid, title: '圖片測試', region: '京都', allowWiki: true, startDate: null });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '京都三日遊', region: '京都', allowWiki: true, startDate: null });
     const good = uuid(), bad = uuid();
     await s.put({ id: good, type: 'spot', tripId: tid, name: '清水寺', nameLocal: '清水寺', emoji: '⛩️', day: 1, order: 0, lat: 34.9948, lng: 135.785, wikiRef: { lang: 'zh', title: '清水寺' }, tags: ['sight'], primary: 'sight' });
-    await s.put({ id: bad, type: 'spot', tripId: tid, name: '阿嬤家的後院第三棵樹', nameLocal: '阿嬤家的後院第三棵樹', emoji: '🌳', day: 1, order: 1, lat: null, lng: null, wikiRef: null, tags: [], primary: null });
+    // 使用者自己打的景點，維基不會有 —— 正是要驗「查不到圖時長怎樣」的真實情境
+    await s.put({ id: bad, type: 'spot', tripId: tid, name: '民宿旁邊的小巷', nameLocal: '民宿旁邊的小巷', emoji: '🏘️', day: 1, order: 1, lat: null, lng: null, wikiRef: null, tags: [], primary: null });
     const qGood = uuid(), qFood = uuid(), qBad = uuid();
-    await s.put({ id: qGood, type: 'quest', tripId: tid, spotId: good, title: '清水舞台', kind: 'building', order: 0 });
-    await s.put({ id: qFood, type: 'quest', tripId: tid, spotId: good, title: '必吃：章魚燒', kind: 'food', order: 1 });
-    await s.put({ id: qBad, type: 'quest', tripId: tid, spotId: bad, title: '那棵樹', kind: 'thing', order: 0 });
+    await s.put({ id: qGood, type: 'quest', tripId: tid, spotId: good, title: '清水舞台', hint: '拍那個懸空的大平台，最好帶到下方交錯的木柱。', kind: 'building', order: 0 });
+    await s.put({ id: qFood, type: 'quest', tripId: tid, spotId: good, title: '必吃：章魚燒', hint: '現買一盒剛起鍋、撒滿柴魚片的章魚燒。', kind: 'food', order: 1 });
+    await s.put({ id: qBad, type: 'quest', tripId: tid, spotId: bad, title: '巷口那盞燈籠', hint: '傍晚亮起來的時候最好看。', kind: 'thing', order: 0 });
     return { tid, good, bad, qGood, qFood, qBad };
   });
   ok('建立測試行程（查得到的景點 / 查不到的景點 / 美食任務）');
@@ -116,28 +117,36 @@ try {
   if (foodCard && foodCard.credit.startsWith('示意圖')) ok(`美食圖標明是示意圖：「${foodCard.credit}」`);
   else fail('美食圖沒標示意圖：' + JSON.stringify(foodCard));
 
-  const phCard = ui.cards.find((c) => c.title.includes('那棵樹'));
+  const phCard = ui.cards.find((c) => c.title.includes('燈籠'));
   if (phCard && phCard.placeholder && phCard.bg.includes('data:image/svg')) ok('查不到圖的任務：用主題色塊佔位，版面不空');
   else fail('沒有佔位圖：' + JSON.stringify(phCard));
 
-  // 一張圖裡同時看到三種情況：維基照片 / 美食示意圖 / 查不到時的主題色塊
-  await mkdir(path.join(ROOT, 'screenshots/features'), { recursive: true });
+  // ---------- 三種情況各拍一張（要轉給使用者看的）----------
+  const OUT = path.join(ROOT, 'screenshots/features');
+  await mkdir(OUT, { recursive: true });
   await page.evaluate(() => document.querySelectorAll('.daycollapse .dc-head').forEach((b) => {
     if (!b.closest('.daycollapse').classList.contains('open')) b.click();
   }));
   await sleep(400);
-  await page.evaluate(() => document.querySelector('.qbig')?.scrollIntoView({ block: 'start' }));
-  await sleep(300);
-  await page.screenshot({ path: path.join(ROOT, 'screenshots/features/img-sources.png') });
 
-  // 查不到圖的那一張單獨拍一張
-  await page.evaluate(() => {
-    const card = [...document.querySelectorAll('.qbig')].find((c) => c.querySelector('.qbig-photo.is-placeholder'));
-    card?.scrollIntoView({ block: 'center' });
-  });
-  await sleep(300);
-  await page.screenshot({ path: path.join(ROOT, 'screenshots/features/img-placeholder.png') });
-  ok('截圖：img-sources.png（維基照片＋美食示意圖）、img-placeholder.png（查不到圖時）');
+  const shotCard = async (match, file) => {
+    const found = await page.evaluate((m) => {
+      const card = [...document.querySelectorAll('.qbig')].find((c) => c.querySelector('.qbig-title')?.textContent.includes(m));
+      if (!card) return false;
+      const r = card.getBoundingClientRect();
+      // 讓整張卡（含圖片下緣的授權小字）都在畫面內，頂列下方留一點空
+      window.scrollBy(0, r.top - (document.getElementById('topbar').offsetHeight + 16));
+      return true;
+    }, match);
+    if (!found) { fail('找不到卡片：' + match); return; }
+    await sleep(350);
+    await page.screenshot({ path: path.join(OUT, file) });
+  };
+
+  await shotCard('清水舞台', 'v1.26-任務卡示意圖.png');
+  await shotCard('章魚燒', 'v1.26-美食示意圖.png');
+  await shotCard('燈籠', 'v1.26-查不到圖佔位.png');
+  ok('截圖：v1.26-任務卡示意圖 / v1.26-美食示意圖 / v1.26-查不到圖佔位');
 
   // ---------- 不會每次開畫面都重抓 ----------
   const before = await page.evaluate(() => performance.getEntriesByType('resource').filter((r) => /wikipedia|wikimedia/.test(r.name)).length);
