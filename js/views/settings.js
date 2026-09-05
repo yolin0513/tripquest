@@ -54,6 +54,11 @@ export default async function settings() {
         h('div', { class: 'form-hint' }, '背景更深、文字更白，看起來更清楚。')),
       checkbox(prefs.contrast === 'high', (on) => { setPref('contrast', on ? 'high' : 'normal'); })),
 
+    h('label', { class: 'switch-row' },
+      h('div', {}, h('div', { style: 'font-weight:700' }, '打開旅程時自動捲到今天'),
+        h('div', { class: 'form-hint' }, '旅行途中打開旅程，畫面會自動移到「今天」那一段。關掉的話畫面一律停在最上面，自己往下找。')),
+      checkbox(prefs.autoScroll !== false, (on) => { setPref('autoScroll', on); })),
+
     // ---- 我 ----
     h('div', { class: 'section-label' }, '我'),
     h('div', { class: 'setting-row' },
