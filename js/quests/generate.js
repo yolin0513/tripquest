@@ -156,6 +156,17 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
   if (itineraryText) {
     for (const p of parseItinerary(itineraryText, region)) list.push({ name: p.name, region: p.region, day: p.day });
   }
+  // 依「第幾天、幾點」排好再產生 —— 匯入的行程有時間，排序對了行程頁才會照真的順序走。
+  // 沒有時間的維持原本的相對次序（stable sort）。
+  list.forEach((x, i) => { if (x) x._i = i; });
+  list.sort((a, b) => {
+    if (!a || !b) return 0;
+    const d = (a.day || 1) - (b.day || 1);
+    if (d) return d;
+    const at = Number.isFinite(a.startMin) ? a.startMin : Infinity;
+    const bt = Number.isFinite(b.startMin) ? b.startMin : Infinity;
+    return at === bt ? a._i - b._i : at - bt;
+  });
 
   const spots = [];
   const quests = [];
@@ -193,6 +204,10 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
         blurb: '', must: [], tags: [], source: 'auto', inferredType: type,
       };
     }
+
+    // 匯入行程表帶進來的時間（沒有就不寫，別留一堆 null 欄位）
+    if (Number.isFinite(it.startMin)) spot.startMin = it.startMin;
+    if (Number.isFinite(it.stayMin)) spot.stayMin = it.stayMin;
 
     // 主題判定 + 依主題組文案（同一趟不重複句型）
     spot.theme = themeForSpot(spot);

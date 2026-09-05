@@ -191,9 +191,38 @@ export default async function create() {
     placeholder: '一行一個景點，或用「、」分隔：\n第1天 清水寺、金閣寺\n第2天 大阪城、道頓堀\n（不在清單裡的也可以，系統會自動出題）',
   });
   const aiChk = h('input', { type: 'checkbox' });
+
+  // ---- 進階：匯入行程表（照片 / PDF / 文字）----
+  state.imported = [];
+  const importBar = h('div', { class: 'imp-bar', hidden: true });
+  const drawImported = () => {
+    importBar.hidden = !state.imported.length;
+    if (!state.imported.length) return;
+    const days = new Set(state.imported.map((i) => i.day)).size;
+    importBar.replaceChildren(
+      h('span', {}, `📋 已匯入 ${state.imported.length} 個景點（${days} 天）`),
+      h('button', { class: 'btn btn-sm', type: 'button', onclick: () => { state.imported = []; drawImported(); } }, '清除'),
+    );
+  };
+  const importBtn = h('button', { class: 'btn btn-block', type: 'button', onclick: async () => {
+    const { default: openImport } = await import('./import.js');
+    const picks = [...state.picked.values()];
+    const res = await openImport({ cityHint: picks.length ? (picks[0].cityName || '') : '' });
+    if (!res) return;
+    state.imported = res.items;
+    if (res.usedAi) aiChk.checked = true;      // 已經有金鑰了，順手把 AI 加值打開
+    drawImported();
+    toast(`讀到 ${res.items.length} 個景點`);
+  } }, '📋 匯入行程表（照片／PDF／文字）');
+
   const advDetails = h('details', {},
     h('summary', { style: 'cursor:pointer;font-weight:700;padding:10px 0' }, '進階（可略過）'),
     h('div', { style: 'margin-top:8px' },
+      h('div', { class: 'form-field' },
+        h('span', { class: 'form-label' }, '有現成的行程表？'),
+        importBtn,
+        h('div', { class: 'form-hint' }, '旅行社給的 PDF、家人傳的照片、或是 LINE 上複製的文字都可以。讀完會先給你確認再建立。'),
+        importBar),
       field('直接貼上完整行程文字', itinField),
       h('label', { class: 'switch-row' },
         h('div', {}, h('div', { style: 'font-weight:700' }, '建立後開啟 AI 加值'),
@@ -212,7 +241,9 @@ export default async function create() {
     if (!state.members.length) state.members.push('我');
 
     const itineraryText = itinField.value.trim();
-    if (!state.picked.size && !itineraryText) { toast('選幾個景點，或用「進階」貼上行程'); return; }
+    if (!state.picked.size && !itineraryText && !state.imported.length) {
+      toast('選幾個景點，或用「進階」匯入行程表'); return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = '產生中…';
@@ -226,6 +257,8 @@ export default async function create() {
       // 依旅程天數把選到的景點平均分配
       const days = tripDays(state.dates.start, state.dates.end);
       const items = picks.map((placeId, i) => ({ placeId, day: days > 1 ? Math.min(days, Math.floor(i / Math.ceil(picks.length / days)) + 1) : 1 }));
+      // 匯入的自己帶了第幾天與時間，不要被上面那套平均分配蓋掉
+      for (const im of state.imported) items.push({ name: im.name, day: im.day, startMin: im.startMin, stayMin: im.stayMin, region });
 
       await store.put({ id: groupId, type: 'group', name: title + ' 旅伴', joinCode: '' });
       for (const name of state.members) await store.put({ id: uuid(), type: 'member', groupId, displayName: name });
@@ -236,6 +269,12 @@ export default async function create() {
         createdByDevice: myDeviceId(),
         aiEnabled: !!aiChk.checked,
       });
+
+      // 這台手機已經有預設金鑰的話，複製一份給這趟（各自算自己的花費上限）。
+      // 不複製的話使用者要在「旅程設定」再貼一次同一支金鑰。
+      if (aiChk.checked) {
+        try { const { adoptDeviceKey } = await import('../aikeys.js'); await adoptDeviceKey(tripId); } catch { /* 沒有就算了 */ }
+      }
 
       const { spots, quests } = await generateForTrip({ tripId, items, itineraryText, region });
       if (!spots.length) { toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitBtn.textContent = '產生拍照任務'; return; }

@@ -20,9 +20,11 @@
     "imgtest": "node scripts/imgtest.mjs",
     "imgcoverage": "node scripts/imgcoverage.mjs",
     "imgsample": "node scripts/imgsample.mjs",
-    "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs && node scripts/imgtest.mjs && node scripts/walltest.mjs && node scripts/updatetest.mjs",
+    "test": "node scripts/validate-places.mjs && node scripts/itintest.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs && node scripts/imgtest.mjs && node scripts/walltest.mjs && node scripts/updatetest.mjs && node scripts/importtest.mjs",
     "walltest": "node scripts/walltest.mjs",
-    "updatetest": "node scripts/updatetest.mjs"
+    "updatetest": "node scripts/updatetest.mjs",
+    "itintest": "node scripts/itintest.mjs",
+    "importtest": "node scripts/importtest.mjs"
   },
   "keywords": [
     "pwa",

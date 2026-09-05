@@ -6,10 +6,17 @@
 // 任何失敗 → 回 null，呼叫端自動用免金鑰的做法。
 
 import * as store from './store.js';
-import { getTripKey, addUsage, usageOf, scrubSecrets, containsSecret } from './aikeys.js';
+import { getTripKey, getDeviceKey, addUsage, usageOf, scrubSecrets, containsSecret, DEVICE_KEY_ID } from './aikeys.js';
 
 const MODEL = 'claude-haiku-4-5';
-const RATE = { in: 1, out: 5 };          // 微美金 / token（Haiku 4.5：$1 / $5 每百萬）
+// 看圖讀行程表要判斷版面（哪一欄是時間、跨頁的表格），Haiku 會漏行，所以這一條路走 Sonnet。
+const VISION_MODEL = 'claude-sonnet-5';
+// 微美金 / token。一定要跟 model 對起來，不然花費統計會騙人。
+const RATES = {
+  'claude-haiku-4-5': { in: 1, out: 5 },        // $1 / $5 每百萬
+  'claude-sonnet-5': { in: 3, out: 15 },        // $3 / $15 每百萬
+};
+const RATE = RATES[MODEL];
 const TTS_MICRO_PER_CHAR = 4;            // Google Standard 語音 ~$4 / 百萬字元
 
 // 這個行程現在能不能用某個 AI 功能
@@ -24,7 +31,7 @@ export async function aiOn(tripId, feature = 'recommend') {
 }
 
 // ---------- Claude（文字） ----------
-async function callClaude(key, { system, prompt, maxTokens = 200, timeout = 25000 }) {
+async function callClaude(key, { system, prompt, content, maxTokens = 200, timeout = 25000, model = MODEL }) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -36,7 +43,7 @@ async function callClaude(key, { system, prompt, maxTokens = 200, timeout = 2500
         'anthropic-dangerous-direct-browser-access': 'true',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: content || prompt }] }),
       signal: ctrl.signal,
     });
     const data = await r.json().catch(() => ({}));
@@ -45,7 +52,8 @@ async function callClaude(key, { system, prompt, maxTokens = 200, timeout = 2500
     }
     const text = (data.content || []).map((c) => c.text || '').join('').trim();
     const u = data.usage || {};
-    const microUsd = (u.input_tokens || 0) * RATE.in + (u.output_tokens || 0) * RATE.out;
+    const rate = RATES[model] || RATE;
+    const microUsd = (u.input_tokens || 0) * rate.in + (u.output_tokens || 0) * rate.out;
     return { text, microUsd };
   } catch (e) {
     return { error: scrubSecrets(e && e.message) || 'network' };
@@ -133,6 +141,68 @@ export async function aiTestTtsKey(ttsKey) {
     const d = await r.json().catch(() => ({}));
     return { ok: false, message: /API key not valid|API_KEY_INVALID/i.test(JSON.stringify(d)) ? '金鑰不正確' : ('測試失敗：HTTP ' + r.status) };
   } catch { return { ok: false, message: '連不上' }; }
+}
+
+// ---------- 看圖／看 PDF 讀行程表（匯入用） ----------
+//
+// 這條路特別在：它發生在「旅程還沒建立」的時候，所以金鑰來自這台手機的預設金鑰
+// （aikeys.DEVICE_KEY_ID），不是某一趟的。花費也記在那裡。
+//
+// 隱私：只有走到這裡才會把圖片內容送出去，而且呼叫端一定要先明確告知使用者。
+// 圖片在送出前已經重繪過（見 views/import.js 的 shrink），EXIF／GPS 不會跟著走。
+
+export async function deviceAiReady() {
+  const k = await getDeviceKey();
+  if (!k || !k.key) return false;
+  return (k.usedMicroUsd || 0) < (k.capUsd ?? 2) * 1e6;
+}
+
+const IMPORT_SYSTEM = `你是行程表判讀助理。使用者給你一張行程表的照片、PDF 或文字。
+只輸出 JSON 陣列，不要任何說明文字。每個元素：
+{"day":數字(第幾天,從1開始),"start":"HH:MM"或null,"end":"HH:MM"或null,"stayMin":數字或null,"name":"景點名稱","uncertain":true/false}
+規則：
+- name 只放地點或店家名稱，不要放交通方式、票價、備註、時間。
+- 「午餐：一蘭拉麵」→ name 是「一蘭拉麵」。「午餐（自理）」這種沒有店名的就不要輸出。
+- 24 小時制。「下午2點」→ "14:00"。看不出時間就 null，不要猜。
+- 只寫得出「上午／下午」這種模糊時段時，給概略時間並把 uncertain 設 true。
+- 表格若跨頁或有欄位對不齊，寧可把該列 uncertain 設 true，也不要合併成一筆。
+- 看不清楚的字不要自己編，該筆 uncertain 設 true。`;
+
+// files: [{ mime, b64 }]（image/* 或 application/pdf）；text: 補充文字（可省略）
+// 回傳 { rows, microUsd } 或 { error }
+export async function aiReadItinerary({ files = [], text = '' }) {
+  const k = await getDeviceKey();
+  if (!k || !k.key) return { error: 'no-key' };
+  if ((k.usedMicroUsd || 0) >= (k.capUsd ?? 2) * 1e6) return { error: 'over-cap' };
+
+  const content = [];
+  for (const f of files.slice(0, 5)) {
+    if (!f || !f.b64) continue;
+    if (f.mime === 'application/pdf') {
+      content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } });
+    } else if (/^image\/(jpeg|png|webp|gif)$/.test(f.mime || '')) {
+      content.push({ type: 'image', source: { type: 'base64', media_type: f.mime, data: f.b64 } });
+    }
+  }
+  if (text.trim()) content.push({ type: 'text', text: text.trim().slice(0, 8000) });
+  if (!content.length) return { error: 'empty' };
+  content.push({ type: 'text', text: '請把上面的行程整理成 JSON 陣列。' });
+
+  const res = await callClaude(k.key, {
+    system: IMPORT_SYSTEM, content, model: VISION_MODEL, maxTokens: 4000, timeout: 90000,
+  });
+  if (res.error) return { error: res.error };
+  await addUsage(DEVICE_KEY_ID, res.microUsd);
+
+  const scrub = scrubSecrets(res.text || '');
+  const m = scrub.match(/\[[\s\S]*\]/);
+  if (!m) return { error: 'parse', microUsd: res.microUsd };
+  try {
+    const rows = JSON.parse(m[0]);
+    if (!Array.isArray(rows)) return { error: 'parse', microUsd: res.microUsd };
+    if (containsSecret(JSON.stringify(rows))) return { error: 'parse', microUsd: res.microUsd };
+    return { rows, microUsd: res.microUsd };
+  } catch { return { error: 'parse', microUsd: res.microUsd }; }
 }
 
 export { usageOf };
