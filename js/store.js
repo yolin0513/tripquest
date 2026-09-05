@@ -161,13 +161,20 @@ export function hereRecord(tripId) {
   return r && !r.deleted && r.spotId ? r : null;
 }
 
+const spotDone = (spotId) => {
+  const p = spotProgress(spotId);
+  return p.total > 0 && p.done === p.total;
+};
+
 export function getHereSpot(tripId) {
   const rec = hereRecord(tripId);
   if (!rec) return null;
   const s = get(rec.spotId);
   if (!s || s.tripId !== tripId) return null;              // 景點被刪了 → 當作沒設
-  const p = spotProgress(rec.spotId);
-  if (p.total > 0 && p.done === p.total) return null;      // 完成了 → 自動往下推進（不寫入）
+  // 「完成就自動往下推進」只能用在**設定之後才完成**的情況。使用者挑一個已經拍完的
+  // 地方是很正常的（想再回去、或人就站在那裡要導航）—— 那是他的明確選擇，不能默默
+  // 忽略，不然畫面看起來就像「我按了卻沒反應」。
+  if (spotDone(rec.spotId) && !rec.wasDone) return null;
   return rec.spotId;
 }
 
@@ -178,6 +185,7 @@ export async function setHereSpot(tripId, spotId, actor = null) {
     id: HERE_ID(tripId), type: 'here', tripId, spotId: spotId || null,
     byMemberId: (actor && actor.id) || null,
     byName: (actor && actor.name) || '',
+    wasDone: spotId ? spotDone(spotId) : false,   // 設定當下就已經拍完 → 之後不要自動放手
     createdAt: (prev && prev.createdAt) || Date.now(),
   });
 }
