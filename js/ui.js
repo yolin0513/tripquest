@@ -167,6 +167,16 @@ export async function promptDialog(message, { value = '', placeholder = '', okLa
 }
 
 // SVG 進度環
+// 等待中的畫面一定要有字。長輩看到一顆沒有說明的轉圈圈，會以為當掉了就把 App 關掉
+// —— 而關掉的往往正是「本來再等三秒就好了」的那一次。
+export function spinnerBox(text, sub = '') {
+  return h('div', { class: 'center-fill wait-box', style: 'min-height:140px' },
+    h('div', { class: 'spinner' }),
+    h('p', { class: 'wait-text' }, text),
+    sub ? h('p', { class: 'muted sm', style: 'margin:6px 0 0;text-align:center' }, sub) : null,
+  );
+}
+
 export function ring(ratio, { size = 44, stroke = 5, label } = {}) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;

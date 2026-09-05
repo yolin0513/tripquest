@@ -2,7 +2,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast } from '../ui.js';
+import { h, toast, spinnerBox } from '../ui.js';
 import { navigate } from '../router.js';
 import { forecast, buildAdvice, wxIcon, wxText, hereTempNow, getHome } from '../weather.js';
 import { currentPosition } from '../geo.js';
@@ -48,7 +48,7 @@ export default async function weather(tripId) {
     return;
   }
 
-  page.append(h('div', { class: 'center-fill', style: 'min-height:120px' }, h('div', { class: 'spinner' })));
+  page.append(spinnerBox('正在查天氣…', '第一次要跟氣象網站要資料，大概 3～10 秒'));
 
   const f = await forecast(dc.lat, dc.lng);
   if (!f) {
