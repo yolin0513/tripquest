@@ -397,16 +397,71 @@ button.card { appearance: none; font: inherit; }
   color: var(--text); font-size: 0.76rem; font-weight: 800; vertical-align: middle;
 }
 
-/* ---------- 照片牆的排序與篩選 ---------- */
-.wall-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.wall-chip {
-  appearance: none; cursor: pointer; font: inherit;
-  border: 2px solid var(--line); background: var(--bg-elev); color: var(--text);
-  border-radius: 14px; padding: 10px 14px; font-weight: 700; font-size: 0.95rem;
-  min-height: 46px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* ---------- 有新版本 ---------- */
+.update-bar {
+  position: fixed; left: 10px; right: 10px; z-index: 90;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 10px);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev-2); border: 2px solid var(--primary);
+  border-radius: 16px; padding: 10px 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  animation: slideup 0.24s ease;
 }
-.wall-chip:active { transform: scale(0.96); }
-.wall-chip.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 20%, transparent); }
+.update-text { flex: 1; min-width: 0; font-weight: 700; }
+.update-go {
+  appearance: none; flex: none; cursor: pointer; font: inherit; font-weight: 800;
+  background: var(--primary); color: var(--primary-ink);
+  border: 0; border-radius: 12px; padding: 0 16px; min-height: 46px;
+}
+.update-go:active { transform: scale(0.96); }
+.update-later {
+  appearance: none; flex: none; cursor: pointer;
+  background: none; border: 0; color: var(--muted);
+  font-size: 1.1rem; width: 46px; min-height: 46px;
+}
+
+/* ---------- 照片牆的排序與篩選 ----------
+   壓成一行：標題 + 景點下拉 + 排序小圖示。景點一多的時候，一整排 chips 會把
+   畫面吃掉一大半，照片反而變成配角。 */
+.wall-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin: 26px 2px 10px;
+}
+.wall-bar-title {
+  flex: 1; min-width: 0;
+  font-size: 0.9rem; font-weight: 800; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wall-ctl {
+  appearance: none; cursor: pointer; font: inherit; flex: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 2px solid var(--line); background: var(--bg-elev); color: var(--text);
+  border-radius: 14px; padding: 0 12px; min-height: 46px; max-width: 45vw;
+  font-weight: 700; font-size: 0.95rem;
+}
+.wall-ctl:active { transform: scale(0.96); }
+.wall-ctl.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 20%, transparent); }
+.wall-ctl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wall-ctl-chev { flex: none; color: var(--muted); font-size: 0.8rem; }
+.wall-ctl.on .wall-ctl-chev { color: var(--text); }
+.wall-ctl-icon { min-width: 46px; justify-content: center; font-size: 1.15rem; padding: 0 10px; }
+
+/* 通用的「挑一個」大按鈕清單（chooseFrom） */
+.pick-row {
+  appearance: none; display: flex; align-items: center; gap: 12px; width: 100%;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--bg-elev); border: 2px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 8px; min-height: var(--tap);
+}
+.pick-row.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 15%, transparent); }
+.pick-row:active { transform: scale(0.99); }
+.pick-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pick-row-label { font-weight: 800; line-height: 1.35; }
+.pick-row-tag {
+  flex: none; font-size: 0.85rem; font-weight: 800; color: var(--muted);
+  background: var(--bg-elev-2); border-radius: 999px; padding: 3px 10px;
+}
+.pick-row-tick { flex: none; color: var(--primary); font-weight: 900; font-size: 1.2rem; }
 
 /* ---------- 大任務卡（長輩主視覺） ---------- */
 /* 卡片本身不是按鈕了：上半部（圖＋文字）點了看照片，下半部是加照片的兩顆大按鈕。

@@ -159,17 +159,85 @@ setNotFound(() => { navigate('/', { replace: true }); });
   import('./outbox.js').then((o) => o.startAutoDrain()).catch(() => {});
 
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').then((reg) => {
-        reg.addEventListener('updatefound', () => {
-          const nw = reg.installing;
-          nw && nw.addEventListener('statechange', () => {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              toast('已更新，下次開啟生效');
-            }
-          });
-        });
-      }).catch(() => {});
-    });
+    // 注意：這裡在 boot() 的兩個 await 之後才執行，load 事件很可能早就發生過了。
+    // 只掛 listener 的話會永遠不觸發 —— 那就整個沒註冊：不能離線、也收不到更新。
+    const register = () => navigator.serviceWorker.register('./sw.js').then(setupUpdates).catch(() => {});
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register, { once: true });
   }
 })();
+
+// ---------- 更新流程 ----------
+// 原本只跳一句「已更新，下次開啟生效」，使用者得自己滑掉 App 重開；
+// 現在改成：安全的時候直接無感換好，否則底下出現一條「有新版本」，按一下就好。
+const bootAt = Date.now();
+const AUTO_KEY = 'tripquest.autoUpdated';
+let interacted = false;
+for (const ev of ['pointerdown', 'keydown']) {
+  window.addEventListener(ev, () => { interacted = true; }, { once: true, passive: true });
+}
+
+// 正在做事就不要自作主張重載 —— 重載會把打到一半的字、拍到一半的照片弄丟
+function appBusy() {
+  if (document.getElementById('modalRoot')?.childElementCount) return true;    // 對話框開著
+  if (document.querySelector('.upload-prog, .celebrate, .record-overlay, .tagger')) return true;
+  return false;
+}
+
+// 只有「剛打開、還沒動任何東西」才自動換：這時候重載使用者根本感覺不到
+function canAutoUpdate() {
+  try { if (sessionStorage.getItem(AUTO_KEY)) return false; } catch { return false; }
+  return !interacted && !appBusy() && Date.now() - bootAt < 12000;
+}
+
+function setupUpdates(reg) {
+  let applying = false;      // 只有「我們主動要換版」才重載
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // 第一次安裝接手時也會觸發，那時候沒什麼好換的，不要重載
+    if (!applying || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+
+  const apply = (worker) => {
+    applying = true;
+    try { worker.postMessage('SKIP_WAITING'); } catch { /* noop */ }
+  };
+
+  const ready = (worker) => {
+    if (canAutoUpdate()) {
+      try { sessionStorage.setItem(AUTO_KEY, '1'); } catch { /* noop */ }
+      apply(worker);
+      return;
+    }
+    showUpdateBar(() => apply(worker));
+  };
+
+  if (reg.waiting) ready(reg.waiting);
+  reg.addEventListener('updatefound', () => {
+    const nw = reg.installing;
+    if (!nw) return;
+    nw.addEventListener('statechange', () => {
+      if (nw.state === 'installed' && navigator.serviceWorker.controller) ready(nw);
+    });
+  });
+
+  // PWA 常常一直開著，回到前景時再問一次有沒有新版
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reg.update().catch(() => {});
+  });
+}
+
+function showUpdateBar(onApply) {
+  if (document.getElementById('updateBar')) return;
+  const bar = h('div', { id: 'updateBar', class: 'update-bar' },
+    h('span', { class: 'update-text' }, '有新版本'),
+    h('button', {
+      class: 'update-go',
+      onclick: () => { bar.remove(); toast('更新中，馬上好…'); onApply(); },
+    }, '點一下更新'),
+    h('button', { class: 'update-later', 'aria-label': '稍後再說', onclick: () => bar.remove() }, '✕'),
+  );
+  document.body.append(bar);
+}

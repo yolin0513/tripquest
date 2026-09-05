@@ -306,32 +306,68 @@ try {
 
   // ================= 照片牆的排序與篩選 =================
   await go(`/#/trip/${setup.tid}/people`);
-  await page.waitForSelector('.wall-chips');
+  await page.waitForSelector('.wall-bar');
   await sleep(1200);
 
-  const wall = await page.evaluate(() => ({
-    sorts: [...document.querySelectorAll('.wall-chips')][0] ? [...document.querySelectorAll('.wall-chips')][0].querySelectorAll('.wall-chip').length : 0,
-    activeSort: [...document.querySelectorAll('.wall-chip.on')].map((b) => b.textContent)[0] || '',
-    spotChips: [...document.querySelectorAll('.wall-chip')].filter((b) => /（\d+）/.test(b.textContent)).map((b) => b.textContent),
-    small: [...document.querySelectorAll('.wall-chip')].filter((b) => b.getBoundingClientRect().height < 44).length,
-    items: document.querySelectorAll('.feed-item').length,
-  }));
-  if (wall.sorts === 4) ok('排序有 4 種（最新／最舊／照行程順序／照人分）');
-  else fail('排序選項數不對：' + wall.sorts);
-  if (/最新的在前/.test(wall.activeSort)) ok('預設是「最新的在前」');
-  else fail('預設排序不對：' + wall.activeSort);
-  if (wall.small === 0) ok('排序與篩選的按鈕觸控區 ≥ 44px');
+  const wall = await page.evaluate(() => {
+    const bar = document.querySelector('.wall-bar');
+    const ctls = [...document.querySelectorAll('.wall-ctl')];
+    return {
+      hasBar: !!bar,
+      barHeight: bar ? Math.round(bar.getBoundingClientRect().height) : 0,
+      ctlCount: ctls.length,
+      filterLabel: document.querySelector('.wall-ctl .wall-ctl-label')?.textContent || '',
+      small: ctls.filter((b) => { const r = b.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).length,
+      chipsGone: document.querySelectorAll('.wall-chips').length === 0,
+    };
+  });
+  if (wall.hasBar && wall.ctlCount === 2 && wall.chipsGone) ok('控制項壓成一行（景點下拉 + 排序圖示），不再是一整排 chips');
+  else fail('控制項沒有壓成一行：' + JSON.stringify(wall));
+  if (wall.barHeight <= 60) ok(`控制列只佔 ${wall.barHeight}px（一行）`);
+  else fail('控制列太高：' + wall.barHeight);
+  if (wall.small === 0) ok('下拉與排序圖示的觸控區 ≥ 44px');
   else fail(`${wall.small} 顆太小`);
-  if (wall.spotChips.some((t) => /羅東夜市（2）/.test(t)) && wall.spotChips.some((t) => /幾米公園（1）/.test(t))) {
-    ok('景點篩選顯示每個景點的張數：' + wall.spotChips.filter((t) => !/全部/.test(t)).join('、'));
-  } else fail('景點張數不對：' + JSON.stringify(wall.spotChips));
+  if (wall.filterLabel === '全部照片') ok('預設顯示「全部照片」');
+  else fail('預設篩選標籤不對：' + wall.filterLabel);
+
+  await page.evaluate(() => document.querySelector('.wall-ctl-icon').click());
+  await page.waitForSelector('.pick-row');
+  await sleep(450);
+  const sortMenu = await page.evaluate(() => ({
+    rows: document.querySelectorAll('.pick-row').length,
+    current: document.querySelector('.pick-row.on')?.textContent || '',
+    small: [...document.querySelectorAll('.pick-row')].filter((b) => b.getBoundingClientRect().height < 44).length,
+    fits: (() => { const c = document.querySelector('.modal-card').getBoundingClientRect(); return c.top >= -1 && c.bottom <= window.innerHeight + 1; })(),
+  }));
+  if (sortMenu.rows === 4) ok('排序選單有 4 種（最新／最舊／照行程順序／照人分）');
+  else fail('排序選項數不對：' + sortMenu.rows);
+  if (/最新的在前/.test(sortMenu.current)) ok('預設是「最新的在前」');
+  else fail('預設排序不對：' + sortMenu.current);
+  if (sortMenu.small === 0 && sortMenu.fits) ok('排序選單的選項夠大、不會超出螢幕');
+  else fail('排序選單有問題：' + JSON.stringify(sortMenu));
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '取消').click());
+  await sleep(300);
+
+  await page.evaluate(() => document.querySelector('.wall-ctl').click());
+  await page.waitForSelector('.pick-row');
+  await sleep(450);
+  const filterMenu = await page.evaluate(() => [...document.querySelectorAll('.pick-row')]
+    .map((r) => `${r.querySelector('.pick-row-label').textContent}=${r.querySelector('.pick-row-tag')?.textContent || ''}`));
+  if (filterMenu.some((t) => /羅東夜市=2/.test(t)) && filterMenu.some((t) => /幾米公園=1/.test(t))) {
+    ok('景點下拉顯示每個景點的張數：' + filterMenu.join('、'));
+  } else fail('景點張數不對：' + JSON.stringify(filterMenu));
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '取消').click());
+  await sleep(300);
 
   // 排序真的有效
   const order = async () => page.evaluate(() => [...document.querySelectorAll('.feed-item .fi-what')].map((e) => e.textContent).filter((t) => t.includes('任務')));
   const newest = await order();
-  await page.evaluate(() => [...document.querySelectorAll('.wall-chip')].find((b) => b.textContent.includes('最舊的在前')).click());
+  await page.evaluate(() => document.querySelector('.wall-ctl-icon').click());
+  await page.waitForSelector('.pick-row');
+  await sleep(400);
+  await page.evaluate(() => [...document.querySelectorAll('.pick-row')].find((b) => b.textContent.includes('最舊的在前')).click());
   await page.waitForSelector('.feed-item');
-  await sleep(1200);
+  await sleep(1400);
   const oldest = await order();
   const reversed = newest.length > 1 && newest.length === oldest.length
     && newest.every((x, i) => x === oldest[oldest.length - 1 - i]);
@@ -339,40 +375,47 @@ try {
   else fail(`排序沒作用：新→${JSON.stringify(newest)} 舊→${JSON.stringify(oldest)}`);
 
   // 篩選景點
-  await page.evaluate(() => [...document.querySelectorAll('.wall-chip')].find((b) => /羅東夜市（2）/.test(b.textContent)).click());
+  await page.evaluate(() => document.querySelector('.wall-ctl').click());
+  await page.waitForSelector('.pick-row');
+  await sleep(400);
+  await page.evaluate(() => [...document.querySelectorAll('.pick-row')].find((b) => b.textContent.includes('羅東夜市')).click());
   await page.waitForSelector('.feed-item');
-  await sleep(1200);
+  await sleep(1400);
   const only = await page.evaluate(() => ({
     items: document.querySelectorAll('.feed-item').length,
-    label: [...document.querySelectorAll('.section-label')].map((e) => e.textContent).find((t) => t.includes('符合的照片')) || '',
+    label: document.querySelector('.wall-bar-title')?.textContent || '',
   }));
   const total = newest.length;
-  if (only.items === 2 && only.label.includes(`2 / ${total}`)) ok(`只看羅東夜市：剩 2 張，標題顯示「${only.label}」`);
+  if (only.items === 2 && only.label.includes(`2／${total}`)) ok(`只看羅東夜市：剩 2 張，標題顯示「${only.label}」`);
   else fail(`景點篩選不對（全部應為 ${total} 張）：` + JSON.stringify(only));
 
   // 選擇要記住
   await go(`/#/trip/${setup.tid}/people`);
-  await page.waitForSelector('.wall-chips');
+  await page.waitForSelector('.wall-bar');
   await sleep(1200);
   const remembered = await page.evaluate(() => ({
     items: document.querySelectorAll('.feed-item').length,
-    on: [...document.querySelectorAll('.wall-chip.on')].map((b) => b.textContent),
+    label: document.querySelector('.wall-ctl-label')?.textContent || '',
+    sortMarked: document.querySelector('.wall-ctl-icon')?.classList.contains('on'),
   }));
-  if (remembered.items === 2 && remembered.on.some((t) => /羅東夜市/.test(t)) && remembered.on.some((t) => /最舊的在前/.test(t))) {
-    ok('下次進來維持上次的排序與篩選');
+  if (remembered.items === 2 && /羅東夜市/.test(remembered.label) && remembered.sortMarked) {
+    ok(`下次進來維持上次的排序與篩選（下拉「${remembered.label}」、排序圖示有標記）`);
   } else fail('沒記住：' + JSON.stringify(remembered));
 
   // 未標記篩選與既有提示並存
+  await page.evaluate(() => document.querySelector('.wall-ctl').click());
+  await page.waitForSelector('.pick-row');
+  await sleep(400);
   const coexist = await page.evaluate(() => ({
     cta: !!document.querySelector('.untag-cta'),
-    chip: [...document.querySelectorAll('.wall-chip')].some((b) => /只看未標記/.test(b.textContent)),
+    opt: [...document.querySelectorAll('.pick-row')].some((b) => /只看未標記/.test(b.textContent)),
   }));
-  if (coexist.cta && coexist.chip) ok('「還有 N 張沒標記」的提示與「只看未標記」篩選並存');
+  if (coexist.cta && coexist.opt) ok('「還有 N 張沒標記」的提示與下拉裡的「只看未標記」並存');
   else fail('未標記提示/篩選不對：' + JSON.stringify(coexist));
 
-  await page.evaluate(() => [...document.querySelectorAll('.wall-chip')].find((b) => /只看未標記/.test(b.textContent)).click());
-  await page.waitForSelector('.wall-chips');
-  await sleep(1200);
+  await page.evaluate(() => [...document.querySelectorAll('.pick-row')].find((b) => /只看未標記/.test(b.textContent)).click());
+  await page.waitForSelector('.wall-bar');
+  await sleep(1400);
   const untag = await page.evaluate(() => ({
     items: document.querySelectorAll('.feed-item').length,
     dots: document.querySelectorAll('.untag-dot').length,

@@ -1,6 +1,6 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, avatar, toast } from '../ui.js';
+import { h, avatar, toast, chooseFrom } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
@@ -111,52 +111,61 @@ export default async function people(tripId) {
   const view = loadView(tripId);
   const { list: subs, spotOf } = arrange(allSubs, view, tripId);
 
+  // 控制項壓在一行裡（景點下拉 + 排序小圖示），讓照片本身是焦點。
+  // 景點一多的時候，一整排 chips 會把畫面吃掉一大半。
+  const filtered = !!(view.spot || view.untagged);
+  const title = !allSubs.length ? '還沒有照片'
+    : (filtered ? `符合的照片 ${subs.length}／${allSubs.length}` : '大家拍的照片');
+
   if (allSubs.length) {
     const apply = (patch) => { saveView(tripId, { ...view, ...patch }); people(tripId); };
 
-    // 排序
-    page.append(h('div', { class: 'section-label' }, '排序'));
-    page.append(h('div', { class: 'wall-chips' }, ...SORTS.map((s) => h('button', {
-      class: 'wall-chip' + (view.sort === s.id ? ' on' : ''),
-      onclick: () => apply({ sort: s.id }),
-    }, s.label))));
-
-    // 只看某個景點（附張數）
     const counts = new Map();
     for (const s of allSubs) {
       const sid = spotOf(s);
       if (sid) counts.set(sid, (counts.get(sid) || 0) + 1);
     }
     const spotsWithPhotos = store.spotsOf(tripId).filter((s) => counts.get(s.id));
-    if (spotsWithPhotos.length > 1) {
-      page.append(h('div', { class: 'section-label' }, '只看哪個景點'));
-      page.append(h('div', { class: 'wall-chips' },
-        h('button', {
-          class: 'wall-chip' + (view.spot ? '' : ' on'),
-          onclick: () => apply({ spot: '' }),
-        }, `全部（${allSubs.length}）`),
-        ...spotsWithPhotos.map((s) => h('button', {
-          class: 'wall-chip' + (view.spot === s.id ? ' on' : ''),
-          onclick: () => apply({ spot: view.spot === s.id ? '' : s.id }),
-        }, `${s.emoji || '📍'} ${s.name}（${counts.get(s.id)}）`)),
-      ));
-    }
+    const pickedSpot = view.spot ? store.get(view.spot) : null;
+    const label = view.untagged ? '只看未標記' : (pickedSpot ? pickedSpot.name : '全部照片');
 
-    // 只看未標記（多人才有意義）
-    if (members.length > 1 && (untagged.length || view.untagged)) {
-      page.append(h('div', { class: 'wall-chips', style: 'margin-top:10px' },
-        h('button', {
-          class: 'wall-chip' + (view.untagged ? ' on' : ''),
-          onclick: () => apply({ untagged: !view.untagged }),
-        }, `🏷️ 只看未標記（${untagged.length}）`)));
-    }
+    const openFilter = async () => {
+      const options = [{ value: '', label: '全部照片', tag: String(allSubs.length) }];
+      if (members.length > 1 && (untagged.length || view.untagged)) {
+        options.push({ value: '__untagged', label: '只看未標記', sub: '還沒標「照片裡有誰」的', tag: String(untagged.length) });
+      }
+      for (const s of spotsWithPhotos) {
+        options.push({ value: s.id, label: `${s.emoji || '📍'} ${s.name}`, tag: String(counts.get(s.id)) });
+      }
+      const cur = view.untagged ? '__untagged' : (view.spot || '');
+      const got = await chooseFrom({ title: '要看哪些照片？', options, value: cur });
+      if (got === undefined || got === cur) return;
+      apply(got === '__untagged' ? { spot: '', untagged: true } : { spot: got, untagged: false });
+    };
+
+    const openSort = async () => {
+      const got = await chooseFrom({
+        title: '照片怎麼排？',
+        options: SORTS.map((s) => ({ value: s.id, label: s.label })),
+        value: view.sort,
+      });
+      if (got !== undefined && got !== view.sort) apply({ sort: got });
+    };
+
+    page.append(h('div', { class: 'wall-bar' },
+      h('span', { class: 'wall-bar-title' }, title),
+      h('button', { class: 'wall-ctl' + (filtered ? ' on' : ''), onclick: openFilter },
+        h('span', { class: 'wall-ctl-label' }, label),
+        h('span', { class: 'wall-ctl-chev' }, '▾'),
+      ),
+      h('button', {
+        class: 'wall-ctl wall-ctl-icon' + (view.sort === 'new' ? '' : ' on'),
+        'aria-label': '排序方式', title: '排序方式', onclick: openSort,
+      }, '⇅'),
+    ));
+  } else {
+    page.append(h('div', { class: 'section-label' }, title));
   }
-
-  // 照片動態
-  const filtered = !!(view.spot || view.untagged);
-  page.append(h('div', { class: 'section-label' },
-    !allSubs.length ? '還沒有照片'
-      : (filtered ? `符合的照片（${subs.length} / ${allSubs.length}）` : '大家拍的照片')));
 
   if (!allSubs.length) {
     page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'),

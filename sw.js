@@ -3,7 +3,7 @@
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  */
-const VERSION = 'tripquest-v1.32.0';
+const VERSION = 'tripquest-v1.33.0';
 const SHELL = `${VERSION}-shell`;
 
 const SHELL_ASSETS = [
@@ -90,8 +90,19 @@ const SHELL_ASSETS = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(SHELL).then((c) => c.addAll(SHELL_ASSETS)).then(() => self.skipWaiting())
+    // cache:'reload' 一定要加。GitHub Pages 對每個檔案都送 Cache-Control: max-age=600，
+    // 普通的 addAll 會走瀏覽器的 HTTP 快取 —— 新版 SW 有可能把「舊的 JS」預存進新快取，
+    // 使用者重開之後跑的還是舊程式，於是得再重開一次。這是「要重開兩次」的元凶。
+    caches.open(SHELL).then((c) => c.addAll(SHELL_ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+    // 這裡刻意不自動 skipWaiting：由畫面決定什麼時候換，才不會在使用者操作到一半時
+    // 讓新資源混進正在跑的舊程式裡。畫面準備好了會傳 SKIP_WAITING 過來。
   );
+});
+
+// 畫面說「可以換了」才接手
+self.addEventListener('message', (e) => {
+  const d = e.data;
+  if (d === 'SKIP_WAITING' || (d && d.type === 'SKIP_WAITING')) self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
