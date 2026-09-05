@@ -15,7 +15,7 @@ import { parseItinerary, fromRows, annotate, fmtTime } from '../itinerary.js';
 
 const STAYS = [
   { v: '', label: '不設定' }, { v: '30', label: '30 分' }, { v: '60', label: '1 小時' },
-  { v: '90', label: '1.5 時' }, { v: '120', label: '2 小時' }, { v: '180', label: '3 小時' },
+  { v: '90', label: '1.5 小時' }, { v: '120', label: '2 小時' }, { v: '180', label: '3 小時' },
   { v: '240', label: '4 小時' },
 ];
 // 下拉選單的欄位很窄，「2 小時 30 分」會被截掉 —— 這裡用短寫法
