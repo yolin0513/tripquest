@@ -229,6 +229,9 @@ try {
   else fail('消歧義沒處理：' + JSON.stringify(kin));
   if (kin && !/可以指|may refer/.test(kin.blurb)) ok('消歧義頁那句「金閣寺可以指：」沒有被拿去當景點介紹');
   else fail('介紹句被消歧義污染：' + JSON.stringify(kin && kin.blurb));
+  // 中文維基搜「金閣寺」第一名是三島由紀夫的同名小說 —— 景點要的是地方，不是書
+  if (kin && !/小說|小说|novel|電影|映画/.test(kin.blurb)) ok(`消歧義追到的是「地方」不是同名的小說／電影：「${kin.blurb.slice(0, 16)}…」`);
+  else fail('追錯條目（拿到同名作品）：' + JSON.stringify(kin && kin.blurb));
 
   // ---------- 連不到 Wikimedia 時，不可以把景點永久標成「沒有圖」 ----------
   const N = await dev();

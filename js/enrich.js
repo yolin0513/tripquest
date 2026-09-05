@@ -138,20 +138,28 @@ function related(query, title) {
 
 // strict：景點要檢查搜到的條目跟名字沾不沾得上邊（給錯的地點照片會誤導）。
 // 美食則刻意不檢查 —— 找「該道菜」的通用照本來就是要找相近的料理，而且畫面會標「示意圖」。
-async function wikiSearch(lang, term, { strict = true, skip = '' } = {}) {
+// needGeo：只接受「有座標」的條目。解消歧義時用 —— 中文維基搜「金閣寺」第一名是
+// 三島由紀夫的小說《金閣寺》，那本書沒有座標，寺廟（鹿苑寺）有。景點要的是地方，
+// 有沒有座標就是最乾淨的判準，比看標題像不像可靠得多。
+async function wikiSearch(lang, term, { strict = true, skip = '', needGeo = false } = {}) {
   const d = await api(`${lang}.wikipedia.org`, {
-    generator: 'search', gsrsearch: term, gsrlimit: '3', gsrnamespace: '0',
-    prop: 'pageimages|extracts|pageprops', piprop: 'thumbnail|name', pithumbsize: String(THUMB),
-    ppprop: 'disambiguation', exintro: '1', explaintext: '1', exsentences: '2',
+    generator: 'search', gsrsearch: term, gsrlimit: '5', gsrnamespace: '0',
+    prop: 'pageimages|extracts|pageprops|coordinates', piprop: 'thumbnail|name', pithumbsize: String(THUMB),
+    colimit: '1', ppprop: 'disambiguation', exintro: '1', explaintext: '1', exsentences: '2',
   });
   const pages = ((d && d.query && d.query.pages) || []).slice();
   pages.sort((a, b) => (a.index || 99) - (b.index || 99));
   const p = pages.find((x) => x.thumbnail
     && x.title !== skip
     && !(x.pageprops && 'disambiguation' in x.pageprops)
+    && (!needGeo || (x.coordinates && x.coordinates.length))
     && (!strict || related(term, x.title)));
   if (!p) return null;
-  return { title: p.title, file: p.pageimage || null, thumb: p.thumbnail.source, extract: p.extract || '' };
+  const co = p.coordinates && p.coordinates[0];
+  return {
+    title: p.title, file: p.pageimage || null, thumb: p.thumbnail.source, extract: p.extract || '',
+    lat: co ? co.lat : null, lng: co ? co.lon : null,
+  };
 }
 
 async function langLinks(lang, title) {
@@ -334,14 +342,16 @@ async function _enrich(spot) {
     // 3. 查不到條目、或查到的是消歧義頁 → 站內搜尋
     //    （「清水寺 本堂」會帶到「清水寺」；「金閣寺」的消歧義會帶到「鹿苑寺」）
     if (!spot.heroHash && !got && (!page || page.disambig)) {
+      const ambiguous = !!(page && page.disambig);
       for (const lg of [lang0, 'ja', 'en']) {
-        // 消歧義代表這個詞是真的存在、只是有多個條目，這時放寬相關性檢查照著搜尋排序走
+        // 消歧義代表這個詞真的存在、只是有多個條目 → 放寬標題相關性，改用「有沒有座標」
+        // 認出哪一個才是地方（不然搜「金閣寺」會拿到三島由紀夫的同名小說）
         const s = await wikiSearch(lg, spot.name, {
-          strict: !(page && page.disambig),
-          skip: page ? page.title : '',
+          strict: !ambiguous, needGeo: ambiguous, skip: page ? page.title : '',
         });
         if (!s) continue;
         if (!spot.blurb && !patch.blurb && s.extract) patch.blurb = trimExtract(s.extract);
+        if (s.lat != null && patch.lat == null && spot.lat == null) { patch.lat = s.lat; patch.lng = s.lng; }
         got = await takeWikiImage(s);
         if (got) { source = 'wikisearch:' + lg; break; }
       }
