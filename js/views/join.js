@@ -1,5 +1,5 @@
 import { setTop, render } from '../app.js';
-import { h, toast } from '../ui.js';
+import { h, toast, spinnerBox } from '../ui.js';
 import { navigate } from '../router.js';
 import { importShareCode, peekShareCode, peekInvite, joinInvite } from '../share.js';
 import { ensureMember } from '../claim.js';
@@ -13,7 +13,7 @@ export default async function join(query) {
   const copyCode = query.d;
   if (!syncCode && !copyCode) { navigate('/', { replace: true }); return; }
 
-  render(h('div', { class: 'page' }, h('div', { class: 'center-fill' }, h('div', { class: 'spinner' }))));
+  render(h('div', { class: 'page' }, spinnerBox('正在讀這個邀請…', '大行程可能要等一下')));
 
   let info;
   try {

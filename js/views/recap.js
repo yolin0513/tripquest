@@ -2,7 +2,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, avatar } from '../ui.js';
+import { h, toast, avatar, spinnerBox } from '../ui.js';
 import { navigate } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
@@ -18,7 +18,7 @@ export default async function recap(tripId) {
 
   const page = h('div', { class: 'page' });
   render(page);
-  page.append(h('div', { class: 'center-fill', style: 'min-height:140px' }, h('div', { class: 'spinner' })));
+  page.append(spinnerBox('正在整理這趟的回顧…', '要算路線、找美食、查當時的天氣'));
 
   const r = await buildRecap(tripId);
 

@@ -24,7 +24,9 @@
     "walltest": "node scripts/walltest.mjs",
     "updatetest": "node scripts/updatetest.mjs",
     "itintest": "node scripts/itintest.mjs",
-    "importtest": "node scripts/importtest.mjs"
+    "importtest": "node scripts/importtest.mjs",
+    "sweep": "node scripts/sweep.mjs",
+    "livecheck-import": "node scripts/livecheck-import.mjs"
   },
   "keywords": [
     "pwa",
