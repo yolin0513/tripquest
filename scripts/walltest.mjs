@@ -5,11 +5,14 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { rm } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const WEB = 5214;
+const WEB = 5214, API = 8794;
+await rm(fileURLToPath(new URL('../server/data', import.meta.url)), { recursive: true, force: true });
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
+const api = spawn('node', ['server/index.mjs'], { cwd: ROOT, stdio: 'ignore', env: { ...process.env, PORT: String(API) } });
 await sleep(1400);
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
@@ -223,10 +226,143 @@ try {
   if (untag.items > 0 && untag.items === untag.dots) ok(`「只看未標記」有效：${untag.items} 張，每張都有未標記角標`);
   else fail('未標記篩選不對：' + JSON.stringify(untag));
 
+  // ================= 「現在這一站」要同步給整個群組 =================
+  // 兩個獨立 context 當兩台手機，走真的同步伺服器
+  const dev = async (name) => {
+    const ctx = await browser.createBrowserContext();
+    const pg = await ctx.newPage();
+    await pg.setViewport({ width: 390, height: 844 });
+    pg.on('pageerror', (e) => { console.log(`  [${name} pageerror]`, e.message); process.exitCode = 1; });
+    await pg.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.hero');
+    await pg.evaluate((u) => { (async () => { (await import('./js/sync.js')).setConfig({ mode: 'lan', url: u }); })(); }, `http://localhost:${API}`);
+    return pg;
+  };
+  const drain = (pg) => pg.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
+
+  const A = await dev('A');
+  const shared = await A.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const { ensureGroupSync } = await import('./js/share.js');
+    const gid = uuid(), tid = uuid(), mA = uuid(), mB = uuid();
+    await s.put({ id: gid, type: 'group', name: '同行團' });
+    await s.put({ id: mA, type: 'member', groupId: gid, displayName: '阿明' });
+    await s.put({ id: mB, type: 'member', groupId: gid, displayName: '奶奶' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '同步測試', region: '宜蘭', allowWiki: false });
+    const ids = [];
+    for (let i = 0; i < 3; i++) {
+      const sid = uuid();
+      await s.put({ id: sid, type: 'spot', tripId: tid, name: ['第一站', '第二站', '第三站'][i], emoji: '📍', day: 1, order: i });
+      await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: sid, title: `任務${i + 1}`, kind: 'thing', order: 0 });
+      ids.push(sid);
+    }
+    await ensureGroupSync(gid);
+    s.setActiveMember(tid, mA);
+    return { tid, gid, spots: ids, mA, mB };
+  });
+  await drain(A);
+
+  const invite = await A.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), shared.tid);
+  const B = await dev('B');
+  await B.evaluate(async (c) => { await (await import('./js/share.js')).joinInvite(c); }, invite.split('j=')[1]);
+  await B.evaluate(async (m) => { (await import('./js/store.js')).setActiveMember(m.tid, m.mB); }, shared);
+  ok('兩台裝置加入同一個群組');
+
+  // A 指定第三站
+  await A.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    await s.setHereSpot(m.tid, m.spots[2], { id: m.mA, name: '阿明' });
+  }, shared);
+  await drain(A);
+  await drain(B);
+
+  const onB = await B.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    const rec = s.hereRecord(m.tid);
+    return { here: s.getHereSpot(m.tid), by: rec && rec.byMemberId, name: rec && (s.getRaw(rec.byMemberId)?.displayName || rec.byName) };
+  }, shared);
+  if (onB.here === shared.spots[2]) ok('A 指定的「現在這一站」同步到了 B');
+  else fail('沒同步過去：' + JSON.stringify(onB));
+  if (onB.name === '阿明') ok(`B 看得到是誰改的（${onB.name}）`);
+  else fail('沒帶設定者：' + JSON.stringify(onB));
+
+  // B 的畫面上要顯示「阿明 把大家帶到這裡」
+  await B.goto('about:blank');
+  await B.goto(`http://localhost:${WEB}/#/trip/${shared.tid}`, { waitUntil: 'networkidle0' });
+  await B.waitForSelector('.nextstn');
+  await sleep(600);
+  const byLine = await B.evaluate(() => document.querySelector('.nextstn-by')?.textContent || '');
+  if (/阿明.*把大家帶到這裡/.test(byLine)) ok(`B 的畫面顯示「${byLine}」`);
+  else fail('沒顯示是誰改的：' + byLine);
+
+  // B 改成第二站 → 後寫入者為準，A 也要跟著變
+  await B.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    await s.setHereSpot(m.tid, m.spots[1], { id: m.mB, name: '奶奶' });
+  }, shared);
+  await drain(B);
+  await drain(A);
+  const onA = await A.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    const rec = s.hereRecord(m.tid);
+    const all = s.exportRecords().filter((r) => r.type === 'here' && r.tripId === m.tid);
+    return { here: s.getHereSpot(m.tid), by: rec && rec.byName, records: all.length };
+  }, shared);
+  if (onA.here === shared.spots[1]) ok('B 改了之後 A 也跟著變（後寫入者為準）');
+  else fail('沒有以後寫入者為準：' + JSON.stringify(onA));
+  if (onA.records === 1) ok('整個群組只有一筆「現在這一站」記錄（不會各自長一筆打架）');
+  else fail(`有 ${onA.records} 筆記錄`);
+
+  // 完成之後自動往下推進 —— 而且不可以寫入（否則多台裝置會互相覆蓋）
+  const before = await A.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    return s.getRaw('here:' + m.tid).updatedAt;
+  }, shared);
+  await A.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    const { importPhoto } = await import('./js/photos.js');
+    const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+    c.getContext('2d').fillRect(0, 0, 300, 200);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8));
+    for (const q of s.questsOf(m.spots[1])) {
+      await importPhoto(new File([blob], 'x.jpg', { type: 'image/jpeg' }), { tripId: m.tid, questId: q.id, memberId: m.mA, allowGeo: false });
+    }
+  }, shared);
+  const syncAdv = await A.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    return { here: s.getHereSpot(m.tid), updatedAt: s.getRaw('here:' + m.tid).updatedAt };
+  }, shared);
+  if (syncAdv.here === null) ok('指定的那一站完成後自動失效，兩台都會照順序往下推進');
+  else fail('完成後沒推進：' + JSON.stringify(syncAdv));
+  if (syncAdv.updatedAt === before) ok('自動推進是「推導」出來的、沒有寫入 —— 不會多台裝置互相覆蓋');
+  else fail('自動推進竟然寫入了，會造成同步風暴');
+
+  // 離線也要先在本機生效
+  await B.setOfflineMode(true);
+  await B.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    await s.setHereSpot(m.tid, m.spots[0], { id: m.mB, name: '奶奶' });
+  }, shared);
+  const offlineNow = await B.evaluate(async (m) => (await import('./js/store.js')).getHereSpot(m.tid), shared);
+  if (offlineNow === shared.spots[0]) ok('離線時先在本機生效');
+  else fail('離線設定失敗：' + offlineNow);
+  await B.setOfflineMode(false);
+  await B.waitForFunction(() => navigator.onLine === true, { timeout: 10000 });
+  const pushed = await drain(B);
+  const pulled = await drain(A);
+  const healed = await A.evaluate(async (m) => {
+    const s = await import('./js/store.js');
+    const rec = s.getRaw('here:' + m.tid);
+    return { here: s.getHereSpot(m.tid), spotId: rec && rec.spotId, want: m.spots[0] };
+  }, shared);
+  if (healed.here === shared.spots[0]) ok('恢復連線後自動同步出去，A 也看到了');
+  else fail(`恢復連線後沒同步：${JSON.stringify(healed)} push=${JSON.stringify(pushed)} pull=${JSON.stringify(pulled)}`);
+
   console.log('\n照片牆與「現在這一站」測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
 } finally {
   await browser.close();
-  web.kill();
+  web.kill(); api.kill();
 }

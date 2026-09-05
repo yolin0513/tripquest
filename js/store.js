@@ -43,6 +43,7 @@ export async function init() {
   const recs = await db.allRecords();
   for (const r of recs) state.byId.set(r.id, r);
   state.ready = true;
+  migrateHere().catch(() => {});
 }
 
 // ---------- 寫入基本操作 ----------
@@ -144,29 +145,56 @@ export function setActiveMember(tripId, memberId) {
   try { localStorage.setItem('tripquest.me.' + tripId, memberId); } catch { /* noop */ }
 }
 
-// ---------- 「我現在在哪一站」----------
-// 只存本機、不同步：一家人可能分頭行動，爸爸還在夜市、女兒已經走到下一站，
-// 把這個同步出去會讓別人的畫面被硬拉走。這是「我的視角」，不是行程資料。
+// ---------- 「大家現在在哪一站」（同步給整個群組）----------
+// id 固定成 'here:<行程id>'，所以每個群組永遠只有一筆。不同裝置改同一筆時走一般的
+// 「後寫入者勝」合併，不會各自長出一筆來打架。
 //
-// 會自動失效：指定的景點完成之後就不再算數，「下一站」自動往後推，
-// 使用者不會被困在一個自己設過就忘了的狀態裡。
-const HERE = (tripId) => 'tripquest.here.' + tripId;
+// **只有使用者親手指定時才寫入。** 景點完成後的「自動往下推進」是純推導、不寫任何東西 ——
+// 這是避免同步風暴的關鍵：如果完成當下每台裝置都各自算出下一站再寫回去，五個人就會
+// 寫五次、互相覆蓋。改成從「已完成」這個本來就會同步的事實各自推導，大家算出來的
+// 結果一模一樣，卻一次寫入都沒有。
+const HERE_ID = (tripId) => 'here:' + tripId;
+
+// 原始記錄（含是誰設的、什麼時候設的），給畫面顯示「○○ 把大家帶到這裡」用
+export function hereRecord(tripId) {
+  const r = state.byId.get(HERE_ID(tripId));
+  return r && !r.deleted && r.spotId ? r : null;
+}
 
 export function getHereSpot(tripId) {
-  let id = null;
-  try { id = localStorage.getItem(HERE(tripId)); } catch { return null; }
-  if (!id) return null;
-  const s = get(id);
-  if (!s || s.tripId !== tripId) { clearHereSpot(tripId); return null; }
-  const p = spotProgress(id);
-  if (p.total > 0 && p.done === p.total) { clearHereSpot(tripId); return null; }  // 完成就放手
-  return id;
+  const rec = hereRecord(tripId);
+  if (!rec) return null;
+  const s = get(rec.spotId);
+  if (!s || s.tripId !== tripId) return null;              // 景點被刪了 → 當作沒設
+  const p = spotProgress(rec.spotId);
+  if (p.total > 0 && p.done === p.total) return null;      // 完成了 → 自動往下推進（不寫入）
+  return rec.spotId;
 }
-export function setHereSpot(tripId, spotId) {
-  try { localStorage.setItem(HERE(tripId), spotId); } catch { /* noop */ }
+
+// actor：{ id, name } —— 是誰把大家帶過去的
+export async function setHereSpot(tripId, spotId, actor = null) {
+  const prev = state.byId.get(HERE_ID(tripId));
+  return put({
+    id: HERE_ID(tripId), type: 'here', tripId, spotId: spotId || null,
+    byMemberId: (actor && actor.id) || null,
+    byName: (actor && actor.name) || '',
+    createdAt: (prev && prev.createdAt) || Date.now(),
+  });
 }
-export function clearHereSpot(tripId) {
-  try { localStorage.removeItem(HERE(tripId)); } catch { /* noop */ }
+export async function clearHereSpot(tripId, actor = null) {
+  if (!state.byId.get(HERE_ID(tripId))) return null;
+  return setHereSpot(tripId, null, actor);
+}
+
+// v1.29 把這個存在 localStorage，改成同步記錄後搬過來一次
+async function migrateHere() {
+  for (const t of trips()) {
+    const key = 'tripquest.here.' + t.id;
+    let old = null;
+    try { old = localStorage.getItem(key); localStorage.removeItem(key); } catch { continue; }
+    if (!old || state.byId.get(HERE_ID(t.id)) || !get(old)) continue;
+    try { await setHereSpot(t.id, old, null); } catch { /* noop */ }
+  }
 }
 
 // PhotoSubmission 專用：直接新增，不走 stamp 的可變語意

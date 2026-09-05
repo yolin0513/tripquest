@@ -10,6 +10,7 @@ import { blobURL } from '../photos.js';
 import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
 import { addPhotoButtons } from '../addphoto.js';
 import { activeMemberId, ensureMember } from '../claim.js';
+import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
@@ -163,6 +164,8 @@ export default async function trip(tripId, { fresh = false } = {}) {
       .catch(() => {});
   }
 
+  watchHere(tripId);
+
   // 背景補示意圖。抓好一張就把那一張換上去，不整頁重畫 —— 大行程要抓一分鐘，
   // 整頁重畫會讓使用者看到一半的畫面突然跳掉。
   // 一律呼叫：enrichTrip 自己會判斷有沒有事要做，而且它還要修「同步過來但本機沒圖」的情況
@@ -272,9 +275,33 @@ function nextStationButton(tripId, t, allDone) {
 
   return h('div', { class: 'nextstn', style: 'margin-top:8px' },
     nav,
+    hereByLine(tripId),
     h('button', { class: 'nextstn-switch', onclick: () => pickHereSpot(tripId) },
       manual ? '不是這一站？換一站' : '換一站'),
   );
+}
+
+// 「○○ 把大家帶到這裡」—— 這是同步的，別人改了畫面會跟著動，
+// 不講清楚是誰改的，使用者會覺得畫面莫名其妙自己跳。
+function hereByLine(tripId) {
+  const rec = store.hereRecord(tripId);
+  if (!rec || !store.getHereSpot(tripId)) return null;
+  const who = (rec.byMemberId && store.getRaw(rec.byMemberId)?.displayName) || rec.byName || '';
+  const me = activeMemberId(tripId);
+  const mine = rec.byMemberId && me && rec.byMemberId === me;
+  const when = agoLabel(rec.updatedAt || rec.createdAt);
+  const text = mine ? '你設為現在這一站' : (who ? `${who} 把大家帶到這裡` : '有人把大家帶到這裡');
+  return h('div', { class: 'nextstn-by' }, when ? `${text} · ${when}` : text);
+}
+
+function agoLabel(ts) {
+  if (!ts) return '';
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return '剛剛';
+  if (m < 60) return `${m} 分鐘前`;
+  const hr = Math.floor(m / 60);
+  if (hr < 24) return `${hr} 小時前`;
+  return `${Math.floor(hr / 24)} 天前`;
 }
 
 // 選「現在在哪一站」。也提供「自動」把手動狀態關掉，不會被困住。
@@ -336,8 +363,12 @@ async function pickHereSpot(tripId) {
     for (const d of byDay.keys()) localStorage.removeItem(`tripquest.dayOpen.${tripId}.${d}`);
   } catch { /* noop */ }
 
-  if (res === 'auto') { store.clearHereSpot(tripId); toast('改成自動照順序'); }
-  else { store.setHereSpot(tripId, res); toast(`現在這一站：${store.get(res)?.name || ''}`); }
+  // 帶上是誰改的。離線也會先在本機生效，outbox 會在連線恢復後推出去。
+  const meId = activeMemberId(tripId);
+  const actor = { id: meId, name: (meId && store.getRaw(meId)?.displayName) || myName() || '' };
+
+  if (res === 'auto') { await store.clearHereSpot(tripId, actor); toast('改成自動照順序'); }
+  else { await store.setHereSpot(tripId, res, actor); toast(`現在這一站：${store.get(res)?.name || ''}`); }
   trip(tripId, { fresh: true });
 }
 
@@ -531,6 +562,21 @@ function spotSection(s, tripId, hereId) {
       ...quests.map((q) => questBigCard(q, s, tk)))),
   );
   return sec;
+}
+
+// 旅伴改了「現在這一站」→ 同步進來之後把這一頁重畫，讓大家看到的是同一站。
+// 只在那一站真的變了才重畫（同步每次拉取都會 emit，不能每次都整頁重畫）。
+let hereWatch = null;
+function watchHere(tripId) {
+  if (hereWatch) { hereWatch(); hereWatch = null; }
+  let last = store.getHereSpot(tripId);
+  hereWatch = store.subscribe(() => {
+    if (!location.hash.includes(`/trip/${tripId}`) || location.hash.match(/\/(spot|plan|poster|weather|people|expenses|memories)/)) return;
+    const now = store.getHereSpot(tripId);
+    if (now === last) return;
+    last = now;
+    trip(tripId);
+  });
 }
 
 // ---------- 背景補示意圖 ----------
