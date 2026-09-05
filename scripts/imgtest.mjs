@@ -178,6 +178,107 @@ try {
   if (offline.cards > 0 && offline.withBg === offline.cards) ok(`完全連不到 Wikimedia 時，${offline.cards} 張卡片的圖照樣顯示（擋掉 ${blocked.length} 個請求）`);
   else fail(`連不到 Wikimedia 時圖不見了：${offline.withBg}/${offline.cards}`);
 
+  // ================= 舊行程（v1.25 以前建立的）會不會自動補圖 =================
+  const dev = async () => {
+    const ctx = await browser.createBrowserContext();
+    const pg = await ctx.newPage();
+    await pg.setViewport({ width: 390, height: 780 });
+    pg.on('pageerror', (e) => { console.log('  [pageerror]', e.message); process.exitCode = 1; });
+    await pg.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.hero');
+    return pg;
+  };
+  // v1.25 以前留下的樣子：_enriched 已經是 true（舊版標記處理過了），但其實沒有圖、
+  // 也沒有 _enrichV。「金閣寺」故意用會撞到中文維基消歧義頁的名字。
+  const seedOld = (pg, extra = {}) => pg.evaluate(async (ex) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: '舊團' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '去年的京都', region: '京都', ...ex });
+    for (const n of ['清水寺', '金閣寺']) {
+      const sid = uuid();
+      await s.put({
+        id: sid, type: 'spot', tripId: tid, name: n, nameLocal: n, emoji: '⛩️', day: 1, order: 0,
+        lat: null, lng: null, wikiRef: { lang: 'zh', title: n }, _enriched: true,
+      });
+      await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: sid, title: n + '的主建築', kind: 'building', order: 0 });
+    }
+    return tid;
+  }, extra);
+  const openTrip = async (pg, tid, ms = 12000) => {
+    await pg.goto('about:blank');
+    await pg.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.qbig');
+    await sleep(ms);
+  };
+  const spotState = (pg, tid) => pg.evaluate(async (t) => {
+    const s = await import('./js/store.js');
+    return s.spotsOf(t).map((x) => ({ n: x.name, hero: !!x.heroHash, v: x._enrichV || 0, noHero: !!x._noHero, blurb: x.blurb || '' }));
+  }, tid);
+
+  const O = await dev();
+  const oldTid = await seedOld(O);                       // 沒有 allowWiki 欄位 —— 舊行程可能就是這樣
+  await openTrip(O, oldTid);
+  const oldAfter = await spotState(O, oldTid);
+  if (oldAfter.every((x) => x.hero)) ok(`舊行程再次打開會自動補圖，使用者不用做任何設定（${oldAfter.map((x) => x.n).join('、')}）`);
+  else fail('舊行程沒有自動補圖：' + JSON.stringify(oldAfter));
+
+  const kin = oldAfter.find((x) => x.n === '金閣寺');
+  if (kin && kin.hero) ok('撞到消歧義頁的名字（金閣寺 → 鹿苑寺）也追得到圖');
+  else fail('消歧義沒處理：' + JSON.stringify(kin));
+  if (kin && !/可以指|may refer/.test(kin.blurb)) ok('消歧義頁那句「金閣寺可以指：」沒有被拿去當景點介紹');
+  else fail('介紹句被消歧義污染：' + JSON.stringify(kin && kin.blurb));
+
+  // ---------- 連不到 Wikimedia 時，不可以把景點永久標成「沒有圖」 ----------
+  const N = await dev();
+  const netTid = await seedOld(N);
+  await N.setRequestInterception(true);
+  const onReq = (r) => {
+    if (/wikipedia\.org|wikimedia\.org/.test(r.url())) r.abort().catch(() => {});
+    else r.continue().catch(() => {});
+  };
+  N.on('request', onReq);
+  await openTrip(N, netTid, 8000);
+  const cut = await spotState(N, netTid);
+  if (cut.every((x) => !x.hero && x.v === 0 && !x.noHero)) ok('連不到 Wikimedia 時：不留任何標記，之後才有機會重補');
+  else fail('斷網時被錯誤標記了：' + JSON.stringify(cut));
+  const cutUI = await N.evaluate(() => {
+    const ph = [...document.querySelectorAll('.qbig-photo')];
+    return { cards: ph.length, withBg: ph.filter((p) => p.style.backgroundImage).length };
+  });
+  if (cutUI.cards > 0 && cutUI.withBg === cutUI.cards) ok('斷網時畫面仍然完整（先用主題色塊佔位）');
+  else fail(`斷網時有空白卡片：${cutUI.withBg}/${cutUI.cards}`);
+
+  // 網路恢復 → 重開行程頁就補回來
+  N.off('request', onReq);
+  await N.setRequestInterception(false);
+  await openTrip(N, netTid);
+  const healed = await spotState(N, netTid);
+  if (healed.every((x) => x.hero)) ok('網路恢復後再打開行程頁：圖自動補上');
+  else fail('網路恢復後沒補上：' + JSON.stringify(healed));
+
+  // ---------- 抓過就不再重抓 ----------
+  const again = await N.evaluate(() => performance.getEntriesByType('resource').filter((r) => /wikipedia|wikimedia/.test(r.name)).length);
+  await openTrip(N, netTid, 4000);
+  const again2 = await N.evaluate(() => performance.getEntriesByType('resource').filter((r) => /wikipedia|wikimedia/.test(r.name)).length);
+  if (again2 === 0) ok('補完之後再進去完全不再打 Wikimedia');
+  else fail(`補完還重打了 ${again2} 次`);
+  void again;
+
+  // ---------- 關掉「景點示意圖」開關就不抓 ----------
+  const F2 = await dev();
+  const offTid = await seedOld(F2, { allowWiki: false });
+  await F2.setRequestInterception(true);
+  let wikiCalls = 0;
+  F2.on('request', (r) => {
+    if (/wikipedia\.org|wikimedia\.org/.test(r.url())) wikiCalls++;
+    r.continue().catch(() => {});
+  });
+  await openTrip(F2, offTid, 6000);
+  if (wikiCalls === 0) ok('行程設定關掉「景點示意圖」就完全不對外連線');
+  else fail(`關掉了還打了 ${wikiCalls} 次`);
+
   console.log('\n示意圖測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
