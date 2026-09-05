@@ -1,6 +1,6 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, KIND_META } from '../ui.js';
+import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META } from '../ui.js';
 import { navigate, back, navRestoredScroll } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue } from '../ids.js';
@@ -240,39 +240,6 @@ function scrollToToday(container, todayDay, hereId) {
   smoothScrollTo(target);
 }
 
-function smoothScrollTo(top) {
-  // 尊重系統／App 的「減少動態效果」：直接跳過去，不做動畫
-  if (document.documentElement.classList.contains('reduce-motion')) {
-    window.scrollTo(0, top);
-    return;
-  }
-  const from = window.scrollY;
-  const dist = top - from;
-  const dur = 320;                       // 要快：長輩不喜歡畫面慢慢飄
-  const t0 = performance.now();
-  let cancelled = false;
-
-  // 使用者一碰畫面就讓給他，不要跟他搶
-  const stop = () => { cancelled = true; };
-  const opts = { passive: true };
-  window.addEventListener('touchstart', stop, opts);
-  window.addEventListener('wheel', stop, opts);
-  window.addEventListener('keydown', stop);
-  const cleanup = () => {
-    window.removeEventListener('touchstart', stop, opts);
-    window.removeEventListener('wheel', stop, opts);
-    window.removeEventListener('keydown', stop);
-  };
-
-  const step = (now) => {
-    if (cancelled) { cleanup(); return; }
-    const p = Math.min(1, (now - t0) / dur);
-    window.scrollTo(0, from + dist * (1 - Math.pow(1 - p, 3)));   // ease-out
-    if (p < 1) requestAnimationFrame(step);
-    else cleanup();
-  };
-  requestAnimationFrame(step);
-}
 
 // 「用地圖帶我去下一站」＋「換一站」
 function nextStationButton(tripId, t, allDone) {

@@ -2,7 +2,7 @@
 
 import { route, setNotFound, startRouter, navigate, currentRoute, back, resetHistory } from './router.js';
 import * as store from './store.js';
-import { mount, h, toast } from './ui.js';
+import { mount, h, toast, smoothScrollTo } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
 import { initIdentity } from './identity.js';
 
@@ -92,8 +92,17 @@ function tripIdOfPath(p) {
 }
 
 function tabItem(icon, label, href, active) {
-  return h('a', { class: 'tab' + (active ? ' active' : ''), href: '#' + href },
+  const el = h('a', { class: 'tab' + (active ? ' active' : ''), href: '#' + href },
     h('span', { class: 'ti' }, icon), h('span', {}, label));
+  // 已經在這一頁時再按同一個分頁 → 回到最上面。
+  // 切到別的分頁維持原本行為（router 會還原那一頁上次看到哪裡）。
+  el.addEventListener('click', (e) => {
+    if (!active) return;
+    e.preventDefault();
+    if (window.scrollY <= 4) return;     // 已經在最上面就什麼都不做，不要莫名跳一下
+    smoothScrollTo(0);
+  });
+  return el;
 }
 
 function renderTabs() {

@@ -267,6 +267,87 @@ try {
   if (hh.scrolls <= 2) ok(`減少動態效果：一步到位、沒有動畫（${hh.scrolls} 幀）`);
   else fail(`reduce-motion 下仍有動畫：${hh.scrolls} 幀`);
 
+  // ================= 底部分頁：再按一次回到最上面 =================
+  const T = await device();
+  // 照片牆要有東西才捲得動，所以先讓幾個景點有照片
+  const tidT = await seed(T.page, { startOffset: -1, dayCount: 3, spotsPerDay: 3, complete: [[1, 0], [1, 1], [1, 2], [2, 0]] });
+  await openTrip(T.page, tidT);
+
+  await T.page.evaluate(() => window.scrollTo(0, 1200));
+  await sleep(400);
+  const parkedT = await T.page.evaluate(() => Math.round(window.scrollY));
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.classList.contains('active')).click());
+  await sleep(900);
+  const toTop = await T.page.evaluate(() => Math.round(window.scrollY));
+  if (parkedT > 500 && toTop === 0) ok(`已經在這一頁時再按同一個分頁 → 回到最上面（${parkedT} → ${toTop}）`);
+  else fail(`沒有回到最上面：${parkedT} → ${toTop}`);
+
+  const before2 = await T.page.evaluate(() => Math.round(window.scrollY));
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.classList.contains('active')).click());
+  await sleep(600);
+  const after2 = await T.page.evaluate(() => ({ y: Math.round(window.scrollY), hash: location.hash }));
+  if (before2 === 0 && after2.y === 0 && after2.hash.includes(`/trip/${tidT}`)) ok('已經在最上面時再按：什麼都不做，也不會跳走');
+  else fail('在最上面按了卻有動作：' + JSON.stringify(after2));
+
+  await T.page.evaluate(() => window.scrollTo(0, 900));
+  await sleep(400);
+  const keep = await T.page.evaluate(() => Math.round(window.scrollY));
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('照片')).click());
+  await T.page.waitForSelector('.people-row, .empty');
+  await sleep(700);
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('任務')).click());
+  await T.page.waitForSelector('.qbig');
+  await sleep(1500);
+  const backY = await T.page.evaluate(() => Math.round(window.scrollY));
+  if (Math.abs(backY - keep) <= 40) ok(`切到別的分頁再切回來：還原上次的位置（${keep} → ${backY}），不是跳到頂端`);
+  else fail(`切回來位置不對：${keep} → ${backY}`);
+
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('照片')).click());
+  await T.page.waitForSelector('.people-row, .empty');
+  await sleep(900);
+  await T.page.evaluate(() => window.scrollTo(0, 600));
+  await sleep(400);
+  const pParked = await T.page.evaluate(() => Math.round(window.scrollY));
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.classList.contains('active')).click());
+  await sleep(900);
+  const pTop = await T.page.evaluate(() => Math.round(window.scrollY));
+  if (pParked > 200 && pTop === 0) ok(`照片分頁也一樣（${pParked} → ${pTop}）`);
+  else fail(`照片分頁不一致：${pParked} → ${pTop}`);
+
+  await T.page.goto('about:blank');
+  await T.page.goto(`http://localhost:${WEB}/#/settings`, { waitUntil: 'networkidle0' });
+  await T.page.waitForSelector('.page');
+  await sleep(600);
+  await T.page.evaluate(() => window.scrollTo(0, 700));
+  await sleep(400);
+  const sParked = await T.page.evaluate(() => Math.round(window.scrollY));
+  await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.classList.contains('active')).click());
+  await sleep(900);
+  const sTop = await T.page.evaluate(() => Math.round(window.scrollY));
+  if (sParked > 200 && sTop === 0) ok(`首頁層的分頁（設定）也一樣（${sParked} → ${sTop}）`);
+  else fail(`設定頁不一致：${sParked} → ${sTop}`);
+
+  const R2 = await device({ reduceMotion: true });
+  const tidR2 = await seed(R2.page, { startOffset: -1, dayCount: 3, spotsPerDay: 3 });
+  await openTrip(R2.page, tidR2);
+  await R2.page.evaluate(() => { window.scrollTo(0, 1200); window.__scrolls = []; });
+  await sleep(400);
+  await R2.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.classList.contains('active')).click());
+  await sleep(800);
+  const rr = await R2.page.evaluate(() => ({ y: Math.round(window.scrollY), n: (window.__scrolls || []).length }));
+  if (rr.y === 0 && rr.n <= 2) ok(`減少動態效果：一步跳到最上面、沒有動畫（${rr.n} 次取樣）`);
+  else fail('reduce-motion 行為不對：' + JSON.stringify(rr));
+
+  await R2.page.evaluate(async (t) => {
+    const s = await import('./js/store.js');
+    const list = s.spotsOf(t);
+    await s.setHereSpot(t, list[list.length - 1].id, null);
+  }, tidR2);
+  await openTrip(R2.page, tidR2);
+  const stillAuto = await R2.page.evaluate(() => Math.round(window.scrollY));
+  if (stillAuto > 100) ok(`沒有干擾原本的自動捲動（打開行程仍捲到指定那一站，${stillAuto}px）`);
+  else fail('自動捲動被影響了：' + stillAuto);
+
   console.log('\n折疊與自動捲動測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

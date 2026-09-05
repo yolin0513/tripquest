@@ -74,6 +74,41 @@ export function modal({ title, body, actions }) {
   });
 }
 
+// 平滑捲到某個位置。行程頁的「捲到今天」與底部分頁的「再按一次回到最上面」共用。
+export function smoothScrollTo(top) {
+  // 尊重系統／App 的「減少動態效果」：直接跳過去，不做動畫
+  if (document.documentElement.classList.contains('reduce-motion')) {
+    window.scrollTo(0, top);
+    return;
+  }
+  const from = window.scrollY;
+  const dist = top - from;
+  const dur = 320;                       // 要快：長輩不喜歡畫面慢慢飄
+  const t0 = performance.now();
+  let cancelled = false;
+
+  // 使用者一碰畫面就讓給他，不要跟他搶
+  const stop = () => { cancelled = true; };
+  const opts = { passive: true };
+  window.addEventListener('touchstart', stop, opts);
+  window.addEventListener('wheel', stop, opts);
+  window.addEventListener('keydown', stop);
+  const cleanup = () => {
+    window.removeEventListener('touchstart', stop, opts);
+    window.removeEventListener('wheel', stop, opts);
+    window.removeEventListener('keydown', stop);
+  };
+
+  const step = (now) => {
+    if (cancelled) { cleanup(); return; }
+    const p = Math.min(1, (now - t0) / dur);
+    window.scrollTo(0, from + dist * (1 - Math.pow(1 - p, 3)));   // ease-out
+    if (p < 1) requestAnimationFrame(step);
+    else cleanup();
+  };
+  requestAnimationFrame(step);
+}
+
 // 從一串選項裡挑一個。選項做成大按鈕（長輩點得到），內容多的時候靠 .modal-body 捲動。
 // options: [{ value, label, sub?, tag? }]，回傳選到的 value；取消回傳 undefined。
 export function chooseFrom({ title, hint, options, value }) {
