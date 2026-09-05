@@ -218,6 +218,20 @@ await page.evaluate(() => [...document.querySelectorAll('a.btn')].find(a => a.te
 await sleep(200);
 await shot('30-map-navigate');
 
+// ---------- 31. 景點頁的任務列：唯一該做的事就是加照片 ----------
+await page.evaluate(() => document.querySelector('.qrow')?.scrollIntoView({ block: 'center' }));
+await sleep(250);
+await shot('31-spot-addphoto');
+
+// ---------- 32. 調整每天的行程：任務的編輯 / 刪除 / 新增都在這裡 ----------
+await go(`/#/trip/${tripId}/plan`);
+await page.waitForSelector('.plan-row');
+await page.evaluate(() => [...document.querySelectorAll('.plan-mini')].find((b) => b.textContent.includes('改任務'))?.click());
+await page.waitForSelector('.pq-row');
+await page.evaluate(() => document.querySelector('.plan-quests')?.scrollIntoView({ block: 'center' }));
+await sleep(300);
+await shot('32-plan-quest-edit');
+
 // ---------- 7. 完成任務的慶祝 ----------
 await page.evaluate(async () => {
   const { celebrate } = await import('./js/ui.js');
@@ -244,6 +258,20 @@ await page.evaluate(() => {
 });
 await sleep(400);
 await shot('09-people-feed');
+
+// ---------- 33. 照片牆的「還有 N 張沒標記」入口 ----------
+await go(`/#/trip/${tripId}/people`);
+await page.waitForSelector('.untag-cta');
+await page.evaluate(() => document.querySelector('.untag-cta')?.scrollIntoView({ block: 'center' }));
+await sleep(300);
+await shot('33-untagged-cta');
+
+// ---------- 34. 標記畫面：照片裡有誰 / 誰拍的 ----------
+await page.evaluate(() => document.querySelector('.untag-cta').click());
+await page.waitForSelector('.tagger-chip');
+await sleep(500);
+await shot('34-photo-tagger');
+await page.evaluate(() => document.querySelector('.tagger-overlay')?.remove());
 
 // ---------- 10. 全部解鎖 ----------
 await fillPhotos(tripId, 1);

@@ -179,6 +179,65 @@ function retractedIds() {
   return s;
 }
 
+// ---------- 照片標記（上傳時不問，事後在照片牆標）----------
+// 為什麼不直接改投稿：投稿是 append-only，importRecords 合併時對已存在的投稿直接跳過，
+// 所以標記若寫回投稿裡，在自己手機上看起來有改，卻永遠傳不到旅伴的手機。
+// 改成另存一筆記錄，id 固定成 'tag:<投稿id>' —— 不同裝置標同一張照片時 id 一致，
+// 就會走一般的「後寫入者勝」合併，最後一次標記為準。
+const TAG_PREFIX = 'tag:';
+
+// 一張照片「現在」的標記。沒有事後標記時，沿用上傳當下寫進投稿的舊欄位。
+// taggedAt 只在真的動到「照片裡有誰 / 誰拍的」時才寫 —— 只加了說明不算標記過人物，
+// 否則照片牆會少算「還有幾張沒標」。
+export function photoTag(sub) {
+  if (!sub) return { photographerId: null, subjectIds: [], caption: '', explicit: false };
+  const rec = state.byId.get(TAG_PREFIX + sub.id);
+  const has = !!(rec && !rec.deleted);
+  const explicit = has && !!rec.taggedAt;
+  const live = (ids) => (Array.isArray(ids) ? ids.filter((id) => alive(state.byId.get(id))) : []);
+  return {
+    photographerId: (explicit ? rec.photographerId : null) || sub.memberId || null,
+    subjectIds: explicit ? live(rec.subjectIds) : live(sub.subjectIds),
+    caption: has ? (rec.caption || '') : (sub.caption || ''),
+    explicit,
+  };
+}
+
+// 只帶要改的欄位；沒帶到的沿用現況。
+export async function setPhotoTag(submissionId, changes = {}) {
+  const sub = state.byId.get(submissionId);
+  if (!sub || sub.type !== 'submission') return null;
+  const cur = photoTag(sub);
+  const prev = state.byId.get(TAG_PREFIX + submissionId);
+  const touchesPeople = 'subjectIds' in changes || 'photographerId' in changes;
+  return put({
+    id: TAG_PREFIX + submissionId,
+    type: 'phototag',
+    tripId: sub.tripId,
+    submissionId,
+    photographerId: ('photographerId' in changes ? changes.photographerId : cur.photographerId) || null,
+    subjectIds: [...('subjectIds' in changes ? (changes.subjectIds || []) : cur.subjectIds)],
+    caption: String(('caption' in changes ? changes.caption : cur.caption) || ''),
+    taggedAt: touchesPeople ? Date.now() : (prev ? prev.taggedAt || null : null),
+    createdAt: prev ? prev.createdAt : Date.now(),
+  });
+}
+
+// 照片說明也放進標記記錄裡，這樣事後改的說明才會同步（寫回投稿一樣傳不出去）
+export function photoCaption(sub) { return photoTag(sub).caption; }
+
+export function isPhotoTagged(sub) {
+  const t = photoTag(sub);
+  return t.explicit || t.subjectIds.length > 0 || !!(sub && sub.forMemberId);
+}
+
+// 一個人的旅程不需要標「照片裡有誰」，所以那時候一律當作標好了
+export function untaggedPhotos(tripId) {
+  const trip = get(tripId);
+  if (!trip || membersOf(trip.groupId).length < 2) return [];
+  return submissionsOfTrip(tripId).filter((s) => !isPhotoTagged(s));
+}
+
 // 清掉不再被任何投稿參照的 blob
 export async function gcBlobs(candidates) {
   const live = new Set();

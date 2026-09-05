@@ -1058,6 +1058,118 @@ textarea.field { resize: vertical; line-height: 1.6; }
 
 /* ---------- 成就徽章 ---------- */
 .pr-badges { font-size: 0.85rem; margin-left: 8px; color: var(--accent); font-weight: 800; }
+
+/* ---------- 景點頁的任務列（唯一該做的事＝加照片）---------- */
+/* 實測長輩看到任務旁的「編輯」會下意識按下去，以為那是加照片的入口，
+   所以這一列現在只剩兩顆加照片的按鈕，改任務移到「調整每天的行程」。 */
+.qrow {
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: 16px; padding: 14px;
+}
+.qrow.done { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.qrow-head { display: flex; align-items: flex-start; gap: 12px; }
+.qrow-icon {
+  width: 44px; height: 44px; flex: none; border-radius: 12px;
+  background: var(--bg-elev-2); display: grid; place-items: center; font-size: 1.3rem;
+}
+.qrow.done .qrow-icon { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+.qrow-main { flex: 1; min-width: 0; }
+.qrow-title { font-weight: 800; font-size: 1.08rem; line-height: 1.4; }
+.qrow-status { font-size: 0.9rem; font-weight: 700; color: var(--muted); margin-top: 6px; }
+.qrow-status.is-done { color: var(--ok); }
+.qrow-thumbs { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.qrow-thumbs img {
+  width: 64px; height: 64px; object-fit: cover; border-radius: 10px;
+  background: var(--bg-elev-2); cursor: pointer; display: block;
+}
+/* 兩顆並排，總高度跟一顆大按鈕一樣 —— 少一層選單，字面上就說清楚各自會做什麼 */
+.addphoto-row { display: flex; gap: 10px; margin-top: 12px; }
+.addphoto-row .btn {
+  flex: 1; min-width: 0; min-height: 56px; font-size: 1.05rem; padding: 10px 8px;
+}
+
+/* 景點頁底部的管理區（預設收合，長輩不會誤觸） */
+.manage-box { margin-top: 30px; border-top: 1px solid var(--line); }
+.manage-head {
+  appearance: none; width: 100%; background: none; border: 0; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 2px; font: inherit; font-weight: 800; cursor: pointer; min-height: var(--tap);
+}
+.manage-body { padding-bottom: 8px; }
+
+/* ---------- 照片標記 ---------- */
+.untag-dot {
+  position: absolute; top: 8px; left: 8px;
+  background: rgba(0, 0, 0, 0.6); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px; padding: 3px 9px;
+  font-size: 0.72rem; font-weight: 800; pointer-events: none;
+}
+.untag-cta {
+  appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--bg-elev); border: 2px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: 16px; padding: 14px 16px; margin-top: 14px; min-height: var(--tap);
+}
+.untag-cta:active { transform: scale(0.99); }
+.untag-cta-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fi-photo-btn {
+  appearance: none; display: block; width: 100%; padding: 0; border: 0;
+  background: none; cursor: pointer; position: relative;
+}
+
+.tagger-overlay { align-items: center; padding: 10px; }
+.tagger {
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  width: 100%; max-width: var(--maxw); max-height: 92vh; overflow-y: auto;
+  padding: 0 16px calc(20px + env(safe-area-inset-bottom));
+}
+.tagger-head {
+  position: sticky; top: 0; z-index: 2; background: var(--bg-elev);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px;
+}
+.tagger-count { font-weight: 800; color: var(--muted); }
+.tagger-close {
+  appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+  border-radius: 12px; width: 48px; height: 48px; font-size: 1.2rem; cursor: pointer; flex: none;
+}
+.tagger-photo {
+  width: 100%; max-height: 42vh; object-fit: contain;
+  background: #000; border-radius: 14px; display: block;
+}
+.tagger-where { font-weight: 800; margin-top: 10px; }
+.tagger-saved { font-size: 0.9rem; font-weight: 700; color: var(--muted); margin-top: 2px; }
+.tagger-label { font-weight: 800; font-size: 1.05rem; margin: 20px 0 10px; }
+.tagger-sub { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-top: 3px; }
+.tagger-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.tagger-chip {
+  appearance: none; cursor: pointer; font: inherit;
+  border: 2px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+  border-radius: 14px; padding: 12px 18px; font-weight: 800; font-size: 1.05rem;
+  min-height: 54px; min-width: 88px;
+}
+.tagger-chip:active { transform: scale(0.96); }
+.tagger-chip.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 22%, transparent); }
+.tagger-chip.ghost { font-weight: 700; color: var(--muted); }
+.tagger-chip.ghost.on { color: var(--text); }
+.tagger-nav { display: flex; gap: 10px; margin-top: 24px; }
+.tagger-nav .btn { flex: 1; min-height: 54px; }
+.tagger-more { display: flex; gap: 10px; margin-top: 18px; justify-content: center; }
+
+/* ---------- 「調整每天的行程」裡的任務編輯 ---------- */
+.plan-row { display: block; }
+.plan-row-top { display: flex; align-items: stretch; gap: 10px; }
+.plan-ghost { display: block; }
+.plan-row-actions { flex-wrap: wrap; }
+.plan-quests { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.pq-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--bg-elev-2);
+}
+.pq-main { flex: 1; min-width: 0; }
+.pq-title { font-weight: 700; line-height: 1.4; }
+.pq-btns { display: flex; gap: 8px; flex: none; }
 .badge-who { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
 .badge-who-btn {
   appearance: none; border: 2px solid var(--line); background: var(--bg-elev); color: var(--text);
