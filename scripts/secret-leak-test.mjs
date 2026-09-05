@@ -39,6 +39,25 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
   await aikeys.setTripKey(tid, { key: fakeA, ttsKey: fakeG, capUsd: 5 });
   await aikeys.addUsage(tid, 12345);
 
+  // 這台手機的預設金鑰（匯入行程表用的那支）—— 它跟每趟的金鑰放在同一個 store，
+  // 所以下面每一條匯出路徑的斷言同時也在保護它。
+  await aikeys.setDeviceKey({ key: fakeA, capUsd: 3 });
+  const dev = await aikeys.getDeviceKey();
+  const deviceStored = !!(dev && dev.key === fakeA);
+
+  // 建第二趟，驗證 adoptDeviceKey 是「複製」不是「共用」：各自算各自的額度
+  const tid2 = uuid();
+  await store.put({ id: tid2, type: 'trip', groupId: gid, title: '第二趟', region: '台北', country: 'TW', aiEnabled: true, createdByDevice: identity.myDeviceId() });
+  await aikeys.adoptDeviceKey(tid2);
+  const t2 = await aikeys.getTripKey(tid2);
+  await aikeys.addUsage(tid2, 99);
+  const devAfter = await aikeys.getDeviceKey();
+  const adopted = !!(t2 && t2.key === fakeA && t2.capUsd === 3);
+  const isolated = (devAfter.usedMicroUsd || 0) === (dev.usedMicroUsd || 0);
+
+  // 已經有自己金鑰的旅程，不可以被預設金鑰覆蓋
+  const noOverwrite = (await aikeys.adoptDeviceKey(tid)) === false;
+
   // sanity：確定真的存進去了
   const back = await aikeys.getTripKey(tid);
   const stored = back && back.key === fakeA && back.ttsKey === fakeG;
@@ -70,7 +89,7 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
     }
   }
 
-  return { stored, hits, swBad };
+  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite };
 
   async function blobText(b) { return await b.text(); }
 }, FAKE_ANTHROPIC, FAKE_GOOGLE);
@@ -80,6 +99,10 @@ server.kill();
 
 let ok = true;
 if (!result.stored) { console.log('✗ 假金鑰沒有正確存入 tripSecrets'); ok = false; }
+if (!result.deviceStored) { console.log('✗ 裝置預設金鑰沒有正確存入'); ok = false; } else console.log('✓ 裝置預設金鑰存在同一個 tripSecrets store（匯出保證自動涵蓋）');
+if (!result.adopted) { console.log('✗ adoptDeviceKey 沒有把金鑰與上限複製給新旅程'); ok = false; } else console.log('✓ 新旅程複製到預設金鑰與花費上限');
+if (!result.isolated) { console.log('✗ 新旅程的花費算到預設金鑰頭上了（應該各自獨立）'); ok = false; } else console.log('✓ 每趟各自記帳，不共用額度');
+if (!result.noOverwrite) { console.log('✗ 已有金鑰的旅程被預設金鑰覆蓋'); ok = false; } else console.log('✓ 已有自己金鑰的旅程不會被覆蓋');
 const leakKeys = Object.keys(result.hits);
 if (leakKeys.length) { console.log('✗ 金鑰洩漏於：', leakKeys.join(', ')); ok = false; }
 else console.log('✓ exportRecords / exportGroup / exportBundle / exportCard / encodeCard / shareURL 皆無金鑰');

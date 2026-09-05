@@ -1375,3 +1375,72 @@ textarea.field { resize: vertical; line-height: 1.6; }
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 0.9rem;
 }
+
+/* ---------- 匯入行程表 ---------- */
+/* 來源選擇：三顆大按鈕，長輩一眼看得出差別 */
+.imp-src {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  background: var(--bg-elev); border: 2px solid var(--line); border-radius: 16px;
+  padding: 14px 16px; margin-bottom: 10px; color: var(--text);
+  min-height: var(--tap); cursor: pointer;
+}
+.imp-src:active { background: var(--bg-elev-2); }
+.imp-src-i { font-size: 1.8rem; flex: none; }
+.imp-src-t { display: block; font-weight: 800; font-size: 1.05rem; }
+.imp-src-s { display: block; font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+
+.imp-note {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 12px; padding: 12px 14px; font-size: 0.9rem; line-height: 1.6;
+}
+
+/* 建立頁的「已匯入」提示條 */
+.imp-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: color-mix(in srgb, var(--ok) 14%, var(--bg-elev));
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+  border-radius: 12px; padding: 10px 12px; margin-top: 8px; font-weight: 700; font-size: 0.9rem;
+}
+
+/* 確認清單 */
+.imp-sum {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg); padding: 8px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
+}
+.imp-warn-c { color: var(--accent); font-weight: 700; }
+.imp-day { font-weight: 800; font-size: 0.95rem; margin: 14px 0 8px; color: var(--muted); }
+.imp-row {
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.imp-row.off { opacity: 0.45; }
+.imp-r1 { display: flex; align-items: center; gap: 6px; }
+/* 三個窄欄位排成等寬三欄。擠在同一行會被截成「第 1 ラ」「-- --:-」那種樣子 */
+.imp-r2 { display: grid; grid-template-columns: 78px 1.35fr 1fr; gap: 6px; margin-top: 8px; }
+.imp-chk-w { display: grid; place-items: center; width: 38px; height: 44px; flex: none; }
+.imp-chk { width: 26px; height: 26px; accent-color: var(--primary); }
+.imp-in {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 4px; font-size: 0.9rem; min-height: 44px;
+  min-width: 0; max-width: 100%;
+}
+.imp-name { flex: 1 1 auto; min-width: 0; font-weight: 700; padding: 9px 10px; font-size: 1rem; }
+.imp-badge { flex: none; width: 16px; font-size: 1rem; color: var(--ok); font-weight: 900; }
+.imp-del {
+  flex: none; width: 44px; height: 44px; border-radius: 10px;
+  background: transparent; border: 1px solid var(--line); color: var(--muted); font-size: 1.1rem;
+}
+.imp-warn { font-size: 0.82rem; color: var(--accent); margin-top: 6px; line-height: 1.5; }
+.imp-add {
+  width: 100%; background: transparent; border: 2px dashed var(--line); color: var(--muted);
+  border-radius: 12px; padding: 12px; font-weight: 700; min-height: 48px; margin-bottom: 4px;
+}
+.imp-bad {
+  display: flex; align-items: center; gap: 10px; justify-content: space-between;
+  background: var(--bg-elev); border: 1px dashed var(--line); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.imp-bad-t { font-size: 0.85rem; color: var(--muted); word-break: break-all; }
+
+.btn-sm { padding: 8px 14px; font-size: 0.85rem; min-height: 40px; border-radius: 10px; }

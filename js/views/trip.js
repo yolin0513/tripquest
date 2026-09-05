@@ -418,6 +418,15 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
   return sec;
 }
 
+// 匯入行程表帶進來的預定時間，寫成「09:00 停留 2 小時」這種看得懂的樣子
+function planTime(s) {
+  const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const t = hhmm(s.startMin);
+  if (!Number.isFinite(s.stayMin) || s.stayMin <= 0) return t;
+  const h = Math.floor(s.stayMin / 60), mi = s.stayMin % 60;
+  return t + ' 停留 ' + (h ? h + ' 小時' + (mi ? ' ' + mi + ' 分' : '') : mi + ' 分');
+}
+
 async function fillWeather(slot, container, tripId, trip) {
   try {
     const [{ destCoords, tripForecastDays }, wx, geo] = await Promise.all([
@@ -509,7 +518,10 @@ function spotSection(s, tripId, hereId) {
         h('span', { class: 'qc-emoji' }, s.emoji || '📍'),
         h('span', { class: 'qc-name' }, s.name,
           isHere ? h('span', { class: 'qc-here' }, '📍 現在這一站') : null,
-          h('span', { class: 'qc-theme' }, tm.emoji + ' ' + tm.label)),
+          h('span', { class: 'qc-theme' },
+            // 從行程表匯入的才有時間；沒有就不佔位置
+            Number.isFinite(s.startMin) ? '🕘 ' + planTime(s) + ' · ' : '',
+            tm.emoji + ' ' + tm.label)),
         h('span', {
           class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
         }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
