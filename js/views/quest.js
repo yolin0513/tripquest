@@ -5,6 +5,9 @@ import { navigate } from '../router.js';
 import { blobURL } from '../photos.js';
 import { addPhotoButtons } from '../addphoto.js';
 import { openTagger } from '../phototag.js';
+import { refImageFor } from '../enrich.js';
+import { themeForSpot, loadThemes } from '../theme.js';
+import { paintRef } from './trip.js';
 
 export default async function quest(questId) {
   const q = store.get(questId);
@@ -12,6 +15,7 @@ export default async function quest(questId) {
   const spot = store.get(q.spotId);
   const t = store.get(q.tripId);
   const km = KIND_META[q.kind] || KIND_META.thing;
+  await loadThemes().catch(() => {});          // 佔位圖要用主題色
 
   setTop({
     title: spot?.name || '任務',
@@ -22,8 +26,9 @@ export default async function quest(questId) {
   const members = store.membersOf(t.groupId);
   const done = subs.length > 0;
 
+  // 這裡的大圖是「要拍的東西長怎樣」的參考圖，所以不用使用者自己拍的（自己的照片在下面的格子裡）
   const heroPhoto = h('div', { class: 'quest-focus-photo' }, h('span', { class: 'qf-emoji' }, km.icon));
-  if (spot?.heroHash) blobURL(spot.heroHash).then((u) => { if (u) { heroPhoto.style.backgroundImage = `url("${u}")`; heroPhoto.classList.add('has-img'); } });
+  paintRef(heroPhoto, refImageFor(q, spot, null), spot ? (spot.theme || themeForSpot(spot)) : 'journey', q.spotId);
 
   const grid = h('div', { class: 'photo-grid' });
 

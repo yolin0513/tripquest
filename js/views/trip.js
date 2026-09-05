@@ -7,10 +7,10 @@ import { uuid, hashHue } from '../ids.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
-import { enrichTrip } from '../enrich.js';
+import { enrichTrip, needsEnrich, refImageFor, creditLine } from '../enrich.js';
 import { activeMemberId, ensureMember } from '../claim.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
-import { loadThemes, themeForSpot, themeMeta } from '../theme.js';
+import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
 import { aiConfigCard } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
@@ -100,13 +100,23 @@ export default async function trip(tripId, { fresh = false } = {}) {
 
     // 全部展開 / 全部收合 小工具（只在多於一天時顯示）
     if (dayNums.length > 1) {
+      // 兩層一起：天和景點都展開／收合。只收「天」的話，展開後裡面景點還是關的，
+      // 使用者得再一個個點，等於沒有「全部展開」。
       const setAll = (open) => {
         for (const el of container.querySelectorAll('.daycollapse')) {
           el.classList.toggle('open', open);
-          const d = el.dataset.day;
           const chv = el.querySelector('.dc-chev');
           if (chv) chv.textContent = open ? '▾' : '▸';
-          try { localStorage.setItem(`tripquest.dayOpen.${tripId}.${d}`, open ? '1' : '0'); } catch { /* noop */ }
+          el.querySelector('.dc-head')?.setAttribute('aria-expanded', String(open));
+          try { localStorage.setItem(`tripquest.dayOpen.${tripId}.${el.dataset.day}`, open ? '1' : '0'); } catch { /* noop */ }
+        }
+        for (const el of container.querySelectorAll('.qcollapse')) {
+          el.classList.toggle('open', open);
+          const chv = el.querySelector('.qc-chev');
+          if (chv) chv.textContent = open ? '▾' : '▸';
+          el.querySelector('.qc-toggle')?.setAttribute('aria-expanded', String(open));
+          // 跟個別點擊寫的是同一個 key，之後他自己再點哪一個就以那次為準
+          try { localStorage.setItem('tripquest.spotOpen.' + el.dataset.spot, open ? '1' : '0'); } catch { /* noop */ }
         }
       };
       container.append(h('div', { class: 'day-tools' },
@@ -142,7 +152,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
   }
 
   // 背景補景點示意圖，回來後重繪一次
-  if (t.allowWiki !== false && spots.some((s) => !s._enriched)) {
+  if (t.allowWiki !== false && needsEnrich(tripId)) {
     enrichTrip(tripId).then(() => {
       if (location.hash.includes(`/trip/${tripId}`) && !location.hash.includes('/spot/')) trip(tripId);
     }).catch(() => {});
@@ -392,6 +402,7 @@ function spotSection(s, tripId) {
   const chev = h('span', { class: 'qc-chev' }, open ? '▾' : '▸');
   const sec = h('section', {
     class: 'qcollapse' + (open ? ' open' : ''),
+    dataset: { spot: s.id },
     style: `--theme-accent:${tm.poster.accent}`,
   },
     h('div', { class: 'qc-head' },
@@ -419,9 +430,28 @@ function spotSection(s, tripId) {
     ),
     h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' },
       spotMapButton(s),
-      ...quests.map((q) => questBigCard(q, s)))),
+      ...quests.map((q) => questBigCard(q, s, tk)))),
   );
   return sec;
+}
+
+// 把示意圖畫上去。抓不到圖（或 blob 被清掉）一律用主題色塊，不留一塊空白。
+export function paintRef(el, pick, themeKey, seed) {
+  const placeholder = () => {
+    el.style.backgroundImage = `url("${themePlaceholder(themeKey, seed)}")`;
+    el.classList.add('is-placeholder');
+    el.classList.remove('has-img');
+  };
+  if (!pick) { placeholder(); return; }
+  el.classList.add('has-img');
+  blobURL(pick.hash).then((u) => {
+    if (u) el.style.backgroundImage = `url("${u}")`;
+    else placeholder();
+  }).catch(placeholder);
+  if (!pick.own) {
+    const line = creditLine(pick.attr, pick.generic);
+    if (line) el.append(h('span', { class: 'img-credit' }, line));
+  }
 }
 
 function spotMapButton(s) {
@@ -433,18 +463,18 @@ function spotMapButton(s) {
   }, `🗺️ 用地圖看「${s.name}」在哪裡`);
 }
 
-function questBigCard(q, spot) {
+function questBigCard(q, spot, themeKey) {
   const done = store.isQuestDone(q.id);
   const subs = store.submissionsOf(q.id);
   const km = KIND_META[q.kind] || KIND_META.thing;
   const likeCount = subs.reduce((n, s) => n + store.reactionsOf(s.id).length, 0);
 
-  const photo = h('div', { class: 'qbig-photo' + (spot.heroHash ? ' has-img' : '') },
+  const photo = h('div', { class: 'qbig-photo' },
     h('span', { class: 'qbig-emoji' }, km.icon),
     done ? h('span', { class: 'qbig-check' }, '✓') : null,
   );
-  if (spot.heroHash) blobURL(spot.heroHash).then((u) => { if (u) photo.style.backgroundImage = `url("${u}")`; });
-  else if (subs[0]) blobURL(subs[0].thumbHash).then((u) => { if (u) { photo.style.backgroundImage = `url("${u}")`; photo.classList.add('has-img'); } });
+  // 自己拍過了就顯示自己的照片；還沒拍才給參考圖
+  paintRef(photo, refImageFor(q, spot, subs[0] && (subs[0].thumbHash || subs[0].photoHash)), themeKey, spot.id);
 
   return h('button', {
     class: 'qbig' + (done ? ' done' : ''),

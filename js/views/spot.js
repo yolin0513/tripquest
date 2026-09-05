@@ -7,7 +7,9 @@ import * as store from '../store.js';
 import { h, toast, promptDialog, confirmDialog, KIND_META } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { blobURL } from '../photos.js';
-import { enrichSpot } from '../enrich.js';
+import { enrichSpot, refImageFor } from '../enrich.js';
+import { themeForSpot, loadThemes } from '../theme.js';
+import { paintRef } from './trip.js';
 import { mapsDirUrl } from '../maps.js';
 import { addPhotoButtons } from '../addphoto.js';
 import { openTagger } from '../phototag.js';
@@ -16,6 +18,7 @@ export default async function spot(tripId, spotId) {
   const s = store.get(spotId);
   const t = store.get(tripId);
   if (!s || !t) { navigate('/', { replace: true }); return; }
+  await loadThemes().catch(() => {});          // 佔位圖要用主題色
 
   setTop({ title: s.name });
 
@@ -24,7 +27,7 @@ export default async function spot(tripId, spotId) {
   const refresh = () => spot(tripId, spotId);
 
   const hero = h('div', { class: 'quest-focus-photo' }, h('span', { class: 'qf-emoji' }, s.emoji || '📍'));
-  if (s.heroHash) blobURL(s.heroHash).then((u) => { if (u) hero.style.backgroundImage = `url("${u}")`; });
+  paintRef(hero, refImageFor(null, s, null), s.theme || themeForSpot(s), s.id);
 
   render(h('div', { class: 'page' },
     hero,
@@ -88,7 +91,7 @@ function manageBox(s, tripId, spotId, quests) {
         h('div', { class: 'form-hint' }, s.name)),
       h('button', { class: 'btn btn-soft', onclick: async () => {
         const v = await promptDialog('景點名稱', { value: s.name });
-        if (v) { await store.patch(spotId, { name: v, _enriched: false }); enrichSpot(store.getRaw(spotId)); toast('已更新'); spot(tripId, spotId); }
+        if (v) { await store.patch(spotId, { name: v, _enrichV: 0, _noHero: false }); enrichSpot(store.getRaw(spotId)); toast('已更新'); spot(tripId, spotId); }
       } }, '改名字'),
     ),
 

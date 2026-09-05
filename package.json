@@ -17,7 +17,9 @@
     "aitest": "node scripts/aitest.mjs",
     "tagtest": "node scripts/tagtest.mjs",
     "scrolltest": "node scripts/scrolltest.mjs",
-    "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs"
+    "imgtest": "node scripts/imgtest.mjs",
+    "imgcoverage": "node scripts/imgcoverage.mjs",
+    "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs && node scripts/imgtest.mjs"
   },
   "keywords": [
     "pwa",
