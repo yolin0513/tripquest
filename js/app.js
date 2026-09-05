@@ -204,27 +204,65 @@ function canAutoUpdate() {
 }
 
 function setupUpdates(reg) {
-  let applying = false;      // 只有「我們主動要換版」才重載
+  let applying = false;      // 使用者（或自動）已經要求換版
   let reloading = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // 第一次安裝接手時也會觸發，那時候沒什麼好換的，不要重載
-    if (!applying || reloading) return;
+  let firstControl = !navigator.serviceWorker.controller;   // 這一頁一開始沒有 SW 在控制
+
+  const reload = () => {
+    if (reloading) return;
     reloading = true;
     location.reload();
+  };
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // 第一次安裝接手：沒有舊程式的問題，不用重載
+    if (firstControl) { firstControl = false; return; }
+    // 到這裡代表控制權換成新版 SW 了。可能是我們自己按的，**也可能是別的分頁按的**
+    // ——後者最容易出事：這一頁會變成「舊的 JS ＋ 新的 SW」，而 controllerchange
+    // 只會來這一次，不重載就永遠停在舊版，而且之後按「點一下更新」也不會有反應
+    // （已經沒有 waiting 的 SW 可以叫了）。
+    if (applying || canAutoUpdate()) { reload(); return; }
+    showUpdateBar(() => applyNow(null));
   });
 
-  const apply = (worker) => {
+  // 按下更新之後一定要有結果：先好好講，講不聽就硬來
+  function applyNow(worker) {
     applying = true;
-    try { worker.postMessage('SKIP_WAITING'); } catch { /* noop */ }
-  };
+    const w = worker && worker.state === 'installed' ? worker : reg.waiting;
+    if (!w) { reload(); return; }         // 沒有等待中的版本 → 直接重載就會拿到新的
+    try { w.postMessage('SKIP_WAITING'); } catch { /* noop */ }
+
+    // 2.5 秒還沒換好 → 再推一次
+    setTimeout(async () => {
+      if (reloading) return;
+      try {
+        const r = await navigator.serviceWorker.getRegistration();
+        if (r && r.waiting) r.waiting.postMessage('SKIP_WAITING');
+      } catch { /* noop */ }
+
+      // 再 1.5 秒還是不行 → 最後手段：解除註冊後重載，一定拿得到新版。
+      // 只在有網路時才解除註冊 —— 沒網路又沒 SW 的話，App 會整個打不開。
+      setTimeout(async () => {
+        if (reloading) return;
+        if (navigator.onLine) {
+          try {
+            const r = await navigator.serviceWorker.getRegistration();
+            if (r) await r.unregister();
+          } catch { /* noop */ }
+        }
+        reload();
+      }, 1500);
+    }, 2500);
+  }
 
   const ready = (worker) => {
     if (canAutoUpdate()) {
       try { sessionStorage.setItem(AUTO_KEY, '1'); } catch { /* noop */ }
-      apply(worker);
+      applying = true;
+      applyNow(worker);
       return;
     }
-    showUpdateBar(() => apply(worker));
+    showUpdateBar(() => applyNow(worker));
   };
 
   if (reg.waiting) ready(reg.waiting);
@@ -244,13 +282,21 @@ function setupUpdates(reg) {
 
 function showUpdateBar(onApply) {
   if (document.getElementById('updateBar')) return;
-  const bar = h('div', { id: 'updateBar', class: 'update-bar' },
-    h('span', { class: 'update-text' }, '有新版本'),
-    h('button', {
-      class: 'update-go',
-      onclick: () => { bar.remove(); toast('更新中，馬上好…'); onApply(); },
-    }, '點一下更新'),
-    h('button', { class: 'update-later', 'aria-label': '稍後再說', onclick: () => bar.remove() }, '✕'),
-  );
+  const text = h('span', { class: 'update-text' }, '有新版本');
+  const go = h('button', { class: 'update-go' }, '點一下更新');
+  const later = h('button', { class: 'update-later', 'aria-label': '稍後再說', onclick: () => bar.remove() }, '✕');
+  const bar = h('div', { id: 'updateBar', class: 'update-bar' }, text, go, later);
+
+  go.addEventListener('click', () => {
+    // 按下去要馬上看得出「有在做事」。不要把整條收掉 —— 收掉會像沒反應，
+    // 使用者就會開始亂按或乾脆去滑掉 App。
+    if (bar.dataset.busy) return;
+    bar.dataset.busy = '1';
+    text.textContent = '更新中…';
+    go.textContent = '請稍候';
+    go.disabled = true;
+    later.remove();
+    onApply();
+  });
   document.body.append(bar);
 }

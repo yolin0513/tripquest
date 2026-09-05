@@ -20,6 +20,7 @@ const fail = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 
 // 伺服器：可以切換「版本」，並且像 GitHub Pages 一樣送 max-age=600
 let VERSION = 'A';
+let STUBBORN = false;
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg' };
 const server = http.createServer(async (req, res) => {
   let rel = decodeURIComponent(req.url.split('?')[0]);
@@ -28,7 +29,12 @@ const server = http.createServer(async (req, res) => {
   try {
     let buf = await readFile(file);
     // 換版時改兩個檔：sw.js 的 VERSION 與一個看得出來的標記
-    if (rel === '/sw.js') buf = Buffer.from(String(buf).replace(/tripquest-v[\d.]+/, 'tripquest-vTEST' + VERSION));
+    if (rel === '/sw.js') {
+      let t = String(buf).replace(/tripquest-v[\d.]+/, 'tripquest-vTEST' + VERSION);
+      // STUBBORN：模擬「叫不動」的 SW（不理會 SKIP_WAITING），用來驗證逾時保護
+      if (STUBBORN) t = t.replace(/if \(d === 'SKIP_WAITING'[^\n]*\n/, '\n');
+      buf = Buffer.from(t);
+    }
     if (rel === '/js/app.js') buf = Buffer.from(String(buf) + `\nwindow.__BUILD = '${VERSION}';\n`);
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(rel)] || 'application/octet-stream',
@@ -168,6 +174,94 @@ try {
   });
   if (cached === true) ok('預存的是最新的 JS（cache:reload 生效，不會存到 HTTP 快取裡的舊檔）');
   else fail('預存到舊檔了：' + cached);
+
+  // ================= 多分頁：別的分頁先換好，這一頁不能卡住 =================
+  // 使用者實際踩到的就是這個：另一個分頁（或剛開啟、閒著的那個）自動套用了更新，
+  // controllerchange 在他按下按鈕**之前**就發生了。舊寫法只在 applying 時才重載，
+  // 於是這一頁變成「舊 JS ＋ 新 SW」，之後按更新也永遠不會有反應。
+  VERSION = 'D';
+  const tabA = await browser.newPage();
+  await tabA.setViewport({ width: 390, height: 844 });
+  tabA.on('pageerror', (e) => console.log('  [tabA]', e.message));
+  await tabA.goto(BASE, { waitUntil: 'networkidle0' });
+  await tabA.waitForSelector('.hero');
+  await tabA.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+  // tabA 假裝「正在用」：不會自動更新，只會出現提示
+  await tabA.evaluate(() => {
+    try { sessionStorage.setItem('tripquest.autoUpdated', '1'); } catch {}
+    window.dispatchEvent(new Event('pointerdown'));
+  });
+
+  VERSION = 'E';
+  const tabB = await browser.newPage();      // 全新分頁、閒著 → 會自動套用
+  await tabB.setViewport({ width: 390, height: 844 });
+  await tabB.goto(BASE, { waitUntil: 'networkidle0' });
+  await tabB.waitForSelector('.hero');
+  await sleep(5000);
+
+  const tabBBuild = await tabB.evaluate(() => window.__BUILD).catch(() => '?');
+  if (tabBBuild === 'E') ok('閒著的分頁自動換好了');
+  else fail('閒著的分頁沒換：' + tabBBuild);
+
+  await sleep(3000);
+  const tabAAfter = await tabA.evaluate(() => ({
+    build: window.__BUILD, bar: !!document.getElementById('updateBar'),
+  })).catch(() => ({ build: 'E', bar: false }));
+  if (tabAAfter.build === 'E' || tabAAfter.bar) {
+    ok('別的分頁換好之後，這一頁' + (tabAAfter.build === 'E' ? '也跟著換好了' : '出現了更新提示') + '（不會卡在舊版又按不動）');
+  } else fail('這一頁卡住了：' + JSON.stringify(tabAAfter));
+
+  if (tabAAfter.bar) {
+    await tabA.evaluate(() => document.querySelector('#updateBar .update-go').click());
+    // 這條路沒有 waiting 的 SW（別的分頁已經啟用了）→ 直接重載，快到來不及顯示文字，
+    // 那是最好的結果。進行中回饋在下面「叫不動的 SW」那段驗（那裡才真的有等待時間）。
+    const busy = await tabA.evaluate(() => document.getElementById('updateBar')?.textContent || '(已重載)').catch(() => '(已重載)');
+    if (/更新中|請稍候|已重載/.test(busy) || busy === '') ok('按下去不是沒反應（' + (busy || '立刻重載') + '）');
+    else fail('按下去沒有進行中的回饋：' + busy);
+    await tabA.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 }).catch(() => {});
+    await tabA.waitForSelector('.hero');
+    await sleep(600);
+    const done = await tabA.evaluate(() => window.__BUILD);
+    if (done === 'E') ok('按一下之後真的換成新版');
+    else fail('按了還是舊版：' + done);
+  }
+  await tabA.close(); await tabB.close();
+
+  // ================= 逾時保護：SW 叫不動時也要能完成 =================
+  STUBBORN = true;
+  VERSION = 'F';
+  const tabC = await browser.newPage();
+  await tabC.setViewport({ width: 390, height: 844 });
+  await tabC.goto(BASE, { waitUntil: 'networkidle0' });
+  await tabC.waitForSelector('.hero');
+  await tabC.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+  await tabC.evaluate(() => {
+    try { sessionStorage.setItem('tripquest.autoUpdated', '1'); } catch {}
+    window.dispatchEvent(new Event('pointerdown'));
+  });
+  VERSION = 'G';
+  await tabC.evaluate(() => { navigator.serviceWorker.getRegistration().then((r) => r && r.update()); });
+  await tabC.waitForSelector('#updateBar', { timeout: 20000 });
+  const t0 = Date.now();
+  await tabC.evaluate(() => document.querySelector('#updateBar .update-go').click());
+  await sleep(500);
+  const busyC = await tabC.evaluate(() => {
+    const b = document.getElementById('updateBar');
+    return b ? { text: b.textContent, disabled: !!b.querySelector('.update-go')?.disabled } : null;
+  }).catch(() => null);
+  if (busyC && /更新中/.test(busyC.text) && busyC.disabled) ok('等待期間按鈕顯示「' + busyC.text.replace('更新中…', '更新中… / ') + '」且不能重複按');
+  else fail('等待期間沒有進行中的回饋：' + JSON.stringify(busyC));
+  await tabC.waitForNavigation({ waitUntil: 'networkidle0', timeout: 25000 }).catch(() => {});
+  await tabC.waitForSelector('.hero');
+  await sleep(800);
+  const spent = Date.now() - t0;
+  const stub = await tabC.evaluate(() => window.__BUILD);
+  if (stub === 'G') ok('SW 叫不動時也會完成更新（逾時保護，' + (spent / 1000).toFixed(1) + ' 秒）');
+  else fail('叫不動的 SW 讓更新卡住了：' + stub + '（等了 ' + spent + 'ms）');
+  if (spent < 12000) ok('不會讓使用者無限等待');
+  else fail('等太久：' + spent + 'ms');
+  await tabC.close();
+  STUBBORN = false;
 
   console.log('\n更新流程測試結束');
 } catch (e) {
