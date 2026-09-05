@@ -193,29 +193,45 @@ function tripEnded(t) {
 //   3. 今天那一列本來就看得到就不動
 //   4. 只捲到「第 N 天」的標題列，不捲進任務深處，他才知道自己在哪一天
 //   5. 設定可以整個關掉
+// 捲動目標一律是「那一天的標題列」——使用者要先知道自己在第幾天，再看到那一站。
+// 有指定「現在這一站」就用它所屬的那一天（那天會展開、而且只有那一站是展開的，
+// 所以捲到天的標題列就看得到它）；沒指定就用今天。
+// 例外：如果捲到天的標題列之後，那一站仍然落在畫面外（那天景點很多時會這樣），
+// 就改捲到那一站，因為「看到我要去的那一站」才是真正的目的。
 function scrollToToday(container, todayDay, hereId) {
   if (!hereId && !(todayDay > 0)) return;
   if (navRestoredScroll()) return;
   if (getPrefs().autoScroll === false) return;
 
-  // 有指定「現在這一站」就捲到那一站；否則捲到今天那一天的標題列
-  let head = null;
-  if (hereId) {
-    const sp = container.querySelector(`.qcollapse[data-spot="${CSS.escape(hereId)}"]`);
-    head = sp && (sp.querySelector('.qc-head') || sp);
-  }
-  if (!head) {
-    const sec = container.querySelector(`.daycollapse[data-day="${todayDay}"]`);
-    head = sec && (sec.querySelector('.dc-head') || sec);
-  }
+  const spotSec = hereId ? container.querySelector(`.qcollapse[data-spot="${CSS.escape(hereId)}"]`) : null;
+  const day = hereId ? (store.getRaw(hereId)?.day || 1) : todayDay;
+  const daySec = container.querySelector(`.daycollapse[data-day="${day}"]`);
+  const dayHead = daySec && (daySec.querySelector('.dc-head') || daySec);
+  const spotHead = spotSec && (spotSec.querySelector('.qc-head') || spotSec);
+  const head = dayHead || spotHead;
   if (!head) return;
 
   const topH = document.getElementById('topbar')?.offsetHeight || 60;
   const tabH = document.getElementById('tabbar')?.offsetHeight || 76;
+  const bottom = window.innerHeight - tabH;
   const r = head.getBoundingClientRect();
-  if (r.top >= topH && r.bottom <= window.innerHeight - tabH) return;   // 本來就看得到
 
-  const target = Math.max(0, window.scrollY + r.top - topH - 10);
+  // 本來就看得到（連那一站也看得到）就別動
+  const spotVisibleNow = !spotHead || (() => {
+    const q = spotHead.getBoundingClientRect();
+    return q.top >= topH && q.bottom <= bottom;
+  })();
+  if (r.top >= topH && r.bottom <= bottom && spotVisibleNow) return;
+
+  let target = Math.max(0, window.scrollY + r.top - topH - 10);
+
+  // 捲到天的標題列之後，那一站還是看不到 → 改捲到那一站
+  if (spotHead && head !== spotHead) {
+    const q = spotHead.getBoundingClientRect();
+    const spotTopAfter = q.top - (target - window.scrollY);
+    if (spotTopAfter > bottom - 60) target = Math.max(0, window.scrollY + q.top - topH - 10);
+  }
+
   if (Math.abs(target - window.scrollY) < 24) return;
   smoothScrollTo(target);
 }
@@ -275,33 +291,9 @@ function nextStationButton(tripId, t, allDone) {
 
   return h('div', { class: 'nextstn', style: 'margin-top:8px' },
     nav,
-    hereByLine(tripId),
     h('button', { class: 'nextstn-switch', onclick: () => pickHereSpot(tripId) },
       manual ? '不是這一站？換一站' : '換一站'),
   );
-}
-
-// 「○○ 把大家帶到這裡」—— 這是同步的，別人改了畫面會跟著動，
-// 不講清楚是誰改的，使用者會覺得畫面莫名其妙自己跳。
-function hereByLine(tripId) {
-  const rec = store.hereRecord(tripId);
-  if (!rec || !store.getHereSpot(tripId)) return null;
-  const who = (rec.byMemberId && store.getRaw(rec.byMemberId)?.displayName) || rec.byName || '';
-  const me = activeMemberId(tripId);
-  const mine = rec.byMemberId && me && rec.byMemberId === me;
-  const when = agoLabel(rec.updatedAt || rec.createdAt);
-  const text = mine ? '你設為現在這一站' : (who ? `${who} 把大家帶到這裡` : '有人把大家帶到這裡');
-  return h('div', { class: 'nextstn-by' }, when ? `${text} · ${when}` : text);
-}
-
-function agoLabel(ts) {
-  if (!ts) return '';
-  const m = Math.floor((Date.now() - ts) / 60000);
-  if (m < 1) return '剛剛';
-  if (m < 60) return `${m} 分鐘前`;
-  const hr = Math.floor(m / 60);
-  if (hr < 24) return `${hr} 小時前`;
-  return `${Math.floor(hr / 24)} 天前`;
 }
 
 // 選「現在在哪一站」。也提供「自動」把手動狀態關掉，不會被困住。
@@ -327,17 +319,12 @@ async function pickHereSpot(tripId) {
     for (const [day, list] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
       body.append(h('div', { class: 'section-label', style: 'margin:14px 2px 8px' }, `第 ${day} 天`));
       for (const s of list) {
-        const p = store.spotProgress(s.id);
-        const done = p.total > 0 && p.done === p.total;
         body.append(h('button', {
           class: 'here-pick' + (manual === s.id ? ' on' : ''),
           onclick: () => close(s.id),
         },
           h('span', { class: 'here-pick-emoji' }, s.emoji || '📍'),
-          h('span', { class: 'here-pick-main' },
-            h('span', { class: 'here-pick-name' }, s.name),
-            h('span', { class: 'muted sm' }, p.total ? (done ? '✓ 已完成' : `完成 ${p.done}/${p.total}`) : '還沒有任務'),
-          ),
+          h('span', { class: 'here-pick-name' }, s.name),
           manual === s.id ? h('span', { class: 'here-pick-tick' }, '✓') : null,
         ));
       }
@@ -369,7 +356,9 @@ async function pickHereSpot(tripId) {
 
   if (res === 'auto') { await store.clearHereSpot(tripId, actor); toast('改成自動照順序'); }
   else { await store.setHereSpot(tripId, res, actor); toast(`現在這一站：${store.get(res)?.name || ''}`); }
-  trip(tripId, { fresh: true });
+  // 不傳 fresh：選完通常是接著要點導航，畫面這時候跳走反而礙事。
+  // 自動捲動留到「下一次重新打開這趟行程」再做。
+  trip(tripId);
 }
 
 // 今天是這趟的第幾天：0 = 還沒開始、-1 = 已結束、null = 沒設日期、正整數 = 進行中

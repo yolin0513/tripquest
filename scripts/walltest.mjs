@@ -85,15 +85,43 @@ try {
   // 手動指定第 3 個景點（太平山）—— 明明還沒輪到，但人已經先過去了
   await page.evaluate(() => document.querySelector('.nextstn-switch').click());
   await page.waitForSelector('.here-pick');
+  await sleep(450);                       // 等 slideup 動畫跑完再量位置
   const pickCount = await page.evaluate(() => document.querySelectorAll('.here-pick').length);
   if (pickCount === 3) ok(`「換一站」列出全部 ${pickCount} 個景點`);
   else fail('選單裡的景點數不對：' + pickCount);
   const tooSmall = await page.evaluate(() => [...document.querySelectorAll('.here-pick')].filter((b) => b.getBoundingClientRect().height < 44).length);
   if (tooSmall === 0) ok('選單的按鈕觸控區 ≥ 44px');
   else fail(`${tooSmall} 顆太小`);
+  const noCounts = await page.evaluate(() => [...document.querySelectorAll('.here-pick')]
+    .every((b) => !/完成|任務|\d+\s*\/\s*\d+/.test(b.textContent)));
+  if (noCounts) ok('選單裡不顯示任務數量，畫面乾淨');
+  else fail('選單裡還有任務數量');
 
+  // 內容比螢幕高時要捲得動（原本卡片沒有 max-height，會往上長到螢幕外、怎麼滑都沒反應）
+  const scrollOK = await page.evaluate(() => {
+    const card = document.querySelector('.modal-card');
+    const bodyEl = card.querySelector('.modal-body');
+    const picks = [...document.querySelectorAll('.here-pick')];
+    const fits = card.getBoundingClientRect().top >= -1 && card.getBoundingClientRect().bottom <= window.innerHeight + 1;
+    // 每個選項都要能靠捲動看到
+    const reachable = picks.every((el) => {
+      el.scrollIntoView({ block: 'nearest' });
+      const r = el.getBoundingClientRect(), c = card.getBoundingClientRect();
+      return r.top >= c.top - 1 && r.bottom <= c.bottom + 1;
+    });
+    return { fits, reachable, scrollable: bodyEl.scrollHeight > bodyEl.clientHeight + 1 };
+  });
+  if (scrollOK.fits) ok('對話框不會超出螢幕');
+  else fail('對話框超出螢幕');
+  if (scrollOK.reachable) ok('選單裡每個景點都能捲到、點得到');
+  else fail('有選項捲不到');
+
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => [...document.querySelectorAll('.here-pick')].find((b) => b.textContent.includes('太平山')).click());
-  await sleep(700);
+  await sleep(1600);
+  const afterPickScroll = await page.evaluate(() => Math.round(window.scrollY));
+  if (afterPickScroll === 0) ok('選完下一站的當下不會自動捲走（接著要點導航）');
+  else fail('選完就自己捲走了：' + afterPickScroll);
   const manual = await page.evaluate(() => ({
     name: document.querySelector('.nextstn-name')?.textContent || '',
     hereTag: !!document.querySelector('.qcollapse.is-here .qc-here'),
@@ -122,8 +150,25 @@ try {
   if (again.name.includes('太平山') && again.openSpots.length === 1 && again.openSpots[0] === '太平山') {
     ok('下次打開這趟行程：仍然預設展開指定的那一站');
   } else fail('重開後沒維持：' + JSON.stringify(again));
-  if (again.scrollY > 100) ok(`自動捲到指定的那一站（捲了 ${again.scrollY}px）`);
-  else fail('沒有捲到指定的那一站：' + again.scrollY);
+  if (again.scrollY > 100) ok(`重新打開時自動捲動（捲了 ${again.scrollY}px）`);
+  else fail('重新打開沒有自動捲動：' + again.scrollY);
+  // 捲動目標應該是「那一站所屬的那一天」的標題列，而且那一站要看得到
+  const target = await page.evaluate(() => {
+    const topH = document.getElementById('topbar').offsetHeight;
+    const tabH = document.getElementById('tabbar').offsetHeight;
+    const dayHead = document.querySelector('.daycollapse[data-day="2"] .dc-head');
+    const spotHead = [...document.querySelectorAll('.qcollapse')]
+      .find((e) => e.querySelector('.qc-name')?.firstChild?.textContent === '太平山')?.querySelector('.qc-head');
+    const d = dayHead.getBoundingClientRect(), q = spotHead.getBoundingClientRect();
+    return {
+      dayTop: Math.round(d.top), topH: Math.round(topH),
+      spotVisible: q.top >= topH && q.bottom <= window.innerHeight - tabH,
+    };
+  });
+  if (target.dayTop >= target.topH - 4 && target.dayTop <= target.topH + 40) ok(`捲到「第 2 天」的標題列（距頂列 ${target.dayTop - target.topH}px）`);
+  else fail(`捲動目標不是那一天的標題列：${JSON.stringify(target)}`);
+  if (target.spotVisible) ok('那一站也在畫面內，打開行程就直接看到要去的那一站');
+  else fail('捲完之後那一站還是看不到');
 
   // 完成之後要自動放手，不能把人困在手動狀態
   await page.evaluate(async (s) => {
@@ -287,14 +332,14 @@ try {
   if (onB.name === '阿明') ok(`B 看得到是誰改的（${onB.name}）`);
   else fail('沒帶設定者：' + JSON.stringify(onB));
 
-  // B 的畫面上要顯示「阿明 把大家帶到這裡」
+  // 是誰改的仍然存在記錄裡（之後要用得到），但畫面上不顯示
   await B.goto('about:blank');
   await B.goto(`http://localhost:${WEB}/#/trip/${shared.tid}`, { waitUntil: 'networkidle0' });
   await B.waitForSelector('.nextstn');
   await sleep(600);
-  const byLine = await B.evaluate(() => document.querySelector('.nextstn-by')?.textContent || '');
-  if (/阿明.*把大家帶到這裡/.test(byLine)) ok(`B 的畫面顯示「${byLine}」`);
-  else fail('沒顯示是誰改的：' + byLine);
+  const byLine = await B.evaluate(() => document.body.textContent.includes('把大家帶到這裡'));
+  if (!byLine) ok('畫面上不再顯示「○○ 把大家帶到這裡」');
+  else fail('還在顯示是誰改的');
 
   // B 改成第二站 → 後寫入者為準，A 也要跟著變
   await B.evaluate(async (m) => {
