@@ -74,6 +74,38 @@ export function modal({ title, body, actions }) {
   });
 }
 
+// 從一串選項裡挑一個。選項做成大按鈕（長輩點得到），內容多的時候靠 .modal-body 捲動。
+// options: [{ value, label, sub?, tag? }]，回傳選到的 value；取消回傳 undefined。
+export function chooseFrom({ title, hint, options, value }) {
+  const root = document.getElementById('modalRoot');
+  return new Promise((resolve) => {
+    const overlay = h('div', { class: 'modal-overlay', onclick: (e) => { if (e.target === overlay) close(undefined); } });
+    const close = (v) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') close(undefined); };
+
+    const body = h('div', {}, hint ? h('p', { class: 'sm muted', style: 'margin:0 0 12px' }, hint) : null);
+    for (const o of options) {
+      const on = o.value === value;
+      body.append(h('button', { class: 'pick-row' + (on ? ' on' : ''), onclick: () => close(o.value) },
+        h('span', { class: 'pick-row-main' },
+          h('span', { class: 'pick-row-label' }, o.label),
+          o.sub ? h('span', { class: 'muted sm' }, o.sub) : null,
+        ),
+        o.tag ? h('span', { class: 'pick-row-tag' }, o.tag) : null,
+        on ? h('span', { class: 'pick-row-tick' }, '✓') : null,
+      ));
+    }
+
+    overlay.append(h('div', { class: 'modal-card', role: 'dialog', 'aria-modal': 'true' },
+      h('h2', { class: 'modal-title' }, title),
+      h('div', { class: 'modal-body' }, body),
+      h('div', { class: 'modal-actions' }, h('button', { class: 'btn', onclick: () => close(undefined) }, '取消')),
+    ));
+    root.append(overlay);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 export async function confirmDialog(message, { danger = false, okLabel = '確定', cancelLabel = '取消' } = {}) {
   return modal({
     body: h('p', {}, message),
