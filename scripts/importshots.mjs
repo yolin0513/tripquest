@@ -66,8 +66,13 @@ try {
   await sleep(900);                       // 等策展地點庫比對完，「✓ 認得」才會出現
   await shot('confirm-top');
 
-  await page.evaluate(() => { document.querySelector('.modal-body').scrollTop = 1200; });
-  await shot('confirm-bottom');
+  // 用比例捲，不要寫死像素 —— 內容不夠長時寫死的數字會直接捲到底，
+  // 拍出跟下一張一模一樣的圖
+  await page.evaluate(() => {
+    const b = document.querySelector('.modal-body');
+    b.scrollTop = Math.round((b.scrollHeight - b.clientHeight) * 0.45);
+  });
+  await shot('confirm-middle');
 
   await page.evaluate(() => { document.querySelector('.modal-body').scrollTop = 99999; });
   await shot('confirm-unreadable');
