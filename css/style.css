@@ -361,6 +361,16 @@ button.card { appearance: none; font: inherit; }
 .map-btn { font-size: 1rem; }
 
 /* ---------- 大任務卡（長輩主視覺） ---------- */
+/* 卡片本身不是按鈕了：上半部（圖＋文字）點了看照片，下半部是加照片的兩顆大按鈕。
+   加照片的按鈕必須直接在卡片上 —— 藏在任何一層裡面長輩就找不到。 */
+.qbig-open {
+  appearance: none; display: block; width: 100%; padding: 0; margin: 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.qbig-open:active { opacity: 0.88; }
+.qbig-actions { padding: 0 14px 14px; }
+.qbig-actions .addphoto-row { margin-top: 0; }
+
 .qbig {
   position: relative;
   display: block;
@@ -369,13 +379,12 @@ button.card { appearance: none; font: inherit; }
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-elev);
-  cursor: pointer;
   text-align: left;
   color: inherit;
   font: inherit;
   margin-bottom: 14px;
 }
-.qbig:active { transform: scale(0.99); }
+.qbig-body { padding-bottom: 10px; }
 .qbig-photo {
   height: 168px;
   background: var(--bg-elev-2) center/cover no-repeat;
@@ -813,11 +822,8 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qc-prog.part { color: var(--accent); }
 .qc-prog.done { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
 .qc-chev { flex: none; color: var(--muted); font-size: 0.9rem; width: 1.2em; text-align: center; }
-.qc-edit {
-  appearance: none; border: 0; border-left: 1px solid var(--line); background: transparent;
-  color: var(--muted); font: inherit; font-weight: 700; padding: 0 16px; cursor: pointer; flex: none;
-}
-.qc-edit:active { background: var(--bg-elev-2); }
+/* .qc-edit 已移除：那顆「編輯」會把長輩帶到景點頁，而拍照按鈕在那裡，
+   於是「編輯」看起來就成了加照片的入口。景點管理現在集中在「調整每天的行程」。 */
 .qc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.28s ease; }
 .qcollapse.open .qc-body { grid-template-rows: 1fr; }
 .qc-inner { overflow: hidden; min-height: 0; padding: 4px 12px 2px; }

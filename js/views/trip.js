@@ -7,7 +7,8 @@ import { uuid, hashHue } from '../ids.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
-import { enrichTrip, needsEnrich, refImageFor, creditLine } from '../enrich.js';
+import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
+import { addPhotoButtons } from '../addphoto.js';
 import { activeMemberId, ensureMember } from '../claim.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
@@ -153,7 +154,9 @@ export default async function trip(tripId, { fresh = false } = {}) {
 
   // 背景補示意圖。抓好一張就把那一張換上去，不整頁重畫 —— 大行程要抓一分鐘，
   // 整頁重畫會讓使用者看到一半的畫面突然跳掉。
-  if (t.allowWiki !== false && needsEnrich(tripId)) startEnrich(tripId);
+  // 一律呼叫：enrichTrip 自己會判斷有沒有事要做，而且它還要修「同步過來但本機沒圖」的情況
+  // （那個從記錄看不出來，得去 IndexedDB 查有沒有 blob）。
+  if (t.allowWiki !== false) startEnrich(tripId);
 
   // 有開 AI → 背景自動產生 / 更新行程表與任務文案（有快取就秒回、沒開就不會進來）
   if (t.aiEnabled && spots.length) {
@@ -420,10 +423,9 @@ function spotSection(s, tripId) {
         }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
         chev,
       ),
-      h('button', {
-        class: 'qc-edit', 'aria-label': '編輯景點',
-        onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`),
-      }, '編輯'),
+      // 這裡本來有一顆「編輯」，但它會把長輩帶到景點頁 —— 而拍照按鈕在那裡，
+      // 於是「編輯」看起來就成了加照片的入口。拍照按鈕現在直接在任務卡上，
+      // 景點的改名 / 刪除 / 改任務都集中到「調整每天的行程」。
     ),
     h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' },
       spotMapButton(s),
@@ -479,17 +481,19 @@ export function paintRef(el, pick, themeKey, seed) {
     el.style.backgroundImage = `url("${themePlaceholder(themeKey, seed)}")`;
     el.classList.add('is-placeholder');
     el.classList.remove('has-img');
+    el.querySelector('.img-credit')?.remove();     // 沒有圖就不能留著別人的授權標示
   };
   if (!pick) { placeholder(); return; }
   el.classList.add('has-img');
   blobURL(pick.hash).then((u) => {
-    if (u) el.style.backgroundImage = `url("${u}")`;
-    else placeholder();
-  }).catch(placeholder);
-  if (!pick.own) {
+    if (!u) { placeholder(); return; }             // 同步過來但本機還沒抓到圖
+    el.style.backgroundImage = `url("${u}")`;
+    // 出處等圖真的出現才標。先標的話，圖載不出來時就會變成
+    // 「大大的 emoji ＋ 別人的姓名授權」，看起來像那個 emoji 是他的作品。
+    if (pick.own) return;
     const line = creditLine(pick.attr, pick.generic);
-    if (line) el.append(h('span', { class: 'img-credit' }, line));
-  }
+    if (line && !el.querySelector('.img-credit')) el.append(h('span', { class: 'img-credit' }, line));
+  }).catch(placeholder);
 }
 
 function spotMapButton(s) {
@@ -514,20 +518,27 @@ function questBigCard(q, spot, themeKey) {
   // 自己拍過了就顯示自己的照片；還沒拍才給參考圖
   paintRef(photo, refImageFor(q, spot, subs[0] && (subs[0].thumbHash || subs[0].photoHash)), themeKey, spot.id);
 
-  return h('button', {
-    class: 'qbig' + (done ? ' done' : ''),
-    onclick: () => navigate(`/quest/${q.id}`),
-  },
-    photo,
-    h('div', { class: 'qbig-body' },
-      h('div', { class: 'qbig-title' }, q.title,
-        q.aiQuest ? h('span', { class: 'ai-mark', title: '這個任務由 AI 出題' }, ' ✨') : null),
-      q.hint ? h('div', { class: 'qbig-hint' }, q.hint) : null,
-      h('div', { class: 'qbig-foot' },
-        h('span', { class: 'tag' }, km.label),
-        h('span', { class: 'qbig-status' }, done ? `✓ 完成（${subs.length} 張）` : '還沒拍'),
-        likeCount ? h('span', { class: 'qbig-likes' }, '❤️ ' + likeCount) : null,
+  // 卡片本身不再是一顆大按鈕 —— 加照片的兩顆按鈕要直接放在卡片上，
+  // 長輩一眼就看得到、按一下就開始，不用先點進任何地方。
+  return h('div', { class: 'qbig' + (done ? ' done' : '') },
+    h('button', {
+      class: 'qbig-open', onclick: () => navigate(`/quest/${q.id}`),
+      'aria-label': `看「${q.title}」的照片`,
+    },
+      photo,
+      h('div', { class: 'qbig-body' },
+        h('div', { class: 'qbig-title' }, q.title,
+          q.aiQuest ? h('span', { class: 'ai-mark', title: '這個任務由 AI 出題' }, ' ✨') : null),
+        q.hint ? h('div', { class: 'qbig-hint' }, q.hint) : null,
+        h('div', { class: 'qbig-foot' },
+          h('span', { class: 'tag' }, km.label),
+          h('span', { class: 'qbig-status' }, done ? `✓ 完成（${subs.length} 張）` : '還沒拍'),
+          likeCount ? h('span', { class: 'qbig-likes' }, '❤️ ' + likeCount) : null,
+        ),
       ),
+    ),
+    h('div', { class: 'qbig-actions' },
+      addPhotoButtons(q.tripId, q.id, { compact: true, onDone: () => trip(q.tripId) }),
     ),
   );
 }

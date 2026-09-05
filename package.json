@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "tripquest",
   "version": "1.0.0",
   "description": "手機優先的 PWA：一群人在出遊時共建行程，系統為每個景點產出代表性的建築 / 美食 / 事物作為拍照任務，像解任務一樣蒐集照片，全部解鎖後把照片做成回憶影片。純前端、免註冊、離線可用、可部署到 GitHub Pages。",
@@ -19,6 +19,7 @@
     "scrolltest": "node scripts/scrolltest.mjs",
     "imgtest": "node scripts/imgtest.mjs",
     "imgcoverage": "node scripts/imgcoverage.mjs",
+    "imgsample": "node scripts/imgsample.mjs",
     "test": "node scripts/validate-places.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs && node scripts/imgtest.mjs"
   },
   "keywords": [
