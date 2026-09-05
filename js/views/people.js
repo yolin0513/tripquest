@@ -10,18 +10,19 @@ import { openTagger } from '../phototag.js';
 
 const REACTIONS = ['❤️', '👍', '😍', '👏'];
 
-// 排序方式。預設「最新的在前」：旅途中打開照片牆，最常見的是想看剛剛拍了什麼。
+// 只有新舊兩種。照片本來就是照時間拍的，時間順序自然就對應行程順序，
+// 再多給「照行程」「照人分」只是讓長輩多一個要想的東西。
+// 預設「最新的在前」：旅途中打開照片牆，最常見的是想看剛剛拍了什麼。
 const SORTS = [
-  { id: 'new', label: '🕘 最新的在前' },
-  { id: 'old', label: '🕗 最舊的在前' },
-  { id: 'spot', label: '📍 照行程順序' },
-  { id: 'person', label: '👥 照人分' },
+  { id: 'new', label: '🕘 最新在前' },
+  { id: 'old', label: '🕗 最舊在前' },
 ];
 const VIEW_KEY = (tripId) => 'tripquest.wall.' + tripId;
 
 function loadView(tripId) {
   try {
     const v = JSON.parse(localStorage.getItem(VIEW_KEY(tripId)) || '{}');
+    // 舊的 'spot' / 'person' 會落回 'new'
     return { sort: SORTS.some((s) => s.id === v.sort) ? v.sort : 'new', spot: v.spot || '', untagged: !!v.untagged };
   } catch { return { sort: 'new', spot: '', untagged: false }; }
 }
@@ -30,9 +31,7 @@ function saveView(tripId, v) {
 }
 
 // 排序與篩選都在這裡，畫面只負責顯示
-function arrange(all, view, tripId) {
-  const spotOrder = new Map();
-  store.spotsOf(tripId).forEach((s, i) => spotOrder.set(s.id, i));
+function arrange(all, view) {
   const spotOf = (sub) => {
     const q = store.getRaw(sub.questId);
     return q ? q.spotId : null;
@@ -43,16 +42,7 @@ function arrange(all, view, tripId) {
   if (view.untagged) list = list.filter((s) => !store.isPhotoTagged(s));
 
   const at = (s) => s.takenAt || s.createdAt || 0;
-  if (view.sort === 'old') list.sort((a, b) => at(a) - at(b));
-  else if (view.sort === 'spot') {
-    list.sort((a, b) => (spotOrder.get(spotOf(a)) ?? 999) - (spotOrder.get(spotOf(b)) ?? 999) || at(a) - at(b));
-  } else if (view.sort === 'person') {
-    const name = (s) => {
-      const id = shooterOf(s);
-      return (id && store.getRaw(id)?.displayName) || s.byDevice || '';
-    };
-    list.sort((a, b) => name(a).localeCompare(name(b), 'zh-Hant') || at(b) - at(a));
-  } else list.sort((a, b) => at(b) - at(a));           // 預設：最新的在前
+  list.sort(view.sort === 'old' ? (a, b) => at(a) - at(b) : (a, b) => at(b) - at(a));
   return { list, spotOf };
 }
 
@@ -109,13 +99,14 @@ export default async function people(tripId) {
 
   // ---------- 排序與篩選 ----------
   const view = loadView(tripId);
-  const { list: subs, spotOf } = arrange(allSubs, view, tripId);
+  const { list: subs, spotOf } = arrange(allSubs, view);
 
   // 控制項壓在一行裡（景點下拉 + 排序小圖示），讓照片本身是焦點。
   // 景點一多的時候，一整排 chips 會把畫面吃掉一大半。
   const filtered = !!(view.spot || view.untagged);
+  // 標題盡量短：頂列已經寫「照片牆」了，這裡改成給實際有用的數字
   const title = !allSubs.length ? '還沒有照片'
-    : (filtered ? `符合的照片 ${subs.length}／${allSubs.length}` : '大家拍的照片');
+    : (filtered ? `${subs.length}／${allSubs.length} 張` : `${allSubs.length} 張照片`);
 
   if (allSubs.length) {
     const apply = (patch) => { saveView(tripId, { ...view, ...patch }); people(tripId); };
@@ -143,14 +134,10 @@ export default async function people(tripId) {
       apply(got === '__untagged' ? { spot: '', untagged: true } : { spot: got, untagged: false });
     };
 
-    const openSort = async () => {
-      const got = await chooseFrom({
-        title: '照片怎麼排？',
-        options: SORTS.map((s) => ({ value: s.id, label: s.label })),
-        value: view.sort,
-      });
-      if (got !== undefined && got !== view.sort) apply({ sort: got });
-    };
+    // 只有兩種，用「按一下就換」的切換鈕比跳選單少兩下；
+    // 但按鈕上直接寫現在是哪一種，不然長輩看圖示猜不出來、按完也不知道換了什麼。
+    const sortNow = SORTS.find((x) => x.id === view.sort) || SORTS[0];
+    const toggleSort = () => apply({ sort: view.sort === 'old' ? 'new' : 'old' });
 
     page.append(h('div', { class: 'wall-bar' },
       h('span', { class: 'wall-bar-title' }, title),
@@ -159,9 +146,10 @@ export default async function people(tripId) {
         h('span', { class: 'wall-ctl-chev' }, '▾'),
       ),
       h('button', {
-        class: 'wall-ctl wall-ctl-icon' + (view.sort === 'new' ? '' : ' on'),
-        'aria-label': '排序方式', title: '排序方式', onclick: openSort,
-      }, '⇅'),
+        class: 'wall-ctl wall-ctl-sort' + (view.sort === 'new' ? '' : ' on'),
+        'aria-label': `目前是${sortNow.label}，點一下換另一種`,
+        title: '點一下換新舊順序', onclick: toggleSort,
+      }, h('span', { class: 'wall-ctl-label' }, sortNow.label)),
     ));
   } else {
     page.append(h('div', { class: 'section-label' }, title));
