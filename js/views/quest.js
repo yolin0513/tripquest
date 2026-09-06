@@ -2,8 +2,7 @@ import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, promptDialog, KIND_META } from '../ui.js';
 import { navigate } from '../router.js';
-import { blobURL } from '../photos.js';
-import { addPhotoButtons } from '../addphoto.js';
+import { subPhoto } from '../photoimg.js';
 import { openTagger } from '../phototag.js';
 import { refImageFor } from '../enrich.js';
 import { themeForSpot, loadThemes } from '../theme.js';
@@ -43,7 +42,11 @@ export default async function quest(questId) {
     done ? h('div', { class: 'section-label' }, `已完成 · ${subs.length} 張照片`) : null,
     grid,
 
-    addPhotoButtons(q.tripId, questId, { onDone: () => quest(questId) }),
+    // 這裡本來還有一組「拍照 / 從相簿選」，拿掉了 —— v1.41 之後上一層的任務列
+    // 收合狀態就有那兩顆，同一個動作在兩層各放一次只是讓畫面更長。
+    // 要補拍或換照片，回上一層那一列按就好。
+    h('p', { class: 'form-hint center' },
+      '要再拍或換照片，回上一頁在那個任務的那一列直接按 📷 就好。'),
     members.length > 1
       ? h('p', { class: 'form-hint center' }, '加完照片後，可以到「照片」那一頁標記照片裡有誰。')
       : null,
@@ -61,7 +64,6 @@ async function paintGrid(grid, questId, tripId) {
   })();
   grid.replaceChildren();
   for (const sub of subs) {
-    const url = await blobURL(sub.thumbHash || sub.photoHash);
     const tag = store.photoTag(sub);
     const shooter = tag.photographerId ? store.getRaw(tag.photographerId) : null;
     const names = tag.subjectIds.map((id) => store.getRaw(id)?.displayName).filter(Boolean);
@@ -71,10 +73,10 @@ async function paintGrid(grid, questId, tripId) {
       : (shooter?.displayName || sub.byDevice || '未指定');
     const untagged = multi && !store.isPhotoTagged(sub);
     grid.append(h('figure', { class: 'photo-cell' },
-      h('img', {
-        src: url, alt: store.photoCaption(sub) || '', loading: 'lazy',
+      h('button', {
+        class: 'photo-cell-btn',
         onclick: async () => { if (await openTagger(tripId, sub.id, subs)) quest(questId); },
-      }),
+      }, subPhoto(sub, { className: '', alt: store.photoCaption(sub) || '' })),
       untagged ? h('span', { class: 'untag-dot' }, '未標記') : null,
       likes ? h('span', { class: 'mini-likes' }, '❤️ ' + likes) : null,
       h('figcaption', {}, cap),

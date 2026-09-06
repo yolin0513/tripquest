@@ -68,7 +68,8 @@ export function openTagger(tripId, startId, listIn) {
       const spot = quest ? store.getRaw(quest.spotId) : null;
 
       const img = h('img', { class: 'tagger-photo', alt: '' });
-      blobURL(sub.photoHash).then((u) => { if (u) img.src = u; });
+      // 縮圖優先 —— 全圖是延遲同步的，只認全圖會讓標記畫面也一片空白
+      blobURL(sub.thumbHash || sub.photoHash).then((u) => { if (u) img.src = u; });
 
       const subjRow = h('div', { class: 'tagger-chips' });
       const shotRow = h('div', { class: 'tagger-chips' });

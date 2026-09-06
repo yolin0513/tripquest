@@ -20,7 +20,7 @@
     "imgtest": "node scripts/imgtest.mjs",
     "imgcoverage": "node scripts/imgcoverage.mjs",
     "imgsample": "node scripts/imgsample.mjs",
-    "test": "node scripts/validate-places.mjs && node scripts/itintest.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs && node scripts/imgtest.mjs && node scripts/walltest.mjs && node scripts/updatetest.mjs && node scripts/importtest.mjs && node scripts/installtest.mjs && node scripts/densitytest.mjs",
+    "test": "node scripts/validate-places.mjs && node scripts/itintest.mjs && node scripts/secret-leak-test.mjs && node scripts/aitest.mjs && node scripts/screenshots.mjs && node scripts/synctest.mjs && node scripts/tagtest.mjs && node scripts/scrolltest.mjs && node scripts/imgtest.mjs && node scripts/walltest.mjs && node scripts/updatetest.mjs && node scripts/importtest.mjs && node scripts/installtest.mjs && node scripts/densitytest.mjs && node scripts/photosynctest.mjs && node scripts/collapsetest.mjs",
     "walltest": "node scripts/walltest.mjs",
     "updatetest": "node scripts/updatetest.mjs",
     "itintest": "node scripts/itintest.mjs",
@@ -28,7 +28,9 @@
     "sweep": "node scripts/sweep.mjs",
     "livecheck-import": "node scripts/livecheck-import.mjs",
     "installtest": "node scripts/installtest.mjs",
-    "densitytest": "node scripts/densitytest.mjs"
+    "densitytest": "node scripts/densitytest.mjs",
+    "photosynctest": "node scripts/photosynctest.mjs",
+    "collapsetest": "node scripts/collapsetest.mjs"
   },
   "keywords": [
     "pwa",

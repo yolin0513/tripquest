@@ -107,8 +107,12 @@ try {
   if (JSON.stringify(openDays(a)) === '[2]') ok('進行中：只展開今天（第 2 天），其他天收合');
   else fail('進行中展開的天數不對：' + JSON.stringify(openDays(a)));
 
-  if (a.spots.length === 6 && a.spots.every((x) => x.open)) ok('沒完成的景點全部展開');
-  else fail('景點展開狀態不對：' + JSON.stringify(a.spots));
+  // v1.42：只展開「現在這一站」（今天第一個未完成的），不再把當天全部未完成的打開 ——
+  // 使用者實機回報「第二天的全部任務都是展開的」就是舊行為造成的
+  const openNames = a.spots.filter((x) => x.open).map((x) => x.name);
+  if (a.spots.length === 6 && openNames.length === 1 && openNames[0] === '第2天景點1') {
+    ok(`只展開今天第一個未完成的景點（${openNames[0]}），其他收合`);
+  } else fail('景點展開狀態不對：' + JSON.stringify(a.spots));
 
   // 自動捲動：今天那列本來在畫面外，應該被帶到頂列下方
   const pos = await A.page.evaluate(() => {
@@ -153,8 +157,9 @@ try {
   const undoneToday = d.spots.filter((x) => !x.done && x.name.startsWith('第2天'));
   if (doneSpot && !doneSpot.open) ok(`完成的景點預設收合（${doneSpot.name}）`);
   else fail('完成的景點沒收合：' + JSON.stringify(doneSpot));
-  if (undoneToday.length && undoneToday.every((x) => x.open)) ok('同一天還沒完成的景點仍然展開');
-  else fail('沒完成的景點沒展開：' + JSON.stringify(undoneToday));
+  const openToday = undoneToday.filter((x) => x.open);
+  if (openToday.length === 1) ok(`同一天只展開第一個還沒完成的（${openToday[0].name}），其餘收合`);
+  else fail('同一天展開的數量不對：' + JSON.stringify(undoneToday));
 
   // ================= E. 使用者手動的選擇優先 =================
   await D.page.evaluate(() => {

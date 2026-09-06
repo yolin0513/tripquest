@@ -1605,3 +1605,24 @@ textarea.field { resize: vertical; line-height: 1.6; }
   text-decoration: none;
 }
 .qc-map:active { transform: scale(0.94); }
+
+/* ---------- 投稿照片：blob 還沒到時的狀態 ---------- */
+/* 之前 blobURL() 抓不到就回空字串，<img src=""> 在畫面上是 0px ——
+   使用者看到的是「照片消失了」，連載入中都沒有。 */
+.ph { display: block; width: 100%; }
+.ph-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 180px; padding: 24px 16px;
+  background: var(--bg-elev-2); border-radius: 12px;
+  text-align: center;
+}
+.ph-state-t { font-weight: 700; font-size: 1rem; }
+.ph-state-s { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+.ph-retry { min-height: 44px; padding: 10px 18px; background: var(--bg-elev); border: 1px solid var(--line); color: var(--text); }
+.photo-cell-btn {
+  appearance: none; border: 0; padding: 0; background: none; width: 100%;
+  display: block; cursor: pointer;
+}
+.photo-cell-btn .ph-state { min-height: 0; aspect-ratio: 1; padding: 12px; gap: 6px; }
+.photo-cell-btn .ph-state-t { font-size: 0.9rem; }
+.photo-cell-btn .ph-state-s { font-size: 0.75rem; }

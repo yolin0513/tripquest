@@ -34,6 +34,27 @@ function currentSpot(tripId) {
   return nextIncompleteSpot(tripId);
 }
 
+// 畫面要展開哪一個景點。跟 currentSpot 的差別：**以「今天」為錨**。
+// 「帶我去下一站」指向下一個未完成的（不管哪一天）是對的；但展開不一樣 ——
+// 人在第 2 天，卻因為第 1 天有一張沒補拍就把畫面拉回第 1 天，那是幫倒忙。
+function focusSpot(tripId, todayDay) {
+  const manual = store.getHereSpot(tripId);
+  if (manual) return store.get(manual);
+  const spots = store.spotsOf(tripId);
+  const undone = spots.filter((s) => {
+    const p = store.spotProgress(s.id);
+    return p.total === 0 || p.done < p.total;
+  });
+  if (!undone.length) return null;
+  if (todayDay === -1) return null;               // 旅程結束了：全部收合，把回顧推到最上面
+  if (todayDay > 0) {
+    const today = undone.find((s) => (s.day || 1) === todayDay);
+    if (today) return today;                      // 今天還有沒拍完的 → 就是它
+    if (spots.some((s) => (s.day || 1) === todayDay)) return null;  // 今天全拍完了 → 不強迫展開別天
+  }
+  return undone[0];
+}
+
 const COUNTRY_NAMES = {};
 function countryName(code) { return code ? (COUNTRY_NAMES[code] || code) : ''; }
 async function pickCountry(tripId) {
@@ -141,10 +162,26 @@ export default async function trip(tripId, { fresh = false } = {}) {
     }
 
     const hereId = store.getHereSpot(tripId);
-    const hereDay = hereId ? (store.get(hereId)?.day || 1) : null;
+    // 「現在這一站」＝手動指定的，沒指定就是第一個未完成的。
+    // 展開規則一律以它為準（天與景點兩層都是），畫面才會只聚焦在一個地方。
+    const focus = focusSpot(tripId, todayDay);
+    const focusId = focus ? focus.id : null;
+    const focusDay = focus ? (focus.day || 1) : null;
+
+    // 「現在這一站」換了（他自己改的，或前一站拍完自動往下走）→ 把記住的折疊狀態清掉，
+    // 新的預設才生效。不清的話，之前按過一次「全部展開」就等於永遠全部展開 ——
+    // 使用者實機看到的「第二天的全部任務都是展開的」就是這樣來的。
+    try {
+      const fk = 'tripquest.focus.' + tripId;
+      if (localStorage.getItem(fk) !== String(focusId)) {
+        for (const s of spots) localStorage.removeItem('tripquest.spotOpen.' + s.id);
+        for (const d of byDay.keys()) localStorage.removeItem(`tripquest.dayOpen.${tripId}.${d}`);
+        localStorage.setItem(fk, String(focusId));
+      }
+    } catch { /* noop */ }
     for (const day of dayNums) {
       container.append(dayCollapse(day, byDay.get(day), tripId, t, {
-        dayNums, todayDay, allDone, hereDay, hereId,
+        dayNums, todayDay, allDone, focusDay, focusId, hereId,
       }));
     }
     // 新增景點在「調整每天的行程」裡；這裡不再重複放
@@ -367,7 +404,7 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
   // 預設展開規則。使用者手動指定「現在這一站」時，那一天最優先 ——
   // 他自己講的，比日期推算準。
   let dflt;
-  if (ctx.hereDay) dflt = day === ctx.hereDay;
+  if (ctx.focusDay) dflt = day === ctx.focusDay;          // 現在這一站在哪一天就開哪一天
   else if (ctx.allDone) dflt = false;
   else if (ctx.todayDay == null || ctx.todayDay === 0) dflt = day === ctx.dayNums[0];   // 沒設日期 / 還沒開始 → 只開第一天
   else if (ctx.todayDay === -1) dflt = false;                                            // 已結束 → 全收
@@ -412,7 +449,7 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
       chev,
     ),
     h('div', { class: 'dc-body' },
-      h('div', { class: 'dc-inner' }, ...daySpots.map((s) => spotSection(s, tripId, ctx.hereId)))),
+      h('div', { class: 'dc-inner' }, ...daySpots.map((s) => spotSection(s, tripId, ctx.focusId, ctx.hereId)))),
   );
   sec._wxSpan = wxSpan;
   return sec;
@@ -480,22 +517,24 @@ async function fillWeather(slot, container, tripId, trip) {
 
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，
 // 做完的自動讓位。使用者自己點過的展開／收合永遠優先（存 localStorage）。
-function spotSection(s, tripId, hereId) {
+function spotSection(s, tripId, focusId, hereId) {
   const quests = store.questsOf(s.id);
   const p = store.spotProgress(s.id);
   const allDone = p.total > 0 && p.done === p.total;
   const isHere = !!hereId && hereId === s.id;
 
   const openKey = 'tripquest.spotOpen.' + s.id;
-  let open;
+  // 預設**只展開現在這一站**（使用者手動指定的，或第一個未完成的）。
+  // 原本沒指定時是 `!allDone` —— 那會把當天所有未完成的景點通通展開，
+  // 使用者實機看到的就是「第二天的全部任務都是展開的」。
+  const isFocus = !!focusId && focusId === s.id;
+  const dflt = isFocus;                        // 沒有焦點（全完成／旅程已結束）就全部收合
+  let open = dflt;
   try {
     const stored = localStorage.getItem(openKey);
     if (stored === '1') open = true;
     else if (stored === '0') open = false;
-    // 有指定「現在這一站」時只展開那一站，其他收起來
-    else if (hereId) open = isHere;
-    else open = !allDone;
-  } catch { open = hereId ? isHere : !allDone; }
+  } catch { /* noop */ }
 
   const tk = s.theme || themeForSpot(s);
   const tm = themeMeta(tk);

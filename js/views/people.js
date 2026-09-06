@@ -3,7 +3,7 @@ import * as store from '../store.js';
 import { h, avatar, toast, chooseFrom } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { hashHue } from '../ids.js';
-import { blobURL } from '../photos.js';
+import { subPhoto } from '../photoimg.js';
 import { ensureMember, activeMemberId } from '../claim.js';
 import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges } from '../badges.js';
 import { openTagger } from '../phototag.js';
@@ -177,7 +177,6 @@ export default async function people(tripId) {
 async function feedItem(sub, tripId, allSubs, multi) {
   const quest = store.getRaw(sub.questId);
   const spot = quest ? store.getRaw(quest.spotId) : null;
-  const url = await blobURL(sub.photoHash);
 
   const shooter = shooterOf(sub);
   const author = shooter ? store.getRaw(shooter) : null;
@@ -201,7 +200,7 @@ async function feedItem(sub, tripId, allSubs, multi) {
     class: 'fi-photo-btn',
     onclick: async () => { if (await openTagger(tripId, sub.id, allSubs)) people(tripId); },
   },
-    h('img', { class: 'fi-photo', src: url, alt: caption || '', loading: 'lazy' }),
+    subPhoto(sub, { className: 'fi-photo', alt: caption || '' }),
     needsTag ? h('span', { class: 'untag-dot' }, '未標記') : null,
   );
   item.append(photoWrap);

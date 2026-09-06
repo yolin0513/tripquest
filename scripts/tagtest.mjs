@@ -197,14 +197,20 @@ try {
   else fail(`任務列有 ${rowUI.tooSmall} 顆按鈕小於 44px`);
 
   // ---------- 一次選 3 張：不該跳出任何詢問 ----------
-  await go(A.page, `/#/quest/${setup.questId}`);
-  await A.page.waitForSelector('.big-shot-btn');
-  const inputs = await A.page.$$('.big-shot-btn input[type=file]');
+  // v1.42 起任務詳情頁不再放加照片按鈕（上一層的任務列就有了，不必兩層各放一次）
+  // → 改走現在真正的主要路徑：行程頁那一列上的圖示鈕
+  await go(A.page, `/#/trip/${setup.tid}`);
+  await A.page.waitForSelector('.addphoto-icons');
+  await A.page.evaluate(() => document.querySelectorAll('.qcollapse').forEach((x) => x.classList.add('open')));
+  await sleep(400);
+  const inputs = await A.page.$$('.qline .addphoto-icons input[type=file]');
+  if (inputs.length < 2) throw new Error('找不到任務列上的檔案輸入：' + inputs.length);
   await inputs[1].uploadFile(...FILES);            // [0]=拍照 [1]=從相簿選
   // 第一次完成任務會跳慶祝畫面（後面還接著徽章），慶祝之外不該有任何「詢問」對話框
   await A.page.waitForSelector('.celebrate', { timeout: 30000 });
   const askedDuringUpload = await A.page.evaluate(() => !!document.querySelector('.modal-overlay'));
   await clearCelebrations(A.page);
+  await go(A.page, `/#/quest/${setup.questId}`);
   await A.page.waitForFunction(() => document.querySelectorAll('.photo-cell').length >= 3, { timeout: 30000 });
   const afterUpload = await A.page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
