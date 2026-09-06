@@ -1447,3 +1447,62 @@ textarea.field { resize: vertical; line-height: 1.6; }
 
 .wait-box { flex-direction: column; gap: 12px; }
 .wait-text { margin: 0; font-weight: 700; font-size: 1.05rem; text-align: center; }
+
+/* ---------- 加到主畫面的引導 ---------- */
+.ig-wrap { display: block; }
+.ig-warn {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elev));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+  font-size: 0.95rem; line-height: 1.6;
+}
+.ig-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px; margin-bottom: 10px;
+}
+.ig-num {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--primary); color: var(--primary-ink);
+  display: grid; place-items: center; font-weight: 900; font-size: 1rem;
+}
+.ig-ic { flex: none; width: 34px; display: grid; place-items: center; color: var(--primary); }
+.ig-emoji { font-size: 1.5rem; line-height: 1; }
+.ig-txt { flex: 1; min-width: 0; }
+.ig-t { display: block; font-weight: 800; font-size: 1.02rem; line-height: 1.5; }
+.ig-s { display: block; font-size: 0.85rem; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.ig-after {
+  margin: 14px 0 0; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--ok) 14%, var(--bg-elev));
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+  font-size: 0.92rem; line-height: 1.6;
+}
+.ig-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px 12px; margin: 10px 0;
+}
+.ig-banner-ic { font-size: 1.4rem; flex: none; }
+.ig-banner-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.4; }
+.ig-banner-x {
+  flex: none; width: 40px; height: 40px; border-radius: 10px;
+  background: transparent; border: none; color: var(--muted); font-size: 1.3rem;
+}
+
+/* 邀請頁：iPhone 要先裝再加入 */
+.join-install {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev));
+  border: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 16px; padding: 16px; margin: 14px 0;
+}
+.join-install-t { font-weight: 900; font-size: 1.08rem; margin-bottom: 8px; }
+.join-install-p { margin: 0 0 14px; font-size: 0.95rem; line-height: 1.65; color: var(--text); }
+
+/* 首頁：裝好之後是空的 → 直接給貼上邀請的入口 */
+.join-hint {
+  background: color-mix(in srgb, var(--primary) 14%, var(--bg-elev));
+  border: 2px solid color-mix(in srgb, var(--primary) 50%, transparent);
+  border-radius: 16px; padding: 16px; margin-bottom: 16px;
+}
+.join-hint-t { font-weight: 900; font-size: 1.08rem; margin-bottom: 6px; }
+.join-hint-p { margin: 0 0 14px; font-size: 0.92rem; line-height: 1.6; color: var(--muted); }

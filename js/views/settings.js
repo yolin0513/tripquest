@@ -272,10 +272,11 @@ function emergencyContactEditor(refresh) {
   return wrap;
 }
 
-export async function joinByCode() {
-  const raw = await promptDialog('貼上邀請連結', { multiline: true, okLabel: '加入' });
-  if (!raw) return;
-  const s = raw.trim();
+// 從一段文字（整條連結或純代碼）加入。首頁的剪貼簿流程也用這一支。
+// 回傳成功與否，讓呼叫端決定失敗後要不要再請使用者自己貼一次。
+export async function joinByText(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return false;
   try {
     if (s.includes('j=')) {
       toast('加入中…（大行程最多約 1 分鐘，請稍候）', 4000);
@@ -288,7 +289,17 @@ export async function joinByCode() {
       toast('已加入');
       navigate(`/trip/${tripId}`, { replace: true });
     }
-  } catch (e) { toast(/伺服器上還沒有/.test(e.message) ? e.message : '連結無法解析：' + e.message, 4000); }
+    return true;
+  } catch (e) {
+    toast(/伺服器上還沒有/.test(e.message) ? e.message : '連結無法解析：' + e.message, 4000);
+    return false;
+  }
+}
+
+export async function joinByCode() {
+  const raw = await promptDialog('貼上邀請連結', { multiline: true, okLabel: '加入' });
+  if (!raw) return false;
+  return joinByText(raw);
 }
 
 // ---- 設定同步伺服器 ----
