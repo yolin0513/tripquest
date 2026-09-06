@@ -661,9 +661,9 @@ function spotMapButton(s) {
   if (!url) return null;
   return h('a', {
     class: 'qc-map', href: url, target: '_blank', rel: 'noopener',
-    'aria-label': `用地圖看「${s.name}」在哪裡`, title: `用地圖看「${s.name}」在哪裡`,
+    'aria-label': `導航到「${s.name}」`, title: `導航到「${s.name}」`,
     onclick: (e) => e.stopPropagation(),
-  }, '🗺️');
+  }, h('span', { class: 'qc-map-ic' }, '🗺️'), h('span', { class: 'qc-map-t' }, '導航'));
 }
 
 // 任務列：收合是一列（約 88px），點一下才展開大圖與說明。
@@ -744,11 +744,12 @@ function questLine(q, spot, themeKey) {
 
   row.append(
     head,
-    // 完成的任務右邊只放一個打勾；要再拍就點開（使用者指定的行為）
-    done
-      ? h('span', { class: 'qline-done', 'aria-label': '已完成' }, '✓')
-      : h('div', { class: 'qline-act' },
-          addPhotoButtons(q.tripId, q.id, { icons: true, onDone: () => trip(q.tripId) })),
+    // 完成與否，右邊都是同樣位置、同樣的兩顆圖示鈕。
+    // 之前完成的列改成一個綠色打勾，等於完成前後的操作方式不一樣 ——
+    // 想再拍一張的人會在原本的位置找不到東西。
+    // 完成狀態改由縮圖（換成他自己拍的那張）與列上的「✓ 已完成」表示。
+    h('div', { class: 'qline-act' },
+      addPhotoButtons(q.tripId, q.id, { icons: true, onDone: () => trip(q.tripId) })),
     more,
   );
   return row;

@@ -33,7 +33,7 @@ export default async function plan(tripId) {
 
   const list = h('div', { class: 'plan-list' });
   render(h('div', { class: 'page' },
-    h('p', { class: 'plan-tip' }, '按住 ☰ 拖曳可以換順序，也可以拖到別天（拖到畫面上下緣會自己往那邊捲）。同一天內換前後也可以用 ▲ ▼。任務和照片會自動跟著搬。'),
+    h('p', { class: 'plan-tip' }, '按住 ☰ 拖曳可以換順序，同一天內換前後也可以用 ▲ ▼。'),
     list,
   ));
 
@@ -95,11 +95,20 @@ export default async function plan(tripId) {
     }, '▼');
 
     const box = h('div', { class: 'plan-quests', hidden: true });
+    // 兩顆等寬、圖示在前、數字用固定寬度的小標籤 —— 不然「改任務（3）」跟
+    // 「景點設定」長度不一樣，一排看起來歪歪的
+    const count = h('span', { class: 'plan-mini-n' });
     const toggle = h('button', {
       class: 'plan-mini', onclick: () => { box.hidden = !box.hidden; label(); },
     });
     const label = () => {
-      toggle.textContent = (box.hidden ? '✏️ 改任務' : '▾ 收起任務') + `（${store.questsOf(s.id).length}）`;
+      const n = store.questsOf(s.id).length;
+      toggle.replaceChildren(
+        h('span', { class: 'plan-mini-ic' }, box.hidden ? '✏️' : '▾'),
+        h('span', { class: 'plan-mini-t' }, box.hidden ? '任務' : '收起'),
+        count,
+      );
+      count.textContent = String(n);
     };
     fillQuestBox(box, s, label);
     label();
@@ -112,7 +121,10 @@ export default async function plan(tripId) {
           timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
           h('div', { class: 'plan-row-actions' },
             toggle,
-            h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) }, '景點設定'),
+            h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) },
+              h('span', { class: 'plan-mini-ic' }, '⚙️'),
+              h('span', { class: 'plan-mini-t' }, '設定'),
+              h('span', { class: 'plan-mini-n', hidden: true })),
           ),
         ),
         h('div', { class: 'plan-updown' }, up, down),

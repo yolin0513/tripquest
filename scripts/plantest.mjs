@@ -69,15 +69,24 @@ try {
   // ---------- 1. 「換天」拿掉了 ----------
   console.log('\n— 調整每天的行程 —');
   await openPlan();
-  const btns = await page.$$eval('.plan-row .plan-mini', (els) => els.map((e) => e.textContent.trim()));
+  const btns = await page.evaluate(() =>
+    [...document.querySelectorAll('.plan-row .plan-mini')].map((e) => e.textContent.replace(/\s+/g, '')));
   yes(!btns.some((t) => t.includes('換天')), '每個景點的「換天」按鈕已移除');
-  yes(btns.some((t) => t.includes('改任務')), '「改任務」還在');
-  yes(btns.some((t) => t.includes('景點設定')), '「景點設定」還在');
+  yes(btns.some((t) => t.includes('任務')), '改任務那顆還在');
+  yes(btns.some((t) => t.includes('設定')), '景點設定那顆還在');
   const arrows = await page.$$eval('.plan-row .plan-arrow', (els) => els.map((e) => e.getAttribute('aria-label')));
   yes(arrows.includes('往前移') && arrows.includes('往後移'), '同一天內的 ▲▼ 保留（不擅長拖拉的人還有路可走）');
   const tip = await page.$eval('.plan-tip', (e) => e.textContent);
   yes(!tip.includes('換天'), '說明文字也不再提「換天」');
-  yes(/上下緣/.test(tip), `說明有講拖到邊緣會自己捲：「${tip.slice(0, 40)}…」`);
+  eq(tip.trim(), '按住 ☰ 拖曳可以換順序，同一天內換前後也可以用 ▲ ▼。', '提示只剩一句（拿掉邊緣捲動那段）');
+  // 第 2 項：兩顆按鈕要等寬對齊
+  const pair = await page.evaluate(() => {
+    const row = document.querySelector('.plan-row-actions');
+    const bs = [...row.querySelectorAll('.plan-mini')];
+    return bs.map((b) => ({ w: Math.round(b.getBoundingClientRect().width), t: b.innerText.replace(/s+/g, '') }));
+  });
+  eq(pair.length, 2, '一排就兩顆按鈕');
+  yes(Math.abs(pair[0].w - pair[1].w) <= 1, `兩顆等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
 
   // ---------- 2. 目標在畫面外的跨天拖曳 ----------
   console.log('\n— 跨天拖曳（目標在畫面外）—');
@@ -149,7 +158,7 @@ try {
   console.log('\n— 加任務／改任務還到得了嗎 —');
   await openPlan();
   await page.evaluate(() => {
-    const b = [...document.querySelectorAll('.plan-mini')].find((x) => x.textContent.includes('改任務'));
+    const b = [...document.querySelectorAll('.plan-mini')].find((x) => /任務/.test(x.textContent));
     b.scrollIntoView({ block: 'center' }); b.click();
   });
   await page.waitForSelector('.plan-quests .pq-row, .plan-quests .btn', { timeout: 8000 });
@@ -207,6 +216,11 @@ try {
     stay: document.querySelector('.spot-stay').selectedOptions[0].textContent,
   }));
   eq(sv.labels.join('／'), '景點名稱／幾點到／停留多久', `只剩三個欄位：${sv.labels.join('、')}`);
+  // 第 5 項：上方的「第幾天／幾個任務」與底下那段提示都拿掉
+  const txt = await page.evaluate(() => document.querySelector('#view > .page').innerText);
+  yes(!/第 d+ 天/.test(txt), '上方不再顯示「第幾天」');
+  yes(!/個任務/.test(txt), '上方不再顯示「幾個任務」');
+  yes(!/調整每天的行程/.test(txt), '底下那段「任務要改要加請到…」的提示已移除');
   yes(!sv.hasHero, '示意圖已移除');
   yes(!sv.hasBlurb, '文字描述已移除');
   yes(!sv.hasMap, '「用地圖帶我去」已移除（改在景點標題列的 🗺️）');
@@ -231,7 +245,7 @@ try {
     s.dispatchEvent(new Event('change', { bubbles: true }));
     [...document.querySelectorAll('.page button')].find((b) => b.textContent.trim() === '儲存').click();
   });
-  await page.waitForFunction(() => location.hash.includes('/trip/') && !location.hash.includes('/spot/'), { timeout: 10000 });
+  await page.waitForFunction(() => location.hash.includes('/plan'), { timeout: 10000 });
   await sleep(1200);
   const saved = await page.evaluate(async (sid) => {
     const s = await import('./js/store.js');
@@ -243,6 +257,9 @@ try {
   eq(saved.stayMin, 90, '停留存成 90 分');
   eq(saved.legacy.join(','), ',', '舊的字串欄位清掉了（只留一套，海報與回顧才不會讀到過期值）');
 
+  ok('儲存後回到「調整每天的行程」，不會跳去別頁');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.qcollapse', { timeout: 15000 });
   await page.evaluate(() => document.querySelectorAll('.qcollapse').forEach((x) => x.classList.add('open')));
   await sleep(600);
   const onTrip = await page.evaluate(() => document.body.innerText);
@@ -268,6 +285,21 @@ try {
   await sleep(400);
   const stillThere = await page.evaluate(async (sid) => !!(await import('./js/store.js')).getRaw(sid), ids.sid);
   yes(stillThere, '按「再想想」不會刪掉');
+
+  // 第 1 項：真的刪掉之後要留在「調整每天的行程」
+  await page.evaluate(() => {
+    [...document.querySelectorAll('.page button')].find((b) => b.textContent.includes('刪除這個景點')).click();
+  });
+  await page.waitForSelector('.del-warn', { timeout: 8000 });
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => /刪掉/.test(b.textContent)).click());
+  await page.waitForFunction(() => !location.hash.includes('/spot/'), { timeout: 15000 });
+  await sleep(900);
+  const landed = await page.evaluate(() => ({ hash: location.hash, hasPlan: !!document.querySelector('.plan-row') }));
+  yes(//plan$/.test(landed.hash) && landed.hasPlan,
+    `刪除後留在「調整每天的行程」（${landed.hash}）`, JSON.stringify(landed));
+  // remove() 是留墓碑（getRaw 仍讀得到），要用 get() 判斷還在不在
+  const gone = await page.evaluate(async (sid) => !(await import('./js/store.js')).get(sid), ids.sid);
+  yes(gone, '景點真的刪掉了');
 
   console.log('\n行程調整與景點設定測試結束');
 } catch (e) {

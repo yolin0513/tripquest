@@ -114,6 +114,11 @@ button, input, textarea, select { font: inherit; }
      高 52px），不然捲到最後時最後一段內容會永遠被那顆紅色按鈕蓋住看不到。 */
   padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 84px);
   animation: fade 0.18s ease;
+  /* 每一頁至少佔滿一個畫面高：內容短的分頁（例如只有一兩筆的分帳）若比畫面矮，
+     頁面就不能捲，iOS Safari 的瀏覽器工具列因此不會收起來，底部功能列看起來
+     就比別的分頁高一截。四頁一律填滿，行為才一致。 */
+  min-height: calc(100vh - var(--topbar-h));
+  min-height: calc(100dvh - var(--topbar-h));
 }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
 .pad-x { padding: 0 2px; }
@@ -979,7 +984,20 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
 .plan-name { font-size: 1.1rem; font-weight: 800; line-height: 1.3; }
 .plan-time { font-size: 0.9rem; color: var(--muted); font-weight: 700; }
-.plan-row-actions { display: flex; gap: 8px; margin-top: 6px; }
+/* 兩顆等寬、圖示在前、數量用固定寬度的小徽章 ——
+   不然「改任務（3）」跟「景點設定」長度不同，一排看起來歪的 */
+.plan-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.plan-row-actions .plan-mini {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; min-height: 40px; padding: 6px 8px;
+}
+.plan-mini-ic { font-size: 1rem; line-height: 1; flex: none; }
+.plan-mini-t { font-weight: 700; }
+.plan-mini-n {
+  min-width: 20px; padding: 1px 5px; border-radius: 999px; flex: none;
+  background: var(--bg-elev-2); color: var(--muted);
+  font-size: 0.78rem; font-weight: 800; text-align: center;
+}
 .plan-mini {
   appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
   border-radius: 999px; padding: 8px 16px; font-weight: 800; font-size: 0.9rem; cursor: pointer; min-height: 42px;
@@ -1558,11 +1576,6 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qline.open .qline-chev { transform: rotate(90deg); }
 
 .qline-act { grid-area: act; display: flex; align-items: center; padding-right: 6px; }
-.qline-done {
-  grid-area: act; display: grid; place-items: center;
-  width: 46px; height: 46px; margin-right: 6px; flex: none;
-  color: var(--ok); font-size: 1.6rem; font-weight: 900;
-}
 .addphoto-icons { display: flex; gap: 5px; }
 .apx {
   width: 46px; height: 46px; border-radius: 12px; flex: none;
@@ -1598,12 +1611,15 @@ textarea.field { resize: vertical; line-height: 1.6; }
 }
 
 /* 景點標題列右邊的地圖小圖示（原本是整寬一顆大按鈕，每個景點省 64px） */
+/* 只有一個地圖圖示，很多人不知道那是導航 —— 一定要有字 */
 .qc-map {
-  flex: none; width: 48px; height: 48px; align-self: center; margin-right: 6px;
-  display: grid; place-items: center; font-size: 1.35rem;
+  flex: none; min-width: 52px; height: 50px; align-self: center; margin-right: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   border-radius: 12px; background: var(--bg-elev-2); border: 1px solid var(--line);
-  text-decoration: none;
+  text-decoration: none; color: var(--text); padding: 0 6px;
 }
+.qc-map-ic { font-size: 1.15rem; line-height: 1; }
+.qc-map-t { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; }
 .qc-map:active { transform: scale(0.94); }
 
 /* ---------- 投稿照片：blob 還沒到時的狀態 ---------- */
@@ -1636,3 +1652,10 @@ textarea.field { resize: vertical; line-height: 1.6; }
   border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
   border-radius: 12px; padding: 14px; line-height: 1.7; font-size: 0.98rem;
 }
+
+/* 調整行程／景點設定：這兩頁多半是年輕人在操作，可以比日常畫面緊湊。
+   長輩導向的尺寸要求仍然適用於任務頁、照片牆、SOS、加入流程。 */
+.page.compact { padding-top: 12px; }
+.page.compact .form-field { margin-bottom: 12px; }
+.page.compact .form-label { font-size: 0.95rem; }
+.page.compact .field { min-height: 46px; padding: 10px 12px; }

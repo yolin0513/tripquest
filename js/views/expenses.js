@@ -17,7 +17,8 @@ export default async function expenses(tripId) {
 
   const members = store.membersOf(trip.groupId);
   if (members.length < 1) {
-    render(h('div', { class: 'empty' }, h('p', {}, '先在「旅程設定」加旅伴，才能分帳。')));
+    // 要包在 .page 裡 —— 少了它就沒有底部留白，內容會被底部功能列蓋住
+    render(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '先在「旅程設定」加旅伴，才能分帳。'))));
     return;
   }
 

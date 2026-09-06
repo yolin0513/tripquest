@@ -98,7 +98,9 @@ try {
     return { w: Math.round(b.width), h: Math.round(b.height), label: a.getAttribute('aria-label') || '' };
   });
   yes(mapBtn && mapBtn.w >= 44 && mapBtn.h >= 44, `地圖小圖示 ${mapBtn && mapBtn.w}×${mapBtn && mapBtn.h}px，仍是可點的大小`);
-  yes(mapBtn && /用地圖看/.test(mapBtn.label), '地圖圖示有說明文字（螢幕閱讀器與長按都看得到）');
+  yes(mapBtn && /導航/.test(mapBtn.label), '地圖按鈕的說明是「導航」');
+  const mapTxt = await page.$eval('.qc-map', (e) => e.innerText.replace(/s+/g, ''));
+  yes(/導航/.test(mapTxt), '地圖按鈕上看得到「導航」兩個字 —— 只有圖示很多人不知道那是什麼');
 
   // ---------- ② 名字看得完整 ----------
   console.log('\n— 名字要看得出來 —');
@@ -137,20 +139,34 @@ try {
   yes(wired.cam, '「拍照」那顆會直接叫相機（capture=environment）');
 
   // ---------- 已完成的列 ----------
+  // v1.44：完成與否，右邊都是同樣位置、同樣的兩顆圖示鈕。
+  // 之前完成的列換成綠色打勾，等於完成前後的操作方式不一樣 ——
+  // 想再拍一張的人會在原本的位置找不到東西。
   const doneRow = await page.evaluate(() => {
     const r = document.querySelector('.qline.done');
-    if (!r) return null;
+    const u = document.querySelector('.qline:not(.done)');
+    if (!r || !u) return null;
+    const box = (el) => {
+      const b = el.getBoundingClientRect();
+      return { w: Math.round(b.width), h: Math.round(b.height), right: Math.round(innerWidth - b.right) };
+    };
     return {
       check: !!r.querySelector('.qline-done'),
-      noCam: !r.querySelector('.qline-act'),
+      btns: [...r.querySelectorAll('.qline-act button')].map((b) => b.getAttribute('aria-label')),
+      doneAct: box(r.querySelector('.qline-act')),
+      undoneAct: box(u.querySelector('.qline-act')),
       ownThumb: r.querySelector('.qline-thumb').classList.contains('has-img'),
       sub: r.querySelector('.qline-sub').textContent,
     };
   });
-  yes(doneRow && doneRow.check, '完成的任務右邊是打勾');
-  yes(doneRow && doneRow.noCam, '完成的任務收合時不再放相機鈕（點開才有「再拍一張」）');
-  yes(doneRow && doneRow.ownThumb, '完成的任務縮圖換成自己拍的那張');
-  yes(doneRow && /已完成/.test(doneRow.sub), `完成狀態寫在列上：「${doneRow && doneRow.sub.trim()}」`);
+  yes(doneRow && !doneRow.check, '完成的任務右邊不再是綠色打勾');
+  yes(doneRow && doneRow.btns.length === 2 && doneRow.btns.some((x) => /拍照|再拍/.test(x)) && doneRow.btns.some((x) => /相簿/.test(x)),
+    `完成的任務一樣有兩顆鈕：${doneRow && doneRow.btns.join('、')}`);
+  yes(doneRow && doneRow.doneAct.right === doneRow.undoneAct.right && doneRow.doneAct.w === doneRow.undoneAct.w,
+    `完成前後按鈕的位置與大小完全一樣（距右 ${doneRow && doneRow.doneAct.right}px、寬 ${doneRow && doneRow.doneAct.w}px）`,
+    JSON.stringify(doneRow));
+  yes(doneRow && doneRow.ownThumb, '完成狀態改用縮圖表示（換成自己拍的那張）');
+  yes(doneRow && /已完成/.test(doneRow.sub), `列上也有文字：「${doneRow && doneRow.sub.trim()}」`);
 
   // ---------- 展開 ----------
   console.log('\n— 點開才給大圖 —');

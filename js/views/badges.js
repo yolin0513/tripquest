@@ -15,7 +15,7 @@ export default async function badges(tripId) {
   setTop({ title: '成就徽章' });
 
   const members = store.membersOf(trip.groupId);
-  if (!members.length) { render(h('div', { class: 'empty' }, h('p', {}, '先加旅伴。'))); return; }
+  if (!members.length) { render(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '先加旅伴。')))); return; }
 
   let who = activeMemberId(tripId) || members[0].id;
 

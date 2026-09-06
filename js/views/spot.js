@@ -51,7 +51,7 @@ export default async function spot(tripId, spotId) {
     });
     if (renamed) enrichSpot(store.getRaw(spotId)).catch(() => {});
     toast('已儲存');
-    back(`/trip/${tripId}`);
+    back(`/trip/${tripId}/plan`);
   };
 
   const del = async () => {
@@ -82,13 +82,10 @@ export default async function spot(tripId, spotId) {
     }
     await store.remove(spotId);
     toast('已刪除');
-    navigate(`/trip/${tripId}`, { replace: true });
+    navigate(`/trip/${tripId}/plan`, { replace: true });
   };
 
-  render(h('div', { class: 'page form' },
-    h('p', { class: 'sm muted', style: 'margin:0 0 14px' },
-      `第 ${s.day || 1} 天${s.region ? '　' + s.region : ''}　${quests.length} 個任務`),
-
+  render(h('div', { class: 'page form compact' },
     field('景點名稱', nameField),
     field('幾點到', h('div', { class: 'spot-time-row' }, timeField,
       h('button', {
@@ -97,13 +94,11 @@ export default async function spot(tripId, spotId) {
       }, '清除'))),
     field('停留多久', stayField),
 
-    h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:18px', onclick: save }, '儲存'),
-    h('button', { class: 'btn btn-ghost btn-block', onclick: () => back(`/trip/${tripId}`) }, '取消'),
+    h('button', { class: 'btn btn-primary btn-block', style: 'margin-top:18px', onclick: save }, '儲存'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: () => back(`/trip/${tripId}/plan`) }, '取消'),
 
-    h('div', { class: 'danger-zone', style: 'margin-top:28px' },
+    h('div', { class: 'danger-zone', style: 'margin-top:22px' },
       h('button', { class: 'btn btn-danger btn-block', onclick: del }, '🗑️ 刪除這個景點'),
-      h('p', { class: 'form-hint center', style: 'margin-top:8px' },
-        '任務要改或要加，在「調整每天的行程」那頁。'),
     ),
   ));
 }

@@ -392,8 +392,9 @@ try {
   // ================= 任務的編輯 / 刪除有沒有真的搬到「調整每天的行程」 =================
   await go(A.page, `/#/trip/${setup.tid}/plan`);
   await A.page.waitForSelector('.plan-row');
-  await A.page.evaluate(() => [...document.querySelectorAll('.plan-mini')].find((b) => b.textContent.includes('改任務'))?.click());
-  await A.page.waitForSelector('.pq-row');
+  // v1.44：按鈕改成圖示＋短字（「✏️ 任務 3」），不能再用「改任務」四個字找
+  await A.page.evaluate(() => [...document.querySelectorAll('.plan-mini')].find((b) => /任務/.test(b.textContent))?.click());
+  await A.page.waitForSelector('.pq-row', { visible: true });
   const planUI = await A.page.evaluate(() => ({
     quests: document.querySelectorAll('.pq-row').length,
     edit: [...document.querySelectorAll('.pq-row .tag-btn')].map((b) => b.textContent),
