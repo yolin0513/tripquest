@@ -176,17 +176,23 @@ try {
   else fail('按了沒反應');
 
   // ================= 問題一：任務列只剩「加入照片」 =================
-  await go(A.page, `/#/trip/${setup.tid}/spot/${setup.spotId}`);
-  await A.page.waitForSelector('.qrow');
+  // v1.43 起景點頁只剩改名／時間／停留／刪除，任務列在行程頁上（.qline）。
+  // 這一節的用意沒變：任務那一列不可以有「編輯／刪除」讓長輩誤按，
+  // 但**一定要有**加照片的按鈕，而且觸控區夠大。
+  await go(A.page, `/#/trip/${setup.tid}`);
+  await A.page.waitForSelector('.qline');
+  await A.page.evaluate(() => document.querySelectorAll('.qcollapse').forEach((x) => x.classList.add('open')));
+  await sleep(400);
   const rowUI = await A.page.evaluate(() => {
-    const rows = [...document.querySelectorAll('.qrow')];
+    const rows = [...document.querySelectorAll('.qline')];
     return {
       rows: rows.length,
-      editOrDelete: rows.reduce((n, r) => n + r.querySelectorAll('.tag-btn').length, 0),
-      addBtns: rows[0] ? [...rows[0].querySelectorAll('.addphoto-row button')].map((b) => b.textContent) : [],
-      // 觸控區：長輩按得到才算數
+      editOrDelete: [...document.querySelectorAll('.qline button, .qcollapse .qc-head button')]
+        .filter((b) => /編輯|刪除/.test(b.textContent)).length,
+      addBtns: rows[0] ? [...rows[0].querySelectorAll('.addphoto-icons button, .addphoto-row button')]
+        .map((b) => b.getAttribute('aria-label') || b.textContent) : [],
       tooSmall: rows.reduce((n, r) => n + [...r.querySelectorAll('button')]
-        .filter((b) => b.getBoundingClientRect().height < 44).length, 0),
+        .filter((b) => { const h = b.getBoundingClientRect().height; return h > 0 && h < 44; }).length, 0),
     };
   });
   if (rowUI.editOrDelete === 0) ok('任務列已無「編輯 / 刪除」按鈕');
@@ -195,6 +201,18 @@ try {
   else fail('任務列的加照片按鈕不對：' + JSON.stringify(rowUI.addBtns));
   if (rowUI.tooSmall === 0) ok(`任務列 ${rowUI.rows} 列的按鈕觸控區都 ≥ 44px`);
   else fail(`任務列有 ${rowUI.tooSmall} 顆按鈕小於 44px`);
+
+  // ---------- 景點設定頁只剩四件事 ----------
+  await go(A.page, `/#/trip/${setup.tid}/spot/${setup.spotId}`);
+  await A.page.waitForSelector('.page.form', { timeout: 15000 });
+  const spotPage = await A.page.evaluate(() => ({
+    labels: [...document.querySelectorAll('.form-label')].map((e) => e.textContent.trim()),
+    hasQuestList: !!document.querySelector('.qrow, .qline'),
+    hasAddPhoto: !!document.querySelector('.addphoto-row, .addphoto-icons'),
+  }));
+  if (spotPage.labels.join('／') === '景點名稱／幾點到／停留多久' && !spotPage.hasQuestList && !spotPage.hasAddPhoto) {
+    ok('景點設定頁只剩改名／時間／停留／刪除，任務與加照片都不在這裡了');
+  } else fail('景點設定頁沒簡化乾淨：' + JSON.stringify(spotPage));
 
   // ---------- 一次選 3 張：不該跳出任何詢問 ----------
   // v1.42 起任務詳情頁不再放加照片按鈕（上一層的任務列就有了，不必兩層各放一次）

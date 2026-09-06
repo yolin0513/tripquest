@@ -1,144 +1,113 @@
-// 景點頁 —— 這是「做事」的頁面，唯一該做的事就是加照片。
-// 任務的編輯 / 刪除已移到「調整每天的行程」（管理集中在那裡，長輩日常不會進去），
-// 因為實測長輩看到任務旁的「編輯」會下意識按下去，以為那是加照片的入口。
+// 景點設定頁 —— 只做四件事：改名字、幾點到、停留多久、刪掉它。
+//
+// 這頁本來還有示意圖、介紹文字、「用地圖帶我去」、任務清單與加照片按鈕。
+// 全部拿掉了，因為那些在別的地方都已經有，而且更靠近使用者真正在做事的地方：
+//   · 任務與加照片 → 行程頁的任務列（v1.41 起收合狀態就有 📷🖼️）
+//   · 地圖         → 景點標題列右邊的 🗺️ 圖示
+//   · 加任務／改任務 → 「調整每天的行程」的「✏️ 改任務」（有新增、編輯、刪除）
+// 同一件事散在兩三個地方，長輩只會更難找。
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, promptDialog, confirmDialog, KIND_META } from '../ui.js';
+import { h, toast, modal } from '../ui.js';
 import { navigate, back } from '../router.js';
-import { blobURL } from '../photos.js';
-import { enrichSpot, refImageFor } from '../enrich.js';
-import { themeForSpot, loadThemes } from '../theme.js';
-import { paintRef } from './trip.js';
-import { mapsDirUrl } from '../maps.js';
-import { addPhotoButtons } from '../addphoto.js';
-import { openTagger } from '../phototag.js';
+import { enrichSpot } from '../enrich.js';
+import { spotTimes, stayOptions, minOfInput } from '../spottime.js';
 
 export default async function spot(tripId, spotId) {
   const s = store.get(spotId);
   const t = store.get(tripId);
   if (!s || !t) { navigate('/', { replace: true }); return; }
-  await loadThemes().catch(() => {});          // 佔位圖要用主題色
 
-  setTop({ title: s.name });
+  setTop({ title: '景點設定' });
 
   const quests = store.questsOf(spotId);
-  const p = store.spotProgress(spotId);
-  const refresh = () => spot(tripId, spotId);
+  const photoCount = quests.reduce((n, q) => n + store.submissionsOf(q.id).length, 0);
+  const tm = spotTimes(s);
 
-  const hero = h('div', { class: 'quest-focus-photo' }, h('span', { class: 'qf-emoji' }, s.emoji || '📍'));
-  paintRef(hero, refImageFor(null, s, null), s.theme || themeForSpot(s), s.id);
+  const nameField = h('input', {
+    class: 'field', type: 'text', value: s.name || '', maxlength: 40, placeholder: '景點名稱',
+  });
 
-  render(h('div', { class: 'page' },
-    hero,
-    h('div', { style: 'margin:12px 2px' },
-      h('div', { style: 'font-size:1.2rem;font-weight:800' }, s.name),
-      h('div', { class: 'muted sm' }, [s.region, `第 ${s.day || 1} 天`, `${p.done}/${p.total} 完成`].filter(Boolean).join(' · ')),
+  // 時間與停留沿用匯入流程那一套（原生時間選擇器 ＋ 下拉，非預設值也補成選項）
+  const timeField = h('input', { class: 'field spot-time', type: 'time', value: tm.startTime });
+  const stayField = h('select', { class: 'field spot-stay' },
+    ...stayOptions(tm.stayMin).map((o) =>
+      h('option', { value: o.v, selected: String(tm.stayMin || '') === o.v }, o.label)));
+
+  const save = async () => {
+    const name = nameField.value.trim();
+    if (!name) { toast('名字不能空白'); nameField.focus(); return; }
+    const startMin = minOfInput(timeField.value);
+    const stayMin = stayField.value ? parseInt(stayField.value, 10) : null;
+    const renamed = name !== s.name;
+    await store.patch(spotId, {
+      name,
+      startMin, stayMin,
+      // 舊的字串欄位清掉，只留一套，免得海報／回顧讀到過期的值
+      startTime: '', endTime: '',
+      // 改了名字就重新去找示意圖（原本那張是照舊名字抓的）
+      ...(renamed ? { _enrichV: 0, _noHero: false } : {}),
+    });
+    if (renamed) enrichSpot(store.getRaw(spotId)).catch(() => {});
+    toast('已儲存');
+    back(`/trip/${tripId}`);
+  };
+
+  const del = async () => {
+    const lines = [`「${s.name}」會從行程裡移除。`];
+    if (quests.length) lines.push(`連同 ${quests.length} 個拍照任務`);
+    if (photoCount) lines.push(`以及已經拍的 ${photoCount} 張照片`);
+    lines.push(quests.length || photoCount ? '一起刪掉，而且救不回來。' : '這個景點還沒有任務或照片。');
+    const ok = await modal({
+      title: '要刪掉這個景點嗎？',
+      body: h('div', {},
+        h('div', { class: 'del-warn' },
+          h('p', { style: 'margin:0 0 6px;font-weight:800' }, lines[0]),
+          ...lines.slice(1).map((x) => h('p', { style: 'margin:0 0 4px' }, x))),
+        photoCount
+          ? h('p', { class: 'sm muted', style: 'margin:12px 0 0' },
+            '想留照片的話，先到「照片」那一頁看過再刪。')
+          : null,
+      ),
+      actions: [
+        { label: '不要，我再想想', value: false },
+        { label: photoCount ? `還是刪掉（含 ${photoCount} 張照片）` : '刪掉', value: true, danger: true },
+      ],
+    });
+    if (!ok) return;
+    for (const q of quests) {
+      for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id);
+      await store.remove(q.id);
+    }
+    await store.remove(spotId);
+    toast('已刪除');
+    navigate(`/trip/${tripId}`, { replace: true });
+  };
+
+  render(h('div', { class: 'page form' },
+    h('p', { class: 'sm muted', style: 'margin:0 0 14px' },
+      `第 ${s.day || 1} 天${s.region ? '　' + s.region : ''}　${quests.length} 個任務`),
+
+    field('景點名稱', nameField),
+    field('幾點到', h('div', { class: 'spot-time-row' }, timeField,
+      h('button', {
+        class: 'btn btn-sm', type: 'button',
+        onclick: () => { timeField.value = ''; },
+      }, '清除'))),
+    field('停留多久', stayField),
+
+    h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:18px', onclick: save }, '儲存'),
+    h('button', { class: 'btn btn-ghost btn-block', onclick: () => back(`/trip/${tripId}`) }, '取消'),
+
+    h('div', { class: 'danger-zone', style: 'margin-top:28px' },
+      h('button', { class: 'btn btn-danger btn-block', onclick: del }, '🗑️ 刪除這個景點'),
+      h('p', { class: 'form-hint center', style: 'margin-top:8px' },
+        '任務要改或要加，在「調整每天的行程」那頁。'),
     ),
-
-    s.blurb ? h('p', { class: 'spot-blurb' }, s.blurb,
-      s.aiBlurb ? h('span', { class: 'ai-mark', title: '這句由 AI 生成' }, ' ✨') : null) : null,
-
-    mapButtons(s),
-
-    h('div', { class: 'section-label' }, '這個景點的任務'),
-    quests.length
-      ? h('div', { class: 'stack' }, ...quests.map((q) => questRow(q, tripId, spotId, refresh)))
-      : h('p', { class: 'muted' }, '這個景點還沒有任務。可以到「調整每天的行程」新增。'),
-
-    h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:16px', onclick: () => back(`/trip/${tripId}`) }, '回旅程'),
-
-    manageBox(s, tripId, spotId, quests),
   ));
 }
 
-// 一列任務：上面是「拍什麼」，下面就是兩顆加照片的按鈕。沒有別的東西可以按錯。
-function questRow(q, tripId, spotId, refresh) {
-  const km = KIND_META[q.kind] || KIND_META.thing;
-  const subs = store.submissionsOf(q.id);
-  const done = subs.length > 0;
-
-  const thumbs = h('div', { class: 'qrow-thumbs' });
-  for (const sub of subs.slice(-4)) {
-    const im = h('img', {
-      alt: '', loading: 'lazy',
-      onclick: async () => { if (await openTagger(tripId, sub.id, subs)) refresh(); },
-    });
-    blobURL(sub.thumbHash || sub.photoHash).then((u) => { if (u) im.src = u; });
-    thumbs.append(im);
-  }
-
-  return h('div', { class: 'qrow' + (done ? ' done' : '') },
-    h('div', { class: 'qrow-head' },
-      h('span', { class: 'qrow-icon' }, done ? '✓' : km.icon),
-      h('div', { class: 'qrow-main' },
-        h('div', { class: 'qrow-title' }, q.title),
-        q.hint ? h('div', { class: 'muted sm' }, q.hint) : null,
-        h('div', { class: 'qrow-status' + (done ? ' is-done' : '') },
-          done ? `已加入 ${subs.length} 張照片` : '還沒有照片'),
-      ),
-    ),
-    done ? thumbs : null,
-    addPhotoButtons(tripId, q.id, { compact: true, onDone: refresh }),
-  );
-}
-
-// 管理用的東西全部收在這裡，預設收合，長輩不會誤觸
-function manageBox(s, tripId, spotId, quests) {
-  const body = h('div', { class: 'manage-body', hidden: true },
-    h('div', { class: 'switch-row' },
-      h('div', {}, h('div', { style: 'font-weight:700' }, '景點名稱'),
-        h('div', { class: 'form-hint' }, s.name)),
-      h('button', { class: 'btn btn-soft', onclick: async () => {
-        const v = await promptDialog('景點名稱', { value: s.name });
-        if (v) { await store.patch(spotId, { name: v, _enrichV: 0, _noHero: false }); enrichSpot(store.getRaw(spotId)); toast('已更新'); spot(tripId, spotId); }
-      } }, '改名字'),
-    ),
-
-    h('div', { class: 'switch-row' },
-      h('div', {}, h('div', { style: 'font-weight:700' }, '安排的時間'),
-        h('div', { class: 'form-hint' }, '選填。填了行程海報會顯示時間軸（例：11:00–13:00）。')),
-      h('div', { style: 'display:flex;gap:6px;align-items:center' },
-        timeInput(s.startTime, (v) => store.patch(spotId, { startTime: v })),
-        h('span', { class: 'muted' }, '–'),
-        timeInput(s.endTime, (v) => store.patch(spotId, { endTime: v })),
-      ),
-    ),
-
-    h('button', { class: 'btn btn-soft btn-block', style: 'margin-top:12px', onclick: () => navigate(`/trip/${tripId}/plan`) },
-      '📅 改任務、加任務（在「調整每天的行程」裡）'),
-
-    h('div', { class: 'danger-zone' },
-      h('button', { class: 'btn btn-danger btn-block', onclick: async () => {
-        if (await confirmDialog(`刪除景點「${s.name}」？它的任務與照片都會刪除。`, { danger: true, okLabel: '刪除' })) {
-          for (const q of quests) { for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id); await store.remove(q.id); }
-          await store.remove(spotId);
-          toast('已刪除');
-          navigate(`/trip/${tripId}`, { replace: true });
-        }
-      } }, '🗑️ 刪除這個景點'),
-    ),
-  );
-
-  const head = h('button', { class: 'manage-head', onclick: () => {
-    body.hidden = !body.hidden;
-    head.lastChild.textContent = body.hidden ? '▸' : '▾';
-  } }, h('span', {}, '⚙️ 這個景點的設定'), h('span', { class: 'dc-chev' }, '▸'));
-
-  return h('section', { class: 'manage-box' }, head, body);
-}
-
-function mapButtons(s) {
-  const dir = mapsDirUrl(s);
-  if (!dir) return null;
-  return h('a', {
-    class: 'btn btn-primary btn-block btn-big', style: 'margin-top:12px; text-decoration:none',
-    href: dir, target: '_blank', rel: 'noopener',
-  }, `🧭 用地圖帶我去「${s.name}」`);
-}
-
-function timeInput(value, onChange) {
-  const el = h('input', { type: 'time', class: 'field', style: 'min-height:44px;padding:8px;width:110px', value: value || '' });
-  el.addEventListener('change', () => onChange(el.value));
-  return el;
+function field(label, control) {
+  return h('label', { class: 'form-field' }, h('span', { class: 'form-label' }, label), control);
 }

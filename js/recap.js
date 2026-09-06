@@ -1,6 +1,7 @@
 // 行程最終回顧 —— 把整趟的數字整理成一份可留念的成果。
 
 import * as store from './store.js';
+import { spotTimes } from './spottime.js';
 import { haversine } from './geo.js';
 import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges, BADGES } from './badges.js';
 import { KIND_META } from './ui.js';
@@ -74,9 +75,10 @@ export async function buildRecap(tripId) {
 
   let longestSpot = null, longestMin = 0;
   for (const s of spots) {
-    if (s.startTime && s.endTime) {
-      const [h1, m1] = s.startTime.split(':').map(Number);
-      const [h2, m2] = s.endTime.split(':').map(Number);
+    const _tm = spotTimes(s);
+    if (_tm.startTime && _tm.endTime) {
+      const [h1, m1] = _tm.startTime.split(':').map(Number);
+      const [h2, m2] = _tm.endTime.split(':').map(Number);
       const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
       if (mins > longestMin) { longestMin = mins; longestSpot = s; }
     }

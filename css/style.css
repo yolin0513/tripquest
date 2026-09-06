@@ -1626,3 +1626,13 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .photo-cell-btn .ph-state { min-height: 0; aspect-ratio: 1; padding: 12px; gap: 6px; }
 .photo-cell-btn .ph-state-t { font-size: 0.9rem; }
 .photo-cell-btn .ph-state-s { font-size: 0.75rem; }
+
+/* ---------- 景點設定頁（只剩改名、時間、停留、刪除） ---------- */
+.spot-time-row { display: flex; gap: 8px; align-items: center; }
+.spot-time { flex: 1 1 auto; min-width: 0; }
+.spot-stay { width: 100%; }
+.del-warn {
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg-elev));
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: 12px; padding: 14px; line-height: 1.7; font-size: 0.98rem;
+}

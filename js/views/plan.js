@@ -2,10 +2,11 @@
 //
 // 兩種操作並存（長輩不必只靠拖拉）：
 //   1. 按住 ☰ 拖曳 —— 可跨天、可換順序
-//   2. 每個景點的 ▲ ▼（同一天內移動）＋「換天」按鈕
+//   2. 每個景點的 ▲ ▼（同一天內移動）—— 給不想拖曳的人的替代路徑
 // 調整只改 spot 的 day / order，任務與照片掛在 spotId 上，進度完全跟著走。
 
 import { setTop, render } from '../app.js';
+import { spotTimes } from '../spottime.js';
 import * as store from '../store.js';
 import { h, mount, toast, promptDialog, confirmDialog } from '../ui.js';
 import { navigate, back } from '../router.js';
@@ -32,7 +33,7 @@ export default async function plan(tripId) {
 
   const list = h('div', { class: 'plan-list' });
   render(h('div', { class: 'page' },
-    h('p', { class: 'plan-tip' }, '按住 ☰ 可以拖到別天或換順序；也可以用每個景點的 ▲ ▼ 和「換天」。任務和照片會自動跟著搬。'),
+    h('p', { class: 'plan-tip' }, '按住 ☰ 拖曳可以換順序，也可以拖到別天（拖到畫面上下緣會自己往那邊捲）。同一天內換前後也可以用 ▲ ▼。任務和照片會自動跟著搬。'),
     list,
   ));
 
@@ -82,7 +83,8 @@ export default async function plan(tripId) {
   }
 
   function rowEl(s, day, idx, dayLen) {
-    const timeTxt = [s.startTime, s.endTime].filter(Boolean).join('–');
+    const tm = spotTimes(s);
+    const timeTxt = [tm.startTime, tm.endTime].filter(Boolean).join('–');
     const up = h('button', {
       class: 'plan-arrow', 'aria-label': '往前移', disabled: idx === 0,
       onclick: () => nudge(s, -1),
@@ -109,7 +111,6 @@ export default async function plan(tripId) {
           h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
           timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
           h('div', { class: 'plan-row-actions' },
-            h('button', { class: 'plan-mini', onclick: () => moveDay(s) }, '換天'),
             toggle,
             h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) }, '景點設定'),
           ),
@@ -176,18 +177,6 @@ export default async function plan(tripId) {
     draw();
   }
 
-  async function moveDay(s) {
-    const target = await chooseDay(s.name, s.day || 1, totalDays());
-    if (!target) return;
-    if (target > totalDays()) explicitDays = target;
-    const endOrder = store.spotsOf(tripId).filter((x) => (x.day || 1) === target && x.id !== s.id).length;
-    const from = s.day || 1;
-    await store.patch(s.id, { day: target, order: endOrder });
-    await renumberDay(from);
-    pushDates();
-    draw();
-    toast(`「${s.name}」移到第 ${target} 天`);
-  }
 
   async function renumberDay(day) {
     const inDay = store.spotsOf(tripId).filter((x) => (x.day || 1) === day);
@@ -223,7 +212,42 @@ export default async function plan(tripId) {
   }
 
   // ---------- 拖曳 ----------
+  // 邊緣自動捲動：手指停在畫面上下緣就持續捲，越靠邊越快。
+  // 「換天」按鈕是在這個機制補上之後才拿掉的 —— 沒有它，跨天拖曳只是看起來能做。
+  const EDGE = 96;              // 距離上下緣多少 px 內開始捲
+  const MAX_SPEED = 30;         // 每一幀最多捲幾 px（約 1800px/s）
   let drag = null;
+  let raf = null;
+
+  function autoScrollTick() {
+    if (!drag) { raf = null; return; }
+    const y = drag.lastY;
+    const top = document.getElementById('topbar')?.offsetHeight || 0;
+    const bottom = window.innerHeight - (document.getElementById('tabbar')?.offsetHeight || 0);
+    let dy = 0;
+    if (y < top + EDGE) dy = -MAX_SPEED * Math.min(1, (top + EDGE - y) / EDGE);
+    else if (y > bottom - EDGE) dy = MAX_SPEED * Math.min(1, (y - (bottom - EDGE)) / EDGE);
+    if (dy) {
+      const before = window.scrollY;
+      window.scrollBy(0, dy);
+      if (window.scrollY !== before) {
+        drag.ghost.style.top = (drag.lastY - drag.dy) + 'px';
+        placeAt(drag.lastX, drag.lastY);       // 捲動之後底下換人了，要重新判斷位置
+      }
+    }
+    raf = requestAnimationFrame(autoScrollTick);
+  }
+
+  // 把被拖的那一列插到目前手指下方那個位置
+  function placeAt(x, y) {
+    if (!drag) return;
+    const under = document.elementFromPoint(x, y);
+    const tgt = under && under.closest('.plan-row, .plan-divider, .plan-empty');
+    if (!tgt || tgt === drag.row || !list.contains(tgt)) return;
+    const r = tgt.getBoundingClientRect();
+    const after = y > r.top + r.height / 2;
+    list.insertBefore(drag.row, after ? tgt.nextSibling : tgt);
+  }
   list.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.plan-handle');
     if (!handle) return;
@@ -241,30 +265,26 @@ export default async function plan(tripId) {
     });
     document.body.append(ghost);
     drag.ghost = ghost;
+    drag.lastX = e.clientX;
+    drag.lastY = e.clientY;
     row.classList.add('is-dragging');
+    if (!raf) raf = requestAnimationFrame(autoScrollTick);
   });
 
   list.addEventListener('pointermove', (e) => {
     if (!drag) return;
     drag.moved = true;
+    drag.lastX = e.clientX;
+    drag.lastY = e.clientY;
     drag.ghost.style.left = (e.clientX - drag.dx) + 'px';
     drag.ghost.style.top = (e.clientY - drag.dy) + 'px';
-
-    const under = document.elementFromPoint(e.clientX, e.clientY);
-    const tgt = under && under.closest('.plan-row, .plan-divider, .plan-empty');
-    if (!tgt || tgt === drag.row || !list.contains(tgt)) return;
-    const r = tgt.getBoundingClientRect();
-    const after = e.clientY > r.top + r.height / 2;
-    if (tgt.classList.contains('plan-divider')) {
-      list.insertBefore(drag.row, after ? tgt.nextSibling : tgt);
-    } else {
-      list.insertBefore(drag.row, after ? tgt.nextSibling : tgt);
-    }
+    placeAt(e.clientX, e.clientY);
   });
 
   function endDrag() {
     if (!drag) return;
     const d = drag; drag = null;
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
     d.ghost.remove();
     d.row.classList.remove('is-dragging');
     if (d.moved) commitFromDOM();
@@ -293,28 +313,3 @@ export default async function plan(tripId) {
   draw();
 }
 
-// 換天的小對話框
-function chooseDay(name, current, max) {
-  return new Promise((resolve) => {
-    const root = document.getElementById('modalRoot');
-    const close = (v) => { ov.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
-    const onKey = (e) => { if (e.key === 'Escape') close(0); };
-    const grid = h('div', { class: 'day-move-grid' });
-    for (let d = 1; d <= max + 1; d++) {
-      grid.append(h('button', {
-        class: 'btn ' + (d === current ? 'btn-primary' : 'btn-soft'),
-        disabled: d === current,
-        onclick: () => close(d),
-      }, d > max ? '＋ 新的一天' : `第 ${d} 天`));
-    }
-    const card = h('div', { class: 'modal-card', role: 'dialog', 'aria-modal': 'true' },
-      h('h2', { class: 'modal-title' }, `「${name}」要移到哪一天？`),
-      h('p', { class: 'muted sm', style: 'margin:0 0 12px' }, `目前在第 ${current} 天`),
-      grid,
-      h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:10px', onclick: () => close(0) }, '取消'),
-    );
-    const ov = h('div', { class: 'modal-overlay', onclick: (e) => { if (e.target === ov) close(0); } }, card);
-    root.append(ov);
-    document.addEventListener('keydown', onKey);
-  });
-}

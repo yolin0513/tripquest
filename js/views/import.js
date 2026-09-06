@@ -12,14 +12,10 @@
 
 import { h, modal, toast } from '../ui.js';
 import { parseItinerary, fromRows, annotate, fmtTime } from '../itinerary.js';
+import { stayOptions } from '../spottime.js';
 
-const STAYS = [
-  { v: '', label: '不設定' }, { v: '30', label: '30 分' }, { v: '60', label: '1 小時' },
-  { v: '90', label: '1.5 小時' }, { v: '120', label: '2 小時' }, { v: '180', label: '3 小時' },
-  { v: '240', label: '4 小時' },
-];
-// 下拉選單的欄位很窄，「2 小時 30 分」會被截掉 —— 這裡用短寫法
-const shortStay = (m) => (m < 60 ? m + ' 分' : String(+(m / 60).toFixed(1)) + ' 小時');
+// 停留時間的選項跟景點設定頁共用（js/spottime.js）——
+// 「非預設值會顯示成『不設定』」那個坑不要在兩個地方各踩一次
 
 // 主入口。回傳 { items, usedAi } 或 null（使用者取消）
 export default async function openImport({ cityHint = '' } = {}) {
@@ -323,12 +319,8 @@ async function confirmItems(parsed, cityHint) {
 
     // 解析出來的時間不見得剛好是選單裡的那幾個（14:00-16:30 就是 150 分）。
     // 沒有對應選項時 select 會顯示「不設定」，看起來像被丟掉了 —— 所以把實際值補進去。
-    const opts = [...STAYS];
     const cur = String(it.stayMin || '');
-    if (cur && !opts.some((s) => s.v === cur)) {
-      opts.push({ v: cur, label: shortStay(it.stayMin) });
-      opts.sort((a, b) => (parseInt(a.v, 10) || 0) - (parseInt(b.v, 10) || 0));
-    }
+    const opts = stayOptions(it.stayMin);
     const stay = h('select', { class: 'imp-in imp-stay' },
       ...opts.map((s) => h('option', { value: s.v, selected: cur === s.v }, s.label)));
     stay.addEventListener('change', () => { it.stayMin = stay.value ? parseInt(stay.value, 10) : null; it.stayGuess = false; });

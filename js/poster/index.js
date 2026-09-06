@@ -3,6 +3,7 @@
 // 兩段式排版：先量測算高 → 設 canvas 高度 → 畫。輸出長圖 JPEG，行程 ≥3 天則一天一張。
 
 import * as store from '../store.js';
+import { spotTimes } from '../spottime.js';
 import { blobURL } from '../photos.js';
 import * as db from '../db.js';
 import { drawParagraph, paragraphHeight, clip } from './text.js';
@@ -31,7 +32,7 @@ export function buildModel(tripId) {
       name: s.name,
       district: s.district || '',
       blurb: s.blurb || s.wikiExtract || bestQuestHint(s.id) || '',
-      startTime: s.startTime || '', endTime: s.endTime || '',
+      startTime: spotTimes(s).startTime, endTime: spotTimes(s).endTime,
       photoHash: pickPhotoHash(s), emoji: s.emoji || '📍',
       region: s.region || '',
       theme: s.theme || themeForSpot(s),
