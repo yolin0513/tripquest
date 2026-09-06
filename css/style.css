@@ -923,7 +923,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   background: var(--bg-elev); overflow: hidden; margin-bottom: 12px;
   border-left: 4px solid var(--theme-accent, var(--primary));
 }
-.qc-theme {
+.qc-theme { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
   display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted);
   margin-top: 2px;
 }
@@ -951,7 +951,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qc-inner .qbig:last-child { margin-bottom: 12px; }
 
 /* ---------- 總行程編輯 ---------- */
-.plan-tip { color: var(--muted); font-size: 0.95rem; line-height: 1.6; margin: 0 2px 16px; }
+.plan-tip { font-size: 0.88rem; color: var(--muted); font-size: 0.95rem; line-height: 1.6; margin: 0 2px 16px; }
 .plan-list { display: block; }
 .plan-divider {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
@@ -965,9 +965,9 @@ textarea.field { resize: vertical; line-height: 1.6; }
   text-align: center; color: var(--muted); font-weight: 600; margin-bottom: 10px;
 }
 .plan-row {
-  display: flex; align-items: stretch; gap: 10px;
-  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 16px;
-  padding: 12px; margin-bottom: 10px;
+  display: flex; align-items: stretch; gap: 8px;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;
+  padding: 8px; margin-bottom: 8px;
 }
 .plan-row.is-dragging { opacity: 0.35; }
 .plan-ghost {
@@ -977,36 +977,36 @@ textarea.field { resize: vertical; line-height: 1.6; }
 }
 .plan-handle {
   appearance: none; border: 0; background: var(--bg-elev-2); color: var(--muted);
-  border-radius: 12px; width: 52px; flex: none; font-size: 1.5rem; cursor: grab;
+  border-radius: 10px; width: 42px; flex: none; font-size: 1.3rem; cursor: grab;
   touch-action: none; display: grid; place-items: center;
 }
 .plan-handle:active { cursor: grabbing; background: var(--primary); color: var(--primary-ink); }
 .plan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
-.plan-name { font-size: 1.1rem; font-weight: 800; line-height: 1.3; }
-.plan-time { font-size: 0.9rem; color: var(--muted); font-weight: 700; }
+.plan-name { font-size: 1rem; font-weight: 800; line-height: 1.3; }
+.plan-time { font-size: 0.85rem; color: var(--muted); font-weight: 700; }
 /* 兩顆等寬、圖示在前、數量用固定寬度的小徽章 ——
    不然「改任務（3）」跟「景點設定」長度不同，一排看起來歪的 */
-.plan-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.plan-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
 .plan-row-actions .plan-mini {
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  width: 100%; min-height: 40px; padding: 6px 8px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  width: 100%; min-height: 36px; padding: 4px 6px; font-size: 0.85rem; border-radius: 10px;
 }
-.plan-mini-ic { font-size: 1rem; line-height: 1; flex: none; }
-.plan-mini-t { font-weight: 700; }
+.plan-mini-ic { font-size: 0.95rem; line-height: 1; flex: none; }
+.plan-mini-t { font-weight: 700; white-space: nowrap; }
 .plan-mini-n {
-  min-width: 20px; padding: 1px 5px; border-radius: 999px; flex: none;
-  background: var(--bg-elev-2); color: var(--muted);
-  font-size: 0.78rem; font-weight: 800; text-align: center;
+  min-width: 18px; padding: 0 4px; border-radius: 999px; flex: none;
+  background: var(--bg); color: var(--muted);
+  font-size: 0.72rem; font-weight: 800; text-align: center;
 }
 .plan-mini {
   appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
   border-radius: 999px; padding: 8px 16px; font-weight: 800; font-size: 0.9rem; cursor: pointer; min-height: 42px;
 }
 .plan-mini:active { transform: scale(0.95); }
-.plan-updown { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.plan-updown { display: flex; flex-direction: column; gap: 5px; flex: none; }
 .plan-arrow {
-  appearance: none; border: 2px solid var(--line); background: var(--bg-elev-2); color: var(--text);
-  border-radius: 12px; width: 52px; min-height: 44px; flex: 1; font-size: 1.1rem; font-weight: 800; cursor: pointer;
+  appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+  border-radius: 10px; width: 42px; min-height: 38px; flex: 1; font-size: 1rem; font-weight: 800; cursor: pointer;
 }
 .plan-arrow:active { transform: scale(0.94); }
 .plan-arrow:disabled { opacity: 0.28; cursor: default; }
@@ -1613,13 +1613,13 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* 景點標題列右邊的地圖小圖示（原本是整寬一顆大按鈕，每個景點省 64px） */
 /* 只有一個地圖圖示，很多人不知道那是導航 —— 一定要有字 */
 .qc-map {
-  flex: none; min-width: 52px; height: 50px; align-self: center; margin-right: 6px;
+  flex: none; width: 46px; height: 48px; align-self: center; margin-right: 6px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   border-radius: 12px; background: var(--bg-elev-2); border: 1px solid var(--line);
-  text-decoration: none; color: var(--text); padding: 0 6px;
+  text-decoration: none; color: var(--text);
 }
-.qc-map-ic { font-size: 1.15rem; line-height: 1; }
-.qc-map-t { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; }
+.qc-map-ic { font-size: 1.05rem; line-height: 1; }
+.qc-map-t { font-size: 0.62rem; font-weight: 800; line-height: 1; }
 .qc-map:active { transform: scale(0.94); }
 
 /* ---------- 投稿照片：blob 還沒到時的狀態 ---------- */
@@ -1644,7 +1644,8 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .photo-cell-btn .ph-state-s { font-size: 0.75rem; }
 
 /* ---------- 景點設定頁（只剩改名、時間、停留、刪除） ---------- */
-.spot-time-row { display: flex; gap: 8px; align-items: center; }
+.spot-time-row { display: flex; gap: 8px; align-items: stretch; }
+.spot-time-row .btn { white-space: nowrap; flex: none; padding: 0 14px; }
 .spot-time { flex: 1 1 auto; min-width: 0; }
 .spot-stay { width: 100%; }
 .del-warn {
