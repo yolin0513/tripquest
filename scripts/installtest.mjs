@@ -303,6 +303,33 @@ try {
     await pg.close();
   }
 
+  // ---------- 8b-2. 參數失效時的降級 ----------
+  // openExternalBrowser 沒有官方保證（見 docs/PLATFORM_NOTES.md），
+  // 所以「它哪天不動了」必須是可以接受的狀態，而不是災難。
+  console.log('\n— openExternalBrowser 失效時的降級 —');
+  {
+    const plain = `http://localhost:${WEB}/#` + invite.split('#')[1];   // 完全不帶參數
+    const pg = await dev(UA.iosLine);
+    await pg.goto(plain, { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.ig-step', { timeout: 15000 });
+    const t = await pg.evaluate(() => document.querySelector('.modal-card').innerText);
+    yes(/用 Safari 開啟/.test(t), '參數失效：還是會教他怎麼換到 Safari');
+    yes(/找不到也沒關係/.test(t), '參數失效：退路還在');
+    await pg.evaluate(() => { const o = document.querySelector('.modal-overlay'); if (o) o.remove(); });
+    yes(await has(pg, '直接加入'), '參數失效：「直接加入」那條路還在，不會卡住');
+    await pg.close();
+  }
+  {
+    // 反過來：已經跳到 Safari 了，就不該再看到任何 LINE 相關的話
+    const pg = await dev(UA.iosSafari);
+    await pg.goto(`http://localhost:${WEB}/?openExternalBrowser=1#` + invite.split('#')[1], { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.ig-step', { timeout: 15000 });
+    const t = await pg.evaluate(() => document.querySelector('.modal-card').innerText);
+    yes(!/LINE|用 Safari 開啟|用其他瀏覽器開啟/.test(t), '已經在 Safari：不再出現任何「請換瀏覽器」的內容');
+    yes(/加到主畫面/.test(t), '已經在 Safari：改教「加到主畫面」（那是另一件必要的事）');
+    await pg.close();
+  }
+
   // ---------- 8c. 教學不可以寫死第三方 App 的位置 ----------
   // 使用者實機回報：我們寫「右上角的三個點」，他的 LINE 上是在右下角。
   console.log('\n— 教學不寫死位置 —');
