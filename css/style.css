@@ -989,7 +989,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
 .plan-row-actions .plan-mini {
   display: flex; align-items: center; justify-content: center; gap: 4px;
-  width: 100%; min-height: 36px; padding: 4px 6px; font-size: 0.85rem; border-radius: 10px;
+  width: 100%; min-height: 40px; padding: 4px 6px; font-size: 0.85rem; border-radius: 10px;
 }
 .plan-mini-ic { font-size: 0.95rem; line-height: 1; flex: none; }
 .plan-mini-t { font-weight: 700; white-space: nowrap; }
@@ -1006,7 +1006,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-updown { display: flex; flex-direction: column; gap: 5px; flex: none; }
 .plan-arrow {
   appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
-  border-radius: 10px; width: 42px; min-height: 38px; flex: 1; font-size: 1rem; font-weight: 800; cursor: pointer;
+  border-radius: 10px; width: 42px; min-height: 40px; flex: 1; font-size: 1rem; font-weight: 800; cursor: pointer;
 }
 .plan-arrow:active { transform: scale(0.94); }
 .plan-arrow:disabled { opacity: 0.28; cursor: default; }
