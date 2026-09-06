@@ -60,7 +60,7 @@ try {
   await shot('02-create');
 
   await go(`/#/trip/${tripId}`);
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await shot('03-trip');
   ok('行程總覽（大任務卡）');
 
@@ -101,7 +101,7 @@ try {
   await shot('06-quest-done');
 
   await go(`/#/trip/${tripId}`);
-  await page.waitForSelector('.qbig.done');
+  await page.waitForSelector('.qline.done');
   await shot('07-trip-done');
 
   await go(`/#/trip/${tripId}/album`);
@@ -149,7 +149,7 @@ try {
   // 字級切換
   await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); });
   await go(`/#/trip/${tripId}`);
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await shot('10-trip-xl-font');
   const fsAttr = await page.evaluate(() => document.documentElement.dataset.fs);
   if (fsAttr === 'xl') ok('字級切換（特大）'); else fail('字級切換：' + fsAttr);

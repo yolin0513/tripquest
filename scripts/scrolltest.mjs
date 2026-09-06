@@ -296,7 +296,7 @@ try {
   await T.page.waitForSelector('.people-row, .empty');
   await sleep(700);
   await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('任務')).click());
-  await T.page.waitForSelector('.qbig');
+  await T.page.waitForSelector('.qline');
   await sleep(1500);
   const backY = await T.page.evaluate(() => Math.round(window.scrollY));
   if (Math.abs(backY - keep) <= 40) ok(`切到別的分頁再切回來：還原上次的位置（${keep} → ${backY}），不是跳到頂端`);
@@ -362,7 +362,7 @@ try {
 
   const marker = () => N.page.evaluate(() => ({
     hash: location.hash,
-    what: document.querySelector('.qbig') ? '任務清單'
+    what: document.querySelector('.qline') ? '任務清單'
       : document.querySelector('.qrow') ? '景點頁'
       : document.querySelector('.quest-focus') ? '任務詳情'
       : document.querySelector('.people-row, .wall-bar') ? '照片牆'

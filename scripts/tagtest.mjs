@@ -121,24 +121,25 @@ try {
 
   // ================= 行程頁：打開就看得到加照片的按鈕，不用先點任何東西 =================
   await go(A.page, `/#/trip/${setup.tid}`);
-  await A.page.waitForSelector('.qbig');
+  await A.page.waitForSelector('.qline');
   const front = await A.page.evaluate(() => {
     const vis = (el) => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && !!el.offsetParent;
     };
-    const cards = [...document.querySelectorAll('.qbig')];
+    const cards = [...document.querySelectorAll('.qline')];
     const first = cards[0];
-    const btns = first ? [...first.querySelectorAll('.addphoto-row button')] : [];
+    // 收合的任務列用圖示鈕（.addphoto-icons），展開與景點頁用有字的（.addphoto-row）
+    const btns = first ? [...first.querySelectorAll('.addphoto-row button, .addphoto-icons button')] : [];
     return {
       cards: cards.length,
       // 「不用先點任何東西」＝ 一進來按鈕就已經在畫面上（DOM 可見、有尺寸）
       btnsVisible: btns.filter(vis).length,
-      labels: btns.map((b) => b.textContent),
+      labels: btns.map((b) => b.getAttribute('aria-label') || b.textContent),
       tooSmall: btns.filter((b) => b.getBoundingClientRect().height < 44).length,
       // 整個任務清單裡不該再有「編輯」
-      editButtons: [...document.querySelectorAll('.qcollapse button, .qbig button')]
+      editButtons: [...document.querySelectorAll('.qcollapse button, .qline button')]
         .filter((b) => /編輯/.test(b.textContent)).length,
     };
   });
@@ -153,8 +154,8 @@ try {
 
   // 從打開行程到「開始加照片」需要點幾下 —— 直接數，不用猜
   const taps = await A.page.evaluate(() => {
-    const card = document.querySelector('.qbig');
-    const btn = card && card.querySelector('.addphoto-row button');
+    const card = document.querySelector('.qline');
+    const btn = card && card.querySelector('.addphoto-row button, .addphoto-icons button');
     if (!btn) return -1;
     // 這顆按鈕現在就看得到、按下去就會叫出相機／相簿 → 1 下
     const r = btn.getBoundingClientRect();
@@ -165,10 +166,10 @@ try {
 
   // 真的按下去會不會叫出檔案選擇（＝真的能開始加照片）
   const fires = await A.page.evaluate(() => new Promise((res) => {
-    const card = document.querySelector('.qbig');
+    const card = document.querySelector('.qline');
     const input = card.querySelector('input[type=file]');
     input.addEventListener('click', () => res(true), { once: true });
-    card.querySelector('.addphoto-row button').click();
+    card.querySelector('.addphoto-row button, .addphoto-icons button').click();
     setTimeout(() => res(false), 800);
   }));
   if (fires) ok('按下去確實會叫出相機／相簿');

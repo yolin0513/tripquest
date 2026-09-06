@@ -227,12 +227,12 @@ try {
 
   // ---------- 5. 字級：特大時不能破版 ----------
   console.log('\n— 特大字 —');
-  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fontScale', 'xl'); });
+  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); });
   await sleep(400);
   for (const [label, h] of [['行程頁', `/trip/${ids.tid}`], ['照片牆', `/trip/${ids.tid}/people`], ['分帳', `/trip/${ids.tid}/expenses`], ['設定', '/settings']]) {
     await inspect('特大字 · ' + label, h);
   }
-  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fontScale', 'm'); });
+  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'm'); });
 
   // ---------- 6. 離線 ----------
   console.log('\n— 離線 —');

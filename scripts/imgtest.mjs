@@ -90,21 +90,37 @@ try {
   // ---------- 畫面呈現 ----------
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await sleep(1200);
 
-  const ui = await page.evaluate(() => {
-    const cards = [...document.querySelectorAll('.qbig')].map((c) => {
-      const ph = c.querySelector('.qbig-photo');
+  // 收合狀態看的是 56px 縮圖（不壓授權小字，會糊成一團）；
+  // 出處標在展開後的大圖上 —— 所以要一列一列點開才驗得到。
+  const titles = await page.evaluate(() => [...document.querySelectorAll('.qline-title')].map((x) => x.textContent || ''));
+  const cards = [];
+  for (let i = 0; i < titles.length; i++) {
+    const one = await page.evaluate((idx) => {
+      const c = document.querySelectorAll('.qline')[idx];
+      const ph = c.querySelector('.qline-thumb');
       return {
-        title: c.querySelector('.qbig-title')?.textContent || '',
+        title: c.querySelector('.qline-title')?.textContent || '',
         bg: (ph?.style.backgroundImage || '').slice(0, 24),
         placeholder: ph?.classList.contains('is-placeholder'),
-        credit: ph?.querySelector('.img-credit')?.textContent || '',
+        thumbCredit: ph?.querySelector('.img-credit')?.textContent || '',
       };
-    });
-    return { cards, blank: cards.filter((c) => !c.bg).length };
-  });
+    }, i);
+    await page.evaluate((idx) => document.querySelectorAll('.qline-head')[idx].click(), i);
+    await sleep(700);
+    one.credit = await page.evaluate((idx) => {
+      const c = document.querySelectorAll('.qline')[idx];
+      return c.querySelector('.qline-photo .img-credit')?.textContent || '';
+    }, i);
+    cards.push(one);
+  }
+  await page.evaluate(() => document.querySelectorAll('.qline.open .qline-head').forEach((e) => e.click()));
+  await sleep(300);
+  const ui = { cards, blank: cards.filter((c) => !c.bg).length };
+  if (cards.every((c) => !c.thumbCredit)) ok('56px 的縮圖不壓授權小字（出處改標在展開的大圖上）');
+  else fail('縮圖上出現授權文字：' + JSON.stringify(cards.filter((c) => c.thumbCredit)));
 
   if (ui.blank === 0) ok(`每一張任務卡都有圖或色塊，沒有一張是空白的（${ui.cards.length} 張）`);
   else fail(`還有 ${ui.blank} 張任務卡是空白的`);
@@ -131,7 +147,7 @@ try {
 
   const shotCard = async (match, file) => {
     const found = await page.evaluate((m) => {
-      const card = [...document.querySelectorAll('.qbig')].find((c) => c.querySelector('.qbig-title')?.textContent.includes(m));
+      const card = [...document.querySelectorAll('.qline')].find((c) => c.querySelector('.qline-title')?.textContent.includes(m));
       if (!card) return false;
       const r = card.getBoundingClientRect();
       // 讓整張卡（含圖片下緣的授權小字）都在畫面內，頂列下方留一點空
@@ -152,7 +168,7 @@ try {
   const before = await page.evaluate(() => performance.getEntriesByType('resource').filter((r) => /wikipedia|wikimedia/.test(r.name)).length);
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await sleep(1500);
   const after = await page.evaluate(() => performance.getEntriesByType('resource').filter((r) => /wikipedia|wikimedia/.test(r.name)).length);
   if (after === 0) ok('第二次進入完全不再打 Wikimedia（圖從本機快取讀）');
@@ -168,10 +184,10 @@ try {
   });
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await sleep(1500);
   const offline = await page.evaluate(() => {
-    const ph = [...document.querySelectorAll('.qbig-photo')];
+    const ph = [...document.querySelectorAll('.qline-thumb')];
     return { cards: ph.length, withBg: ph.filter((p) => p.style.backgroundImage).length };
   });
   await page.setRequestInterception(false);
@@ -209,7 +225,7 @@ try {
   const openTrip = async (pg, tid, ms = 12000) => {
     await pg.goto('about:blank');
     await pg.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
-    await pg.waitForSelector('.qbig');
+    await pg.waitForSelector('.qline');
     await sleep(ms);
   };
   const spotState = (pg, tid) => pg.evaluate(async (t) => {
@@ -247,7 +263,7 @@ try {
   if (cut.every((x) => !x.hero && x.v === 0 && !x.noHero)) ok('連不到 Wikimedia 時：不留任何標記，之後才有機會重補');
   else fail('斷網時被錯誤標記了：' + JSON.stringify(cut));
   const cutUI = await N.evaluate(() => {
-    const ph = [...document.querySelectorAll('.qbig-photo')];
+    const ph = [...document.querySelectorAll('.qline-thumb')];
     return { cards: ph.length, withBg: ph.filter((p) => p.style.backgroundImage).length };
   });
   if (cutUI.cards > 0 && cutUI.withBg === cutUI.cards) ok('斷網時畫面仍然完整（先用主題色塊佔位）');

@@ -82,7 +82,7 @@ try {
 
   // ================= 「現在這一站」 =================
   await go(`/#/trip/${setup.tid}`);
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await sleep(500);
   const auto = await page.evaluate(() => ({
     name: document.querySelector('.nextstn-name')?.textContent || '',
@@ -152,7 +152,7 @@ try {
 
   // 重開行程頁，狀態要留著
   await go(`/#/trip/${setup.tid}`);
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await sleep(1500);
   const again = await page.evaluate(() => ({
     name: document.querySelector('.nextstn-name')?.textContent || '',
@@ -175,9 +175,14 @@ try {
     return {
       dayTop: Math.round(d.top), topH: Math.round(topH),
       spotVisible: q.top >= topH && q.bottom <= window.innerHeight - tabH,
+      // v1.41 之後任務列變矮，整頁可能根本沒那麼長 —— 捲到底也還碰不到頂。
+      // 那不是壞掉：真正要看的是「那一站有沒有在畫面上」。
+      atBottom: Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 2,
     };
   });
-  if (target.dayTop >= target.topH - 4 && target.dayTop <= target.topH + 40) ok(`捲到「第 2 天」的標題列（距頂列 ${target.dayTop - target.topH}px）`);
+  const nearTop = target.dayTop >= target.topH - 4 && target.dayTop <= target.topH + 40;
+  if (nearTop) ok(`捲到「第 2 天」的標題列（距頂列 ${target.dayTop - target.topH}px）`);
+  else if (target.atBottom && target.spotVisible) ok(`頁面不夠長捲不到頂，但已捲到底且那一站看得見（距頂列 ${target.dayTop - target.topH}px）`);
   else fail(`捲動目標不是那一天的標題列：${JSON.stringify(target)}`);
   if (target.spotVisible) ok('那一站也在畫面內，打開行程就直接看到要去的那一站');
   else fail('捲完之後那一站還是看不到');
@@ -196,7 +201,7 @@ try {
     }
   }, setup);
   await go(`/#/trip/${setup.tid}`);
-  await page.waitForSelector('.qbig');
+  await page.waitForSelector('.qline');
   await sleep(500);
   const advanced = await page.evaluate(async (tid) => {
     const st = await import('./js/store.js');
@@ -282,7 +287,7 @@ try {
 
     await E.goto('about:blank');
     await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}`, { waitUntil: 'networkidle0' });
-    await E.waitForSelector('.qbig');
+    await E.waitForSelector('.qline');
     await sleep(1200);
     const hasSwitch = await E.evaluate(() => !!document.querySelector('.nextstn-switch'));
     if (hasSwitch) ok(`${label}：仍然有「帶我去下一站」與「換一站」`);
@@ -294,7 +299,7 @@ try {
     }, ez);
     await E.goto('about:blank');
     await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}`, { waitUntil: 'networkidle0' });
-    await E.waitForSelector('.qbig');
+    await E.waitForSelector('.qline');
     await sleep(1800);
     const r = await E.evaluate(() => ({
       scrollY: Math.round(window.scrollY),

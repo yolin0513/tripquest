@@ -1194,7 +1194,9 @@ textarea.field { resize: vertical; line-height: 1.6; }
   pointer-events: none;
 }
 /* 抓不到圖時的主題色塊：不留白，而且 emoji 維持大的、置中（不像有照片時縮到角落） */
+.qline-thumb.is-placeholder, .qline-photo.is-placeholder,
 .qbig-photo.is-placeholder, .quest-focus-photo.is-placeholder { background-size: cover; background-position: center; }
+.qline-thumb.is-placeholder .qline-emoji, .qline-photo.is-placeholder .qbig-emoji,
 .qbig-photo.is-placeholder .qbig-emoji, .quest-focus-photo.is-placeholder .qf-emoji {
   position: static; background: none; width: auto; height: auto;
 }
@@ -1512,3 +1514,94 @@ textarea.field { resize: vertical; line-height: 1.6; }
   background: var(--bg-elev-2); border: 1px dashed var(--line);
   font-size: 0.9rem; line-height: 1.6; color: var(--muted);
 }
+
+/* ---------- 任務列（收合 88px，點開才給大圖） ---------- */
+/* 之前每張卡固定 414px，一個螢幕只放得下 1.7 個任務，五個任務的景點要滑 2300px。*/
+.qline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "head act" "more more";
+  align-items: center;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.qline-head {
+  grid-area: head;
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 2px 8px 8px; min-height: 64px;
+  text-align: left; cursor: pointer; min-width: 0;
+}
+.qline-head:active { background: var(--bg-elev-2); }
+.qline-thumb {
+  flex: none; width: 56px; height: 56px; border-radius: 12px;
+  background: var(--bg-elev-2) center/cover no-repeat;
+  display: grid; place-items: center; position: relative; overflow: hidden;
+}
+.qline-emoji { font-size: 1.5rem; filter: drop-shadow(0 1px 4px rgba(0,0,0,.5)); }
+.qline-thumb.has-img .qline-emoji { display: none; }
+.qline-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* 字級不縮 —— 縮的是圖與留白。
+   一行放不下就折第二行，不要截斷：「必吃：包心…／必吃：阿灶…／必吃：當歸…」
+   三個長得幾乎一樣，等於沒有名字。短名字仍然只佔一行。 */
+.qline-title {
+  font-size: 1.05rem; font-weight: 800; line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+.qline-sub { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.qline.done .qline-sub { color: var(--ok); }
+.qline-chev { flex: none; color: var(--muted); font-size: 0.8rem; width: 10px; text-align: center; }
+.qline.open .qline-chev { transform: rotate(90deg); }
+
+.qline-act { grid-area: act; display: flex; align-items: center; padding-right: 6px; }
+.qline-done {
+  grid-area: act; display: grid; place-items: center;
+  width: 46px; height: 46px; margin-right: 6px; flex: none;
+  color: var(--ok); font-size: 1.6rem; font-weight: 900;
+}
+.addphoto-icons { display: flex; gap: 5px; }
+.apx {
+  width: 46px; height: 46px; border-radius: 12px; flex: none;
+  display: grid; place-items: center; font-size: 1.35rem; line-height: 1;
+  border: 1px solid var(--line); cursor: pointer;
+}
+.apx-cam { background: var(--primary); border-color: var(--primary); }
+.apx-lib { background: var(--bg-elev-2); }
+.apx:active { transform: scale(0.94); }
+
+/* 展開的部分：預設整塊不佔高度 */
+.qline-more {
+  grid-area: more; display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows 0.18s ease;
+}
+.qline.open .qline-more { grid-template-rows: 1fr; }
+.qline-more > * { min-height: 0; }
+.qline-inner { overflow: hidden; }
+.qline-photo {
+  width: 100%; height: 190px; position: relative;
+  background: var(--bg-elev-2) center/cover no-repeat;
+  display: grid; place-items: center;
+}
+.qline-photo.has-img .qbig-emoji { display: none; }
+.qline-detail { padding: 12px 12px 14px; }
+.qline-hint { margin: 0 0 10px; color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+.qline-tags { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.qline-likes { color: var(--muted); font-size: 0.9rem; font-weight: 700; }
+.qline-link {
+  appearance: none; border: 0; background: transparent; color: var(--primary);
+  font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer;
+  min-height: 44px; padding: 0 4px; margin-left: auto;
+}
+
+/* 景點標題列右邊的地圖小圖示（原本是整寬一顆大按鈕，每個景點省 64px） */
+.qc-map {
+  flex: none; width: 48px; height: 48px; align-self: center; margin-right: 6px;
+  display: grid; place-items: center; font-size: 1.35rem;
+  border-radius: 12px; background: var(--bg-elev-2); border: 1px solid var(--line);
+  text-decoration: none;
+}
+.qc-map:active { transform: scale(0.94); }

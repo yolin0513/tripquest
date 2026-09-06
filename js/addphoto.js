@@ -13,7 +13,7 @@ import { importPhoto, blobURL } from './photos.js';
 import { ensureMember } from './claim.js';
 import { newlyEarned } from './badges.js';
 
-export function addPhotoButtons(tripId, questId, { compact = false, onDone } = {}) {
+export function addPhotoButtons(tripId, questId, { compact = false, icons = false, onDone } = {}) {
   // 拍照（叫相機）與從相簿選（不加 capture）各一個 input，共用同一套處理
   const camInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: true, hidden: true });
   const libInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
@@ -81,6 +81,24 @@ export function addPhotoButtons(tripId, questId, { compact = false, onDone } = {
   }
 
   const done = store.isQuestDone(questId);
+
+  // icons：收合的任務列上用。空間只夠圖示，但**照樣是兩顆、各自一下就到** ——
+  // 「加照片要一眼看到、一次點到」是先前定下來不能退讓的一條，
+  // 不可以為了版面把它們收進選單裡多一層。觸控區維持 48×48。
+  if (icons) {
+    return h('div', { class: 'addphoto-icons' },
+      camInput, libInput,
+      h('button', {
+        class: 'apx apx-cam', onclick: (e) => { e.stopPropagation(); camInput.click(); },
+        'aria-label': done ? '再拍一張' : '拍照', title: done ? '再拍一張' : '拍照',
+      }, '📷'),
+      h('button', {
+        class: 'apx apx-lib', onclick: (e) => { e.stopPropagation(); libInput.click(); },
+        'aria-label': '從相簿選', title: '從相簿選',
+      }, '🖼️'),
+    );
+  }
+
   const cls = compact ? 'btn' : 'btn btn-block btn-big';
   return h('div', { class: compact ? 'addphoto-row' : 'big-shot-btn' },
     camInput, libInput,

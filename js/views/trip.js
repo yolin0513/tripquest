@@ -527,13 +527,13 @@ function spotSection(s, tripId, hereId) {
         }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
         chev,
       ),
+      spotMapButton(s),
       // 這裡本來有一顆「編輯」，但它會把長輩帶到景點頁 —— 而拍照按鈕在那裡，
       // 於是「編輯」看起來就成了加照片的入口。拍照按鈕現在直接在任務卡上，
       // 景點的改名 / 刪除 / 改任務都集中到「調整每天的行程」。
     ),
     h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' },
-      spotMapButton(s),
-      ...quests.map((q) => questBigCard(q, s, tk)))),
+      ...quests.map((q) => questLine(q, s, tk)))),
   );
   return sec;
 }
@@ -581,21 +581,25 @@ function startEnrich(tripId) {
 
 // 只換那一張卡的圖，不動其他 DOM
 function repaintQuestPhoto(questId) {
-  const el = document.querySelector(`.qbig-photo[data-q="${CSS.escape(questId)}"]`);
-  if (!el) return;
+  // 一個任務現在有兩個圖面：收合列的小縮圖，以及展開後的大圖（可能還沒建）
+  const els = document.querySelectorAll(`.qref[data-q="${CSS.escape(questId)}"]`);
+  if (!els.length) return;
   const q = store.getRaw(questId);
   if (!q) return;
   const sp = store.getRaw(q.spotId);
   const subs = store.submissionsOf(questId);
-  el.querySelector('.img-credit')?.remove();
-  el.classList.remove('is-placeholder', 'has-img');
-  el.style.backgroundImage = '';
-  paintRef(el, refImageFor(q, sp, subs[0] && (subs[0].thumbHash || subs[0].photoHash)),
-    sp ? (sp.theme || themeForSpot(sp)) : 'journey', q.spotId);
+  const pick = refImageFor(q, sp, subs[0] && (subs[0].thumbHash || subs[0].photoHash));
+  for (const el of els) {
+    el.querySelector('.img-credit')?.remove();
+    el.classList.remove('is-placeholder', 'has-img');
+    el.style.backgroundImage = '';
+    paintRef(el, pick, sp ? (sp.theme || themeForSpot(sp)) : 'journey', q.spotId,
+      { credit: !el.classList.contains('qline-thumb') });
+  }
 }
 
 // 把示意圖畫上去。抓不到圖（或 blob 被清掉）一律用主題色塊，不留一塊空白。
-export function paintRef(el, pick, themeKey, seed) {
+export function paintRef(el, pick, themeKey, seed, { credit = true } = {}) {
   const placeholder = () => {
     el.style.backgroundImage = `url("${themePlaceholder(themeKey, seed)}")`;
     el.classList.add('is-placeholder');
@@ -609,57 +613,113 @@ export function paintRef(el, pick, themeKey, seed) {
     el.style.backgroundImage = `url("${u}")`;
     // 出處等圖真的出現才標。先標的話，圖載不出來時就會變成
     // 「大大的 emoji ＋ 別人的姓名授權」，看起來像那個 emoji 是他的作品。
-    if (pick.own) return;
+    // 縮圖只有 56px，標上授權只會變成一團看不清的字壓在圖上。
+    // 展開後的大圖仍然會標，出處不會消失。
+    if (pick.own || !credit) return;
     const line = creditLine(pick.attr, pick.generic);
     if (line && !el.querySelector('.img-credit')) el.append(h('span', { class: 'img-credit' }, line));
   }).catch(placeholder);
 }
 
+// 地圖入口從「整寬一顆大按鈕」縮成標題列右邊的小圖示。
+// 每個景點省下約 64px；一趟 30 個景點就是 1900px 的滑動距離。
+// 觸控區仍然 48×48，而且有 aria-label —— 縮的是留白，不是可用性。
 function spotMapButton(s) {
   const url = mapsSearchUrl(s);
   if (!url) return null;
   return h('a', {
-    class: 'btn btn-soft btn-block map-btn', href: url, target: '_blank', rel: 'noopener',
-    style: 'text-decoration:none; margin-bottom:12px',
-  }, `🗺️ 用地圖看「${s.name}」在哪裡`);
+    class: 'qc-map', href: url, target: '_blank', rel: 'noopener',
+    'aria-label': `用地圖看「${s.name}」在哪裡`, title: `用地圖看「${s.name}」在哪裡`,
+    onclick: (e) => e.stopPropagation(),
+  }, '🗺️');
 }
 
-function questBigCard(q, spot, themeKey) {
+// 任務列：收合是一列（約 88px），點一下才展開大圖與說明。
+//
+// 之前每張卡固定 414px（大圖 340 ＋ 說明 ＋ 兩顆按鈕），一個螢幕只放得下 1.7 張，
+// 一個五個任務的景點就要滑 2300px。使用者實機回報「景點一多要滑很久」。
+//
+// 收合時**照樣可以直接加照片** —— 右邊那兩顆就是拍照與從相簿選，各自一下就到，
+// 不必先展開。這是先前定下來、不能退讓的一條：加照片要一眼看到、一次點到。
+// 展開的內容是第一次打開時才建，30 個任務不會在進頁面時就抓 30 張大圖。
+function questLine(q, spot, themeKey) {
   const done = store.isQuestDone(q.id);
   const subs = store.submissionsOf(q.id);
   const km = KIND_META[q.kind] || KIND_META.thing;
   const likeCount = subs.reduce((n, s) => n + store.reactionsOf(s.id).length, 0);
+  const refPick = () => refImageFor(q, spot, subs[0] && (subs[0].thumbHash || subs[0].photoHash));
 
-  const photo = h('div', { class: 'qbig-photo', dataset: { q: q.id } },
-    h('span', { class: 'qbig-emoji' }, km.icon),
-    done ? h('span', { class: 'qbig-check' }, '✓') : null,
-  );
-  // 自己拍過了就顯示自己的照片；還沒拍才給參考圖
-  paintRef(photo, refImageFor(q, spot, subs[0] && (subs[0].thumbHash || subs[0].photoHash)), themeKey, spot.id);
+  // 完成的任務，縮圖就是他自己拍的那張（refImageFor 本來就優先用投稿）
+  const thumb = h('div', { class: 'qline-thumb qref', dataset: { q: q.id } },
+    h('span', { class: 'qline-emoji' }, km.icon));
+  paintRef(thumb, refPick(), themeKey, spot.id, { credit: false });
 
-  // 卡片本身不再是一顆大按鈕 —— 加照片的兩顆按鈕要直接放在卡片上，
-  // 長輩一眼就看得到、按一下就開始，不用先點進任何地方。
-  return h('div', { class: 'qbig' + (done ? ' done' : '') },
-    h('button', {
-      class: 'qbig-open', onclick: () => navigate(`/quest/${q.id}`),
-      'aria-label': `看「${q.title}」的照片`,
-    },
+  const more = h('div', { class: 'qline-more' });
+  let built = false;
+
+  const buildMore = () => {
+    const photo = h('div', { class: 'qline-photo qref', dataset: { q: q.id } },
+      h('span', { class: 'qbig-emoji' }, km.icon),
+      done ? h('span', { class: 'qbig-check' }, '✓') : null);
+    paintRef(photo, refPick(), themeKey, spot.id);
+    // 0fr/1fr 這個收合手法要求**只有一個子元素**：grid-template-rows: 0fr 只定義
+    // 一列，多出來的子元素會掉進隱含列（auto），收合之後照樣佔高度、內容漏出來。
+    // 所以大圖與說明要包在同一層裡。
+    more.append(h('div', { class: 'qline-inner' },
       photo,
-      h('div', { class: 'qbig-body' },
-        h('div', { class: 'qbig-title' }, q.title,
-          q.aiQuest ? h('span', { class: 'ai-mark', title: '這個任務由 AI 出題' }, ' ✨') : null),
-        q.hint ? h('div', { class: 'qbig-hint' }, q.hint) : null,
-        h('div', { class: 'qbig-foot' },
+      h('div', { class: 'qline-detail' },
+        q.hint ? h('p', { class: 'qline-hint' }, q.hint) : null,
+        h('div', { class: 'qline-tags' },
           h('span', { class: 'tag' }, km.label),
-          h('span', { class: 'qbig-status' }, done ? `✓ 完成（${subs.length} 張）` : '還沒拍'),
-          likeCount ? h('span', { class: 'qbig-likes' }, '❤️ ' + likeCount) : null,
+          likeCount ? h('span', { class: 'qline-likes' }, '❤️ ' + likeCount) : null,
+          subs.length ? h('button', {
+            class: 'qline-link', onclick: () => navigate(`/quest/${q.id}`),
+          }, `看照片（${subs.length} 張）`) : null,
         ),
+        addPhotoButtons(q.tripId, q.id, { compact: true, onDone: () => trip(q.tripId) }),
       ),
+    ));
+  };
+
+  const row = h('div', { class: 'qline' + (done ? ' done' : ''), dataset: { quest: q.id } });
+
+  const head = h('button', {
+    class: 'qline-head', 'aria-expanded': 'false',
+    onclick: () => {
+      const nowOpen = !row.classList.contains('open');
+      // 同一時間只展開一個 —— 不然展開兩三個之後又回到「要滑很久」
+      for (const other of document.querySelectorAll('.qline.open')) {
+        if (other === row) continue;
+        other.classList.remove('open');
+        other.querySelector('.qline-head')?.setAttribute('aria-expanded', 'false');
+      }
+      if (nowOpen && !built) { built = true; buildMore(); }
+      row.classList.toggle('open', nowOpen);
+      head.setAttribute('aria-expanded', String(nowOpen));
+      if (nowOpen) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+  },
+    thumb,
+    h('span', { class: 'qline-main' },
+      h('span', { class: 'qline-title' }, q.title,
+        q.aiQuest ? h('span', { class: 'ai-mark', title: '這個任務由 AI 出題' }, ' ✨') : null),
+      h('span', { class: 'qline-sub' },
+        done ? `✓ 已完成　${subs.length} 張` : '還沒拍',
+        likeCount ? `　❤️ ${likeCount}` : ''),
     ),
-    h('div', { class: 'qbig-actions' },
-      addPhotoButtons(q.tripId, q.id, { compact: true, onDone: () => trip(q.tripId) }),
-    ),
+    h('span', { class: 'qline-chev' }, '▸'),
   );
+
+  row.append(
+    head,
+    // 完成的任務右邊只放一個打勾；要再拍就點開（使用者指定的行為）
+    done
+      ? h('span', { class: 'qline-done', 'aria-label': '已完成' }, '✓')
+      : h('div', { class: 'qline-act' },
+          addPhotoButtons(q.tripId, q.id, { icons: true, onDone: () => trip(q.tripId) })),
+    more,
+  );
+  return row;
 }
 
 // ---------- 分享 ----------

@@ -148,7 +148,7 @@ await sleep(150);
 
 // ---------- 4. 行程總覽（含底部分頁列）----------
 await go(`/#/trip/${tripId}`);
-await page.waitForSelector('.qbig');
+await page.waitForSelector('.qline');
 await shot('04-trip-overview');
 
 // ---------- 28. 底部分頁列 —— 旅程層 ----------
@@ -276,7 +276,7 @@ await page.evaluate(() => document.querySelector('.tagger-overlay')?.remove());
 // ---------- 10. 全部解鎖 ----------
 await fillPhotos(tripId, 1);
 await go(`/#/trip/${tripId}`);
-await page.waitForSelector('.qbig.done');
+await page.waitForSelector('.qline.done');
 await shot('10-trip-all-done');
 
 // ---------- 11. 回憶影片：製作介面 ----------
@@ -324,19 +324,19 @@ await shot('18-settings-sync');
 // ---------- 19. 特大字 ----------
 await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); });
 await go(`/#/trip/${tripId}`);
-await page.waitForSelector('.qbig');
+await page.waitForSelector('.qline');
 await shot('19-font-xl');
 
 // ---------- 20. 高對比（維持特大字關掉、開高對比）----------
 await page.evaluate(async () => { const p = await import('./js/prefs.js'); p.setPref('fs', 'm'); p.setPref('contrast', 'high'); });
 await go(`/#/trip/${tripId}`);
-await page.waitForSelector('.qbig');
+await page.waitForSelector('.qline');
 await shot('20-high-contrast');
 await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('contrast', 'normal'); });
 
 // ---------- 21. 分享代碼 ----------
 await go(`/#/trip/${tripId}`);
-await page.waitForSelector('.qbig');
+await page.waitForSelector('.qline');
 await page.evaluate(() => { try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); } catch {} });
 await page.evaluate(() => { [...document.querySelectorAll('button')].find(b => b.textContent.includes('分享給旅伴'))?.click(); });
 await page.waitForSelector('.modal-card textarea', { timeout: 8000 });
