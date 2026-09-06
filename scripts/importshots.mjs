@@ -112,9 +112,9 @@ try {
         h('p', { style: 'margin:0 0 12px' }, '把照片上的字讀出來，有兩個辦法：'),
         h('div', { class: 'imp-note' },
           h('p', { style: 'margin:0 0 6px' }, h('b', {}, '① 用手機內建的（免費、不外傳）')),
-          h('p', { class: 'sm', style: 'margin:0 0 4px' }, 'iPhone：打開「照片」→ 點右下角的 ⧉ 文字圖示 → 全選 → 拷貝'),
+          h('p', { class: 'sm', style: 'margin:0 0 4px' }, 'iPhone：打開「照片」→ 找那個像「文字框」的圖示（⧉）並點它 → 全選 → 拷貝'),
           h('p', { class: 'sm', style: 'margin:0' }, 'Android：打開「Google 相簿」→ 點「Lens」→ 選取文字 → 複製'),
-          h('p', { class: 'sm', style: 'margin:6px 0 0' }, '複製好之後回來選「直接打字或貼上」。')),
+          h('p', { class: 'sm', style: 'margin:6px 0 0' }, '複製好之後回來選「直接打字或貼上」。找不到就請家人幫忙一次。')),
         h('p', { class: 'sm muted', style: 'margin:12px 0 0' }, '② 貼一支你自己的 Claude API 金鑰，讓 App 幫你辨識（會把照片傳出去）。')),
       actions: [{ label: '我去複製文字', value: 'manual' }, { label: '貼金鑰', value: 'key', primary: true }],
     });

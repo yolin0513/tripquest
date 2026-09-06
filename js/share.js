@@ -93,8 +93,31 @@ export async function makeShareCode(tripId) {
   return gzip(JSON.stringify(payload));
 }
 
+// 邀請連結的網址前半段。
+//
+// 加上 openExternalBrowser=1：LINE 看到這個參數會直接用系統預設瀏覽器開
+//（iOS → Safari、Android → Chrome），而不是它自己的內建瀏覽器。這很重要，
+// 因為 LINE 的內建瀏覽器**不能把 App 加到主畫面**，而長輩十之八九是從 LINE
+// 點連結的。有這個參數就根本不用教他「怎麼跳出 LINE」——那個教學還會因為
+// LINE 版本與機型不同而講錯位置。
+//
+// 這個參數必須是**真正的查詢字串**（在 # 之前）；邀請碼在 fragment 裡，
+// 順序不能弄反。我們的 hash 路由只看 location.hash，所以在別的地方開啟時
+// 這個參數完全被忽略，沒有副作用。
+//
+// 出處：LINE 自己的網站就在用（help.line.me/…?openExternalBrowser=1、
+// manager.line.biz/…?openExternalBrowser=true），Classmethod DevelopersIO
+// 也在 iOS 與 Android 兩邊實測過。但**它不在 LINE 的開發者文件裡**，所以當成
+// 「有就更好」的加分項：加到主畫面的教學與「直接加入」那條路都要留著。
+export function inviteBase() {
+  const u = new URL(location.href);
+  u.hash = '';
+  u.search = '?openExternalBrowser=1';
+  return u.toString();
+}
+
 export async function shareURL(tripId) {
-  const base = location.href.split('#')[0];
+  const base = inviteBase();
   // 有設定同步 → 產生「加入同一個群組」的邀請；否則退回「複製一份任務清單」
   if (syncEnabled()) {
     const trip = store.get(tripId);

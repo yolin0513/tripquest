@@ -79,8 +79,8 @@ export default async function join(query) {
         await openInstallGuide({
           why: okCopy ? '邀請連結已經複製起來了，裝好之後用得到。' : '',
           after: okCopy
-            ? '裝好之後，打開主畫面的 TripQuest，按最上面的「貼上邀請連結」就完成了。'
-            : '裝好之後，打開主畫面的 TripQuest，按最上面的「貼上邀請連結」，把旅伴給你的連結貼進去。',
+            ? '裝好之後，打開主畫面的 TripQuest，按「貼上邀請連結」就完成了。'
+            : '裝好之後，打開主畫面的 TripQuest，按「貼上邀請連結」，把旅伴給你的連結貼進去。',
         });
       },
     }, '① 教我加到主畫面'),

@@ -251,6 +251,77 @@ try {
     await pg.close();
   }
 
+  // ---------- 8b. 邀請連結帶 openExternalBrowser=1 ----------
+  // LINE 看到這個參數會直接用系統預設瀏覽器開，就不用教他怎麼跳出 LINE ——
+  // 那個教學還會因為版本／機型講錯位置（使用者實機回報過）。
+  console.log('\n— 邀請連結讓 LINE 直接用外部瀏覽器開 —');
+  {
+    yes(invite.includes('?openExternalBrowser=1#'), `邀請連結帶了參數：${invite.split('#')[0]}`);
+    const u = new URL(invite);
+    eq(u.searchParams.get('openExternalBrowser'), '1', '參數是真正的查詢字串');
+    yes(u.search.length > 0 && u.hash.startsWith('#/join?j='),
+      '順序正確：openExternalBrowser 在 # 之前、邀請碼在 fragment 裡');
+    eq((invite.match(/openExternalBrowser/g) || []).length, 1, '只會出現一次，不會越分享越長');
+
+    const pg = await dev(UA.iosSafari);
+    // 從帶參數的網址進來，路由與邀請碼都要照常
+    await pg.goto(invite.replace('https://yolin0513.github.io/tripquest/', `http://localhost:${WEB}/`), { waitUntil: 'networkidle0' });
+    await pg.waitForSelector('.join-install', { timeout: 15000 });
+    yes(await has(pg, '宜蘭遊'), '帶參數的網址照樣解析得出邀請內容');
+    const st = await pg.evaluate(() => ({ search: location.search, hash: location.hash }));
+    eq(st.search, '?openExternalBrowser=1', '參數留在網址上（LINE 才看得到）');
+    yes(st.hash.startsWith('#/join?j='), '邀請碼沒有被參數影響');
+
+    // 在這個網址上再分享一次，不能把參數疊起來
+    const again = await pg.evaluate(async () => (await import('./js/share.js')).inviteBase());
+    eq((again.match(/openExternalBrowser/g) || []).length, 1, '在帶參數的頁面再產生一次，參數不會重複');
+
+    // 真的能加入（參數沒有弄壞任何東西）
+    // 這一頁會自動跳安裝引導（別的小節測過了），先關掉才點得到底下的按鈕
+    await sleep(1400);
+    await pg.evaluate(() => { const o = document.querySelector('.modal-overlay'); if (o) o.remove(); });
+    yes(await clickText(pg, 'button', '② 我只想在 Safari 用，直接加入'), '按下直接加入');
+    // 加入之後會問「這是誰的手機？」，挑一個人才會繼續
+    await pg.waitForSelector('.member-pick', { timeout: 40000 });
+    await pg.evaluate(() => document.querySelector('.member-pick .btn').click());
+    await pg.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 30000 });
+    const n = await pg.evaluate(async () => (await import('./js/store.js')).trips().length);
+    eq(n, 1, '帶參數的邀請連結照樣加入成功');
+    await pg.close();
+  }
+  {
+    // 離線時走帶參數的網址也要開得起來（SW 的 navigate fallback 不是用網址當 key）
+    const pg = await dev(UA.androidChrome);
+    await pg.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+    await sleep(800);
+    await pg.setOfflineMode(true);
+    await pg.goto(`http://localhost:${WEB}/?openExternalBrowser=1#/`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await sleep(1200);
+    const alive = await pg.evaluate(() => (document.getElementById('view') || {}).innerText || '');
+    yes(alive.length > 5, `離線 + 帶參數的網址照樣開得起來（${alive.length} 字）`);
+    await pg.setOfflineMode(false);
+    await pg.close();
+  }
+
+  // ---------- 8c. 教學不可以寫死第三方 App 的位置 ----------
+  // 使用者實機回報：我們寫「右上角的三個點」，他的 LINE 上是在右下角。
+  console.log('\n— 教學不寫死位置 —');
+  {
+    const BAD = ['右上角', '左上角', '右下角', '左下角', '最上面', '最下面', '正中央', '網址列右邊', '下半部'];
+    for (const [name, ua] of [['iPhone Safari', UA.iosSafari], ['LINE', UA.iosLine], ['Android', UA.androidChrome]]) {
+      const pg = await dev(ua);
+      await pg.goto(`http://localhost:${WEB}/#/`, { waitUntil: 'networkidle0' });
+      await pg.evaluate(async () => { (await import('./js/views/installguide.js')).openInstallGuide({}); });
+      await pg.waitForSelector('.ig-step', { timeout: 8000 });
+      const t = await pg.evaluate(() => document.querySelector('.modal-card').innerText);
+      const hit = BAD.filter((b) => t.includes(b));
+      yes(hit.length === 0, `${name} 的教學沒有寫死位置`, '出現了：' + hit.join('、'));
+      yes(/找不到也沒關係/.test(t), `${name} 的教學有「找不到也沒關係」的退路`);
+      yes(/請家人幫忙/.test(t), `${name} 的教學有叫他找家人幫忙`);
+      await pg.close();
+    }
+  }
+
   // ---------- 9. manifest ----------
   console.log('\n— manifest —');
   {

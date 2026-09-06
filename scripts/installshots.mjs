@@ -28,7 +28,7 @@ const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox']
 let n = 0;
 const shot = async (pg, name) => {
   await sleep(350);
-  const f = `${OUT}/v1.39-${String(++n).padStart(2, '0')}-${name}.png`;
+  const f = `${OUT}/v1.40-${String(++n).padStart(2, '0')}-${name}.png`;
   await pg.screenshot({ path: f });
   console.log('✓ ' + f.split(/[\\/]/).pop());
 };

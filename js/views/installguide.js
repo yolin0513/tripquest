@@ -3,9 +3,22 @@
 // 長輩做不到的是「找到分享按鈕、往下捲、找到加入主畫面」這一串。所以這裡不寫
 // 一段文字了事 —— 每一步一張大圖示、一句話，而且**先認出他現在是用什麼開的**：
 // 從 LINE 點進來的畫面根本沒有那顆分享按鈕，教他按也按不到。
+//
+// **不要寫死位置**。使用者實機回報：我們寫「右上角的三個點」，他的 LINE 上
+// 是在右下角。第三方 App 的介面會隨版本、機型、系統設定改變，寫死位置只會
+// 讓人在錯的地方找。一律改成描述按鈕**長什麼樣子**與**功能叫什麼名字**，
+// 再給一句「找不到就請家人幫忙」的退路。
 
 import { h, modal, toast } from '../ui.js';
 import { platform, canPromptInstall, promptInstall, dismissGuide, ICONS } from '../install.js';
+
+// 每一份教學最後都給一句退路。長輩找不到按鈕時最需要的不是更多說明，
+// 是「這不是你的問題，找人幫忙就好」。
+function helpLine(where) {
+  return h('p', { class: 'ig-help' },
+    `找不到也沒關係 —— 請家人幫忙用 ${where} 開一次就好。`
+    + '也可以先不管它，直接按下面的「直接加入」照樣能用。');
+}
 
 function step(n, icon, title, sub) {
   return h('div', { class: 'ig-step' },
@@ -27,29 +40,31 @@ function cannotInstallBody(p, showWarn) {
   return h('div', {},
     showWarn ? h('div', { class: 'ig-warn' }, how) : null,
     p.inApp
-      ? step(1, ICONS.dotsIcon(), '按右上角的「⋯」或「⋮」', '就在這一頁的最上面')
-      : step(1, h('span', { class: 'ig-emoji' }, '🔗'), '把這一頁的網址複製起來', '按網址列右邊的分享'),
+      ? step(1, ICONS.dotsIcon(), '找「⋯」或「⋮」的按鈕', '在畫面的角落，位置每個版本不一樣')
+      : step(1, h('span', { class: 'ig-emoji' }, '🔗'), '把這一頁的網址複製起來', ''),
     step(2, h('span', { class: 'ig-emoji' }, '🧭'),
       p.inApp ? `選「用 ${where} 開啟」` : `打開 ${where}，把網址貼上去`,
-      p.os === 'ios' ? 'iPhone 只有 Safari 可以加到主畫面' : '選預設瀏覽器就可以'),
+      p.inApp ? '也可能寫「用其他瀏覽器開啟」或「在瀏覽器中開啟」' : ''),
     step(3, h('span', { class: 'ig-emoji' }, '↩️'), `${where} 打開之後，會接著教你加到主畫面`, '同一頁會再跳一次說明'),
+    helpLine(where),
   );
 }
 
 function iosBody() {
   return h('div', {},
-    step(1, ICONS.shareIcon(), '按最下面正中央的「分享」', '長得像一個往上的箭頭'),
-    step(2, h('span', { class: 'ig-emoji' }, '👆'), '往上滑，找到「加入主畫面」',
-      '要滑一段，在選單的下半部'),
-    step(3, ICONS.plusBoxIcon(), '按右上角的「新增」', '主畫面就會多一個 TripQuest 圖示'),
+    step(1, ICONS.shareIcon(), '按「分享」', '一個方框加上往上的箭頭，長這樣 ↗'),
+    step(2, h('span', { class: 'ig-emoji' }, '👆'), '在選單裡找「加入主畫面」', '清單有點長，要滑一下'),
+    step(3, ICONS.plusBoxIcon(), '按「新增」', '主畫面就會多一個 TripQuest 圖示'),
+    helpLine('Safari'),
   );
 }
 
 function androidBody() {
   return h('div', {},
-    step(1, ICONS.dotsIcon(), '按右上角的「⋮」', '三個點，在網址列右邊'),
-    step(2, ICONS.plusBoxIcon(), '選「安裝應用程式」或「加到主畫面」', ''),
+    step(1, ICONS.dotsIcon(), '按「⋮」選單', '三個點排成一直線'),
+    step(2, ICONS.plusBoxIcon(), '選「安裝應用程式」或「加到主畫面」', '兩種寫法都可能'),
     step(3, h('span', { class: 'ig-emoji' }, '✅'), '按「安裝」', '主畫面就會多一個 TripQuest 圖示'),
+    helpLine('Chrome'),
   );
 }
 
