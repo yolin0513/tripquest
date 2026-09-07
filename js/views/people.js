@@ -77,7 +77,6 @@ export default async function people(tripId) {
       ),
     ));
   }
-  page.append(h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/badges`) }, '🏅 看成就徽章'));
 
   // 還沒標記的照片 —— 不吵，但看得到，一按就進連續標記
   const untagged = store.untaggedPhotos(tripId);

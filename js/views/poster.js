@@ -17,9 +17,15 @@ export default async function poster(tripId) {
   }
 
   let presetId = t.posterStyle || 'watercolor';
+  let page = 0;
   const canvas = h('canvas', { class: 'poster-canvas' });
   const styleRow = h('div', { class: 'music-pick' });
   const busy = h('div', { class: 'form-hint center', hidden: true });
+  // ≥3 天的行程，匯出是一天一張 —— 預覽也一張一張翻，跟成品一致
+  const pagePrev = h('button', { class: 'btn btn-soft pager-btn', onclick: () => { page--; refresh(); } }, '‹ 前一張');
+  const pageLbl = h('span', { class: 'pager-lbl' });
+  const pageNext = h('button', { class: 'btn btn-soft pager-btn', onclick: () => { page++; refresh(); } }, '下一張 ›');
+  const pager = h('div', { class: 'pager', hidden: true }, pagePrev, pageLbl, pageNext);
 
   function drawStyles() {
     styleRow.replaceChildren(...presetList().map((s) => h('button', {
@@ -31,8 +37,14 @@ export default async function poster(tripId) {
 
   async function refresh() {
     busy.hidden = false; busy.textContent = '繪製預覽…';
-    try { await renderPreview(canvas, tripId, presetId); }
-    catch (e) { console.error(e); toast('預覽失敗：' + e.message); }
+    try {
+      const info = await renderPreview(canvas, tripId, presetId, page);
+      page = info.page;
+      pager.hidden = info.pages <= 1;
+      pageLbl.textContent = `${info.label}（${info.page + 1} / ${info.pages} 張）`;
+      pagePrev.disabled = info.page === 0;
+      pageNext.disabled = info.page >= info.pages - 1;
+    } catch (e) { console.error(e); toast('預覽失敗：' + e.message); }
     busy.hidden = true;
   }
 
@@ -40,6 +52,7 @@ export default async function poster(tripId) {
   render(h('div', { class: 'page' },
     h('p', { class: 'muted center', style: 'margin:0 0 10px' }, '把行程做成一張海報，存下來傳 LINE 或列印。'),
     h('div', { class: 'poster-frame' }, canvas),
+    pager,
     busy,
     h('div', { class: 'section-label' }, '風格'),
     styleRow,

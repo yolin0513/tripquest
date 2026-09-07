@@ -253,6 +253,9 @@ export function createMusic(styleKey = 'gentle', { seed = 20260907 } = {}) {
     },
     // 呼叫端每隔一下告訴我們影片播到哪 —— 段落由這個決定
     progress(r) { progress = Math.max(0, Math.min(1, r || 0)); },
+    // 預覽的暫停／繼續：suspend 會凍住 ctx.currentTime，排程器自然停在原地
+    async pause() { try { await ctx.suspend(); } catch { /* noop */ } },
+    async resume() { try { await ctx.resume(); } catch { /* noop */ } },
     async fadeOutStop(sec = 1.2) {
       try { master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + sec); } catch { /* noop */ }
       stopped = true;
@@ -282,6 +285,8 @@ export async function musicFromFile(file) {
     style: 'file',
     async start() { if (ctx.state === 'suspended') await ctx.resume(); src.start(); },
     progress() { /* 使用者自己的音樂不做編排 */ },
+    async pause() { try { await ctx.suspend(); } catch { /* noop */ } },
+    async resume() { try { await ctx.resume(); } catch { /* noop */ } },
     async fadeOutStop(sec = 1.2) {
       try { gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + sec); } catch { /* noop */ }
       await new Promise((r) => setTimeout(r, sec * 1000 + 100));

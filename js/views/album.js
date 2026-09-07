@@ -40,8 +40,12 @@ export default async function album(tripId) {
   let length = store.getRaw(tripId)?.videoLength || DEFAULT_LENGTH;
 
   const canvas = h('canvas', { class: 'album-canvas' });
-  const bar = h('div', { class: 'scrub' }, h('i'));
+  // 進度條可以拖：預覽是逐幀繪製（drawAt 是「時間 → 畫面」的純函式），
+  // 跳轉就是把時間游標設到那一秒重繪，不用等它從頭播
+  const bar = h('div', { class: 'scrub' }, h('i'), h('span', { class: 'scrub-knob' }));
   const barFill = bar.firstChild;
+  const knob = bar.lastChild;
+  const timeLbl = h('div', { class: 'scrub-time' }, '0:00 / 0:00');
   const playBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: togglePlay }, '▶ 播放預覽');
   const lenPick = h('div', { class: 'len-pick' });
   const lenNote = h('p', { class: 'form-hint' });
@@ -137,7 +141,7 @@ export default async function album(tripId) {
 
   render(h('div', { class: 'page' },
     h('div', { class: 'section-label', style: 'margin-top:0' }, '影片'),
-    h('div', { class: 'album-frame' }, canvas, bar),
+    h('div', { class: 'album-frame' }, canvas, bar, timeLbl),
     meta,
     playBtn,
 
@@ -164,8 +168,34 @@ export default async function album(tripId) {
   drawMusicPick();
   drawShare();
 
-  let player = null, playing = false, barIv = 0;
-  ensurePlayer().then((p) => p.seek(1.4));
+  let player = null, barIv = 0, dragging = false;
+  ensurePlayer().then((p) => { p.seek(1.4); updateBar(); });
+
+  const fmtT = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  function updateBar() {
+    if (!player) return;
+    const r = player.duration ? player.time / player.duration : 0;
+    barFill.style.width = (r * 100) + '%';
+    knob.style.left = `calc(${(r * 100).toFixed(2)}% - 10px)`;
+    timeLbl.textContent = `${fmtT(player.time)} / ${fmtT(player.duration)}`;
+  }
+  function syncBtn() {
+    if (!player) { playBtn.textContent = '▶ 播放預覽'; return; }
+    if (player.playing) playBtn.textContent = '⏸ 暫停';
+    else if (player.time >= player.duration - 0.1) playBtn.textContent = '▶ 重播';
+    else playBtn.textContent = player.time > 0.1 ? '▶ 繼續播放' : '▶ 播放預覽';
+  }
+  async function seekFromEvent(ev) {
+    const p = await ensurePlayer();
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+    p.seek(ratio * p.duration);
+    updateBar(); syncBtn();
+  }
+  bar.addEventListener('pointerdown', (e) => { dragging = true; try { bar.setPointerCapture(e.pointerId); } catch { /* noop */ } seekFromEvent(e); });
+  bar.addEventListener('pointermove', (e) => { if (dragging) seekFromEvent(e); });
+  bar.addEventListener('pointerup', () => { dragging = false; });
+  bar.addEventListener('pointercancel', () => { dragging = false; });
 
   // 有開 AI → 背景自動產生影片文案（片頭片尾、旁白、照片字幕），好了重繪一次
   if (t.aiEnabled) {
@@ -183,11 +213,11 @@ export default async function album(tripId) {
 
   function resetPlayer() {
     if (player) { try { player.destroy(); } catch { /* noop */ } }
-    player = null; playing = false;
+    player = null;
     playBtn.textContent = '▶ 播放預覽';
     clearInterval(barIv);
     barFill.style.width = '0';
-    ensurePlayer().then((p) => p.seek(1.4));
+    ensurePlayer().then((p) => { p.seek(1.4); updateBar(); });
   }
   async function ensurePlayer() {
     if (!player) player = await createPlayer(canvas, tripId, { length });
@@ -195,16 +225,14 @@ export default async function album(tripId) {
   }
   async function togglePlay() {
     const p = await ensurePlayer();
-    if (playing) { p.stop(); playing = false; playBtn.textContent = '▶ 播放預覽'; clearInterval(barIv); return; }
-    playing = true; playBtn.textContent = '⏸ 暫停';
-    const start = performance.now();
+    if (p.playing) { p.pause(); clearInterval(barIv); updateBar(); syncBtn(); return; }
     clearInterval(barIv);
-    barIv = setInterval(() => {
-      barFill.style.width = Math.min(100, ((performance.now() - start) / 1000 / p.duration) * 100) + '%';
-    }, 100);
+    barIv = setInterval(updateBar, 100);
+    playBtn.textContent = '⏸ 暫停';
     await p.play(musicFile ? 'none' : music, () => {
-      playing = false; playBtn.textContent = '▶ 重播'; clearInterval(barIv); barFill.style.width = '100%';
+      clearInterval(barIv); updateBar(); syncBtn();
     });
+    syncBtn();
   }
 
   // ---------- 分享網址 ----------
@@ -311,7 +339,7 @@ export default async function album(tripId) {
 
   // ---------- 錄影 ----------
   async function doVideo() {
-    if (playing) { player.stop(); playing = false; }
+    if (player?.playing) { player.pause(); clearInterval(barIv); syncBtn(); }
     const est = estimateDuration(tripId, length);
     const overlay = h('div', { class: 'record-overlay' },
       h('div', { class: 'spinner' }),

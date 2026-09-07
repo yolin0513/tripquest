@@ -430,9 +430,7 @@ export async function renderPoster(tripId, { presetId = 'watercolor', onProgress
     }
   }
 
-  const groups = model.dayCount >= 3
-    ? model.days.map((d) => [d])
-    : [model.days];
+  const groups = posterGroups(model);
 
   const out = [];
   for (let gi = 0; gi < groups.length; gi++) {
@@ -460,14 +458,27 @@ export async function warmPosterAi(tripId) {
   } catch { return false; }
 }
 
-// 預覽用：畫到指定 canvas（單張、全部天數擠一起、縮小）—— 不等 AI，用現有快取
-export async function renderPreview(canvas, tripId, presetId) {
+// 匯出時的分組（≥3 天一天一張）。預覽也要用同一套 —— 預覽跟成品不一樣就是騙人。
+export function posterGroups(model) {
+  return model.dayCount >= 3 ? model.days.map((d) => [d]) : [model.days];
+}
+
+// 預覽用：畫到指定 canvas —— 不等 AI，用現有快取。
+// 舊版只畫 model.days.slice(0, 2)，三天的行程預覽只看得到前兩天，使用者以為是 bug。
+// 現在用跟匯出完全相同的分組，page 指定看第幾張，回傳頁數讓 UI 放「上一張/下一張」。
+export async function renderPreview(canvas, tripId, presetId, page = 0) {
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();
   await loadThemes();
   const model = buildModel(tripId);
   for (const d of model.days) for (const it of d.items) it.img = it.photoHash ? await loadImg(it.photoHash.hash) : null;
-  await drawPoster(canvas, model, model.days.slice(0, 2), preset, tripId + ':' + presetId + ':prev');
+  const groups = posterGroups(model);
+  const gi = Math.max(0, Math.min(groups.length - 1, page));
+  await drawPoster(canvas, model, groups[gi], preset, tripId + ':' + presetId + ':' + (groups.length > 1 ? gi : 'prev'));
+  return {
+    pages: groups.length, page: gi,
+    label: groups.length > 1 ? `第 ${groups[gi][0].day} 天` : '整趟',
+  };
 }
 
 void db;
