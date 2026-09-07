@@ -186,14 +186,20 @@ try {
   });
   yes(two.pages === 1 && two.exported === 1, '2 天維持單張（預覽 1 張、匯出 1 張）');
 
-  // 海報頁 UI：翻頁列真的出現、按鈕能翻
+  // 海報頁 UI：翻頁列真的出現、按鈕能翻。
+  // 三天的長度故意差很大（7 / 1 / 4 個景點）—— 驗收標準是「翻頁時按鈕位置不動」
   const tid3 = await page.evaluate(async () => {
     const s = await import('./js/store.js');
     const { uuid } = await import('./js/ids.js');
     const gid = uuid(), tid = uuid();
     await s.put({ id: gid, type: 'group', name: 'g' });
     await s.put({ id: tid, type: 'trip', groupId: gid, title: '三日遊', region: '宜蘭', allowWiki: false });
-    for (let d = 1; d <= 3; d++) await s.put({ id: uuid(), type: 'spot', tripId: tid, name: `第${d}天的景點`, emoji: '📍', day: d, order: 0 });
+    const per = [7, 1, 4];
+    for (let d = 1; d <= 3; d++) {
+      for (let k = 0; k < per[d - 1]; k++) {
+        await s.put({ id: uuid(), type: 'spot', tripId: tid, name: `第${d}天的景點${k + 1}`, emoji: '📍', day: d, order: k });
+      }
+    }
     return tid;
   });
   await page.goto('about:blank');
@@ -205,11 +211,31 @@ try {
   }));
   yes(pgr.lbl === '第 1 天 / 共 3 天', `翻頁列文字一句講完：「${pgr.lbl}」`);
   yes(pgr.prevVis === 'hidden', '第一張時「‹ 前一張」是藏起來的');
+  // 翻頁時版面不可以跳：記下按鈕與預覽框的位置，翻兩次逐一比對
+  const boxOf = async (sel) => { const b = await (await page.$(sel)).boundingBox(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; };
+  const canvasFits = () => page.evaluate(() => {
+    const f = document.querySelector('.poster-frame').getBoundingClientRect();
+    const c = document.querySelector('.poster-canvas').getBoundingClientRect();
+    return c.height <= f.height + 1 && c.width <= f.width + 1;
+  });
+  const btn0 = await boxOf('.pager-btn:last-of-type');
+  const frame0 = await boxOf('.poster-frame');
+  yes(await canvasFits(), '第 1 天（7 個景點）：預覽縮在固定高度的框裡');
   await page.click('.pager-btn:last-of-type');
   await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent === '第 2 天 / 共 3 天', { timeout: 20000 });
-  ok('按「下一張」翻到第 2 天');
+  await sleep(500);
+  const btn1 = await boxOf('.pager-btn:last-of-type');
+  const frame1 = await boxOf('.poster-frame');
+  yes(JSON.stringify(btn1) === JSON.stringify(btn0), `翻到第 2 天（只有 1 個景點）按鈕位置一動不動（${JSON.stringify(btn1)}）`, `之前 ${JSON.stringify(btn0)}`);
+  yes(frame1.h === frame0.h && frame1.y === frame0.y, `預覽框高度固定（${frame0.h}px），短的那天置中留白`);
+  yes(await canvasFits(), '第 2 天：短海報置中、不撐開版面');
+  await page.screenshot({ path: fileURLToPath(new URL('海報頁-翻頁-短的一天置中.png', OUT)) });
+  console.log('  📸 海報頁-翻頁-短的一天置中');
   await page.click('.pager-btn:last-of-type');
   await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent === '第 3 天 / 共 3 天', { timeout: 20000 });
+  await sleep(500);
+  const btn2 = await boxOf('.pager-btn:last-of-type');
+  yes(JSON.stringify(btn2) === JSON.stringify(btn0), '翻到第 3 天按鈕位置還是一動不動');
   const lastVis = await page.evaluate(() => getComputedStyle(document.querySelector('.pager-btn:last-of-type')).visibility);
   yes(lastVis === 'hidden', '最後一張時「下一張 ›」是藏起來的');
   await page.screenshot({ path: fileURLToPath(new URL('海報頁-翻頁列.png', OUT)) });
@@ -260,16 +286,16 @@ try {
   // 播放 → 暫停 → 繼續
   await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => /播放預覽|繼續播放/.test(b.textContent))?.click());
   await sleep(900);
-  const btn1 = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent).find((x) => x.includes('暫停')));
-  yes(!!btn1, '播放中按鈕變成「⏸ 暫停」');
+  const pb1 = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent).find((x) => x.includes('暫停')));
+  yes(!!pb1, '播放中按鈕變成「⏸ 暫停」');
   await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('暫停'))?.click());
   await sleep(300);
   const paused = await page.evaluate(() => document.querySelector('.scrub-time').textContent);
   await sleep(700);
   const paused2 = await page.evaluate(() => document.querySelector('.scrub-time').textContent);
   yes(paused === paused2, `暫停後時間停住（${paused}）`);
-  const btn2 = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent).find((x) => x.includes('繼續播放')));
-  yes(!!btn2, '暫停後按鈕變成「▶ 繼續播放」');
+  const pb2 = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent).find((x) => x.includes('繼續播放')));
+  yes(!!pb2, '暫停後按鈕變成「▶ 繼續播放」');
   await page.screenshot({ path: fileURLToPath(new URL('回憶頁-進度條.png', OUT)) });
   console.log('  📸 回憶頁-進度條');
 
