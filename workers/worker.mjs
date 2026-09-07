@@ -7,6 +7,12 @@
 //   HEAD /blob/<hash>                  200 存在 / 404 不存在（PUT 前先問，避免重傳）
 //   GET  /blob/<hash>                  下載照片
 //   PUT  /blob/<hash>   <binary>       上傳照片（<= MAX_BLOB_BYTES）
+//   PUT    /album/<albumId>  {html,hashes,title}   發布公開相簿
+//   DELETE /album/<albumId>                        收回公開相簿
+//
+// 公開端點（不需要祕鑰 —— 網址本身就是憑證）：
+//   GET /a/<albumId>                 相簿頁（送嚴格 CSP，完全不准腳本）
+//   GET /a/<albumId>/p/<hash>        相簿裡的照片（清單裡沒有的一律不給）
 //
 // 安全模型：群組由 groupId + 128-bit 祕鑰識別。第一次 push 建立群組並綁定祕鑰；
 // 之後所有請求的祕鑰必須相符。每個群組的資料互相隔離。
@@ -28,6 +34,13 @@ export default {
     if (request.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
     if (path === '/health') return json({ ok: true, ts: Date.now() });
 
+    // 公開相簿：唯一不需要祕鑰的路徑（網址本身就是憑證，albumId 是 128-bit 亂數）
+    const pub = path.match(/^\/a\/([a-f0-9]{24,64})(?:\/p\/([a-f0-9]{16,64}))?$/);
+    if (pub) {
+      try { return await handlePublicAlbum(env, pub[1], pub[2] || null); }
+      catch (e) { return new Response('相簿讀取失敗：' + String(e && e.message || e), { status: 500 }); }
+    }
+
     const groupId = url.searchParams.get('g');
     const secret = bearer(request) || url.searchParams.get('s');
     if (!groupId || !secret) return json({ error: 'missing group or secret' }, 400);
@@ -38,6 +51,8 @@ export default {
       if (blobMatch) return handleBlob(request, env, url, groupId, secret, blobMatch[1]);
       if (path === '/push' && request.method === 'POST') return handlePush(request, env, groupId, secret);
       if (path === '/pull') return handlePull(env, url, groupId, secret);
+      const albumMatch = path.match(/^\/album\/([a-f0-9]{24,64})$/);
+      if (albumMatch) return handleAlbum(request, env, groupId, secret, albumMatch[1]);
       return json({ error: 'not found' }, 404);
     } catch (e) {
       return json({ error: String(e && e.message || e) }, 500);
@@ -162,10 +177,107 @@ async function handleBlob(request, env, url, groupId, secret, hash) {
   return json({ error: 'method not allowed' }, 405);
 }
 
+// ---------- 公開相簿 ----------
+//
+// 為什麼要有這條路：單檔 HTML 把照片用 base64 內嵌，實測 40 張就 46.6MB，
+// 一百多張會做出 60–200MB 的檔案 —— 電腦打得開，手機打不開。使用者真正要的是
+// 「傳一個連結給家人看」，那就讓照片走 HTTP 一張一張載，而不是塞進一個檔案裡。
+//
+// 安全模型：
+//   · albumId 是 App 端產生的 128-bit 亂數，網址本身就是憑證（跟邀請連結同一套想法）。
+//   · 清單裡沒有的 hash 一律不給 —— 不會因為知道 groupId 就能撈整個群組的照片。
+//   · 相簿頁是使用者的 App 上傳的 HTML，所以回應一定要送嚴格的 CSP：完全不准腳本。
+//     沒有這一行，這裡就是自家網域上的儲存型 XSS。
+//   · 只有原本就有群組祕鑰的人能發布 / 收回。
+const ALBUM_HTML_MAX = 4_000_000;
+
+function albumKeys(albumId) {
+  return { meta: `album/${albumId}.json`, page: `album/${albumId}.html` };
+}
+
+async function handlePublicAlbum(env, albumId, hash) {
+  const k = albumKeys(albumId);
+  const metaObj = await env.PHOTOS.get(k.meta);
+  if (!metaObj) return new Response('這個相簿不存在，或已經被收回了。', {
+    status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+  const meta = JSON.parse(await metaObj.text());
+
+  if (hash) {
+    if (!Array.isArray(meta.hashes) || !meta.hashes.includes(hash)) return new Response('not found', { status: 404 });
+    const obj = await env.PHOTOS.get(`${meta.groupId}/${hash}`);
+    if (!obj) return new Response('not found', { status: 404 });
+    return new Response(obj.body, {
+      headers: {
+        'content-type': obj.httpMetadata?.contentType || 'image/jpeg',
+        'cache-control': 'public, max-age=31536000, immutable',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }
+
+  const pageObj = await env.PHOTOS.get(k.page);
+  if (!pageObj) return new Response('這個相簿還沒做好，請請對方再分享一次。', {
+    status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+  return new Response(pageObj.body, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      // no-store：不然按了「收回連結」之後，家人的瀏覽器還是拿得到快取的那一份
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+      // 這份 HTML 是使用者上傳的 —— 一律不准跑腳本
+      'content-security-policy':
+        "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; " +
+        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'none'",
+    },
+  });
+}
+
+async function handleAlbum(request, env, groupId, secret, albumId) {
+  const { error } = await authGroup(env, groupId, secret);
+  if (error) return error;
+  const k = albumKeys(albumId);
+
+  if (request.method === 'DELETE') {
+    const metaObj = await env.PHOTOS.get(k.meta);
+    if (metaObj) {
+      const meta = JSON.parse(await metaObj.text());
+      if (meta.groupId !== groupId) return json({ error: 'forbidden' }, 403);
+    }
+    await env.PHOTOS.delete(k.meta);
+    await env.PHOTOS.delete(k.page);
+    return json({ ok: true, removed: true });
+  }
+  if (request.method !== 'PUT') return json({ error: 'method not allowed' }, 405);
+
+  // 已經存在就必須是同一個群組的（albumId 是亂數，這只是防呆）
+  const existing = await env.PHOTOS.get(k.meta);
+  if (existing) {
+    const meta = JSON.parse(await existing.text());
+    if (meta.groupId !== groupId) return json({ error: 'forbidden' }, 403);
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body.html !== 'string' || !Array.isArray(body.hashes)) {
+    return json({ error: 'bad album payload' }, 400);
+  }
+  if (body.html.length > ALBUM_HTML_MAX) return json({ error: 'album page too large' }, 413);
+  const hashes = [...new Set(body.hashes.filter((h) => /^[a-f0-9]{16,64}$/.test(h)))];
+  if (!hashes.length) return json({ error: 'no photos' }, 400);
+
+  await env.PHOTOS.put(k.meta, JSON.stringify({
+    groupId, albumId, hashes,
+    title: String(body.title || '').slice(0, 200),
+    createdAt: Date.now(),
+  }), { httpMetadata: { contentType: 'application/json' } });
+  await env.PHOTOS.put(k.page, body.html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } });
+  return json({ ok: true, albumId, photos: hashes.length });
+}
+
 // ---------- helpers ----------
 function cors(res) {
   res.headers.set('Access-Control-Allow-Origin', '*');
-  res.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,HEAD,OPTIONS');
+  res.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,HEAD,OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'authorization,content-type,x-content-type');
   res.headers.set('Access-Control-Max-Age', '86400');
   return res;

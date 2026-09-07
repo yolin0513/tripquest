@@ -5,6 +5,7 @@ import * as db from './db.js';
 import { sha256Hex, uuid, deviceId, deviceName } from './ids.js';
 import { readExif } from './exif.js';
 import * as store from './store.js';
+import { getPrefs } from './prefs.js';
 
 const MAX_EDGE = 1600;
 const THUMB_EDGE = 320;
@@ -119,6 +120,15 @@ export async function importPhoto(file, opts) {
   const photo = await storeBlob(comp.photo, 'photo');
   const thumb = await storeBlob(comp.thumb, 'thumb');
 
+  // 「保留原檔」（預設關）。原檔只留在這台裝置上 —— outbox 只排縮圖與 1600px
+  // 那兩份，原檔永遠不會被同步上去，不然雲端容量會被吃爆。
+  // 沒有這個選項的話，匯出「無壓縮的照片」在既有照片上根本做不到，因為
+  // 下面的壓縮流程從來沒有把原始檔存下來過。
+  let original = null;
+  if (getPrefs().keepOriginal) {
+    try { original = await storeBlob(file, 'original'); } catch { original = null; }
+  }
+
   const sub = await store.addSubmission({
     tripId: opts.tripId,
     questId: opts.questId,
@@ -127,6 +137,8 @@ export async function importPhoto(file, opts) {
     subjectIds: Array.isArray(opts.subjectIds) && opts.subjectIds.length ? opts.subjectIds : null, // 照片裡有誰
     photoHash: photo.hash,
     thumbHash: thumb.hash,
+    originalHash: original ? original.hash : null,
+    originalBytes: original ? original.bytes : null,
     w: comp.w, h: comp.h,
     bytes: photo.bytes,
     takenAt: exif.takenAt || file.lastModified || Date.now(),
@@ -182,6 +194,14 @@ export async function blobURL(hash) {
 
 export async function hasLocal(hash) {
   return !!(await db.getBlob(hash));
+}
+
+// 拿到照片本體（匯出、打包用）。本機沒有就走跟 blobURL 一樣的延遲下載。
+export async function photoBlob(hash) {
+  if (!hash) return null;
+  const entry = await db.getBlob(hash);
+  if (entry) return entry.blob;
+  return lazyFetch(hash);
 }
 export function revokeAll() {
   for (const url of _urlCache.values()) URL.revokeObjectURL(url);

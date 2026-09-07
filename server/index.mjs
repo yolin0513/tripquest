@@ -10,12 +10,14 @@
 //   HEAD /blob/<hash>              → 200 / 404
 //   GET  /blob/<hash>             → 照片
 //   PUT  /blob/<hash>  <binary>   → 上傳
+//   PUT / DELETE /album/<albumId>  → 發布 / 收回公開相簿
+//   GET  /a/<albumId>[/p/<hash>]   → 公開相簿頁 / 相簿裡的照片（不需要祕鑰）
 //
 // 執行：node server/index.mjs        （預設埠 8787，或 PORT=9000 node server/index.mjs）
 // 資料：server/data/  —— 想全部清空就刪掉這個資料夾。
 
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, rm } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize } from 'node:path';
@@ -25,6 +27,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const DATA = join(__dirname, 'data');
 const BLOBS = join(DATA, 'blobs');
+const ALBUMS = join(DATA, 'albums');
 const STATE_FILE = join(DATA, 'state.json');
 const PORT = Number(process.env.PORT || 8787);
 const MAX_BLOB = 15_000_000;
@@ -66,7 +69,7 @@ function authGroup(groupId, secret, createIfMissing) {
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,HEAD,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,HEAD,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'authorization,content-type,x-content-type');
 }
 const send = (res, code, obj) => { cors(res); res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
@@ -92,7 +95,31 @@ const server = createServer(async (req, res) => {
   try {
     if (path === '/health') return send(res, 200, { ok: true, ts: Date.now() });
 
-    const isApi = path === '/push' || path === '/pull' || path.startsWith('/blob/');
+    // ---- 公開相簿（跟 workers/worker.mjs 同一套；本機開發與測試用）----
+    const pub = path.match(/^\/a\/([a-f0-9]{24,64})(?:\/p\/([a-f0-9]{16,64}))?$/);
+    if (pub && req.method === 'GET') {
+      const meta = join(ALBUMS, pub[1] + '.json');
+      if (!existsSync(meta)) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('這個相簿不存在，或已經被收回了。'); }
+      const info = JSON.parse(await readFile(meta, 'utf8'));
+      if (pub[2]) {
+        if (!info.hashes.includes(pub[2])) { res.writeHead(404); return res.end('not found'); }
+        const f = join(BLOBS, info.groupId, pub[2]);
+        if (!existsSync(f)) { res.writeHead(404); return res.end('not found'); }
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable' });
+        return createReadStream(f).pipe(res);
+      }
+      const page = join(ALBUMS, pub[1] + '.html');
+      if (!existsSync(page)) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('這個相簿還沒做好。'); }
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'none'",
+      });
+      return createReadStream(page).pipe(res);
+    }
+
+    const isApi = path === '/push' || path === '/pull' || path.startsWith('/blob/') || path.startsWith('/album/');
     if (isApi) {
       const groupId = u.searchParams.get('g');
       const auth = (req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
@@ -132,6 +159,34 @@ const server = createServer(async (req, res) => {
         const more = rows.length === PULL_LIMIT;
         const seq = rows.length ? (more ? rows[rows.length - 1].seq : g.seq) : since;
         return send(res, 200, { records: rows.map((x) => x.rec), seq, more });
+      }
+
+      // ---- /album ----
+      const am = path.match(/^\/album\/([a-f0-9]{24,64})$/);
+      if (am) {
+        const { code, err } = authGroup(groupId, secret, false);
+        if (err) return send(res, code, { error: err });
+        await mkdir(ALBUMS, { recursive: true });
+        const meta = join(ALBUMS, am[1] + '.json');
+        const pageFile = join(ALBUMS, am[1] + '.html');
+        if (existsSync(meta)) {
+          const cur = JSON.parse(await readFile(meta, 'utf8'));
+          if (cur.groupId !== groupId) return send(res, 403, { error: 'forbidden' });
+        }
+        if (req.method === 'DELETE') {
+          if (existsSync(meta)) await rm(meta);
+          if (existsSync(pageFile)) await rm(pageFile);
+          return send(res, 200, { ok: true, removed: true });
+        }
+        if (req.method === 'PUT') {
+          const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+          const hashes = [...new Set((body.hashes || []).filter((x) => /^[a-f0-9]{16,64}$/.test(x)))];
+          if (!hashes.length || typeof body.html !== 'string') return send(res, 400, { error: 'bad album payload' });
+          await writeFile(meta, JSON.stringify({ groupId, albumId: am[1], hashes, title: body.title || '', createdAt: Date.now() }));
+          await writeFile(pageFile, body.html);
+          return send(res, 200, { ok: true, albumId: am[1], photos: hashes.length });
+        }
+        return send(res, 405, { error: 'method not allowed' });
       }
 
       // ---- /blob ----

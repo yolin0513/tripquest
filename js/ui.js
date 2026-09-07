@@ -143,7 +143,8 @@ export function chooseFrom({ title, hint, options, value }) {
 
 export async function confirmDialog(message, { danger = false, okLabel = '確定', cancelLabel = '取消' } = {}) {
   return modal({
-    body: h('p', {}, message),
+    // pre-line：訊息裡的換行要真的換行（確認匯出照片、發布相簿都會列好幾條）
+    body: h('p', { style: 'white-space:pre-line' }, message),
     actions: [
       { label: cancelLabel, value: false },
       { label: okLabel, value: true, primary: !danger, danger },

@@ -1,4 +1,5 @@
 import { setTop, render } from '../app.js';
+import { keepOriginals, originalUsage, dropOriginals } from '../photoexport.js';
 import * as store from '../store.js';
 import { h, toast, confirmDialog, promptDialog, modal, fmtBytes } from '../ui.js';
 import { navigate } from '../router.js';
@@ -28,6 +29,10 @@ export default async function settings() {
   const usedPct = est.quota ? Math.min(100, (est.usage / est.quota) * 100) : 0;
   const prefs = getPrefs();
   const pending = await pendingCount();
+  const orig = await originalUsage();
+  const origLine = orig.count
+    ? `現在留著 ${orig.count} 張原始檔，佔 ${fmtBytes(orig.bytes)}。`
+    : (keepOriginals() ? '目前還沒有留下任何原始檔（只對打開之後拍的照片有效）。' : '目前沒有保留原始檔。');
 
   const bundleInput = h('input', { type: 'file', accept: '.json,application/json', hidden: true });
   bundleInput.addEventListener('change', async () => {
@@ -80,6 +85,29 @@ export default async function settings() {
       emergencyContactEditor(settings),
       h('button', { class: 'btn btn-danger btn-block', style: 'margin-top:10px', onclick: () => navigate('/sos') }, '🆘 打開緊急求助畫面'),
     ),
+
+    // ---- 照片品質 ----
+    // 「匯出無壓縮的照片」這件事只有從現在起才做得到 —— 匯入時一律縮到長邊
+    // 1600px，原始檔從來沒有被留下來過。所以這個開關要把代價講清楚，
+    // 而且預設關（多留一份原檔，佔用會變成大約十倍）。
+    h('div', { class: 'section-label' }, '照片品質'),
+    h('label', { class: 'switch-row' },
+      h('div', {}, h('div', { style: 'font-weight:700' }, '連原始檔一起留著'),
+        h('div', { class: 'form-hint' },
+          '平常拍的照片會縮到長邊 1600px 再存（大約 300KB）。打開這個開關，之後拍的照片會多留一份沒有壓縮的原始檔，'
+          + '匯出時就能拿到原畫質。代價是佔用空間大約變成 10 倍（一張 3–5MB）。'
+          + '原始檔只留在這支手機裡，不會同步給旅伴、也不會進備份檔。'),
+        h('div', { class: 'form-hint' }, origLine)),
+      checkbox(prefs.keepOriginal === true, (on) => { setPref('keepOriginal', on); settings(); })),
+    orig.count ? h('button', { class: 'btn btn-ghost btn-block', onclick: async () => {
+      const ok = await confirmDialog(`要刪掉已經留下來的 ${orig.count} 張原始檔嗎？可以空出 ${fmtBytes(orig.bytes)}。
+
+壓縮過的那份（1600px）會留著，照片不會不見。`, { danger: true, okLabel: '刪掉原始檔' });
+      if (!ok) return;
+      const r = await dropOriginals();
+      toast(`已刪掉 ${r.count} 張原始檔，空出 ${fmtBytes(r.freed)}`);
+      settings();
+    } }, `刪掉已留的原始檔（${fmtBytes(orig.bytes)}）`) : null,
 
     // ---- 儲存空間 ----
     h('div', { class: 'section-label' }, '儲存空間'),

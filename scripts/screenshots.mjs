@@ -114,7 +114,7 @@ try {
   const tl = await page.evaluate(async (tid) => {
     const m = await import('./js/memory.js');
     const timeline = await m.buildTimeline(tid);
-    const album = await m.buildAlbumPage(tid);
+    const album = (await m.buildAlbumPage(tid)).blob;   // v1.45 起回傳 { blob, bytes, missing, count }
     const txt = await album.text();
     return {
       kinds: [...new Set(timeline.segs.map(s => s.kind))],

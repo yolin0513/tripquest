@@ -229,7 +229,7 @@ export async function deleteSubmission(id) {
   };
   state.byId.set(rec.id, rec);
   await db.putRecord(rec);
-  await gcBlobs([sub.photoHash, sub.thumbHash]);
+  await gcBlobs([sub.photoHash, sub.thumbHash, sub.originalHash]);
   emit();
   await queueSync('push', rec);
 }
@@ -303,7 +303,9 @@ export function untaggedPhotos(tripId) {
 export async function gcBlobs(candidates) {
   const live = new Set();
   for (const r of state.byId.values()) {
-    if (r.type === 'submission') { live.add(r.photoHash); live.add(r.thumbHash); }
+    // originalHash 也算「還有人要」—— 打開「保留原檔」之後那份原始檔只存在這台
+    // 裝置上，被 GC 掉就永遠回不來了
+    if (r.type === 'submission') { live.add(r.photoHash); live.add(r.thumbHash); live.add(r.originalHash); }
   }
   for (const h of candidates || []) {
     if (h && !live.has(h)) await db.deleteBlob(h);

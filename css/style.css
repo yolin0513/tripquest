@@ -1660,3 +1660,24 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .page.compact .form-field { margin-bottom: 12px; }
 .page.compact .form-label { font-size: 0.95rem; }
 .page.compact .field { min-height: 46px; padding: 10px 12px; }
+
+/* ---- 回憶影片：長度選項與分享網址 ---- */
+.len-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.len-btn {
+  display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;
+  min-height: 62px; padding: 10px 8px; border-radius: 14px;
+  border: 2px solid var(--line); background: var(--bg-elev-2); color: var(--text);
+  font: inherit; cursor: pointer; text-align: center;
+}
+.len-btn.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, transparent); }
+.len-t { font-weight: 800; font-size: 1.02rem; }
+.len-s { font-size: 0.85rem; color: var(--muted); }
+
+.share-box { display: flex; flex-direction: column; gap: 10px; }
+.share-live { font-weight: 700; color: var(--ok, #3fb27f); margin: 0; }
+.share-url {
+  font-size: 0.86rem; line-height: 1.5; word-break: break-all; user-select: all;
+  padding: 10px 12px; border-radius: 12px; background: var(--bg-elev-2);
+  border: 1px solid var(--line); color: var(--muted);
+}
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

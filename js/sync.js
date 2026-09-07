@@ -86,6 +86,21 @@ export function adapterForGroup(groupId, secret) {
       const r = await fetch(b + '/blob/' + hash + q, { headers: H });
       return r.ok ? r.blob() : null;
     },
+    // 公開相簿：發布 / 收回。發布後任何人拿到網址都看得到，所以只由使用者主動觸發。
+    async putAlbum(albumId, { html, hashes, title }) {
+      const r = await fetch(b + '/album/' + albumId + q, {
+        method: 'PUT', headers: { ...H, 'content-type': 'application/json' },
+        body: JSON.stringify({ html, hashes, title }),
+      });
+      if (!r.ok) throw new Error('putAlbum ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 120));
+      return r.json();
+    },
+    async deleteAlbum(albumId) {
+      const r = await fetch(b + '/album/' + albumId + q, { method: 'DELETE', headers: H });
+      if (!r.ok) throw new Error('deleteAlbum ' + r.status);
+      return r.json();
+    },
+    albumURL(albumId) { return b + '/a/' + albumId; },
   };
 }
 
