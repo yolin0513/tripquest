@@ -597,7 +597,7 @@ function drawOutro(ctx, seg, t) {
     { maxW: W - 140, maxLines: 2, size: 42, min: 28, color: 'rgba(255,255,255,0.75)' }) + 36;
   if (s.reactions) y += centerText(ctx, `互相按了 ${s.reactions} 個讚 ❤️`, W / 2, y + 22,
     { maxW: W - 140, maxLines: 1, size: 40, min: 26, color: 'rgba(255,255,255,0.6)' }) + 22;
-  centerText(ctx, 'TripQuest' + (seg.ai ? '　·　✨ 文案由 AI 生成' : ''), W / 2, y + 74,
+  centerText(ctx, 'TripQuest', W / 2, y + 74,
     { maxW: W - 140, maxLines: 2, size: 34, min: 24, weight: 700, color: 'rgba(255,255,255,0.4)' });
   ctx.restore();
 }

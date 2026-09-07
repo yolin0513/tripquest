@@ -62,13 +62,21 @@ export const STYLES = {
 };
 
 // 段落表：at 是影片進度（0~1）的起點，後面是每一層的密度（0 = 不出現）
+//
+// 使用者實測回饋：原本 intro 段只有襯底長音、旋律要到 9% 才進來 —— 一支三分鐘的
+// 影片等於前十幾秒只有單音，「讓人以為壞掉」。所以**第一秒就要全編制**：
+// 旋律、低音、節奏從 0 開始，開頭兩小節還固定彈一段主題（見 MOTIF），
+// 一聽就知道音樂正常。安靜的鋪陳改放在中後段（c 段）當對比。
 const SECTIONS = [
-  { at: 0.00, name: 'intro', prog: 'intro', pad: 1.0, bass: 0.0, arp: 0.0, mel: 0.0, perc: 0.0 },
-  { at: 0.09, name: 'a', prog: 'a', pad: 0.9, bass: 1.0, arp: 0.0, mel: 0.8, perc: 0.0 },
-  { at: 0.38, name: 'b', prog: 'b', pad: 0.8, bass: 1.0, arp: 1.0, mel: 1.0, perc: 1.0 },
-  { at: 0.64, name: 'c', prog: 'c', pad: 1.0, bass: 0.7, arp: 0.4, mel: 0.5, perc: 0.0 },
-  { at: 0.86, name: 'outro', prog: 'outro', pad: 1.0, bass: 0.5, arp: 0.0, mel: 0.35, perc: 0.0 },
+  { at: 0.00, name: 'open', prog: 'a', pad: 1.0, bass: 1.0, arp: 0.6, mel: 1.0, perc: 0.7 },
+  { at: 0.30, name: 'b', prog: 'b', pad: 0.8, bass: 1.0, arp: 1.0, mel: 1.0, perc: 1.0 },
+  { at: 0.60, name: 'c', prog: 'c', pad: 1.0, bass: 0.7, arp: 0.4, mel: 0.6, perc: 0.0 },
+  { at: 0.82, name: 'lift', prog: 'a', pad: 0.9, bass: 1.0, arp: 0.8, mel: 0.9, perc: 0.8 },
+  { at: 0.94, name: 'outro', prog: 'outro', pad: 1.0, bass: 0.5, arp: 0.0, mel: 0.4, perc: 0.0 },
 ];
+
+// 開頭兩小節的固定主題（音階級數）—— 不靠機率，第一拍就有清楚的旋律
+const MOTIF = [4, 5, 7, 4, 2, 4, 0, 2];
 
 function sectionAt(r) {
   let s = SECTIONS[0];
@@ -194,15 +202,22 @@ export function createMusic(styleKey = 'gentle', { seed = 20260907 } = {}) {
       const n = seq[inChord % seq.length];
       tone(S.arpWave, noteHz(S.root + n + 12), t, beat * 0.7, 0.036 * sec.arp);
     }
-    // 旋律：在音階上做有限制的隨機漫步，落在和弦音上比較常見
-    if (sec.mel > 0 && inChord % 2 === 0 && rand() < 0.5 + 0.4 * sec.mel) {
-      const jump = [-2, -1, -1, 0, 1, 1, 2, 3][Math.floor(rand() * 8)];
-      let deg = melLast + jump;
-      if (deg > 9) deg -= 5;
-      if (deg < 0) deg += 5;
-      melLast = deg;
-      const dur = beat * (rand() < 0.3 ? 1.5 : 0.85);
-      tone(S.melWave, noteHz(degToSemi(deg) + 12), t, dur, 0.085 * sec.mel, { glide: rand() < 0.25 ? 1 : 0 });
+    // 旋律：開頭兩小節走固定主題（一聽就知道音樂正常），之後在音階上做
+    // 有限制的隨機漫步，落在和弦音上比較常見
+    if (sec.mel > 0 && inChord % 2 === 0) {
+      if (bar < 2) {
+        const deg = MOTIF[(bar * 4 + inChord / 2) % MOTIF.length];
+        melLast = deg;
+        tone(S.melWave, noteHz(degToSemi(deg) + 12), t, beat * 1.1, 0.1 * sec.mel);
+      } else if (rand() < 0.5 + 0.4 * sec.mel) {
+        const jump = [-2, -1, -1, 0, 1, 1, 2, 3][Math.floor(rand() * 8)];
+        let deg = melLast + jump;
+        if (deg > 9) deg -= 5;
+        if (deg < 0) deg += 5;
+        melLast = deg;
+        const dur = beat * (rand() < 0.3 ? 1.5 : 0.85);
+        tone(S.melWave, noteHz(degToSemi(deg) + 12), t, dur, 0.085 * sec.mel, { glide: rand() < 0.25 ? 1 : 0 });
+      }
     }
     // 節奏
     if (sec.perc > 0 && S.perc) {
@@ -233,7 +248,7 @@ export function createMusic(styleKey = 'gentle', { seed = 20260907 } = {}) {
       if (ctx.state === 'suspended') await ctx.resume();
       nextTime = ctx.currentTime + 0.08;
       master.gain.setValueAtTime(0.0001, ctx.currentTime);
-      master.gain.exponentialRampToValueAtTime(S.gain, ctx.currentTime + 2.2);
+      master.gain.exponentialRampToValueAtTime(S.gain, ctx.currentTime + 0.5);   // 半秒內就要聽得到，不要讓人以為沒聲音
       pump();
     },
     // 呼叫端每隔一下告訴我們影片播到哪 —— 段落由這個決定

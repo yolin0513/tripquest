@@ -27,7 +27,7 @@ const mmss = (sec) => {
 export default async function album(tripId) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
-  setTop({ title: '回憶影片' });
+  setTop({ title: '回憶' });
 
   const slides = collectSlides(tripId);
   if (!slides.length) {
@@ -47,7 +47,6 @@ export default async function album(tripId) {
   const lenNote = h('p', { class: 'form-hint' });
   const musicPick = h('div', { class: 'music-pick' });
   const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
-  const aiNote = h('p', { class: 'form-hint center', hidden: true }, '✨ 片頭片尾、每天的旁白與部分照片字幕由 AI 生成');
   const meta = h('p', { class: 'muted center', style: 'margin:10px 0' });
   const shareBox = h('div', { class: 'share-box' });
 
@@ -122,7 +121,22 @@ export default async function album(tripId) {
     }
   }
 
+  // 「進階」收納：分享網址頁本來就能逐張長按存到手機（照片是同網域的一般
+  // 圖片網址，iOS / Android 都適用），所以這兩個匯出不再當主要選項。
+  // 但不能整個拿掉 —— 單檔相簿是「沒設定同步就沒有分享網址」時唯一的退路，
+  // ZIP 匯出是「保留原檔」畫質唯一的出口。
+  const advBody = h('div', { class: 'stack', hidden: true },
+    h('button', { class: 'btn btn-soft btn-block', onclick: doAlbumPage }, '📄 存成單一相簿檔（離線也能看）'),
+    h('button', { class: 'btn btn-soft btn-block', onclick: doExportPhotos }, '📦 匯出全部照片（壓縮檔）'),
+    h('p', { class: 'form-hint' }, '平常不需要這兩個：家人打開分享網址後，長按照片就能存到手機。這裡是給沒有網路分享、或想拿原始檔的人用的。'),
+  );
+  const advToggle = h('button', {
+    class: 'btn btn-ghost btn-block',
+    onclick: () => { advBody.hidden = !advBody.hidden; advToggle.textContent = advBody.hidden ? '更多儲存方式 ▾' : '更多儲存方式 ▴'; },
+  }, '更多儲存方式 ▾');
+
   render(h('div', { class: 'page' },
+    h('div', { class: 'section-label', style: 'margin-top:0' }, '影片'),
     h('div', { class: 'album-frame' }, canvas, bar),
     meta,
     playBtn,
@@ -135,18 +149,15 @@ export default async function album(tripId) {
     musicPick,
     fileInput,
 
-    h('div', { class: 'section-label' }, '傳給家人看'),
-    shareBox,
-
-    h('div', { class: 'section-label' }, '存到手機'),
     videoSupported()
-      ? h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doVideo }, '🎬 存成影片檔')
-      : h('p', { class: 'form-hint' }, '這支手機不支援直接存影片，請用上面的分享網址（一樣好看、一樣能傳）。'),
-    h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doAlbumPage }, '📄 存成單一相簿檔（離線也能看）'),
-    h('button', { class: 'btn btn-soft btn-block btn-big', onclick: doExportPhotos }, '📦 匯出全部照片'),
-    h('p', { class: 'form-hint center' }, '影片與相簿檔都在這支手機裡做好，不會上傳。'),
-    aiNote,
-    h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:14px', onclick: () => navigate(`/trip/${tripId}/recap`) }, '🎁 看這趟的數字回顧'),
+      ? h('button', { class: 'btn btn-soft btn-block btn-big', style: 'margin-top:14px', onclick: doVideo }, '🎬 存成影片檔')
+      : h('p', { class: 'form-hint' }, '這支手機不支援直接存影片，請用下面的相片分享網址（一樣好看、一樣能傳）。'),
+    h('p', { class: 'form-hint center' }, '影片在這支手機裡做好，不會上傳。'),
+
+    h('div', { class: 'section-label', style: 'margin-top:26px' }, '相片'),
+    shareBox,
+    advToggle,
+    advBody,
   ));
 
   drawLenPick();
@@ -164,7 +175,6 @@ export default async function album(tripId) {
         await Promise.all([ensureTripText(tripId), ensurePhotoCaptions(tripId)]);
         if ((aiPayload(tripId, 'tripText') || aiPayload(tripId, 'photoCaptions'))
           && location.hash.includes(`/trip/${tripId}/album`)) {
-          aiNote.hidden = false;
           resetPlayer();
         }
       } catch { /* 靜默 */ }

@@ -36,13 +36,11 @@ export default async function poster(tripId) {
     busy.hidden = true;
   }
 
-  const aiNote = h('p', { class: 'form-hint center', hidden: true }, '✨ 副標與每天的一句話由 AI 生成');
 
   render(h('div', { class: 'page' },
     h('p', { class: 'muted center', style: 'margin:0 0 10px' }, '把行程做成一張海報，存下來傳 LINE 或列印。'),
     h('div', { class: 'poster-frame' }, canvas),
     busy,
-    aiNote,
     h('div', { class: 'section-label' }, '風格'),
     styleRow,
 
@@ -58,8 +56,7 @@ export default async function poster(tripId) {
   // 有開 AI → 背景把海報文案產一產，好了重畫預覽
   if (t.aiEnabled) {
     warmPosterAi(tripId).then((changed) => {
-      if (changed && location.hash.includes(`/trip/${tripId}/poster`)) { aiNote.hidden = false; refresh(); }
-      else if (store.spotsOf(tripId).some((s) => s.aiBlurb)) aiNote.hidden = false;
+      if (changed && location.hash.includes(`/trip/${tripId}/poster`)) refresh();
     }).catch(() => {});
   }
 

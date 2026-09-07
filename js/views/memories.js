@@ -39,8 +39,8 @@ export default async function memories(tripId) {
       () => navigate(`/trip/${tripId}/badges`), true),
 
     // 回憶影片
-    bigCard('🎬', '回憶影片',
-      ready ? '把照片做成一支有片頭、路線地圖、配樂的短片' : `還差 ${prog.total - prog.done} 個任務就能做`,
+    bigCard('🎬', '回憶影片與相簿',
+      ready ? '做成短片，或產生一個給家人看的相簿網址' : `還差 ${prog.total - prog.done} 個任務就能做`,
       ready ? () => navigate(`/trip/${tripId}/album`) : () => toast(`還有 ${prog.total - prog.done} 個任務`),
       ready),
 

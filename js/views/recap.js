@@ -22,7 +22,7 @@ export default async function recap(tripId) {
 
   const r = await buildRecap(tripId);
 
-  // 有開 AI → 用 AI 潤飾過的文案（有快取秒回；沒開 / 失敗就用內建句子）
+  // 有開 AI → 用潤飾過的文案（有快取秒回；沒開 / 失敗就用內建句子）
   let ai = null;
   if (trip.aiEnabled) {
     try { ai = await import('../aicontent.js').then((m) => m.ensureRecapText(tripId, r)); }
@@ -104,16 +104,13 @@ export default async function recap(tripId) {
       h('span', { class: 'recap-badge' }, `${b.emoji} ${b.name}`))));
   }
 
-  if (ai && (ai.opening || ai.closing)) {
-    if (ai.closing) out.append(h('p', { class: 'recap-closing' }, '「' + ai.closing + '」'));
-    out.append(h('p', { class: 'form-hint center', style: 'margin-top:4px' }, '✨ 文字由 AI 潤飾'));
+  if (ai && ai.closing) {
+    out.append(h('p', { class: 'recap-closing' }, '「' + ai.closing + '」'));
   }
 
-  // 動作
+  // 動作 —— 只留這一頁自己的事（影片與海報在「回顧」分頁本來就有入口，不重複放）
   out.append(h('div', { class: 'stack', style: 'margin-top:22px' },
     h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => exportCard(tripId, r, ai) }, '📤 存成圖片 / 分享'),
-    h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/album`) }, '🎬 做成回憶影片'),
-    h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/poster`) }, '🎨 做一張行程海報'),
   ));
 
   page.replaceChildren(out);
@@ -126,94 +123,157 @@ function num(ic, n, label) {
     h('div', { class: 'recap-num-l' }, label));
 }
 
-// ---------- 匯出回顧卡（canvas）----------
-async function exportCard(tripId, r, ai) {
-  toast('產生回顧卡…');
-  const theme = themeMeta(themeForTrip(store.spotsOf(tripId)));
-  const p = theme.poster;
-  const W = 1080, H = 1350;
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const x = c.getContext('2d');
+// ---------- 匯出回顧卡（canvas） ----------
+//
+// 使用者實測回報三個跑版：開場文字壓到 📷、「次互動」上有重疊、13 個徽章
+// 超出右邊被切掉。根本原因是舊版**每一塊的 y 都寫死**（文字卡在 262、
+// 宮格卡在 370…），內容一多（AI 開場三行、美食名稱換行）就直接疊在一起，
+// 徽章又只畫 emoji 一長串。改成**流式排版**：每一塊自己量高度、游標往下推，
+// 畫布高度最後才決定 —— 資料多就變長，永遠不重疊、不溢出。
+// renderRecapCard 拆出來、回傳每一塊的框，測試就能自動驗「不重疊、不出界」。
 
-  x.fillStyle = p.paper; x.fillRect(0, 0, W, H);
-  // 頂部色帶
-  x.fillStyle = p.band; x.fillRect(0, 0, W, 12);
-  x.fillStyle = p.band; x.fillRect(0, H - 12, W, 12);
+const CARD_FONT = '"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif';
 
-  x.textAlign = 'center';
-  x.fillStyle = p.ink;
-  x.font = `800 68px "PingFang TC","Noto Sans TC",sans-serif`;
-  wrapText(x, r.title, W / 2, 130, W - 140, 74);
-  x.fillStyle = p.sub; x.font = `400 34px "PingFang TC","Noto Sans TC",sans-serif`;
-  x.fillText([r.dateRange, `${r.dayCount} 天 · ${r.people} 人`].filter(Boolean).join('　·　'), W / 2, 205);
-  if (ai && ai.opening) {
-    x.fillStyle = p.ink; x.font = `400 30px "PingFang TC","Noto Sans TC",sans-serif`;
-    wrapText(x, ai.opening, W / 2, 262, W - 180, 40);
+function cardWrap(x, text, maxW, size, { weight = 400, min = 24, maxLines = 99 } = {}) {
+  let s = size;
+  const measure = (px) => {
+    x.font = `${weight} ${px}px ${CARD_FONT}`;
+    const lines = [];
+    let line = '';
+    for (const ch of [...String(text)]) {
+      if (line && x.measureText(line + ch).width > maxW) { lines.push(line); line = ch; }
+      else line += ch;
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+  let lines = measure(s);
+  while (lines.length > maxLines && s > min) { s -= 2; lines = measure(s); }
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    let last = lines[maxLines - 1];
+    while (last.length > 1 && x.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+    lines[maxLines - 1] = last + '…';
   }
+  return { lines, size: s, lh: Math.round(s * 1.35) };
+}
 
-  // 四宮格大數字
+// 把「emoji 名稱」的小塊排成置中的多行（徽章用）—— 幾個都放得下，放不下就換行
+function chipLines(x, chips, maxW, size) {
+  x.font = `600 ${size}px ${CARD_FONT}`;
+  const gap = x.measureText('　').width;
+  const lines = [];
+  let cur = [], w = 0;
+  for (const c of chips) {
+    const cw = x.measureText(c).width;
+    if (cur.length && w + gap + cw > maxW) { lines.push({ items: cur, w }); cur = []; w = 0; }
+    w += (cur.length ? gap : 0) + cw;
+    cur.push(c);
+  }
+  if (cur.length) lines.push({ items: cur, w });
+  return { lines, gap };
+}
+
+// r / ai → { canvas, boxes }。boxes: 每一塊的名稱與外框，給測試驗不重疊、不出界。
+export function renderRecapCard(r, ai, p) {
+  const W = 1080, PAD = 90, maxW = W - PAD * 2;
+  // 先用一張暫時畫布量字，因為總高度要等排完版才知道
+  const mc = document.createElement('canvas').getContext('2d');
+  const boxes = [];
+  const ops = [];                 // 先記下要畫什麼，量完總高才真的畫
+  let y = 100;
+
+  const block = (name, hgt, draw) => { boxes.push({ name, y0: y, y1: y + hgt }); ops.push({ y, draw }); y += hgt; };
+  const text = (name, str, size, { weight = 400, color = 'ink', min = 24, maxLines = 99, italic = false, gapAfter = 0 } = {}) => {
+    const f = cardWrap(mc, str, maxW, size, { weight, min, maxLines });
+    block(name, f.lines.length * f.lh, (x, top) => {
+      x.font = `${italic ? 'italic ' : ''}${weight} ${f.size}px ${CARD_FONT}`;
+      x.fillStyle = p[color]; x.textAlign = 'center'; x.textBaseline = 'top';
+      f.lines.forEach((ln, i) => x.fillText(ln, W / 2, top + i * f.lh));
+    });
+    y += gapAfter;
+  };
+  const gap = (n) => { y += n; };
+
+  // 標題區
+  text('title', r.title, 66, { weight: 800, min: 42, maxLines: 2, gapAfter: 14 });
+  text('sub', [r.dateRange, `${r.dayCount} 天 · ${r.people} 人`].filter(Boolean).join('　·　'),
+    34, { color: 'sub', min: 26, maxLines: 2, gapAfter: 10 });
+  if (ai && ai.opening) text('opening', ai.opening, 30, { min: 26, maxLines: 4 });
+  gap(44);
+
+  // 大數字宮格：兩欄，列數依內容而定
   const cells = [
     ['📷', r.photoCount, '張照片'],
     ['👣', r.distanceKm >= 0.1 ? r.distanceKm : r.spotCount, r.distanceKm >= 0.1 ? '公里' : '個地方'],
     ['✅', `${r.doneCount}/${r.questTotal}`, '個任務'],
     ['💬', r.interactions, '次互動'],
   ];
-  const gx = [W / 2 - 250, W / 2 + 250];
-  const gy = [370, 620];
-  cells.forEach((cell, i) => {
-    const cx = gx[i % 2], cy = gy[Math.floor(i / 2)];
-    x.font = '64px sans-serif'; x.fillText(cell[0], cx, cy - 40);
-    x.fillStyle = p.accent; x.font = `900 76px "PingFang TC",sans-serif`;
-    x.fillText(String(cell[1]), cx, cy + 40);
-    x.fillStyle = p.sub; x.font = `400 30px "PingFang TC",sans-serif`;
-    x.fillText(cell[2], cx, cy + 82);
-    x.fillStyle = p.ink;
-  });
+  const CELL_H = 196, colX = [W / 2 - 240, W / 2 + 240];
+  for (let row = 0; row < Math.ceil(cells.length / 2); row++) {
+    const rowCells = cells.slice(row * 2, row * 2 + 2);
+    block(`nums-row${row}`, CELL_H, (x, top) => {
+      rowCells.forEach((cell, i) => {
+        const cx = colX[i];
+        x.textAlign = 'center'; x.textBaseline = 'top';
+        x.font = '56px sans-serif'; x.fillStyle = p.ink;
+        x.fillText(cell[0], cx, top);
+        const nf = cardWrap(mc, String(cell[1]), 430, 74, { weight: 900, min: 40, maxLines: 1 });
+        x.font = `900 ${nf.size}px ${CARD_FONT}`; x.fillStyle = p.accent;
+        x.fillText(String(cell[1]), cx, top + 74);
+        x.font = `400 30px ${CARD_FONT}`; x.fillStyle = p.sub;
+        x.fillText(cell[2], cx, top + 160);
+      });
+    });
+    if (row < Math.ceil(cells.length / 2) - 1) gap(26);
+  }
+  gap(46);
 
-  // 美食
-  let yy = 800;
+  // 美食：名稱全列出來（換行），最多 5 行
   if (r.foods.length) {
-    x.fillStyle = p.ink; x.font = `800 38px "PingFang TC",sans-serif`;
-    x.fillText(`吃了 ${r.foods.length} 樣美食`, W / 2, yy);
-    yy += 50;
-    x.font = `400 30px "PingFang TC",sans-serif`; x.fillStyle = p.sub;
-    const names = r.foods.map((f) => f.title.replace(/^必吃：/, '')).slice(0, 6);
-    wrapText(x, names.join('・'), W / 2, yy, W - 160, 42);
-    yy += 90;
+    text('foods-title', `吃了 ${r.foods.length} 樣美食`, 38, { weight: 800, maxLines: 1, gapAfter: 16 });
+    text('foods', r.foods.map((f) => f.title.replace(/^必吃：/, '')).join('・'),
+      30, { color: 'sub', min: 26, maxLines: 5 });
+    gap(40);
   }
 
-  // 徽章
+  // 徽章：「emoji 名稱」一顆一顆排、放不下換行 —— 13 個也不會被切掉
   if (r.tripBadges.length) {
-    x.fillStyle = p.ink; x.font = `800 36px "PingFang TC",sans-serif`;
-    x.fillText(`解鎖 ${r.tripBadges.length} 個徽章`, W / 2, yy + 20);
-    x.font = '46px sans-serif';
-    x.fillText(r.tripBadges.slice(0, 10).map((b) => b.emoji).join(' '), W / 2, yy + 80);
+    text('badges-title', `解鎖 ${r.tripBadges.length} 個徽章`, 36, { weight: 800, maxLines: 1, gapAfter: 16 });
+    const chips = r.tripBadges.map((b) => `${b.emoji} ${b.name}`);
+    const SIZE = 30, LH = 52;
+    const { lines, gap: cg } = chipLines(mc, chips, maxW, SIZE);
+    block('badges', lines.length * LH, (x, top) => {
+      x.font = `600 ${SIZE}px ${CARD_FONT}`; x.fillStyle = p.ink; x.textBaseline = 'top'; x.textAlign = 'left';
+      lines.forEach((ln, i) => {
+        let cx = W / 2 - ln.w / 2;
+        for (const c of ln.items) { x.fillText(c, cx, top + i * LH); cx += x.measureText(c).width + cg; }
+      });
+    });
+    gap(40);
   }
 
-  // 頁尾
-  if (ai && ai.closing) {
-    x.fillStyle = p.ink; x.font = `italic 400 32px "PingFang TC","Noto Sans TC",sans-serif`;
-    wrapText(x, '「' + ai.closing + '」', W / 2, H - 150, W - 180, 42);
-  }
-  x.fillStyle = p.sub; x.font = `400 28px "PingFang TC",sans-serif`;
-  x.fillText('TripQuest 旅圖任務' + (ai && (ai.opening || ai.closing) ? '　·　✨ AI 潤飾' : ''), W / 2, H - 60);
+  // 結尾
+  if (ai && ai.closing) { text('closing', '「' + ai.closing + '」', 32, { italic: true, min: 26, maxLines: 3 }); gap(28); }
+  text('footer', 'TripQuest 旅圖任務', 28, { color: 'sub', maxLines: 1 });
 
-  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.92));
+  // 量完了 → 真的畫
+  const H = Math.max(1350, y + 90);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = p.paper; x.fillRect(0, 0, W, H);
+  x.fillStyle = p.band; x.fillRect(0, 0, W, 12); x.fillRect(0, H - 12, W, 12);
+  for (const op of ops) op.draw(x, op.y);
+  return { canvas: c, boxes, W, H };
+}
+
+async function exportCard(tripId, r, ai) {
+  toast('產生回顧卡…');
+  const theme = themeMeta(themeForTrip(store.spotsOf(tripId)));
+  const { canvas } = renderRecapCard(r, ai, theme.poster);
+  const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
   const file = new File([blob], `${r.title}-回顧.jpg`, { type: 'image/jpeg' });
   if (await nativeShare({ title: r.title, text: '我們的旅程回顧', files: [file] })) return;
   downloadBlob(blob, file.name);
   toast('已存成圖片');
-}
-
-function wrapText(ctx, text, cx, y, maxW, lh) {
-  const chars = [...String(text)];
-  let line = '';
-  const lines = [];
-  for (const ch of chars) {
-    if (ctx.measureText(line + ch).width > maxW && line) { lines.push(line); line = ch; }
-    else line += ch;
-  }
-  if (line) lines.push(line);
-  lines.slice(0, 3).forEach((l, i) => ctx.fillText(l, cx, y + i * lh));
-  return y + lines.length * lh;
 }

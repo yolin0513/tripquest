@@ -235,7 +235,6 @@ async function drawPoster(canvas, model, dayList, preset, seedKey) {
   ctx.fillText('謝謝這趟旅程', W / 2, y);
   ctx.fillStyle = p.sub; ctx.font = F(p, 400, 24);
   ctx.fillText('TripQuest 旅圖任務', W / 2, y + 40);
-  if (model.aiText) ctx.fillText('✨ 文案由 AI 生成', W / 2, y + 74);
 }
 
 async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
