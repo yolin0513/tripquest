@@ -339,15 +339,24 @@ export function questsOf(spotId) {
 export function questsOfTrip(tripId) {
   return list().filter((r) => r.type === 'quest' && r.tripId === tripId && alive(r));
 }
+// 排序一定要有決勝條件：一次選三張同時匯入的照片 takenAt 會完全一樣（同一個
+// lastModified），JS 的 sort 是穩定的，平手時就保留「插入順序」—— 而插入順序在
+// 上傳的那台是上傳順序、在同步過來的那台是拉取順序，兩台的第 1 張會不一樣。
+// 標記（tag:<subId>）本身同步得好好的，但照 index 比對就會看起來像「沒同步」。
+const bySubTime = (a, b) =>
+  ((a.takenAt || a.createdAt) - (b.takenAt || b.createdAt)) ||
+  ((a.createdAt || 0) - (b.createdAt || 0)) ||
+  String(a.id).localeCompare(String(b.id));
+
 export function submissionsOf(questId) {
   const gone = retractedIds();
   return list().filter((r) => r.type === 'submission' && r.questId === questId && !gone.has(r.id))
-    .sort((a, b) => a.createdAt - b.createdAt);
+    .sort((a, b) => (a.createdAt - b.createdAt) || String(a.id).localeCompare(String(b.id)));
 }
 export function submissionsOfTrip(tripId) {
   const gone = retractedIds();
   return list().filter((r) => r.type === 'submission' && r.tripId === tripId && !gone.has(r.id))
-    .sort((a, b) => (a.takenAt || a.createdAt) - (b.takenAt || b.createdAt));
+    .sort(bySubTime);
 }
 
 // 任務完成 = 至少一張投稿（推導，不落地）
