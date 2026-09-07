@@ -215,7 +215,7 @@ try {
     time: document.querySelector('.spot-time').value,
     stay: document.querySelector('.spot-stay').selectedOptions[0].textContent,
   }));
-  eq(sv.labels.join('／'), '景點名稱／幾點到／停留多久', `只剩三個欄位：${sv.labels.join('、')}`);
+  eq(sv.labels.join('／'), '景點名稱／幾點到／停留多久／地圖位置', `欄位：${sv.labels.join('、')}（v1.48 起多了地圖位置）`);
   // 第 5 項：上方的「第幾天／幾個任務」與底下那段提示都拿掉
   const txt = await page.evaluate(() => document.querySelector('#view > .page').innerText);
   yes(!/第 d+ 天/.test(txt), '上方不再顯示「第幾天」');

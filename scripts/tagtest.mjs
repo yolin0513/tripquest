@@ -210,8 +210,9 @@ try {
     hasQuestList: !!document.querySelector('.qrow, .qline'),
     hasAddPhoto: !!document.querySelector('.addphoto-row, .addphoto-icons'),
   }));
-  if (spotPage.labels.join('／') === '景點名稱／幾點到／停留多久' && !spotPage.hasQuestList && !spotPage.hasAddPhoto) {
-    ok('景點設定頁只剩改名／時間／停留／刪除，任務與加照片都不在這裡了');
+  // v1.48 起多一個「地圖位置」（查詢／貼座標／清除）—— 使用者要求的手動修正入口
+  if (spotPage.labels.join('／') === '景點名稱／幾點到／停留多久／地圖位置' && !spotPage.hasQuestList && !spotPage.hasAddPhoto) {
+    ok('景點設定頁只剩改名／時間／停留／位置／刪除，任務與加照片都不在這裡了');
   } else fail('景點設定頁沒簡化乾淨：' + JSON.stringify(spotPage));
 
   // ---------- 一次選 3 張：不該跳出任何詢問 ----------

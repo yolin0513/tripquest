@@ -537,12 +537,23 @@ function drawPhotoSeg(ctx, seg, t, frames) {
 //    數量落差直接寫在副標，不假裝那就是全部
 
 function rectsHit(a, b, pad = 4) {
+  // b 可以是矩形，也可以是圓（{circle:{cx,cy,r}}）。放大圈用外接方框擋的話，
+  // 圓外角落那一圈其實是空的，點在那裡的標籤會「明明有位置卻放不下」而硬疊上去。
+  if (b.circle) {
+    const c = b.circle;
+    const nx = Math.max(a.x0, Math.min(c.cx, a.x1));
+    const ny = Math.max(a.y0, Math.min(c.cy, a.y1));
+    return Math.hypot(nx - c.cx, ny - c.cy) < c.r + pad + 6;
+  }
   return !(a.x1 + pad < b.x0 || b.x1 + pad < a.x0 || a.y1 + pad < b.y0 || b.y1 + pad < a.y0);
 }
 
 // 一組點的標籤擺放：候選位置輪著試，撞到就換，真的沒位置就縮小字再試一輪。
 // occupied 會被就地加入新佔的框（點本身的圓也先放進去，標籤才不會壓到點）。
-function placeLabels(ctx, items, bounds, occupied) {
+// fallback=true：真的沒位置就縮小硬放（主圖 —— 一個地點不能消失）。
+// fallback=false：放不下就跳過（放大圈 —— 15 個名字硬塞進小圈只會糊成一團，
+// 這是實際輸出圖看出來的，比消失更糟）。
+function placeLabels(ctx, items, bounds, occupied, { fallback = true } = {}) {
   const CAND = [
     { dx: 28, dy: 0, align: 'left' }, { dx: -28, dy: 0, align: 'right' },
     { dx: 28, dy: -38, align: 'left' }, { dx: -28, dy: -38, align: 'right' },
@@ -569,6 +580,7 @@ function placeLabels(ctx, items, bounds, occupied) {
       if (placed) break;
     }
     if (!placed) {
+      if (!fallback) continue;
       // 保底：縮到最小放右邊 —— 寧可貼著別人也不能讓一個地點消失
       const size = Math.round(it.size * 0.72);
       ctx.font = `600 ${size}px ${FONT}`;
@@ -625,43 +637,64 @@ export function computeMapLayout(ctx, spots, { totalSpots = null } = {}) {
 
       // 放大圈放在離所有點最遠的角落。半徑不能貪大 —— 實測 310px 的圈會把
       // 遠的那個點整顆吃進圈子裡蓋掉；蓋到點的角落直接重罰
-      const ir = Math.min(255, (box.y1 - box.y0) * 0.24);
+      const ir = Math.min(best.length >= 10 ? 305 : 255, (box.y1 - box.y0) * 0.28);
+      const midY = (box.y0 + box.y1) / 2;
       const corners = [
         { x: box.x0 + ir + 6, y: box.y0 + ir + 6 }, { x: box.x1 - ir - 6, y: box.y0 + ir + 6 },
         { x: box.x0 + ir + 6, y: box.y1 - ir - 6 }, { x: box.x1 - ir - 6, y: box.y1 - ir - 6 },
+        // 邊的中點也算：只有四個角常常「每個角都會蓋到點」，然後被迫縮圈
+        { x: box.x0 + ir + 6, y: midY }, { x: box.x1 - ir - 6, y: midY },
+        { x: (box.x0 + box.x1) / 2, y: box.y0 + ir + 6 }, { x: (box.x0 + box.x1) / 2, y: box.y1 - ir - 6 },
       ];
-      const corner = corners.map((c) => {
+      let corner = corners.map((c) => {
         const d = Math.min(...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y)), Math.hypot(gx - c.x, gy - c.y) - gr);
         return { ...c, d: d < ir + 28 ? d - 5000 : d };   // 會蓋到點 → 打入冷宮
       }).sort((a, b) => b.d - a.d)[0];
+      // 四個角落都會蓋到點的時候（點多的行程常見），把圈縮小到不蓋為止 ——
+      // 不縮的話，被蓋住的點標籤怎麼擺都撞圈，最後 fallback 硬放又被圈蓋掉
+      {
+        const outside = pts.filter((p) => !inSet.has(p.i));
+        const minOut = Math.min(Infinity, ...outside.map((p) => Math.hypot(p.x - corner.x, p.y - corner.y)));
+        if (minOut - 34 < ir) {
+          const ir2 = Math.max(185, minOut - 34);
+          corner = { ...corner,
+            x: Math.min(Math.max(corner.x, box.x0 + ir2 + 6), box.x1 - ir2 - 6),
+            y: Math.min(Math.max(corner.y, box.y0 + ir2 + 6), box.y1 - ir2 - 6) };
+          var irFinal = ir2;
+        } else var irFinal = ir;
+      }
 
       // 群內的點重新投影進放大圈
       const bl = { minLat: Math.min(...best.map((p) => spots[p.i].lat)), maxLat: Math.max(...best.map((p) => spots[p.i].lat)),
         minLng: Math.min(...best.map((p) => spots[p.i].lng)), maxLng: Math.max(...best.map((p) => spots[p.i].lng)) };
       const bmLat = (bl.minLat + bl.maxLat) / 2, bmLng = (bl.minLng + bl.maxLng) / 2;
       const bSpanX = Math.max((bl.maxLng - bl.minLng) * kx, 0.002), bSpanY = Math.max(bl.maxLat - bl.minLat, 0.002);
-      const bScale = Math.min(1, 1) * (ir * 1.02) / Math.max(bSpanX, bSpanY);
+      const bScale = (irFinal * 1.02) / Math.max(bSpanX, bSpanY);
       const insetPts = best.map((p) => ({
         i: p.i, name: p.name, emoji: p.emoji,
         x: corner.x + (spots[p.i].lng - bmLng) * kx * bScale,
         y: corner.y - (spots[p.i].lat - bmLat) * bScale,
       })).sort((a, b) => a.i - b.i);
-      const iBounds = { x0: corner.x - ir + 14, y0: corner.y - ir + 14, x1: corner.x + ir - 14, y1: corner.y + ir - 14 };
+      // 標籤限制在「內接正方形」——用整個外接方框的話，角落的字會被圓邊裁掉
+      const half = irFinal * 0.74;
+      const iBounds = { x0: corner.x - half, y0: corner.y - half, x1: corner.x + half, y1: corner.y + half };
       const iOcc = insetPts.map((p) => ({ x0: p.x - 14, y0: p.y - 14, x1: p.x + 14, y1: p.y + 14 }));
-      const insetLabels = placeLabels(ctx, insetPts.map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`, size: 26 })), iBounds, iOcc);
+      const iSize = best.length > 8 ? 23 : 26;
+      const insetLabels = placeLabels(ctx, insetPts.map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`, size: iSize })),
+        iBounds, iOcc, { fallback: false });
 
       cluster = { x: gx, y: gy, r: gr, count: best.length, inSet,
         label: `${area ? area + '一帶' : '這一帶'}（${best.length} 個地點）`,
-        inset: { cx: corner.x, cy: corner.y, r: ir, pts: insetPts, labels: insetLabels } };
+        inset: { cx: corner.x, cy: corner.y, r: irFinal, pts: insetPts, labels: insetLabels,
+          skipped: insetPts.length - insetLabels.length } };
     }
   }
 
   // 主圖標籤：沒被收進群的點 + 群本身的標籤
   const occupied = pts.filter((p) => !cluster?.inSet.has(p.i)).map((p) => ({ x0: p.x - 18, y0: p.y - 18, x1: p.x + 18, y1: p.y + 18 }));
   if (cluster) {
-    occupied.push({ x0: cluster.x - cluster.r, y0: cluster.y - cluster.r, x1: cluster.x + cluster.r, y1: cluster.y + cluster.r });
-    occupied.push({ x0: cluster.inset.cx - cluster.inset.r, y0: cluster.inset.cy - cluster.inset.r,
-      x1: cluster.inset.cx + cluster.inset.r, y1: cluster.inset.cy + cluster.inset.r });
+    occupied.push({ circle: { cx: cluster.x, cy: cluster.y, r: cluster.r } });
+    occupied.push({ circle: { cx: cluster.inset.cx, cy: cluster.inset.cy, r: cluster.inset.r + 10 } });
   }
   const bounds = { x0: 30, y0: box.y0 - 60, x1: W - 30, y1: box.y1 + 70 };
   const items = pts.filter((p) => !cluster?.inSet.has(p.i)).map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`, size: 30 }));
@@ -800,6 +833,13 @@ function drawMap(ctx, seg, t) {
       }
       for (const lb of ins.labels) drawLabel(ctx, lb, lb.x, lb.y);
       ctx.restore();
+      if (ins.skipped > 0) {
+        // 寫在圈外面的正下方 —— 寫在圈裡會被圓邊裁掉（實際輸出圖看出來的）
+        ctx.font = `600 24px ${FONT}`;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.textAlign = 'center';
+        ctx.fillText(`放大鏡裡標得下 ${ins.labels.length} 個名字，還有 ${ins.skipped} 個`, ins.cx, ins.cy + ins.r + 34);
+      }
     }
   }
   ctx.restore();

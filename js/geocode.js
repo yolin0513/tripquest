@@ -1,0 +1,170 @@
+// 幫景點補上座標 —— 路線圖只畫得出「有座標」的地點，文字匯入的行程裡
+// 餐廳、民宿、小吃店幾乎都配不到景點資料庫，使用者那趟 19 個地點只有 4 個畫得出來。
+//
+// 兩條路，依序試：
+//  (a) 照片的 GPS：只有在該行程開了「記錄位置」才有（而且匯入時就降到約 110 公尺
+//      精度，見 exif.js）。同一景點有多張就取「中位數」座標 —— 平均會被一張
+//      在車上拍的離群值拖走，中位數不會。對已經拍完、沒開定位的旅程，這條路無效。
+//  (b) 地名查詢（主要解法）：OpenStreetMap 的 Nominatim，免金鑰。App 的天氣與
+//      SOS 本來就用它做反向查詢（geo.js），隱私姿態一致：送出去的只有景點名稱。
+//      使用規範照做：每秒最多 1 次、結果一定快取（成功永久、失敗七天內不重問）、
+//      瀏覽器的 Referer 就是識別來源。查詢帶上地區（「林場肉羹 宜蘭」）提高命中，
+//      查不到就維持沒有座標 —— 不亂猜。
+//      （也評估過 Photon 與 Overpass：Photon 的公開機是示範性質不宜依賴；
+//        Overpass 是資料庫查詢語言、按名稱模糊找店家並不適合。）
+//
+// 找到的座標寫進 spot 記錄（LWW 可同步）—— 一個人查過，全群組都有，不會重複查。
+// 防呆：行程已有座標的話算出中心點，新結果離中心 120 公里以上就當查錯、丟掉
+// （「家」這種名字全台灣都有）。
+
+import * as db from './db.js';
+import * as store from './store.js';
+import { haversine } from './geo.js';
+
+let BASE = 'https://nominatim.openstreetmap.org/search';
+export function setGeoEndpoint(u) { BASE = u; }   // 測試用：指到本機的假伺服器
+
+const NEG_TTL = 7 * 86400000;
+const MAX_DIST_M = 120 * 1000;
+
+// ---- 每秒最多一次（Nominatim 使用規範）----
+let chain = Promise.resolve();
+let lastAt = 0;
+function throttled(fn) {
+  const p = chain.then(async () => {
+    const wait = lastAt + 1100 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try { return await fn(); } finally { lastAt = Date.now(); }
+  });
+  chain = p.catch(() => {});
+  return p;
+}
+
+// 名稱清理：拿掉括號註記與 emoji，關鍵字灌水的長名只留第一段。
+// 清不出東西（例如「家」只有一個字）→ 回 null，這種名字不該拿去查。
+export function cleanName(raw) {
+  let s = String(raw || '');
+  for (let i = 0; i < 3; i++) s = s.replace(/[（(][^（）()]*[）)]/g, '');
+  s = s.replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  s = s.replace(/^[-—–·・.]+|[-—–·.]+$/g, '').trim();
+  if (s.length > 24) s = s.split(/[ 　\-—]/)[0].slice(0, 24);
+  return s.length >= 2 ? s : null;
+}
+
+// 單一查詢（有快取）。回 {lat,lng,label} 或 null。
+export async function geocodeQuery(q) {
+  const key = 'geo:v1:' + q;
+  const cached = await db.metaGet(key);
+  if (cached && (cached.ok || Date.now() - cached.ts < NEG_TTL)) {
+    return cached.ok ? { lat: cached.lat, lng: cached.lng, label: cached.label } : null;
+  }
+  const res = await throttled(async () => {
+    const u = `${BASE}?format=jsonv2&limit=1&accept-language=zh-TW&q=${encodeURIComponent(q)}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const r = await fetch(u, { signal: ctrl.signal });
+      if (!r.ok) return undefined;                       // 伺服器出狀況 → 不寫入負面快取
+      const arr = await r.json();
+      const hit = Array.isArray(arr) && arr[0];
+      if (!hit || !hit.lat) return null;
+      return { lat: +(+hit.lat).toFixed(5), lng: +(+hit.lon).toFixed(5), label: hit.display_name || '' };
+    } catch { return undefined; }
+    finally { clearTimeout(timer); }
+  });
+  if (res === undefined) return null;                    // 網路失敗：下次還能再試
+  await db.metaSet(key, res ? { ok: true, ts: Date.now(), ...res } : { ok: false, ts: Date.now() });
+  return res;
+}
+
+// 一個景點：先照片 GPS（本機、免費、即時），再地名查詢（帶地區 → 不帶）
+export function photoCoordsForSpot(spotId) {
+  const pts = [];
+  for (const q of store.questsOf(spotId)) {
+    for (const sub of store.submissionsOf(q.id)) {
+      if (sub.gps && Number.isFinite(sub.gps.lat) && Number.isFinite(sub.gps.lng)) pts.push(sub.gps);
+    }
+  }
+  if (!pts.length) return null;
+  const med = (arr) => { const a = [...arr].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  return { lat: med(pts.map((p) => p.lat)), lng: med(pts.map((p) => p.lng)), n: pts.length };
+}
+
+function centroidOf(spots) {
+  const has = spots.filter((s) => s.lat != null && s.lng != null);
+  if (!has.length) return null;
+  return { lat: has.reduce((n, s) => n + s.lat, 0) / has.length, lng: has.reduce((n, s) => n + s.lng, 0) / has.length };
+}
+
+// 連鎖店的分店字尾會讓查詢摃龜：「北門綠豆沙牛乳大王-羅東店」查不到，
+// 「北門綠豆沙牛乳大王」就查得到。實測宜蘭那趟，光這一類就漏了四家。
+export function stripBranch(name) {
+  let s = String(name)
+    .replace(/[-‐–—]\s*[^\s-]{1,5}(分店|總店|店)$/u, '')
+    .replace(/\s+[^\s-]{1,5}(分店|總店|店)$/u, '')
+    .trim();
+  // 沒有分隔符的「火山爆發雞礁溪總店」這種 —— 只在「總店/分店」這麼明確時才剝
+  if (s === String(name)) s = s.replace(/[^\s-]{1,4}(總店|分店)$/u, '').trim();
+  return s.length >= 2 && s !== name ? s : null;
+}
+
+export async function locateSpot(spot, { region = '', centroid = null } = {}) {
+  const pg = photoCoordsForSpot(spot.id);
+  if (pg) return { lat: pg.lat, lng: pg.lng, src: 'photo' };
+  const name = cleanName(spot.name);
+  if (!name) return null;
+  const noBranch = stripBranch(name);
+  const ladder = [...new Set([
+    region ? `${name} ${region}` : null,
+    name,
+    noBranch && region ? `${noBranch} ${region}` : null,
+    noBranch,
+  ].filter(Boolean))];
+  for (const q of ladder) {
+    const r = await geocodeQuery(q);
+    if (!r) continue;
+    if (centroid && haversine(centroid, r) > MAX_DIST_M) continue;   // 離整趟太遠 → 查到同名的別家，丟掉
+    return { lat: r.lat, lng: r.lng, src: 'osm' };
+  }
+  return null;
+}
+
+// 整趟補齊。onProgress({done,total,name,found})
+export async function fillTripCoords(tripId, { onProgress = () => {} } = {}) {
+  const trip = store.get(tripId);
+  const spots = store.spotsOf(tripId);
+  const missing = spots.filter((s) => s.lat == null || s.lng == null);
+  let found = 0, byPhoto = 0, done = 0;
+  for (const m of missing) {
+    onProgress({ done, total: missing.length, name: m.name, found });
+    const centroid = centroidOf(store.spotsOf(tripId));               // 每找到一個，中心點就更準
+    const r = await locateSpot(m, { region: trip.region || '', centroid });
+    if (r) {
+      await store.patch(m.id, { lat: r.lat, lng: r.lng, geoSrc: r.src });
+      found++;
+      if (r.src === 'photo') byPhoto++;
+    }
+    done++;
+    onProgress({ done, total: missing.length, name: m.name, found });
+  }
+  return { tried: missing.length, found, byPhoto, still: missing.length - found };
+}
+
+// 「貼上座標或地圖連結」：接受 24.67,121.77、Google 地圖網址（@lat,lng、!3d..!4d..、q=lat,lng）
+export function parseCoordInput(text) {
+  const s = String(text || '');
+  const pats = [
+    /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/,
+    /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/,
+    /[?&]q=(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/,
+    /(-?\d{1,2}\.\d{2,})\s*[,，]\s*(-?\d{1,3}\.\d{2,})/,
+  ];
+  for (const p of pats) {
+    const m = s.match(p);
+    if (!m) continue;
+    const lat = +m[1], lng = +m[2];
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+  }
+  return null;
+}

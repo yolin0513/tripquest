@@ -9,7 +9,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, modal } from '../ui.js';
+import { h, toast, modal, promptDialog, confirmDialog } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { enrichSpot } from '../enrich.js';
 import { spotTimes, stayOptions, minOfInput } from '../spottime.js';
@@ -31,6 +31,43 @@ export default async function spot(tripId, spotId) {
 
   // 時間與停留沿用匯入流程那一套（原生時間選擇器 ＋ 下拉，非預設值也補成選項）
   const timeField = h('input', { class: 'field spot-time', type: 'time', value: tm.startTime });
+
+  // 位置：路線圖靠這個。查不到的店家可以手動貼 Google 地圖連結或座標。
+  const posLine = h('div', { class: 'form-hint', style: 'margin:2px 0 8px' });
+  const drawPos = () => {
+    const cur = store.getRaw(spotId);
+    posLine.textContent = cur.lat != null
+      ? `已有位置（${{ photo: '來自照片', osm: '地名查詢', manual: '手動設定' }[cur.geoSrc] || '景點資料庫'}）`
+      : '還沒有位置 —— 路線圖上看不到這個點';
+  };
+  const posBtns = h('div', { class: 'row2', style: 'margin-bottom:4px' },
+    h('button', { class: 'btn btn-soft', onclick: async () => {
+      toast('查詢中…');
+      try {
+        const { locateSpot } = await import('../geocode.js');
+        const cur = store.getRaw(spotId);
+        const r = await locateSpot(cur, { region: t.region || '' });
+        if (!r) { toast('查不到這個名字的位置，可以改用「貼座標」'); return; }
+        await store.patch(spotId, { lat: r.lat, lng: r.lng, geoSrc: r.src });
+        drawPos(); toast('找到了，已存位置');
+      } catch (e) { toast('查詢失敗：' + e.message); }
+    } }, '🔍 查位置'),
+    h('button', { class: 'btn btn-soft', onclick: async () => {
+      const v = await promptDialog('貼上座標（例如 24.677, 121.767）或 Google 地圖的連結：', { placeholder: '24.677, 121.767' });
+      if (!v) return;
+      const { parseCoordInput } = await import('../geocode.js');
+      const c = parseCoordInput(v);
+      if (!c) { toast('看不懂這個內容 —— 要有「緯度, 經度」兩個數字'); return; }
+      await store.patch(spotId, { lat: c.lat, lng: c.lng, geoSrc: 'manual' });
+      drawPos(); toast('已存位置');
+    } }, '📋 貼座標'),
+  );
+  const posClear = h('button', { class: 'btn btn-ghost btn-block', onclick: async () => {
+    if (!(await confirmDialog('要清掉這個景點的位置嗎？路線圖上會看不到它。', { danger: true, okLabel: '清除' }))) return;
+    await store.patch(spotId, { lat: null, lng: null, geoSrc: null });
+    drawPos(); toast('已清除位置');
+  } }, '清除位置');
+  drawPos();
   const stayField = h('select', { class: 'field spot-stay' },
     ...stayOptions(tm.stayMin).map((o) =>
       h('option', { value: o.v, selected: String(tm.stayMin || '') === o.v }, o.label)));
@@ -93,6 +130,9 @@ export default async function spot(tripId, spotId) {
         onclick: () => { timeField.value = ''; },
       }, '清除'))),
     field('停留多久', stayField),
+    h('div', { class: 'form-field' },
+      h('span', { class: 'form-label' }, '地圖位置'),
+      posLine, posBtns, posClear),
 
     h('button', { class: 'btn btn-primary btn-block', style: 'margin-top:18px', onclick: save }, '儲存'),
     h('button', { class: 'btn btn-ghost btn-block', onclick: () => back(`/trip/${tripId}/plan`) }, '取消'),

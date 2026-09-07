@@ -50,6 +50,19 @@ try {
       ],
       noCoord: 0,
     },
+    '羅東擠了十五個點': {
+      coords: [
+        ['羅東運動公園', 24.6832, 121.7594], ['羅東林業文化園區', 24.6766, 121.7745],
+        ['羅東觀光夜市', 24.6779, 121.7674], ['中山公園', 24.6771, 121.7712],
+        ['林場肉羹', 24.6786, 121.7712], ['北門綠豆沙牛乳大王', 24.679, 121.766],
+        ['財記臭豆腐', 24.677, 121.769], ['石頭鄉燜烤玉米', 24.6768, 121.7702],
+        ['火烤碳香真珠玉米', 24.6781, 121.7688], ['山風民宿', 24.672, 121.7695],
+        ['中興文化創意園區', 24.665, 121.752], ['東南蜜餞舖', 24.6772, 121.768],
+        ['正老元香食品廠', 24.6775, 121.7665], ['羅東文化工場', 24.6845, 121.7702],
+        ['粉鳥林漁港', 24.4736, 121.8355], ['鄉村風味', 24.62, 121.78],
+      ],
+      noCoord: 5,
+    },
     '整趟散得很開': {
       coords: [
         ['礁溪溫泉', 24.827, 121.773], ['幾米公園', 24.754, 121.758], ['羅東夜市', 24.678, 121.767],
@@ -114,6 +127,9 @@ try {
     console.log(`  「${name}」 副標＝${res.subtitle}／比例尺＝${res.scale}`);
     yes(!res.overlap, `「${name}」標籤互不重疊`, res.overlap);
     yes(!res.outside, `「${name}」標籤都在畫面內`, res.outside);
+    if (name.includes('十五個點')) {
+      yes(res.cluster >= 10, `${res.cluster} 個點收成一帶（放大圈放不下的名字會略過並標註，不會糊成一團）`);
+    }
     if (name.includes('群聚')) {
       yes(res.cluster >= 3, `密集的 ${res.cluster} 個點收成一帶＋放大圈`);
       yes(res.clusterLabel.startsWith('羅東一帶'), `群名用地名共同開頭：「${res.clusterLabel}」（不是縣市級的「宜蘭一帶」）`);
@@ -183,11 +199,19 @@ try {
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${tid3}/poster`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.pager:not([hidden])', { timeout: 30000 });
-  const pgr = await page.evaluate(() => document.querySelector('.pager-lbl').textContent);
-  yes(/1 \/ 3/.test(pgr), `海報頁出現翻頁列：「${pgr}」`);
+  const pgr = await page.evaluate(() => ({
+    lbl: document.querySelector('.pager-lbl').textContent,
+    prevVis: getComputedStyle(document.querySelector('.pager-btn')).visibility,
+  }));
+  yes(pgr.lbl === '第 1 天 / 共 3 天', `翻頁列文字一句講完：「${pgr.lbl}」`);
+  yes(pgr.prevVis === 'hidden', '第一張時「‹ 前一張」是藏起來的');
   await page.click('.pager-btn:last-of-type');
-  await page.waitForFunction(() => /2 \/ 3/.test(document.querySelector('.pager-lbl').textContent), { timeout: 20000 });
-  ok('按「下一張」翻到第 2 / 3 張');
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent === '第 2 天 / 共 3 天', { timeout: 20000 });
+  ok('按「下一張」翻到第 2 天');
+  await page.click('.pager-btn:last-of-type');
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent === '第 3 天 / 共 3 天', { timeout: 20000 });
+  const lastVis = await page.evaluate(() => getComputedStyle(document.querySelector('.pager-btn:last-of-type')).visibility);
+  yes(lastVis === 'hidden', '最後一張時「下一張 ›」是藏起來的');
   await page.screenshot({ path: fileURLToPath(new URL('海報頁-翻頁列.png', OUT)) });
   console.log('  📸 海報頁-翻頁列');
 

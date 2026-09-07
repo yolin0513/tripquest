@@ -41,9 +41,12 @@ export default async function poster(tripId) {
       const info = await renderPreview(canvas, tripId, presetId, page);
       page = info.page;
       pager.hidden = info.pages <= 1;
-      pageLbl.textContent = `${info.label}（${info.page + 1} / ${info.pages} 張）`;
-      pagePrev.disabled = info.page === 0;
-      pageNext.disabled = info.page >= info.pages - 1;
+      // 「第 1 天」＋「1 / 3 張」講的是同一件事 —— 一句就好。
+      // 兩端用 visibility 藏（不是 disabled）：第一張根本沒有「前一張」可去，
+      // 灰掉的按鈕還是會被按；用 visibility 而非移除，中間的字才不會左右跳。
+      pageLbl.textContent = `${info.label} / 共 ${info.pages} 天`;
+      pagePrev.style.visibility = info.page === 0 ? 'hidden' : 'visible';
+      pageNext.style.visibility = info.page >= info.pages - 1 ? 'hidden' : 'visible';
     } catch (e) { console.error(e); toast('預覽失敗：' + e.message); }
     busy.hidden = true;
   }

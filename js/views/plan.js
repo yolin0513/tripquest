@@ -32,8 +32,41 @@ export default async function plan(tripId) {
   const totalDays = () => Math.max(explicitDays, maxSpotDay());
 
   const list = h('div', { class: 'plan-list' });
+  // 路線圖只畫得出有座標的景點 —— 文字匯入的行程大多沒有。這顆把缺的補起來：
+  // 先用照片 GPS（有開定位才有），再用 OpenStreetMap 查地名（App 的天氣/SOS
+  // 本來就用它做反向查詢）。查到的存進景點並同步，全群組只要有人查過一次。
+  const missingGeo = store.spotsOf(tripId).filter((x) => x.lat == null || x.lng == null).length;
+  const geoBtn = missingGeo ? h('button', {
+    class: 'btn btn-soft btn-block',
+    style: 'margin-bottom:10px',
+    onclick: async () => {
+      const go = await confirmDialog(
+        `有 ${missingGeo} 個景點還沒有地圖位置（路線圖上看不到它們）。
+
+`
+        + '要自動查出來嗎？會把這些景點的「名稱」送到 OpenStreetMap 的免費地圖服務查座標'
+        + '（不會送出照片或任何個人資料）。查到的會存進行程、同步給旅伴。',
+        { okLabel: '開始查詢' });
+      if (!go) return;
+      const line = h('div', { class: 'record-pct' }, '查詢中…');
+      const ov = h('div', { class: 'record-overlay' }, h('div', { class: 'spinner' }), line,
+        h('p', { class: 'form-hint' }, '一秒查一個（地圖服務的規定），請稍等一下'));
+      document.body.append(ov);
+      try {
+        const { fillTripCoords } = await import('../geocode.js');
+        const r = await fillTripCoords(tripId, {
+          onProgress: ({ done, total, found }) => { line.textContent = `查詢中 ${done}/${total}（找到 ${found} 個）`; },
+        });
+        ov.remove();
+        toast(r.found ? `找到 ${r.found} 個位置${r.still ? `，還有 ${r.still} 個查不到` : ''}` : '這次沒有查到新的位置', 4200);
+        plan(tripId);
+      } catch (e) { ov.remove(); toast('查詢失敗：' + e.message); }
+    },
+  }, `📍 自動找出景點位置（還有 ${missingGeo} 個沒有）`) : null;
+
   render(h('div', { class: 'page' },
     h('p', { class: 'plan-tip' }, '按住 ☰ 拖曳可以換順序，同一天內換前後也可以用 ▲ ▼。'),
+    geoBtn,
     list,
   ));
 
