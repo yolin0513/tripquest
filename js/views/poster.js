@@ -58,7 +58,13 @@ export default async function poster(tripId) {
         });
         frame.append(ghost);
       }
-      const info = await renderPreview(canvas, tripId, presetId, page);
+      // 雙緩衝：先畫到暫存 canvas，畫完才一口氣換上 —— renderPreview 會先把
+      // canvas resize（等於清空），圖片又要非同步載入，直接畫在畫面上那格
+      // canvas 會先空白好幾幀
+      const off = document.createElement('canvas');
+      const info = await renderPreview(off, tripId, presetId, page);
+      canvas.width = off.width; canvas.height = off.height;
+      canvas.getContext('2d').drawImage(off, 0, 0);
       page = info.page;
       pager.hidden = info.pages <= 1;
       frame.classList.toggle('paged', info.pages > 1);
@@ -70,11 +76,14 @@ export default async function poster(tripId) {
       pageNext.style.visibility = info.page >= info.pages - 1 ? 'hidden' : 'visible';
       if (ghost) {
         const dist = frame.clientWidth || 360;
-        ghost.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dir * dist}px)` }],
-          { duration: 280, easing: 'ease' });
+        // fill:'forwards' 是關鍵：沒有它，動畫一結束 transform 歸零，滑出去的
+        // 舊頁會跳回來蓋住新頁一幀（使用者錄影抽幀抓到的「閃一下」就是這個）
+        const a = ghost.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dir * dist}px)` }],
+          { duration: 280, easing: 'ease', fill: 'forwards' });
+        a.onfinish = () => ghost.remove();
         canvas.animate([{ transform: `translateX(${dir * dist}px)` }, { transform: 'translateX(0)' }],
           { duration: 280, easing: 'ease' });
-        setTimeout(() => ghost.remove(), 340);
+        setTimeout(() => { if (ghost.isConnected) ghost.remove(); }, 600);   // 保險
       }
     } catch (e) { console.error(e); toast('預覽失敗：' + e.message); }
     busy.hidden = true;

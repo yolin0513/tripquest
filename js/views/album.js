@@ -171,6 +171,16 @@ export default async function album(tripId) {
   let player = null, barIv = 0, dragging = false;
   ensurePlayer().then((p) => { p.seek(1.4); updateBar(); });
 
+  // 健檢抓到的 bug：router 沒有 teardown 機制，播放中切到別頁，
+  // 計時器繼續跑、配樂繼續響。離開這頁就把播放器整個收掉。
+  const stopOnLeave = () => {
+    if (location.hash.includes(`/trip/${tripId}/album`)) return;
+    window.removeEventListener('hashchange', stopOnLeave);
+    clearInterval(barIv);
+    if (player) { try { player.destroy(); } catch { /* noop */ } player = null; }
+  };
+  window.addEventListener('hashchange', stopOnLeave);
+
   const fmtT = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
   function updateBar() {
     if (!player) return;

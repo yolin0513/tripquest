@@ -11,7 +11,7 @@
 
 ---
 
-## 已部署的 Cloudflare 資源（你的帳號 `user@example.com`）
+## 已部署的 Cloudflare 資源（你的 Cloudflare 帳號）
 
 | 資源 | 名稱 | 說明 |
 |---|---|---|

@@ -199,7 +199,13 @@ export async function buildTimeline(tripId, opts = {}) {
   const spots = store.spotsOf(tripId).filter((s) => s.lat != null && s.lng != null);
   const stats = tripStats(tripId);
   const dayCount = new Set(all.map((s) => s.day)).size || 1;
-  const tMap = spots.length >= 2 ? mapDur(spots.length) : 0;
+  // 地圖版面先算好：有密集群（會多一段「鏡頭推進特寫」）的話，地圖段要多給時間
+  let mapLayout = null;
+  if (spots.length >= 2) {
+    const mc = document.createElement('canvas').getContext('2d');
+    mapLayout = computeMapLayout(mc, spots, { totalSpots: store.spotsOf(tripId).length });
+  }
+  const tMap = spots.length >= 2 ? mapDur(spots.length) + (mapLayout?.zoomView ? 4.5 : 0) : 0;
 
   let slides = all;
   if (preset.targetSec) {
@@ -243,7 +249,7 @@ export async function buildTimeline(tripId, opts = {}) {
       g++;
     });
   });
-  if (tMap) segs.push({ kind: 'map', dur: tMap, spots, trip, totalSpots: store.spotsOf(tripId).length });
+  if (tMap) segs.push({ kind: 'map', dur: tMap, spots, trip, totalSpots: store.spotsOf(tripId).length, _layout: mapLayout });
   segs.push({ kind: 'outro', dur: T_OUTRO, trip, stats, line: aiTx.videoOutro || '', ai: usesAi });
 
   let acc = 0;
@@ -261,8 +267,14 @@ export function estimateDuration(tripId, lengthKey) {
   const preset = LENGTHS[lengthKey] || LENGTHS[DEFAULT_LENGTH];
   const all = collectSlides(tripId);
   const days = new Set(all.map((s) => s.day)).size || 1;
-  const spots = store.spotsOf(tripId).filter((s) => s.lat != null && s.lng != null).length;
-  const tMap = spots >= 2 ? mapDur(spots) : 0;
+  const coordSpots = store.spotsOf(tripId).filter((s) => s.lat != null && s.lng != null);
+  let est = 0;
+  if (coordSpots.length >= 2) {
+    const mc = document.createElement('canvas').getContext('2d');
+    const lay = computeMapLayout(mc, coordSpots, { totalSpots: store.spotsOf(tripId).length });
+    est = mapDur(coordSpots.length) + (lay.zoomView ? 4.5 : 0);
+  }
+  const tMap = est;
   const overhead = T_INTRO + days * T_DAY + tMap + T_OUTRO;
   const n = preset.targetSec
     ? Math.min(all.length, Math.max(6, Math.floor(Math.max(preset.photoDur * 6, preset.targetSec - overhead) / preset.photoDur)))
@@ -528,17 +540,18 @@ function drawPhotoSeg(ctx, seg, t, frames) {
 }
 
 // ---------- 路線地圖 ----------
-// 使用者拿實機截圖回報的三個問題，這一版逐一處理：
-// 1) 兩個標籤完全重疊糊成一團 → 標籤有碰撞處理：候選位置輪著試、被擠開就畫引線
-// 2) 一個遠的點（粉鳥林）把其他點壓成一團 → 密集的一群收成「◯◯一帶（n 個地點）」，
-//    旁邊開一個放大圈把那一帶攤開來、各自標名字
-// 3) 沒有任何地理參考 → 指北針＋比例尺＋淡格線（不需要外部服務或底圖資料）；
-//    另外地圖只畫得出「有座標」的地點（文字匯入的行程很多店家配不到座標），
-//    數量落差直接寫在副標，不假裝那就是全部
+// v1.49 改成「會動的鏡頭」：先全景（看得出從哪裡到哪裡、路線怎麼走），
+// 路線畫完後鏡頭平移縮放推進密集區，在特寫裡用「整個畫面」幫每個地點標名字。
+//
+// 為什麼放棄放大圈：一個遠點＋一團密集點時，放大圈只有畫面的一小角 ——
+// 15 個名字怎麼排都放不下（實測只標得下 5 個）。特寫階段整個畫面都是那一帶，
+// 名字就都排得開。鏡頭是純數學（同一份座標換一個 viewport 重畫），每一幀的
+// 成本跟靜態圖一樣、不多吃記憶體 —— 錄影是即時的、手機記憶體有限，這是門檻。
+//
+// 標籤原則不變：碰撞處理（候選位置輪試＋引線）、特寫裡放不下就略過並標註數量、
+// 副標誠實寫「幾個地點、幾個有座標」。
 
 function rectsHit(a, b, pad = 4) {
-  // b 可以是矩形，也可以是圓（{circle:{cx,cy,r}}）。放大圈用外接方框擋的話，
-  // 圓外角落那一圈其實是空的，點在那裡的標籤會「明明有位置卻放不下」而硬疊上去。
   if (b.circle) {
     const c = b.circle;
     const nx = Math.max(a.x0, Math.min(c.cx, a.x1));
@@ -548,11 +561,9 @@ function rectsHit(a, b, pad = 4) {
   return !(a.x1 + pad < b.x0 || b.x1 + pad < a.x0 || a.y1 + pad < b.y0 || b.y1 + pad < a.y0);
 }
 
-// 一組點的標籤擺放：候選位置輪著試，撞到就換，真的沒位置就縮小字再試一輪。
-// occupied 會被就地加入新佔的框（點本身的圓也先放進去，標籤才不會壓到點）。
-// fallback=true：真的沒位置就縮小硬放（主圖 —— 一個地點不能消失）。
-// fallback=false：放不下就跳過（放大圈 —— 15 個名字硬塞進小圈只會糊成一團，
-// 這是實際輸出圖看出來的，比消失更糟）。
+// 一組點的標籤擺放：候選位置輪著試，撞到就換。
+// fallback=true：真的沒位置就縮小硬放（全景 —— 一個地點不能消失）。
+// fallback=false：放不下就跳過（特寫會另外標「還有幾個」）。
 function placeLabels(ctx, items, bounds, occupied, { fallback = true } = {}) {
   const CAND = [
     { dx: 28, dy: 0, align: 'left' }, { dx: -28, dy: 0, align: 'right' },
@@ -561,6 +572,10 @@ function placeLabels(ctx, items, bounds, occupied, { fallback = true } = {}) {
     { dx: 0, dy: -48, align: 'center' }, { dx: 0, dy: 50, align: 'center' },
     { dx: 34, dy: -76, align: 'left' }, { dx: -34, dy: 76, align: 'right' },
     { dx: 34, dy: 76, align: 'left' }, { dx: -34, dy: -76, align: 'right' },
+    // 更遠的位置（引線會拉長）：特寫裡一堆點擠在中間時，近的位置全被佔走
+    { dx: 60, dy: -116, align: 'left' }, { dx: -60, dy: 116, align: 'right' },
+    { dx: 60, dy: 116, align: 'left' }, { dx: -60, dy: -116, align: 'right' },
+    { dx: 0, dy: -158, align: 'center' }, { dx: 0, dy: 160, align: 'center' },
   ];
   const out = [];
   for (const it of items) {
@@ -581,7 +596,6 @@ function placeLabels(ctx, items, bounds, occupied, { fallback = true } = {}) {
     }
     if (!placed) {
       if (!fallback) continue;
-      // 保底：縮到最小放右邊 —— 寧可貼著別人也不能讓一個地點消失
       const size = Math.round(it.size * 0.72);
       ctx.font = `600 ${size}px ${FONT}`;
       const w = ctx.measureText(it.text).width;
@@ -594,9 +608,20 @@ function placeLabels(ctx, items, bounds, occupied, { fallback = true } = {}) {
   return out;
 }
 
+// 比例尺：挑一段畫起來 120–340px 的整數距離
+function pickScaleBar(kmPerPx, x, y) {
+  let nice = 1;
+  for (const k of [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200]) {
+    if (k / kmPerPx >= 120 && k / kmPerPx <= 340) { nice = k; break; }
+    nice = k;
+  }
+  return { x, y, w: Math.min(420, nice / kmPerPx), label: nice < 1 ? `${Math.round(nice * 1000)} 公尺` : `${nice} 公里` };
+}
+
 // 版面計算（純函式，測試直接驗「標籤互不重疊、不出界」）。
 export function computeMapLayout(ctx, spots, { totalSpots = null } = {}) {
   const box = { x0: 100, y0: 430, x1: W - 100, y1: H - 430 };
+  const bc = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
   const lats = spots.map((s) => s.lat), lngs = spots.map((s) => s.lng);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats);
   const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
@@ -605,12 +630,14 @@ export function computeMapLayout(ctx, spots, { totalSpots = null } = {}) {
   const spanX = Math.max((maxLng - minLng) * kx, 0.004) * 1.35;
   const spanY = Math.max(maxLat - minLat, 0.004) * 1.35;
   const scale = Math.min((box.x1 - box.x0) / spanX, (box.y1 - box.y0) / spanY);
-  const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
-  const P = (s) => ({ x: cx + (s.lng - midLng) * kx * scale, y: cy - (s.lat - midLat) * scale });
+  const pts = spots.map((s, i) => ({
+    x: bc.x + (s.lng - midLng) * kx * scale,
+    y: bc.y - (s.lat - midLat) * scale,
+    i, name: s.name, emoji: s.emoji || '', region: s.region || '',
+  }));
+  const kmPerPx = 111.32 / scale;
 
-  const pts = spots.map((s, i) => ({ ...P(s), i, name: s.name, emoji: s.emoji || '', region: s.region || '' }));
-
-  // 密集群偵測：一個遠點會把其他點壓成一團 —— 找「最大的一群擠在小圈圈裡的點」
+  // 密集群偵測：一個遠點會把其他點壓成一團 —— 找最大的一群擠在小圈圈裡的點
   let cluster = null;
   if (pts.length >= 5) {
     const R = 0.17 * Math.min(box.x1 - box.x0, box.y1 - box.y0);
@@ -623,95 +650,65 @@ export function computeMapLayout(ctx, spots, { totalSpots = null } = {}) {
       const gx = best.reduce((n, p) => n + p.x, 0) / best.length;
       const gy = best.reduce((n, p) => n + p.y, 0) / best.length;
       const gr = Math.max(46, ...best.map((p) => Math.hypot(p.x - gx, p.y - gy) + 24));
-      // 這一帶叫什麼：多數地名的共同開頭（羅東運動公園＋羅東夜市 → 「羅東一帶」）
-      // 比 region 準 —— region 是縣市級（宜蘭），寫「宜蘭一帶」等於沒說
+      // 這一帶叫什麼：多數地名的共同開頭（羅東×3 → 羅東一帶），region 是縣市級只當備援
       const pre = {};
-      for (const p of best) { const k = String(p.name).slice(0, 2); if (k.length === 2) pre[k] = (pre[k] || 0) + 1; }
+      for (const p of best) { const k2 = String(p.name).slice(0, 2); if (k2.length === 2) pre[k2] = (pre[k2] || 0) + 1; }
       const topPre = Object.entries(pre).sort((a, b) => b[1] - a[1])[0];
       const regions = {};
       for (const p of best) if (p.region) regions[p.region] = (regions[p.region] || 0) + 1;
       const area = (topPre && topPre[1] >= Math.ceil(best.length / 2))
         ? topPre[0]
         : (Object.entries(regions).sort((a, b) => b[1] - a[1])[0]?.[0] || '');
-      const inSet = new Set(best.map((p) => p.i));
-
-      // 放大圈放在離所有點最遠的角落。半徑不能貪大 —— 實測 310px 的圈會把
-      // 遠的那個點整顆吃進圈子裡蓋掉；蓋到點的角落直接重罰
-      const ir = Math.min(best.length >= 10 ? 305 : 255, (box.y1 - box.y0) * 0.28);
-      const midY = (box.y0 + box.y1) / 2;
-      const corners = [
-        { x: box.x0 + ir + 6, y: box.y0 + ir + 6 }, { x: box.x1 - ir - 6, y: box.y0 + ir + 6 },
-        { x: box.x0 + ir + 6, y: box.y1 - ir - 6 }, { x: box.x1 - ir - 6, y: box.y1 - ir - 6 },
-        // 邊的中點也算：只有四個角常常「每個角都會蓋到點」，然後被迫縮圈
-        { x: box.x0 + ir + 6, y: midY }, { x: box.x1 - ir - 6, y: midY },
-        { x: (box.x0 + box.x1) / 2, y: box.y0 + ir + 6 }, { x: (box.x0 + box.x1) / 2, y: box.y1 - ir - 6 },
-      ];
-      let corner = corners.map((c) => {
-        const d = Math.min(...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y)), Math.hypot(gx - c.x, gy - c.y) - gr);
-        return { ...c, d: d < ir + 28 ? d - 5000 : d };   // 會蓋到點 → 打入冷宮
-      }).sort((a, b) => b.d - a.d)[0];
-      // 四個角落都會蓋到點的時候（點多的行程常見），把圈縮小到不蓋為止 ——
-      // 不縮的話，被蓋住的點標籤怎麼擺都撞圈，最後 fallback 硬放又被圈蓋掉
-      {
-        const outside = pts.filter((p) => !inSet.has(p.i));
-        const minOut = Math.min(Infinity, ...outside.map((p) => Math.hypot(p.x - corner.x, p.y - corner.y)));
-        if (minOut - 34 < ir) {
-          const ir2 = Math.max(185, minOut - 34);
-          corner = { ...corner,
-            x: Math.min(Math.max(corner.x, box.x0 + ir2 + 6), box.x1 - ir2 - 6),
-            y: Math.min(Math.max(corner.y, box.y0 + ir2 + 6), box.y1 - ir2 - 6) };
-          var irFinal = ir2;
-        } else var irFinal = ir;
-      }
-
-      // 群內的點重新投影進放大圈
-      const bl = { minLat: Math.min(...best.map((p) => spots[p.i].lat)), maxLat: Math.max(...best.map((p) => spots[p.i].lat)),
-        minLng: Math.min(...best.map((p) => spots[p.i].lng)), maxLng: Math.max(...best.map((p) => spots[p.i].lng)) };
-      const bmLat = (bl.minLat + bl.maxLat) / 2, bmLng = (bl.minLng + bl.maxLng) / 2;
-      const bSpanX = Math.max((bl.maxLng - bl.minLng) * kx, 0.002), bSpanY = Math.max(bl.maxLat - bl.minLat, 0.002);
-      const bScale = (irFinal * 1.02) / Math.max(bSpanX, bSpanY);
-      const insetPts = best.map((p) => ({
-        i: p.i, name: p.name, emoji: p.emoji,
-        x: corner.x + (spots[p.i].lng - bmLng) * kx * bScale,
-        y: corner.y - (spots[p.i].lat - bmLat) * bScale,
-      })).sort((a, b) => a.i - b.i);
-      // 標籤限制在「內接正方形」——用整個外接方框的話，角落的字會被圓邊裁掉
-      const half = irFinal * 0.74;
-      const iBounds = { x0: corner.x - half, y0: corner.y - half, x1: corner.x + half, y1: corner.y + half };
-      const iOcc = insetPts.map((p) => ({ x0: p.x - 14, y0: p.y - 14, x1: p.x + 14, y1: p.y + 14 }));
-      const iSize = best.length > 8 ? 23 : 26;
-      const insetLabels = placeLabels(ctx, insetPts.map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`, size: iSize })),
-        iBounds, iOcc, { fallback: false });
-
-      cluster = { x: gx, y: gy, r: gr, count: best.length, inSet,
+      cluster = { x: gx, y: gy, r: gr, count: best.length,
+        inSet: new Set(best.map((p) => p.i)),
         label: `${area ? area + '一帶' : '這一帶'}（${best.length} 個地點）`,
-        inset: { cx: corner.x, cy: corner.y, r: irFinal, pts: insetPts, labels: insetLabels,
-          skipped: insetPts.length - insetLabels.length } };
+        areaName: area || '這一帶' };
     }
   }
 
-  // 主圖標籤：沒被收進群的點 + 群本身的標籤
+  // 全景的標籤：群外的點 + 群本身一顆標籤
   const occupied = pts.filter((p) => !cluster?.inSet.has(p.i)).map((p) => ({ x0: p.x - 18, y0: p.y - 18, x1: p.x + 18, y1: p.y + 18 }));
-  if (cluster) {
-    occupied.push({ circle: { cx: cluster.x, cy: cluster.y, r: cluster.r } });
-    occupied.push({ circle: { cx: cluster.inset.cx, cy: cluster.inset.cy, r: cluster.inset.r + 10 } });
-  }
+  if (cluster) occupied.push({ circle: { cx: cluster.x, cy: cluster.y, r: cluster.r } });
   const bounds = { x0: 30, y0: box.y0 - 60, x1: W - 30, y1: box.y1 + 70 };
   const items = pts.filter((p) => !cluster?.inSet.has(p.i)).map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`, size: 30 }));
   if (cluster) items.push({ x: cluster.x, y: cluster.y - cluster.r - 6, text: cluster.label, size: 32 });
-  const labels = placeLabels(ctx, items, bounds, occupied);
+  const overview = {
+    labels: placeLabels(ctx, items, bounds, occupied),
+    scaleBar: pickScaleBar(kmPerPx, box.x0, box.y1 + 96),
+  };
 
-  // 比例尺：1 度緯度 ≈ 111.3 公里 → 挑一段畫起來 120–320px 的整數公里
-  const kmPerPx = 111.32 / scale;
-  let nice = 1;
-  for (const k of [0.5, 1, 2, 5, 10, 20, 50, 100, 200]) { if (k / kmPerPx >= 120 && k / kmPerPx <= 340) { nice = k; break; } nice = k; }
-  const scaleBar = { x: box.x0, y: box.y1 + 96, w: Math.min(420, nice / kmPerPx), label: `${nice} 公里` };
+  // 特寫（有密集群才有）：鏡頭推進到那一帶，整個畫面都是它 —— 名字就排得開
+  let zoomView = null;
+  if (cluster) {
+    const members = pts.filter((p) => cluster.inSet.has(p.i));
+    const mnX = Math.min(...members.map((p) => p.x)), mxX = Math.max(...members.map((p) => p.x));
+    const mnY = Math.min(...members.map((p) => p.y)), mxY = Math.max(...members.map((p) => p.y));
+    const zk = Math.min(14, Math.min(
+      (box.x1 - box.x0) / Math.max(mxX - mnX, 8) * 0.62,
+      (box.y1 - box.y0) / Math.max(mxY - mnY, 8) * 0.62));
+    const vc = { x: (mnX + mxX) / 2, y: (mnY + mxY) / 2 };
+    const zAll = pts.map((p) => ({ ...p, x: bc.x + (p.x - vc.x) * zk, y: bc.y + (p.y - vc.y) * zk }));
+    const inView = (p) => p.x > box.x0 - 60 && p.x < box.x1 + 60 && p.y > box.y0 - 40 && p.y < box.y1 + 40;
+    const zVisible = zAll.filter(inView);
+    const zOcc = zVisible.map((p) => ({ x0: p.x - 20, y0: p.y - 20, x1: p.x + 20, y1: p.y + 20 }));
+    const zLabels = placeLabels(ctx,
+      zVisible.map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`, size: 30 })),
+      bounds, zOcc, { fallback: false });
+    zoomView = {
+      k: zk, cx: vc.x, cy: vc.y,
+      labels: zLabels,
+      visible: zVisible.length,
+      skipped: zVisible.length - zLabels.length,
+      scaleBar: pickScaleBar(kmPerPx / zk, box.x0, box.y1 + 96),
+      title: `${cluster.areaName}特寫`,
+    };
+  }
 
   const subtitle = totalSpots && totalSpots > spots.length
     ? `這趟 ${totalSpots} 個地點，其中 ${spots.length} 個有地圖位置`
     : `${spots.length} 個地點`;
 
-  return { box, pts, cluster, labels, scaleBar, subtitle, north: { x: box.x1 - 26, y: box.y0 - 44 } };
+  return { box, bc, pts, cluster, overview, zoomView, subtitle, north: { x: box.x1 - 26, y: box.y0 - 44 } };
 }
 
 function drawLabel(ctx, L, dotX, dotY) {
@@ -729,36 +726,72 @@ function drawLabel(ctx, L, dotX, dotY) {
   ctx.textBaseline = 'alphabetic';
 }
 
+// 鏡頭時間表（有特寫時）：全景 42% → 推進 16% → 特寫 42%
+const CAM_A = 0.42, CAM_B = 0.58;
+
 function drawMap(ctx, seg, t) {
   bgFill(ctx, 1);
   const fade = clamp01(t / 0.5) * clamp01((seg.dur - t) / 0.45);
   if (!seg._layout) seg._layout = computeMapLayout(ctx, seg.spots, { totalSpots: seg.totalSpots });
   const L = seg._layout;
+  const f = clamp01(t / seg.dur);
+
+  // 鏡頭：cam=0 全景、cam=1 特寫；縮放用對數插值，推進的速度感才均勻
+  const cam = L.zoomView ? easeInOut(clamp01((f - CAM_A) / (CAM_B - CAM_A))) : 0;
+  const k = L.zoomView ? Math.exp(Math.log(L.zoomView.k) * cam) : 1;
+  const ccx = L.zoomView ? (L.bc.x * (1 - cam) + L.zoomView.cx * cam) : L.bc.x;
+  const ccy = L.zoomView ? (L.bc.y * (1 - cam) + L.zoomView.cy * cam) : L.bc.y;
+  const TX = (x) => L.bc.x + (x - ccx) * k;
+  const TY = (y) => L.bc.y + (y - ccy) * k;
+
   ctx.save();
   ctx.globalAlpha = fade;
 
   centerText(ctx, '我們走過的地方', W / 2, 210, { maxW: W - 140, maxLines: 2, size: 64, min: 40, weight: 800 });
-  centerText(ctx, L.subtitle, W / 2, 310, { maxW: W - 160, maxLines: 1, size: 34, min: 26, color: 'rgba(255,255,255,0.62)' });
+  const sub = (cam > 0.5 && L.zoomView) ? L.zoomView.title : L.subtitle;
+  centerText(ctx, sub, W / 2, 310, { maxW: W - 160, maxLines: 1, size: 34, min: 26, color: 'rgba(255,255,255,0.62)' });
 
-  // 淡格線 + 指北針 + 比例尺（沒有底圖，至少要有地理感）
+  // 淡格線畫在「世界座標」上 —— 鏡頭推進時看得出畫面在動
+  ctx.save();
+  ctx.beginPath(); ctx.rect(L.box.x0 - 20, L.box.y0 - 20, L.box.x1 - L.box.x0 + 40, L.box.y1 - L.box.y0 + 40); ctx.clip();
   ctx.strokeStyle = 'rgba(79,141,255,0.10)'; ctx.lineWidth = 1;
-  for (let gx = L.box.x0; gx <= L.box.x1 + 1; gx += 160) { ctx.beginPath(); ctx.moveTo(gx, L.box.y0 - 20); ctx.lineTo(gx, L.box.y1 + 20); ctx.stroke(); }
-  for (let gy = L.box.y0; gy <= L.box.y1 + 1; gy += 160) { ctx.beginPath(); ctx.moveTo(L.box.x0 - 20, gy); ctx.lineTo(L.box.x1 + 20, gy); ctx.stroke(); }
+  const step = 160 * k;
+  let gx = TX(L.bc.x) % step;
+  for (gx = ((TX(0) % step) + step) % step; gx <= L.box.x1 + 20; gx += step) {
+    if (gx < L.box.x0 - 20) continue;
+    ctx.beginPath(); ctx.moveTo(gx, L.box.y0 - 20); ctx.lineTo(gx, L.box.y1 + 20); ctx.stroke();
+  }
+  for (let gy = ((TY(0) % step) + step) % step; gy <= L.box.y1 + 20; gy += step) {
+    if (gy < L.box.y0 - 20) continue;
+    ctx.beginPath(); ctx.moveTo(L.box.x0 - 20, gy); ctx.lineTo(L.box.x1 + 20, gy); ctx.stroke();
+  }
+  ctx.restore();
+
+  // 指北針
   ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(L.north.x, L.north.y + 16); ctx.lineTo(L.north.x, L.north.y - 14); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.north.x - 8, L.north.y - 4); ctx.lineTo(L.north.x, L.north.y - 16); ctx.lineTo(L.north.x + 8, L.north.y - 4); ctx.stroke();
   ctx.font = `700 26px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.65)'; ctx.textAlign = 'center';
   ctx.fillText('北', L.north.x, L.north.y + 46);
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(L.scaleBar.x, L.scaleBar.y - 8); ctx.lineTo(L.scaleBar.x, L.scaleBar.y);
-  ctx.lineTo(L.scaleBar.x + L.scaleBar.w, L.scaleBar.y); ctx.lineTo(L.scaleBar.x + L.scaleBar.w, L.scaleBar.y - 8);
-  ctx.stroke();
-  ctx.font = `600 26px ${FONT}`; ctx.textAlign = 'left';
-  ctx.fillText(L.scaleBar.label, L.scaleBar.x + L.scaleBar.w + 14, L.scaleBar.y + 8);
 
-  // 路線動畫：佔前 62%，後面留住讓人看得完
-  const runFor = Math.max(2, seg.dur * 0.62);
+  // 比例尺：全景與特寫各一支，跟著鏡頭交叉淡入淡出
+  const bars = [[L.overview.scaleBar, 1 - cam]];
+  if (L.zoomView) bars.push([L.zoomView.scaleBar, cam]);
+  for (const [bar, a] of bars) {
+    if (a <= 0.02) continue;
+    ctx.globalAlpha = fade * a;
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bar.x, bar.y - 8); ctx.lineTo(bar.x, bar.y);
+    ctx.lineTo(bar.x + bar.w, bar.y); ctx.lineTo(bar.x + bar.w, bar.y - 8);
+    ctx.stroke();
+    ctx.font = `600 26px ${FONT}`; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText(bar.label, bar.x + bar.w + 14, bar.y + 8);
+  }
+  ctx.globalAlpha = fade;
+
+  // 路線：在全景階段畫完（之後跟著鏡頭移動）
+  const runFor = Math.max(2, seg.dur * (L.zoomView ? CAM_A * 0.85 : 0.62));
   const prog = easeOut(clamp01((t - 0.4) / runFor));
   const total = Math.max(1, L.pts.length - 1);
   ctx.strokeStyle = 'rgba(79,141,255,0.9)';
@@ -766,16 +799,18 @@ function drawMap(ctx, seg, t) {
   ctx.beginPath();
   for (let i = 0; i < L.pts.length; i++) {
     const p = L.pts[i];
-    if (i === 0) { ctx.moveTo(p.x, p.y); continue; }
-    const k = clamp01(prog * total - (i - 1));
-    if (k <= 0) break;
+    const x = TX(p.x), y = TY(p.y);
+    if (i === 0) { ctx.moveTo(x, y); continue; }
+    const kk = clamp01(prog * total - (i - 1));
+    if (kk <= 0) break;
     const q = L.pts[i - 1];
-    ctx.lineTo(q.x + (p.x - q.x) * k, q.y + (p.y - q.y) * k);
+    const qx = TX(q.x), qy = TY(q.y);
+    ctx.lineTo(qx + (x - qx) * kk, qy + (y - qy) * kk);
   }
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // 點：群外的畫大點；群收成一個圈
+  // 點：群內的點在全景時小顆、鏡頭推進時放大回正常
   const appearOf = (i) => clamp01(prog * total - i + 0.5);
   for (const p of L.pts) {
     const a = appearOf(p.i);
@@ -783,62 +818,41 @@ function drawMap(ctx, seg, t) {
     ctx.globalAlpha = fade * a;
     ctx.fillStyle = '#4f8dff';
     const inCluster = L.cluster?.inSet.has(p.i);
-    ctx.beginPath(); ctx.arc(p.x, p.y, inCluster ? 7 : 15, 0, 7); ctx.fill();
-  }
-  if (L.cluster) {
-    const a = Math.max(...[...L.cluster.inSet].map((i) => appearOf(i)));
-    if (a > 0) {
-      ctx.globalAlpha = fade * a;
-      ctx.strokeStyle = 'rgba(255,209,102,0.9)'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(L.cluster.x, L.cluster.y, L.cluster.r, 0, 7); ctx.stroke();
-    }
-  }
-  // 標籤（含碰撞處理後的位置與引線）
-  for (const lb of L.labels) {
-    // 用標籤錨點對回它的點，決定出現時機（群標籤跟圈一起出現）
-    const src = L.pts.find((p) => Math.abs(p.x - lb.x) < 1 && Math.abs(p.y - lb.y) < 1);
-    const a = src ? appearOf(src.i) : (L.cluster ? Math.max(...[...L.cluster.inSet].map((i) => appearOf(i))) : 1);
-    if (a <= 0) continue;
-    ctx.globalAlpha = fade * a;
-    drawLabel(ctx, lb, lb.x, lb.y);
+    const rr = inCluster ? 7 + 8 * cam : 15;
+    ctx.beginPath(); ctx.arc(TX(p.x), TY(p.y), rr, 0, 7); ctx.fill();
   }
 
-  // 放大圈：路線畫得差不多後淡入，把擠成一團的那一帶攤開
-  if (L.cluster) {
-    const ia = clamp01((prog - 0.55) / 0.3) * fade;
-    if (ia > 0) {
-      const ins = L.cluster.inset;
-      ctx.globalAlpha = ia;
-      ctx.strokeStyle = 'rgba(255,209,102,0.55)'; ctx.lineWidth = 3; ctx.setLineDash([6, 10]);
-      const dx = ins.cx - L.cluster.x, dy = ins.cy - L.cluster.y, dd = Math.hypot(dx, dy) || 1;
-      ctx.beginPath();
-      ctx.moveTo(L.cluster.x + dx / dd * L.cluster.r, L.cluster.y + dy / dd * L.cluster.r);
-      ctx.lineTo(ins.cx - dx / dd * ins.r, ins.cy - dy / dd * ins.r);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#0b1220';
-      ctx.beginPath(); ctx.arc(ins.cx, ins.cy, ins.r, 0, 7); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,209,102,0.9)'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(ins.cx, ins.cy, ins.r, 0, 7); ctx.stroke();
-      ctx.save();
-      ctx.beginPath(); ctx.arc(ins.cx, ins.cy, ins.r - 3, 0, 7); ctx.clip();
-      ctx.strokeStyle = 'rgba(79,141,255,0.55)'; ctx.lineWidth = 4; ctx.setLineDash([2, 12]);
-      ctx.beginPath();
-      ins.pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-      ctx.stroke();
-      ctx.setLineDash([]);
-      for (const p of ins.pts) {
-        ctx.fillStyle = '#4f8dff';
-        ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, 7); ctx.fill();
+  // 全景的東西（群的圈與標籤、群外標籤）：鏡頭一開始推進就收掉
+  const ovAlpha = fade * (1 - clamp01(cam * 2.2));
+  if (ovAlpha > 0.02) {
+    if (L.cluster) {
+      const a = Math.max(...[...L.cluster.inSet].map((i) => appearOf(i)));
+      if (a > 0) {
+        ctx.globalAlpha = ovAlpha * a;
+        ctx.strokeStyle = 'rgba(255,209,102,0.9)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(TX(L.cluster.x), TY(L.cluster.y), L.cluster.r * k, 0, 7); ctx.stroke();
       }
-      for (const lb of ins.labels) drawLabel(ctx, lb, lb.x, lb.y);
-      ctx.restore();
-      if (ins.skipped > 0) {
-        // 寫在圈外面的正下方 —— 寫在圈裡會被圓邊裁掉（實際輸出圖看出來的）
+    }
+    for (const lb of L.overview.labels) {
+      const src = L.pts.find((p) => Math.abs(p.x - lb.x) < 1 && Math.abs(p.y - lb.y) < 1);
+      const a = src ? appearOf(src.i) : (L.cluster ? Math.max(...[...L.cluster.inSet].map((i) => appearOf(i))) : 1);
+      if (a <= 0) continue;
+      ctx.globalAlpha = ovAlpha * a;
+      drawLabel(ctx, lb, lb.x, lb.y);
+    }
+  }
+
+  // 特寫的標籤：鏡頭快到定位才淡入（位置是按定位後的座標排的）
+  if (L.zoomView) {
+    const zAlpha = fade * clamp01((cam - 0.86) / 0.14);
+    if (zAlpha > 0.02) {
+      ctx.globalAlpha = zAlpha;
+      for (const lb of L.zoomView.labels) drawLabel(ctx, lb, lb.x, lb.y);
+      if (L.zoomView.skipped > 0) {
         ctx.font = `600 24px ${FONT}`;
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.textAlign = 'center';
-        ctx.fillText(`放大鏡裡標得下 ${ins.labels.length} 個名字，還有 ${ins.skipped} 個`, ins.cx, ins.cy + ins.r + 34);
+        ctx.fillText(`標得下 ${L.zoomView.labels.length} 個名字，還有 ${L.zoomView.skipped} 個`, W / 2, L.box.y1 + 150);
       }
     }
   }

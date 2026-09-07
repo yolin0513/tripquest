@@ -94,49 +94,55 @@ try {
       const spots = s.spotsOf(tid).filter((x) => x.lat != null && x.lng != null);
       const L = mem.computeMapLayout(ctx, spots, { totalSpots: s.spotsOf(tid).length });
       const hit = (a, b) => !(a.x1 + 2 < b.x0 || b.x1 + 2 < a.x0 || a.y1 + 2 < b.y0 || b.y1 + 2 < a.y0);
-      const rects = L.labels.map((x) => x.rect).concat(L.cluster ? L.cluster.inset.labels.map((x) => x.rect) : []);
-      let overlap = null;
-      for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
-        if (hit(rects[i], rects[j])) overlap = JSON.stringify([rects[i], rects[j]]);
-      }
-      const outside = rects.find((r) => r.x0 < 0 || r.x1 > 1080 || r.y0 < 0 || r.y1 > 1920);
-      // 放大圈不可以把「圈外的點」蓋掉（實測抓到的視覺 bug，釘住）
-      let covered = null;
-      if (L.cluster) {
-        for (const p of L.pts) {
-          if (L.cluster.inSet.has(p.i)) continue;
-          if (Math.hypot(p.x - L.cluster.inset.cx, p.y - L.cluster.inset.cy) < L.cluster.inset.r + 18) covered = p.name;
+      const noOverlap = (rects) => {
+        for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+          if (hit(rects[i], rects[j])) return JSON.stringify([rects[i], rects[j]]);
         }
-      }
-      // 實際畫面：用播放器 seek 到地圖段中後段
+        return null;
+      };
+      const ovRects = L.overview.labels.map((x) => x.rect);
+      const zRects = L.zoomView ? L.zoomView.labels.map((x) => x.rect) : [];
+      const overlap = noOverlap(ovRects) || noOverlap(zRects);
+      const outside = [...ovRects, ...zRects].find((r) => r.x0 < 0 || r.x1 > 1080 || r.y0 < 0 || r.y1 > 1920);
+      // 實際畫面：全景（38%）與特寫（92%）各拍一張
       const player = await mem.createPlayer(c, tid, { length: 'full' });
       const t = await mem.buildTimeline(tid, { length: 'full' });
       const mapSeg = t.segs.find((x) => x.kind === 'map');
-      player.seek(mapSeg.start + mapSeg.dur * 0.82);
-      await new Promise((r) => setTimeout(r, 300));
-      player.seek(mapSeg.start + mapSeg.dur * 0.82);
-      const png = c.toDataURL('image/png');
+      const snap = async (frac) => {
+        player.seek(mapSeg.start + mapSeg.dur * frac);
+        await new Promise((r) => setTimeout(r, 250));
+        player.seek(mapSeg.start + mapSeg.dur * frac);
+        return c.toDataURL('image/png');
+      };
+      const png = await snap(0.38);
+      const pngZoom = L.zoomView ? await snap(0.92) : null;
       player.destroy();
       return {
-        png, overlap, outside: outside ? JSON.stringify(outside) : null,
-        labels: L.labels.length, cluster: L.cluster ? L.cluster.count : 0, covered,
+        png, pngZoom, overlap, outside: outside ? JSON.stringify(outside) : null,
+        labels: L.overview.labels.length, cluster: L.cluster ? L.cluster.count : 0,
         clusterLabel: L.cluster ? L.cluster.label : '',
-        subtitle: L.subtitle, scale: L.scaleBar.label,
+        zoomLabeled: L.zoomView ? L.zoomView.labels.length : 0,
+        zoomVisible: L.zoomView ? L.zoomView.visible : 0,
+        mapDur: mapSeg.dur,
+        subtitle: L.subtitle, scale: L.overview.scaleBar.label,
       };
     }, sc);
     console.log(`  「${name}」 副標＝${res.subtitle}／比例尺＝${res.scale}`);
     yes(!res.overlap, `「${name}」標籤互不重疊`, res.overlap);
     yes(!res.outside, `「${name}」標籤都在畫面內`, res.outside);
     if (name.includes('十五個點')) {
-      yes(res.cluster >= 10, `${res.cluster} 個點收成一帶（放大圈放不下的名字會略過並標註，不會糊成一團）`);
+      // 這正是換掉放大圈的理由：小圈只標得下 5 個，特寫用整個畫面幾乎全標得下
+      yes(res.zoomLabeled >= Math.min(res.zoomVisible, 12),
+        `特寫用整個畫面標名字：${res.zoomLabeled}/${res.zoomVisible} 個（放大圈時代只有 5 個）`);
     }
     if (name.includes('群聚')) {
-      yes(res.cluster >= 3, `密集的 ${res.cluster} 個點收成一帶＋放大圈`);
+      yes(res.cluster >= 3, `密集的 ${res.cluster} 個點收成一帶，地圖段加長做鏡頭推進（共 ${res.mapDur.toFixed(1)}s）`);
       yes(res.clusterLabel.startsWith('羅東一帶'), `群名用地名共同開頭：「${res.clusterLabel}」（不是縣市級的「宜蘭一帶」）`);
-      yes(!res.covered, '放大圈沒有蓋到圈外的點', res.covered);
+      yes(res.zoomLabeled === res.zoomVisible, `特寫裡每個地點都標到名字（${res.zoomLabeled}/${res.zoomVisible}）`);
     }
     if (sc.noCoord) yes(res.subtitle.includes(`${sc.coords.length + sc.noCoord} 個地點`), '副標誠實寫出「幾個地點、幾個有座標」', res.subtitle);
-    await savePng(`路線圖-${name}`, res.png);
+    await savePng(`路線圖-${name}-全景`, res.png);
+    if (res.pngZoom) await savePng(`路線圖-${name}-特寫`, res.pngZoom);
   }
 
   // ================= 4. 海報：預覽翻頁 + 全天數輸出 =================
@@ -238,6 +244,37 @@ try {
   yes(JSON.stringify(btn2) === JSON.stringify(btn0), '翻到第 3 天按鈕位置還是一動不動');
   const lastVis = await page.evaluate(() => getComputedStyle(document.querySelector('.pager-btn:last-of-type')).visibility);
   yes(lastVis === 'hidden', '最後一張時「下一張 ›」是藏起來的');
+
+  // 翻頁不可以閃（使用者錄影抽幀抓到：動畫結束後舊頁跳回來一幀）。
+  // 逐幀監看整段轉場：① ghost 一旦開始滑動，就不准再回到位移 0 還留在畫面上
+  // ②轉場期間 canvas 每一幀都要有內容（不是被 resize 清空的空白）
+  const flick = await page.evaluate(() => new Promise((res) => {
+    const frame = document.querySelector('.poster-frame');
+    const cv = document.querySelector('.poster-canvas');
+    const prevBtn = document.querySelector('.pager-btn');
+    let flashback = 0, blank = 0, ghostSeen = false, moved = false, frames = 0;
+    function tick() {
+      const g = frame.querySelector('.poster-ghost');
+      if (g) {
+        ghostSeen = true;
+        const t = getComputedStyle(g).transform;
+        const x = t.startsWith('matrix') ? Math.abs(parseFloat(t.split(',')[4])) : 0;
+        if (x > 6) moved = true;
+        if (moved && x < 2) flashback++;          // 滑出去又跳回原位 = 閃回舊頁
+      }
+      try {
+        const x2 = cv.getContext('2d').getImageData(Math.floor(cv.width / 2), Math.floor(cv.height / 2), 4, 4).data;
+        if (x2[3] === 0) blank++;                 // 透明 = 被 resize 清掉還沒畫
+      } catch { /* noop */ }
+      frames++;
+      if (frames < 50) requestAnimationFrame(tick); else res({ flashback, blank, ghostSeen, frames });
+    }
+    prevBtn.click();                              // 翻回第 2 天，邊翻邊監看
+    requestAnimationFrame(tick);
+  }));
+  yes(flick.ghostSeen, '轉場有滑動（有 ghost）');
+  yes(flick.flashback === 0, `逐幀監看 ${flick.frames} 幀：舊頁沒有跳回來閃一下`, `flashback=${flick.flashback}`);
+  yes(flick.blank === 0, `轉場期間 canvas 每一幀都有內容（blank=${flick.blank}）`);
   await page.screenshot({ path: fileURLToPath(new URL('海報頁-翻頁列.png', OUT)) });
   console.log('  📸 海報頁-翻頁列');
 
@@ -298,6 +335,26 @@ try {
   yes(!!pb2, '暫停後按鈕變成「▶ 繼續播放」');
   await page.screenshot({ path: fileURLToPath(new URL('回憶頁-進度條.png', OUT)) });
   console.log('  📸 回憶頁-進度條');
+
+  // 健檢釘住：播放中離開回憶頁，配樂必須停（AudioContext 要被關掉）
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+  await page.evaluate(() => {
+    const Orig = window.AudioContext;
+    window.__ctxs = [];
+    window.AudioContext = class extends Orig { constructor(...a) { super(...a); window.__ctxs.push(this); } };
+  });
+  await page.evaluate((tid) => { location.hash = `#/trip/${tid}/album`; }, tidV);
+  await page.waitForSelector('.scrub-knob');
+  await sleep(1000);
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => /播放預覽/.test(b.textContent))?.click());
+  await sleep(1200);
+  const playingCtx = await page.evaluate(() => window.__ctxs.filter((c) => c.state === 'running').length);
+  await page.evaluate((tid) => { location.hash = `#/trip/${tid}`; }, tidV);
+  await sleep(1200);
+  const leftCtx = await page.evaluate(() => window.__ctxs.map((c) => c.state));
+  yes(playingCtx >= 1, `播放中有 ${playingCtx} 個 AudioContext 在響`);
+  yes(!leftCtx.includes('running'), `離開回憶頁後配樂全部停了（${JSON.stringify(leftCtx)}）`, leftCtx.join(','));
 
   // ================= 1. 照片牆移除徽章入口 =================
   console.log('\n— 照片牆 —');
