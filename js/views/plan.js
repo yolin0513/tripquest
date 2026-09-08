@@ -7,8 +7,9 @@
 
 import { setTop, render } from '../app.js';
 import { spotTimes } from '../spottime.js';
+import { MODES, travelMatrix, chainTimes, suggestOrder, totalTravelSec, fmtMin, fmtDur } from '../route.js';
 import * as store from '../store.js';
-import { h, mount, toast, promptDialog, confirmDialog } from '../ui.js';
+import { h, mount, toast, promptDialog, confirmDialog, modal } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
@@ -95,6 +96,10 @@ export default async function plan(tripId) {
       list.append(h('div', { class: 'plan-divider', dataset: { day: String(d) } },
         h('span', { class: 'pd-day' }, `第 ${d} 天`),
         h('span', { class: 'pd-count' }, inDay.length ? `${inDay.length} 個景點` : '尚未安排'),
+        inDay.length >= 3 ? h('button', {
+          class: 'btn btn-soft pd-opt',
+          onclick: () => suggestDay(d),
+        }, '✨ 排順序') : null,
       ));
       if (!inDay.length) {
         list.append(h('div', { class: 'plan-empty', dataset: { day: String(d) } }, '把景點拖來這裡，或按下面的「加景點」'));
@@ -111,9 +116,16 @@ export default async function plan(tripId) {
         }, '🔍 搜尋加入')));
     }
 
+    annotateTravel().catch(() => {});
+
     list.append(h('div', { class: 'plan-day-tools' },
       h('button', { class: 'btn btn-soft', onclick: addDay }, '＋ 多加一天'),
       h('button', { class: 'btn btn-soft', onclick: exportText }, '📤 匯出成文字'),
+      h('button', { class: 'btn btn-soft', onclick: async () => {
+        const cur = store.getRaw(tripId)?.travelMode === 'walk' ? 'walk' : 'drive';
+        await store.patch(tripId, { travelMode: cur === 'walk' ? 'drive' : 'walk' });
+        draw();
+      } }, MODES[(t.travelMode === 'walk' ? 'walk' : 'drive')].label + '（點我切換）'),
       h('button', { class: 'btn btn-ghost', onclick: removeLastDay }, '－ 減一天'),
     ));
     list.append(h('button', {
@@ -153,14 +165,23 @@ export default async function plan(tripId) {
     fillQuestBox(box, s, label);
     label();
 
+    // 📌：釘住的景點在「幫我排順序」時位置不動（規劃第 2 批）
+    const pinBtn = h('button', {
+      class: 'plan-mini plan-pin' + (s.pinned ? ' on' : ''),
+      title: '釘住（排順序時不移動）',
+      onclick: async () => { await store.patch(s.id, { pinned: !s.pinned }); draw(); },
+    }, h('span', { class: 'plan-mini-ic' }, '📌'), h('span', { class: 'plan-mini-t' }, s.pinned ? '已釘' : '釘住'));
+
     return h('div', { class: 'plan-row', dataset: { id: s.id } },
       h('div', { class: 'plan-row-top' },
         h('button', { class: 'plan-handle', 'aria-label': '拖曳排序' }, '☰'),
         h('div', { class: 'plan-main' },
           h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
           timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
+          h('div', { class: 'plan-eta', hidden: true }),
           h('div', { class: 'plan-row-actions' },
             toggle,
+            pinBtn,
             h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) },
               h('span', { class: 'plan-mini-ic' }, '⚙️'),
               h('span', { class: 'plan-mini-t' }, '設定'),
@@ -246,6 +267,101 @@ export default async function plan(tripId) {
     pushDates();
     draw();
     toast(`現在共 ${totalDays()} 天`);
+  }
+
+  // ---------- 移動時間與時刻鏈（規劃第 2 批） ----------
+  // 一天一個 OSRM /table 矩陣請求（FOSSGIS），之後拖拉重排全部從快取算；
+  // 失敗或沒座標退回直線×係數。UI 一律「約」，估算來源標得更明白。
+  function dayMode() { return store.getRaw(tripId)?.travelMode === 'walk' ? 'walk' : 'drive'; }
+
+  async function dayMatrix(inDay) {
+    const mode = dayMode();
+    const coordIdx = [];
+    const pts = [];
+    inDay.forEach((sp, i) => { if (sp.lat != null && sp.lng != null) { coordIdx.push(i); pts.push({ lat: sp.lat, lng: sp.lng }); } });
+    let sub = null;
+    if (pts.length >= 2) sub = await travelMatrix(pts, mode);
+    const n = inDay.length;
+    const sec = Array.from({ length: n }, () => Array(n).fill(null));
+    if (sub) {
+      coordIdx.forEach((gi, a) => coordIdx.forEach((gj, b) => { sec[gi][gj] = sub.sec[a][b]; }));
+    }
+    return { sec, src: sub ? sub.src : 'est', full: pts.length === n && n >= 2 };
+  }
+
+  async function annotateTravel() {
+    const mode = dayMode();
+    const spots = store.spotsOf(tripId);
+    const days = totalDays();
+    let anyEst = false, anyOsrm = false;
+    for (let d = 1; d <= days; d++) {
+      const inDay = spots.filter((x) => (x.day || 1) === d).sort((a, b) => (a.order || 0) - (b.order || 0));
+      if (!inDay.length) continue;
+      const m = await dayMatrix(inDay);
+      if (m.src === 'est') anyEst = true; else anyOsrm = true;
+      const chain = chainTimes(inDay, m, mode);
+      chain.forEach((c, i) => {
+        const row = list.querySelector(`.plan-row[data-id="${c.id}"]`);
+        if (!row) return;
+        // 兩點之間的移動小標（插在這一列前面）
+        row.querySelector('.plan-travel-note')?.remove();
+        if (i > 0 && c.travel != null) {
+          const chip = h('div', { class: 'plan-travel-note' },
+            `↓ ${MODES[mode].label.slice(0, 2)}約 ${fmtDur(c.travel)}`);
+          row.prepend(chip);
+        }
+        const eta = row.querySelector('.plan-eta');
+        if (!eta) return;
+        const bits = [];
+        if (c.arrive != null && !c.fixed) bits.push(`約 ${fmtMin(c.arrive)} 到`);
+        if (c.late > 0) bits.push(`⚠ 比預定晚 ${c.late} 分`);
+        if (c.stayAssumed) bits.push('（停留未設，先用 1 小時推算）');
+        eta.textContent = bits.join('　');
+        eta.hidden = !bits.length;
+        eta.classList.toggle('warn', c.late > 0);
+      });
+    }
+    const note = list.querySelector('.plan-src-note');
+    note?.remove();
+    if (anyEst || anyOsrm) {
+      list.append(h('p', { class: 'form-hint plan-src-note' },
+        (anyEst ? '移動時間是用直線距離估的（離線或路網服務沒回應）；' : '移動時間來自 OSRM 開放路網；')
+        + '都是估計值，大眾運輸與塞車請自行斟酌。'));
+    }
+  }
+
+  // 「✨ 排順序」：最近鄰 + 2-opt，📌 不動；永遠先預覽、按套用才寫入
+  async function suggestDay(d) {
+    const inDay = store.spotsOf(tripId).filter((x) => (x.day || 1) === d).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const noCoord = inDay.filter((x) => x.lat == null || x.lng == null).length;
+    if (noCoord) {
+      toast(`還有 ${noCoord} 個景點沒有座標 —— 先按「📍 自動找出景點位置」再排`, 4200);
+      return;
+    }
+    const m = await dayMatrix(inDay);
+    const r = suggestOrder(inDay, { sec: m.sec });
+    if (!r.changed) { toast('目前的順序已經很順了，不用改'); return; }
+    const seq = r.order.map((i) => inDay[i]);
+    const ok = await modal({
+      title: `第 ${d} 天的建議順序`,
+      body: h('div', {},
+        h('p', { class: 'sm muted', style: 'margin:0 0 8px' },
+          `總移動約 ${fmtDur(r.before)} → ${fmtDur(r.after)}（${MODES[dayMode()].label}，估計值）`),
+        h('ol', { class: 'opt-list' }, ...seq.map((sp) => h('li', {},
+          `${sp.pinned ? '📌 ' : ''}${sp.emoji || '📍'} ${sp.name}`))),
+        h('p', { class: 'form-hint' }, '📌 釘住的位置不會動。套用後還是可以拖拉調整。'),
+      ),
+      actions: [
+        { label: '先不要', value: false },
+        { label: '套用這個順序', value: true, primary: true },
+      ],
+    });
+    if (!ok) return;
+    for (let i = 0; i < seq.length; i++) {
+      if (seq[i].order !== i) await store.patch(seq[i].id, { order: i });
+    }
+    toast('已套用，時間有衝突的會標 ⚠');
+    draw();
   }
 
   // 匯出成 itinerary.js 一定解析得回來的純文字（分享/備份用；round-trip 有測試釘著）

@@ -237,6 +237,11 @@ export default async function create() {
     ));
 
   const submitBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: submit }, '產生拍照任務');
+  // 建立行程的另一條路（規劃第 2 批）：不先選景點，建好就進「搜尋景點」邊查邊排
+  const plannerBtn = h('button', {
+    class: 'btn btn-soft btn-block', style: 'margin-top:8px',
+    onclick: () => { state.plannerMode = true; submit(); },
+  }, '🔍 幫我規劃行程（用搜尋一個一個加）');
 
   draw();
 
@@ -247,8 +252,8 @@ export default async function create() {
     if (!state.members.length) state.members.push('我');
 
     const itineraryText = itinField.value.trim();
-    if (!state.picked.size && !itineraryText && !state.imported.length) {
-      toast('選幾個景點，或用「進階」匯入行程表'); return;
+    if (!state.picked.size && !itineraryText && !state.imported.length && !state.plannerMode) {
+      toast('選幾個景點，或按「幫我規劃行程」用搜尋來排'); return;
     }
 
     submitBtn.disabled = true;
@@ -283,15 +288,20 @@ export default async function create() {
       }
 
       const { spots, quests } = await generateForTrip({ tripId, items, itineraryText, region });
-      if (!spots.length) { toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitBtn.textContent = '產生拍照任務'; return; }
+      if (!spots.length && !state.plannerMode) { toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitBtn.textContent = '產生拍照任務'; return; }
       for (const s of spots) await store.put(s);
       for (const q of quests) await store.put(q);
 
       const { syncEnabled } = await import('../sync.js');
       if (syncEnabled()) { const { ensureGroupSync } = await import('../share.js'); await ensureGroupSync(groupId); }
 
-      toast(`建立了 ${spots.length} 個景點、${quests.length} 個任務`);
-      navigate(`/trip/${tripId}`, { replace: true });
+      if (state.plannerMode) {
+        toast('旅程建好了，開始搜尋景點');
+        navigate(`/trip/${tripId}/findspot?day=1`, { replace: true });
+      } else {
+        toast(`建立了 ${spots.length} 個景點、${quests.length} 個任務`);
+        navigate(`/trip/${tripId}`, { replace: true });
+      }
       enrichTrip(tripId).catch(() => {});
     } catch (err) {
       console.error(err);
@@ -314,6 +324,7 @@ export default async function create() {
 
     h('div', { style: 'margin-top:14px' }, advDetails),
     submitBtn,
+    plannerBtn,
   ));
 }
 

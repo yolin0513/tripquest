@@ -85,8 +85,9 @@ try {
     const bs = [...row.querySelectorAll('.plan-mini')];
     return bs.map((b) => ({ w: Math.round(b.getBoundingClientRect().width), t: b.innerText.replace(/s+/g, '') }));
   });
-  eq(pair.length, 2, '一排就兩顆按鈕');
-  yes(Math.abs(pair[0].w - pair[1].w) <= 1, `兩顆等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
+  // v1.51 起多了 📌 釘住（排順序時當錨）—— 任務/設定兩顆仍要等寬
+  eq(pair.length, 3, '一排三顆按鈕（任務／📌／設定）');
+  yes(Math.abs(pair[0].w - pair[2].w) <= 1, `任務與設定等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
 
   // ---------- 2. 目標在畫面外的跨天拖曳 ----------
   console.log('\n— 跨天拖曳（目標在畫面外）—');

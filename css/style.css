@@ -1721,3 +1721,13 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .fs-grid .field { min-width: 0; padding: 8px; }
 .plan-addrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .plan-addrow .plan-search { white-space: nowrap; }
+
+/* ---- 規劃第 2 批：時刻鏈、移動時間、排順序 ---- */
+.plan-travel-note { font-size: 0.82rem; color: var(--muted); padding: 2px 0 4px 54px; pointer-events: none; }
+.plan-eta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+.plan-eta.warn { color: #ffb14e; font-weight: 700; }
+.plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }
+.pd-opt { min-height: 40px; padding: 4px 12px; margin-left: auto; white-space: nowrap; }
+.plan-divider { display: flex; align-items: center; gap: 10px; }
+.opt-list { margin: 0; padding-left: 22px; line-height: 1.9; }
+.plan-src-note { margin-top: 10px; }
