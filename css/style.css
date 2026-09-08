@@ -1703,3 +1703,21 @@ textarea.field { resize: vertical; line-height: 1.6; }
   border: 1px solid var(--line); color: var(--muted);
 }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---- 搜尋景點加入（規劃行程・第 1 批）---- */
+.fs-bar { display: flex; gap: 8px; }
+.fs-bar .field { flex: 1; min-width: 0; }
+.fs-results { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.fs-row { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg-elev-1, var(--bg-elev-2)); }
+.fs-row.fs-done { opacity: 0.66; }
+.fs-head { display: flex; align-items: center; gap: 10px; }
+.fs-main { flex: 1; min-width: 0; }
+.fs-name { font-weight: 800; font-size: 1.05rem; overflow-wrap: anywhere; }
+.fs-meta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.fs-add { min-height: 42px; white-space: nowrap; flex: none; }
+.fs-panel { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.fs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.fs-grid label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fs-grid .field { min-width: 0; padding: 8px; }
+.plan-addrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.plan-addrow .plan-search { white-space: nowrap; }

@@ -21,8 +21,10 @@ import * as db from './db.js';
 import * as store from './store.js';
 import { haversine } from './geo.js';
 
-let BASE = 'https://nominatim.openstreetmap.org/search';
-export function setGeoEndpoint(u) { BASE = u; }   // 測試用：指到本機的假伺服器
+// 測試用：可用 setGeoEndpoint() 或在頁面載入前設 window.__TQ_GEO_ENDPOINT
+// （puppeteer 的 evaluateOnNewDocument —— 換頁重載模組後覆寫才不會消失）
+let BASE = (typeof window !== 'undefined' && window.__TQ_GEO_ENDPOINT) || 'https://nominatim.openstreetmap.org/search';
+export function setGeoEndpoint(u) { BASE = u; }
 
 const NEG_TTL = 7 * 86400000;
 const MAX_DIST_M = 120 * 1000;
@@ -76,6 +78,59 @@ export async function geocodeQuery(q) {
   if (res === undefined) return null;                    // 網路失敗：下次還能再試
   await db.metaSet(key, res ? { ok: true, ts: Date.now(), ...res } : { ok: false, ts: Date.now() });
   return res;
+}
+
+// 關鍵字搜尋 → 候選清單（規劃行程用）。
+// 與 geocodeQuery 同一條節流與快取（Nominatim 規範：只能按鈕觸發，不可打字即搜）。
+// 回傳最多 limit 筆 {name, fullName, lat, lng, cls, type}，查不到回空陣列。
+const TYPE_ZH = {
+  restaurant: '餐廳', cafe: '咖啡店', fast_food: '小吃', bar: '酒吧', food_court: '美食街',
+  attraction: '景點', viewpoint: '觀景點', museum: '博物館', gallery: '美術館', zoo: '動物園',
+  theme_park: '樂園', hotel: '住宿', guest_house: '民宿', hostel: '住宿',
+  park: '公園', garden: '花園', beach: '海灘', peak: '山', waterfall: '瀑布',
+  temple: '寺廟', shrine: '神社', place_of_worship: '寺廟', castle: '城堡',
+  marketplace: '市場', mall: '商場', supermarket: '超市', department_store: '百貨',
+  station: '車站', bus_stop: '公車站', aerodrome: '機場',
+  city: '城市', town: '城鎮', village: '村里', suburb: '地區', neighbourhood: '地區',
+  hamlet: '聚落', island: '島', bay: '海灣', spring: '溫泉',
+};
+export function geoTypeLabel(cls, type) {
+  return TYPE_ZH[type] || TYPE_ZH[cls] || '';
+}
+
+export async function geocodeSearch(q, { limit = 5, region = '' } = {}) {
+  const query = [cleanName(q) || String(q).trim(), region].filter(Boolean).join(' ');
+  if (!query.trim()) return [];
+  const key = 'geo:s2:' + limit + ':' + query;
+  const cached = await db.metaGet(key);
+  if (cached && Date.now() - cached.ts < 30 * 86400000) return cached.list || [];
+  const list = await throttled(async () => {
+    const u = `${BASE}?format=jsonv2&limit=${limit}&accept-language=zh-TW&addressdetails=1&q=${encodeURIComponent(query)}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const r = await fetch(u, { signal: ctrl.signal });
+      if (!r.ok) return undefined;
+      const arr = await r.json();
+      if (!Array.isArray(arr)) return [];
+      return arr.map((hit) => {
+        const a = hit.address || {};
+        const area = [a.country === '臺灣' || a.country === '台灣' ? '' : a.country,
+          a.state || a.county || a.city, a.town || a.district || a.suburb]
+          .filter(Boolean).join(' ');
+        return {
+          name: String(hit.display_name || '').split(',')[0].trim() || String(hit.name || query),
+          fullName: area,
+          lat: +(+hit.lat).toFixed(5), lng: +(+hit.lon).toFixed(5),
+          cls: hit.class || '', type: hit.type || '',
+        };
+      });
+    } catch { return undefined; }
+    finally { clearTimeout(timer); }
+  });
+  if (list === undefined) return null;               // 網路失敗（跟「查無結果」分開，UI 要講不同的話）
+  await db.metaSet(key, { ts: Date.now(), list });
+  return list;
 }
 
 // 一個景點：先照片 GPS（本機、免費、即時），再地名查詢（帶地區 → 不帶）

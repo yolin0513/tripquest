@@ -86,7 +86,8 @@ export default async function plan(tripId) {
     if (!spots.length) {
       list.append(h('div', { class: 'empty' },
         h('p', {}, '這趟還沒有景點'),
-        h('button', { class: 'btn btn-primary', onclick: () => addSpotToDay(1) }, '＋ 新增第一個景點')));
+        h('button', { class: 'btn btn-primary', onclick: () => addSpotToDay(1) }, '＋ 新增第一個景點'),
+        h('button', { class: 'btn btn-soft', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/findspot?day=1`) }, '🔍 搜尋景點加入')));
     }
 
     for (let d = 1; d <= days; d++) {
@@ -99,14 +100,20 @@ export default async function plan(tripId) {
         list.append(h('div', { class: 'plan-empty', dataset: { day: String(d) } }, '把景點拖來這裡，或按下面的「加景點」'));
       }
       inDay.forEach((s, i) => list.append(rowEl(s, d, i, inDay.length)));
-      list.append(h('button', {
-        class: 'plan-addspot', dataset: { day: String(d) },
-        onclick: () => addSpotToDay(d),
-      }, `＋ 加一個景點到第 ${d} 天`));
+      list.append(h('div', { class: 'plan-addrow', dataset: { day: String(d) } },
+        h('button', {
+          class: 'plan-addspot',
+          onclick: () => addSpotToDay(d),
+        }, `＋ 加景點到第 ${d} 天`),
+        h('button', {
+          class: 'plan-addspot plan-search',
+          onclick: () => navigate(`/trip/${tripId}/findspot?day=${d}`),
+        }, '🔍 搜尋加入')));
     }
 
     list.append(h('div', { class: 'plan-day-tools' },
       h('button', { class: 'btn btn-soft', onclick: addDay }, '＋ 多加一天'),
+      h('button', { class: 'btn btn-soft', onclick: exportText }, '📤 匯出成文字'),
       h('button', { class: 'btn btn-ghost', onclick: removeLastDay }, '－ 減一天'),
     ));
     list.append(h('button', {
@@ -239,6 +246,19 @@ export default async function plan(tripId) {
     pushDates();
     draw();
     toast(`現在共 ${totalDays()} 天`);
+  }
+
+  // 匯出成 itinerary.js 一定解析得回來的純文字（分享/備份用；round-trip 有測試釘著）
+  async function exportText() {
+    const { exportItineraryText } = await import('../itinexport.js');
+    const text = exportItineraryText(tripId);
+    const { nativeShare } = await import('../share.js');
+    if (await nativeShare({ title: t.title, text })) return;
+    try { await navigator.clipboard.writeText(text); toast('已複製行程文字，可以貼到 LINE 或備忘錄'); }
+    catch {
+      const { modal } = await import('../ui.js');
+      modal({ title: '行程文字', body: h('textarea', { class: 'field', rows: 12 }, text), actions: [{ label: '關閉', value: true }] });
+    }
   }
 
   async function addSpotToDay(day) {
