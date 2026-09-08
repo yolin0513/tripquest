@@ -78,10 +78,12 @@ try {
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}/plan`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.plan-list');
   const entries = await page.evaluate(() => ({
-    search: [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('搜尋加入')).length,
+    search: [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('搜尋景點加入第')).length,
+    manualBtn: [...document.querySelectorAll('button')].filter((b) => /加景點|新增第一個/.test(b.textContent)).length,
     exportBtn: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('匯出成文字')),
   }));
-  yes(entries.search >= 2, `調整行程頁每天都有「🔍 搜尋加入」（${entries.search} 顆）`);
+  yes(entries.search >= 2, `調整行程頁每天一顆「🔍 搜尋景點加入第 N 天」（${entries.search} 顆）`);
+  yes(entries.manualBtn === 0, '「＋ 加景點」手動入口已移除（手動輸入收進搜尋頁）');
   yes(entries.exportBtn, '調整行程頁有「📤 匯出成文字」');
 
   // ---------- 搜尋頁 ----------
@@ -97,8 +99,8 @@ try {
 
   // ② 候選清單
   await page.click('.fs-bar button');
-  await page.waitForSelector('.fs-row', { timeout: 15000 });
-  const rows = await page.evaluate(() => [...document.querySelectorAll('.fs-row')].map((r) => ({
+  await page.waitForSelector('.fs-results .fs-row', { timeout: 15000 });
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.fs-results .fs-row')].map((r) => ({
     name: r.querySelector('.fs-name').textContent,
     meta: r.querySelector('.fs-meta').textContent,
   })));
@@ -108,42 +110,51 @@ try {
   yes(rows[0].meta.includes('離行程約'), '帶「離行程距離」（有既有座標當中心）');
 
   // ③ 加入：第 2 天、12:30、停留 1 小時
-  await page.evaluate(() => document.querySelector('.fs-row .fs-add').click());
-  await page.waitForSelector('.fs-panel');
-  const dayVal = await page.evaluate(() => document.querySelector('.fs-panel select').value);
+  await page.evaluate(() => document.querySelector('.fs-results .fs-row .fs-add').click());
+  await page.waitForSelector('.fs-results .fs-panel');
+  const dayVal = await page.evaluate(() => document.querySelector('.fs-results .fs-panel select').value);
   yes(dayVal === '2', '「哪一天」預選了網址帶的第 2 天');
 
-  // 排版：三欄標題與欄位一一對齊、欄寬一致；時間欄位空的時候要看得出「未設定」
+  // 版面（v1.51.4 改「哪一天/停留多久」兩欄＋「幾點到」整列）：
+  // 用「實際渲染的框」量三個欄位的左右邊界 —— 互不重疊、不超出容器
   const gridCheck = () => page.evaluate(() => {
-    const cells = [...document.querySelectorAll('.fs-grid > label')].map((lb) => {
-      const label = lb.querySelector('.form-label').getBoundingClientRect();
-      const field = (lb.querySelector('.field') || lb.querySelector('.fs-time')).getBoundingClientRect();
-      return { t: lb.querySelector('.form-label').textContent, dx: Math.abs(Math.round(label.left - field.left)), w: Math.round(field.width) };
-    });
-    return { cells,
+    const panel = document.querySelector('.fs-results .fs-panel').getBoundingClientRect();
+    const r = (el) => { const b = el.getBoundingClientRect(); return { l: Math.round(b.left), r: Math.round(b.right), t: Math.round(b.top), b2: Math.round(b.bottom), w: Math.round(b.width) }; };
+    const [daySel, staySel] = [...document.querySelectorAll('.fs-results .fs-grid2 .field')].map(r);
+    const time = r(document.querySelector('.fs-results .fs-timerow .field'));
+    return {
+      daySel, staySel, time,
+      panel: { l: Math.round(panel.left), r: Math.round(panel.right) },
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       hint: document.querySelector('.fs-time-hint') && !document.querySelector('.fs-time-hint').hidden
         ? document.querySelector('.fs-time-hint').textContent : '' };
   });
+  const checkGeom = (g, label) => {
+    yes(g.daySel.r <= g.staySel.l - 2, `${label}：哪一天(${g.daySel.l}–${g.daySel.r}) 與 停留多久(${g.staySel.l}–${g.staySel.r}) 不重疊`);
+    yes(g.time.t >= g.daySel.b2 - 1, `${label}：幾點到自己一整列（在兩欄下方，不與任何欄同列）`);
+    yes(g.daySel.l >= g.panel.l - 1 && g.staySel.r <= g.panel.r + 1 && g.time.r <= g.panel.r + 1,
+      `${label}：三個欄位都在容器內（容器 ${g.panel.l}–${g.panel.r}）`);
+    yes(Math.abs(g.daySel.w - g.staySel.w) <= 2, `${label}：兩欄等寬（${g.daySel.w}/${g.staySel.w}px）`);
+    yes(!g.overflow, `${label}：頁面不橫向溢出`);
+  };
   let g = await gridCheck();
-  yes(g.cells.every((c) => c.dx <= 2), `三欄標題貼齊各自的欄位（位移 ${g.cells.map((c) => c.dx).join('/')}px）`);
-  const ws = g.cells.map((c) => c.w);
-  yes(Math.max(...ws) - Math.min(...ws) <= 3, `三欄等寬（${ws.join('/')}px）`);
-  yes(g.hint === '未設定', '時間欄位空的時候顯示「未設定」');
-  // 360px + 特大字級也不能破版
-  await page.setViewport({ width: 360, height: 780 });
-  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'xl'));
-  await sleep(500);
-  g = await gridCheck();
-  yes(!g.overflow && g.cells.every((c) => c.dx <= 2), '360px＋特大字級：不破版、標題仍對齊');
+  checkGeom(g, '390px');
+  yes(g.hint.startsWith('未設定'), `時間欄位空的時候顯示「${g.hint}」`);
+  for (const [w, fs, label] of [[360, 'xl', '360px＋特大字級'], [320, 'xl', '320px＋特大字級']]) {
+    await page.setViewport({ width: w, height: 780 });
+    await page.evaluate(async (v) => (await import('./js/prefs.js')).setPref('fs', v), fs);
+    await sleep(500);
+    g = await gridCheck();
+    checkGeom(g, label);
+  }
   await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'm'));
   await page.setViewport({ width: 390, height: 844 });
   await sleep(400);
-  await page.evaluate(() => { const t = document.querySelector('.fs-panel input[type=time]'); t.value = '12:30'; });
-  await page.evaluate(() => { const t = document.querySelector('.fs-panel input[type=time]'); t.dispatchEvent(new Event('input')); });
+  await page.evaluate(() => { const t = document.querySelector('.fs-results .fs-panel input[type=time]'); t.value = '12:30'; });
+  await page.evaluate(() => { const t = document.querySelector('.fs-results .fs-panel input[type=time]'); t.dispatchEvent(new Event('input')); });
   const hintGone = await page.evaluate(() => document.querySelector('.fs-time-hint').hidden);
   yes(hintGone, '設定時間後「未設定」提示消失、顯示時間值');
-  await page.evaluate(() => document.querySelector('.fs-panel .btn-block').click());
+  await page.evaluate(() => document.querySelector('.fs-results .fs-panel .btn-block').click());
   await sleep(600);
   const added = await page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
@@ -157,7 +168,7 @@ try {
     `座標當下就寫進去（${added.lat}, ${added.lng}），不用事後再查`);
   yes(added.day === 2 && added.startMin === 750 && added.stayMin === 60, `第 2 天、12:30、停留 60 分（day=${added.day} start=${added.startMin} stay=${added.stayMin}）`);
   yes(added.quests >= 1, `自動產生了 ${added.quests} 個拍照任務`);
-  const marked = await page.evaluate(() => document.querySelector('.fs-row .fs-add').textContent);
+  const marked = await page.evaluate(() => document.querySelector('.fs-results .fs-row .fs-add').textContent);
   yes(marked.includes('已加入'), `列上標示：${marked.trim()}`);
 
   // 日期自動延長到第 2 天之後？（原本 10/01–10/02，加到第 2 天不用延；驗不變壞即可）
@@ -170,9 +181,44 @@ try {
   // 策展庫優先：搜「羅東夜市」應出現 📖 資料庫來源
   await page.evaluate(() => { const i = document.querySelector('.fs-bar input'); i.value = '羅東夜市'; });
   await page.click('.fs-bar button');
-  await page.waitForFunction(() => document.querySelectorAll('.fs-row').length > 0, { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelectorAll('.fs-results .fs-row').length > 0, { timeout: 15000 });
   const curated = await page.evaluate(() => [...document.querySelectorAll('.fs-meta')].map((x) => x.textContent));
   yes(curated.some((m) => m.includes('資料庫')), '策展資料庫的結果排在前面（本機、零請求、有介紹）');
+
+  // 底部只有一顆「✔ 完成」；「改用手動輸入」已合併移除
+  const bottom = await page.evaluate(() => ({
+    done: [...document.querySelectorAll('button')].filter((b) => b.textContent.trim() === '✔ 完成').length,
+    legacy: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('改用手動輸入') || b.textContent.includes('完成，去調整行程')),
+    manual: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('手動輸入地點')),
+  }));
+  yes(bottom.done === 1 && !bottom.legacy, '底部統整成一顆「✔ 完成」');
+  yes(bottom.manual, '手動輸入入口常駐在搜尋頁');
+
+  // 查無結果 → 明確引導「手動輸入『查詢字』」；手動路徑能設天/時間/停留
+  await page.evaluate(() => { const i = document.querySelector('.fs-bar input'); i.value = '完全查無此店xyz'; });
+  await page.click('.fs-bar button');
+  await page.waitForFunction(() => !document.querySelector('.fs-results').textContent.includes('搜尋中'), { timeout: 15000 });
+  const noHit = await page.evaluate(() => document.querySelector('.fs-results button')?.textContent || '');
+  yes(noHit.includes('手動輸入「完全查無此店xyz」'), `查無結果時引導：「${noHit.trim()}」`);
+  await page.evaluate(() => document.querySelector('.fs-results button').click());
+  await page.waitForFunction(() => !document.querySelector('.fs-manual').hidden, { timeout: 8000 });
+  const manualState = await page.evaluate(() => ({
+    name: document.querySelector('.fs-manual input[type=text]').value,
+    dayOpts: document.querySelectorAll('.fs-manual select')[0].options.length,
+    hasTime: !!document.querySelector('.fs-manual input[type=time]'),
+  }));
+  yes(manualState.name === '完全查無此店xyz' && manualState.dayOpts >= 2 && manualState.hasTime,
+    `手動卡帶入查詢字、可設天（${manualState.dayOpts} 選項）/時間/停留`);
+  await page.evaluate(() => { document.querySelectorAll('.fs-manual select')[0].value = '2'; });
+  await page.evaluate(() => document.querySelector('.fs-manual .btn-block').click());
+  await sleep(700);
+  const manualSpot = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const sp = s.spotsOf(tid).find((x) => x.name.includes('完全查無此店'));
+    return sp && { day: sp.day, lat: sp.lat ?? null, quests: s.questsOf(sp.id).length };
+  }, tid);
+  yes(manualSpot && manualSpot.day === 2 && manualSpot.lat === null && manualSpot.quests >= 1,
+    `手動加入成功：第 ${manualSpot && manualSpot.day} 天、無座標（之後可自動補）、任務 ${manualSpot && manualSpot.quests} 個`);
 
   // ⑤ 離線
   await page.evaluate(async (u) => (await import('./js/geocode.js')).setGeoEndpoint(u), `http://localhost:${GEO}/fail`);
@@ -180,7 +226,8 @@ try {
   await page.click('.fs-bar button');
   await page.waitForFunction(() => !document.querySelector('.fs-results').textContent.includes('搜尋中'), { timeout: 15000 });
   const offlineMsg = await page.evaluate(() => document.querySelector('.fs-results').textContent);
-  yes(offlineMsg.includes('沒有網路'), `連不上時明講：「${offlineMsg.slice(0, 30)}…」`);
+  yes(offlineMsg.includes('沒有網路') && offlineMsg.includes('手動輸入'),
+    `連不上時明講並給手動退路：「${offlineMsg.replace(/\s+/g, ' ').slice(0, 34)}…」`);
 
   // ---------- ⑥ 匯出 round-trip ----------
   console.log('\n— 純文字匯出 round-trip —');
@@ -243,12 +290,12 @@ try {
   // ③ 搜尋並加入第一個景點：沒有日期時「哪一天」也要有選項
   await page.evaluate(() => { document.querySelector('.fs-bar input').value = '粉鳥林'; });
   await page.click('.fs-bar button');
-  await page.waitForSelector('.fs-row', { timeout: 15000 });
-  await page.evaluate(() => document.querySelector('.fs-row .fs-add').click());
-  await page.waitForSelector('.fs-panel');
-  const dayOpts = await page.evaluate(() => [...document.querySelectorAll('.fs-panel select')[0].options].length);
+  await page.waitForSelector('.fs-results .fs-row', { timeout: 15000 });
+  await page.evaluate(() => document.querySelector('.fs-results .fs-row .fs-add').click());
+  await page.waitForSelector('.fs-results .fs-panel');
+  const dayOpts = await page.evaluate(() => [...document.querySelectorAll('.fs-results .fs-panel select')[0].options].length);
   yes(dayOpts >= 2, `沒有日期的行程「哪一天」仍有 ${dayOpts} 個選項（NaN 天已防呆）`);
-  await page.evaluate(() => document.querySelector('.fs-panel .btn-block').click());
+  await page.evaluate(() => document.querySelector('.fs-results .fs-panel .btn-block').click());
   await sleep(700);
   const flowSpot = await page.evaluate(async (tid) => {
     const s = await import('./js/store.js');

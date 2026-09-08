@@ -203,10 +203,11 @@ try {
   await page.goto(`http://localhost:${WEB}/#/trip/${emptyTid}/plan`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.plan-list');
   const dedupe = await page.evaluate(() => ({
-    search: [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('搜尋')).length,
-    add: [...document.querySelectorAll('button')].filter((b) => /加景點|新增第一個/.test(b.textContent)).length,
+    search: [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('搜尋景點加入第')).length,
+    add: [...document.querySelectorAll('button')].filter((b) => /加景點到|新增第一個/.test(b.textContent)).length,
   }));
-  yes(dedupe.search === 1 && dedupe.add === 1, `零景點時入口各一組不重複（搜尋 ${dedupe.search}、加景點 ${dedupe.add}）`);
+  yes(dedupe.search === 1 && dedupe.add === 0,
+    `零景點時只有一顆「搜尋景點加入第 1 天」（手動入口已收進搜尋頁；加景點鈕 ${dedupe.add} 顆）`);
   // 行程頁零景點：「去安排景點」帶去調整行程，不再彈簡易輸入框
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${emptyTid}`, { waitUntil: 'networkidle0' });

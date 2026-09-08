@@ -88,7 +88,7 @@ export default async function plan(tripId) {
       // 同一個動作不要在同一頁出現兩次：加景點／搜尋的入口就在下面第 1 天那一組，
       // 空狀態只說明、不再放重複按鈕（實機回報上下兩組一模一樣）
       list.append(h('div', { class: 'empty' },
-        h('p', {}, '這趟還沒有景點 —— 用下面的「＋ 加景點」或「🔍 搜尋加入」開始')));
+        h('p', {}, '這趟還沒有景點 —— 按下面的「🔍 搜尋景點加入」開始（查不到的店，搜尋頁裡可以手動輸入）')));
     }
 
     for (let d = 1; d <= days; d++) {
@@ -102,18 +102,15 @@ export default async function plan(tripId) {
         }, '✨ 排順序') : null,
       ));
       if (!inDay.length) {
-        list.append(h('div', { class: 'plan-empty', dataset: { day: String(d) } }, '把景點拖來這裡，或按下面的「加景點」'));
+        list.append(h('div', { class: 'plan-empty', dataset: { day: String(d) } }, '把景點拖來這裡，或按下面的「搜尋景點加入」'));
       }
       inDay.forEach((s, i) => list.append(rowEl(s, d, i, inDay.length)));
-      list.append(h('div', { class: 'plan-addrow', dataset: { day: String(d) } },
-        h('button', {
-          class: 'plan-addspot',
-          onclick: () => addSpotToDay(d),
-        }, `＋ 加景點到第 ${d} 天`),
-        h('button', {
-          class: 'plan-addspot plan-search',
-          onclick: () => navigate(`/trip/${tripId}/findspot?day=${d}`),
-        }, '🔍 搜尋加入')));
+      // 手動輸入的入口收進搜尋頁（那裡有完整的名稱/天/時間/停留與「查不到」退路），
+      // 這裡一天只留一顆，不再兩顆功能重疊
+      list.append(h('button', {
+        class: 'plan-addspot', dataset: { day: String(d) },
+        onclick: () => navigate(`/trip/${tripId}/findspot?day=${d}`),
+      }, `🔍 搜尋景點加入第 ${d} 天`));
     }
 
     annotateTravel().catch(() => {});
@@ -376,20 +373,6 @@ export default async function plan(tripId) {
     }
   }
 
-  async function addSpotToDay(day) {
-    const name = await promptDialog('景點名稱', { placeholder: '例：奈良公園（可用「、」分隔多個）', okLabel: '新增' });
-    if (!name) return;
-    const { spots: gs, quests: gq } = await generateForTrip({ tripId, itineraryText: name, region: t.region || '' });
-    if (!gs.length) { toast('沒抓到景點，換個名字試試'); return; }
-    let order = store.spotsOf(tripId).filter((x) => (x.day || 1) === day).length;
-    for (const sp of gs) { sp.day = day; sp.order = order++; await store.put(sp); }
-    for (const q of gq) await store.put(q);
-    if (day > explicitDays) explicitDays = day;
-    pushDates();
-    enrichTrip(tripId).catch(() => {});
-    toast(gs.length > 1 ? `加了 ${gs.length} 個景點` : `已加入「${gs[0].name}」`);
-    draw();
-  }
 
   // ---------- 拖曳 ----------
   // 邊緣自動捲動：手指停在畫面上下緣就持續捲，越靠邊越快。

@@ -1718,10 +1718,15 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .fs-panel { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
 /* 標題與欄位一一對齊的三欄格線：每欄「標題在正上方、欄位撐滿該欄」。
    實機回報過標題等距但欄位寬度不一、整個錯位 —— 欄位一律 width:100%、min-width:0。 */
-.fs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; align-items: end; }
-.fs-grid > label { display: block; min-width: 0; }
-.fs-grid .form-label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0 0 4px; white-space: nowrap; }
-.fs-grid .field { width: 100%; min-width: 0; padding: 10px 6px; font-size: 0.95rem; }
+/* v1.51.4：iOS 原生 time input 實寬遠大於 Chrome，三欄同列實機重疊（回報兩次）。
+   改成「哪一天/停留多久」兩欄一列＋「幾點到」整列 —— 寧可多佔高度也不重疊。 */
+.fs-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.fs-grid2 > label, .fs-timerow { display: block; min-width: 0; }
+.fs-grid2 .form-label, .fs-timerow .form-label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0 0 4px; white-space: nowrap; }
+.fs-grid2 .field { width: 100%; min-width: 0; padding: 10px 6px; font-size: 0.95rem; }
+.fs-timerow { margin-bottom: 10px; }
+.fs-timerow .field { width: 100%; min-width: 0; box-sizing: border-box; }
+.fs-manual .field { margin-bottom: 4px; }
 .fs-time { position: relative; display: block; min-width: 0; }
 .fs-time .field:not(.hasval) { color: transparent; }   /* 沒值時把 --:-- 也藏掉，只留提示 */
 .fs-time-hint {

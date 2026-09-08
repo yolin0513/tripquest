@@ -1,11 +1,14 @@
-// 搜尋景點加入行程（規劃行程・第 1 批）—— 三代理 3:0 決議的主線：
+// 搜尋景點加入行程（規劃行程）—— 三代理 3:0 決議的主線：
 // 搜尋（策展庫優先 → Nominatim 候選清單）→ 挑一個 → 設定第幾天/幾點到/停留 → 加入。
 //
-// 決議裡的三個原則，改動時不要弄回去：
+// 原則（改動時不要弄回去）：
 // 1. **按鈕觸發才查**，不做打字即搜 —— Nominatim 使用規範明文禁止 autocomplete 式查詢。
 // 2. **座標跟著候選走**：加入的當下就把候選的座標寫進景點（不繞純文字、不事後重查）。
-// 3. **誠實**：這裡的資料是 OpenStreetMap —— 景點很齊、巷弄小店常常查不到，查不到就
-//    引導手動輸入，不假裝找得到。
+// 3. **誠實**：景點很齊、巷弄小店常常查不到 —— 查不到就引導「手動輸入」，不假裝找得到。
+// 4. **手動輸入就在這一頁**（v1.51.4 起）：調整行程頁的手動加景點入口已移除，
+//    這裡的手動卡是唯一的手動路徑，必須能設天/時間/停留，不能是死路。
+// 5. 設定欄的版面：**「幾點到」自己一整列** —— iOS Safari 的原生 time input 實際寬度
+//    比 Chrome 大很多，三欄同列在實機上會重疊（回報過兩次）。寧可多佔高度。
 //
 // 這一頁是規劃用（年輕人操作），密度可以高；產出給長輩看的行程頁維持既有原則。
 
@@ -26,8 +29,7 @@ export default async function findspot(tripId, query = {}) {
 
   let day = Math.max(1, parseInt(query.day, 10) || 1);
   // 「幫我規劃」建立的行程可以沒有日期 —— new Date('') 是 Invalid Date，
-  // 算出 NaN 天的話「哪一天」下拉會變成空的、加入的景點 day=NaN 在任何頁面
-  // 都看不到（實機回報「建好了卻什麼都不能做」的元兇）。每一步都要防 NaN。
+  // 每一步都要防 NaN（實機回報過「建好了卻什麼都不能做」）。
   function tripDays() {
     if (!t.startDate || !t.endDate) return 1;
     const n = Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000) + 1;
@@ -53,20 +55,89 @@ export default async function findspot(tripId, query = {}) {
   const addedLine = h('p', { class: 'form-hint center', hidden: true });
   let addedCount = 0;
 
+  // ---------- 手動輸入（常駐在頁尾；查不到／離線時的主要退路） ----------
+  const manualName = h('input', { class: 'field', type: 'text', maxlength: 40, placeholder: '地點名稱' });
+  const manualPanelHost = h('div');
+  const manualCard = h('div', { class: 'fs-row fs-manual', hidden: true },
+    h('div', { class: 'fs-name', style: 'margin-bottom:6px' }, '✍️ 手動輸入地點'),
+    h('p', { class: 'fs-meta', style: 'margin:0 0 8px' }, '免費地圖查不到的店也能加。之後可以在「調整行程」按「自動找出景點位置」補座標。'),
+    manualName,
+    manualPanelHost,
+  );
+  let manualPanel = null;
+  function openManual(prefill = '') {
+    manualCard.hidden = false;
+    if (prefill) manualName.value = prefill;
+    if (!manualPanel) {
+      manualPanel = settingsPanel(
+        (d, startMin, stayMin) => {
+          const name = manualName.value.trim();
+          if (!name) { toast('先填地點名稱'); manualName.focus(); return; }
+          addSpot({ name, manual: true }, d, startMin, stayMin, manualCard);
+          manualName.value = '';
+        },
+        () => `加入「${manualName.value.trim() || '這個地點'}」`,
+      );
+      manualPanelHost.append(manualPanel);
+    }
+    manualCard.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (!prefill) manualName.focus();
+  }
+  const manualToggle = h('button', {
+    class: 'btn btn-ghost btn-block', style: 'margin-top:10px',
+    onclick: () => openManual(),
+  }, '✍️ 查不到嗎？手動輸入地點');
+
   render(h('div', { class: 'page compact' },
     h('div', { class: 'fs-bar' }, input, searchBtn),
-    h('p', { class: 'form-hint' }, '輸入名稱或地名後按「搜尋」。景點與地標都查得到；巷弄小店在免費地圖上常常沒有，查不到就用下面的手動輸入。'),
+    h('p', { class: 'form-hint' }, '輸入名稱或地名後按「搜尋」。景點與地標都查得到；巷弄小店在免費地圖上常常沒有，查不到就用手動輸入。'),
     results,
     addedLine,
-    h('div', { class: 'row2', style: 'margin-top:18px' },
-      h('button', { class: 'btn btn-soft', onclick: () => navigate(`/trip/${tripId}/plan`) }, '✔ 完成，去調整行程'),
-      h('button', {
-        class: 'btn btn-ghost',
-        onclick: () => navigate(`/trip/${tripId}/plan`),   // 手動輸入在調整行程頁的「＋ 加景點」
-      }, '改用手動輸入'),
-    ),
+    manualCard,
+    manualToggle,
+    h('button', {
+      class: 'btn btn-soft btn-block', style: 'margin-top:12px',
+      onclick: () => navigate(`/trip/${tripId}/plan`),
+    }, '✔ 完成'),
   ));
   input.focus();
+
+  // 共用的設定版面：「哪一天／停留多久」一列（兩個 select 窄螢幕也安全），
+  // 「幾點到」自己一整列（iOS 原生 time input 的實際寬度壓不進三欄 —— 重疊回報過兩次）。
+  function settingsPanel(onAdd, labelFn) {
+    const nDays = Math.max(1, totalDays()) + 1;
+    const daySel = h('select', { class: 'field' },
+      ...Array.from({ length: nDays }, (_, i) => i + 1).map((d) =>
+        h('option', { value: d, selected: d === day }, `第 ${d} 天`)));
+    const staySel = h('select', { class: 'field' },
+      ...stayOptions(60).map((o) => h('option', { value: o.v, selected: o.v === '60' }, o.label)));
+    const timeField = h('input', { class: 'field', type: 'time' });
+    const timeHint = h('span', { class: 'fs-time-hint' }, '未設定（可不填）');
+    const syncTime = () => {
+      timeField.classList.toggle('hasval', !!timeField.value);
+      timeHint.hidden = !!timeField.value;
+    };
+    timeField.addEventListener('input', syncTime);
+    timeField.addEventListener('change', syncTime);
+    syncTime();
+    const addBtn = h('button', {
+      class: 'btn btn-primary btn-block',
+      onclick: () => {
+        addBtn.textContent = labelFn();
+        onAdd(Math.max(1, parseInt(daySel.value, 10) || day || 1),
+          minOfInput(timeField.value), staySel.value ? +staySel.value : null);
+      },
+    }, labelFn());
+    return h('div', { class: 'fs-panel' },
+      h('div', { class: 'fs-grid2' },
+        h('label', {}, h('span', { class: 'form-label' }, '哪一天'), daySel),
+        h('label', {}, h('span', { class: 'form-label' }, '停留多久'), staySel)),
+      h('label', { class: 'fs-timerow' },
+        h('span', { class: 'form-label' }, '幾點到'),
+        h('span', { class: 'fs-time' }, timeField, timeHint)),
+      addBtn,
+    );
+  }
 
   async function doSearch() {
     const q = input.value.trim();
@@ -76,15 +147,16 @@ export default async function findspot(tripId, query = {}) {
     try {
       // 策展庫（本機、零成本、有中文介紹）優先，Nominatim 補
       const curated = (await searchPlaces(q).catch(() => []))
-        .slice(0, 3)
         .filter((p) => p.lat != null && p.lng != null)
+        .slice(0, 3)
         .map((p) => ({ name: p.name, fullName: [p.cityName, p.district].filter(Boolean).join(' '),
           lat: p.lat, lng: p.lng, tag: '📖 景點資料庫', curated: p }));
       const osm = await geocodeSearch(q, { region: t.region || '' });
       if (osm === null && !curated.length) {
         results.replaceChildren(h('div', { class: 'empty' },
           h('p', {}, '沒有網路，搜尋需要連線'),
-          h('p', { class: 'form-hint' }, '可以先按「改用手動輸入」把名字打進行程，之後再補位置。')));
+          h('button', { class: 'btn btn-primary', style: 'margin-top:8px', onclick: () => openManual(q) },
+            `✍️ 手動輸入「${q}」`)));
         return;
       }
       // 去重：同名且距離 <300m 視為同一個
@@ -96,7 +168,9 @@ export default async function findspot(tripId, query = {}) {
       if (!list.length) {
         results.replaceChildren(h('div', { class: 'empty' },
           h('p', {}, `找不到「${q}」`),
-          h('p', { class: 'form-hint' }, '免費地圖查不到不代表店不存在 —— 換個寫法（去掉分店名）再試，或改用手動輸入。')));
+          h('p', { class: 'form-hint' }, '免費地圖查不到不代表店不存在 —— 換個寫法（去掉分店名）再試，或直接手動輸入。'),
+          h('button', { class: 'btn btn-primary', style: 'margin-top:8px', onclick: () => openManual(q) },
+            `✍️ 手動輸入「${q}」`)));
         return;
       }
       drawResults(list);
@@ -110,7 +184,7 @@ export default async function findspot(tripId, query = {}) {
       const meta = [cand.tag, cand.fullName, dist != null ? `離行程約 ${fmtDist(dist)}` : '']
         .filter(Boolean).join('｜');
       const row = h('div', { class: 'fs-row' });
-      const addBtn = h('button', { class: 'btn btn-primary fs-add', onclick: () => openSettings() }, '＋ 加入');
+      const addBtn = h('button', { class: 'btn btn-primary fs-add', onclick: () => togglePanel() }, '＋ 加入');
       const head = h('div', { class: 'fs-head' },
         h('div', { class: 'fs-main' },
           h('div', { class: 'fs-name' }, cand.name),
@@ -120,37 +194,12 @@ export default async function findspot(tripId, query = {}) {
       row.append(head);
 
       let panel = null;
-      function openSettings() {
+      function togglePanel() {
         if (panel) { panel.remove(); panel = null; addBtn.textContent = '＋ 加入'; return; }
         addBtn.textContent = '收合';
-        const nDays = Math.max(1, totalDays()) + 1;      // 永遠多給一天可選，且絕不為空
-        const daySel = h('select', { class: 'field' },
-          ...Array.from({ length: nDays }, (_, i) => i + 1).map((d) =>
-            h('option', { value: d, selected: d === day }, `第 ${d} 天`)));
-        // 空的 time 欄位在 iOS 上是一片空白，看不出可以點 —— 蓋一層「未設定」，
-        // 有值就顯示值（欄位文字在沒值時設為透明，Chrome 的 --:-- 也一起蓋掉）
-        const timeField = h('input', { class: 'field', type: 'time' });
-        const timeHint = h('span', { class: 'fs-time-hint' }, '未設定');
-        const syncTime = () => {
-          timeField.classList.toggle('hasval', !!timeField.value);
-          timeHint.hidden = !!timeField.value;
-        };
-        timeField.addEventListener('input', syncTime);
-        timeField.addEventListener('change', syncTime);
-        syncTime();
-        const staySel = h('select', { class: 'field' },
-          ...stayOptions(60).map((o) => h('option', { value: o.v, selected: o.v === '60' }, o.label)));
-        panel = h('div', { class: 'fs-panel' },
-          h('div', { class: 'fs-grid' },
-            h('label', {}, h('span', { class: 'form-label' }, '哪一天'), daySel),
-            h('label', {}, h('span', { class: 'form-label' }, '幾點到'),
-              h('span', { class: 'fs-time' }, timeField, timeHint)),
-            h('label', {}, h('span', { class: 'form-label' }, '停留多久'), staySel)),
-          h('button', {
-            class: 'btn btn-primary btn-block',
-            onclick: () => addSpot(cand, Math.max(1, parseInt(daySel.value, 10) || day || 1),
-              minOfInput(timeField.value), staySel.value ? +staySel.value : null, row),
-          }, `加入「${cand.name}」`),
+        panel = settingsPanel(
+          (d, startMin, stayMin) => addSpot(cand, d, startMin, stayMin, row),
+          () => `加入「${cand.name}」`,
         );
         row.append(panel);
       }
@@ -165,12 +214,14 @@ export default async function findspot(tripId, query = {}) {
       tripId, region: t.region || '',
       items: [{ name: cand.name, day: d, startMin, stayMin }],
     });
-    if (!gs.length) { toast('建立失敗，請改用手動輸入'); return; }
+    if (!gs.length) { toast('建立失敗，換個名字再試一次'); return; }
     const order = store.spotsOf(tripId).filter((x) => (x.day || 1) === d).length;
     for (const sp of gs) {
       sp.day = d; sp.order = order;
       sp.startMin = startMin; sp.stayMin = stayMin;
-      if (sp.lat == null || sp.lng == null) { sp.lat = cand.lat; sp.lng = cand.lng; sp.geoSrc = cand.curated ? 'db' : 'osm'; }
+      if ((sp.lat == null || sp.lng == null) && cand.lat != null) {
+        sp.lat = cand.lat; sp.lng = cand.lng; sp.geoSrc = cand.curated ? 'db' : 'osm';
+      }
       await store.put(sp);
     }
     for (const q of gq) await store.put(q);
@@ -184,11 +235,14 @@ export default async function findspot(tripId, query = {}) {
     addedCount++;
     addedLine.hidden = false;
     addedLine.textContent = `已加入 ${addedCount} 個景點，可以繼續搜尋下一個`;
-    row.classList.add('fs-done');
-    row.querySelector('.fs-panel')?.remove();
-    const btn = row.querySelector('.fs-add');
-    btn.textContent = `✔ 已加入第 ${d} 天`;
-    btn.disabled = true;
-    toast(`已加入「${cand.name}」`);
+    if (row && !row.classList.contains('fs-manual')) {
+      row.classList.add('fs-done');
+      row.querySelector('.fs-panel')?.remove();
+      const btn = row.querySelector('.fs-add');
+      if (btn) { btn.textContent = `✔ 已加入第 ${d} 天`; btn.disabled = true; }
+    }
+    toast(cand.manual
+      ? `已加入「${cand.name}」（沒有座標，之後可按「自動找出位置」補）`
+      : `已加入「${cand.name}」`);
   }
 }
