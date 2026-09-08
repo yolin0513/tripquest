@@ -348,10 +348,11 @@ try {
   await page.waitForSelector('.scrub-knob');
   await sleep(1000);
   await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => /播放預覽/.test(b.textContent))?.click());
-  await sleep(1200);
+  // 內建曲目要下載+解碼（非同步），等到真的開始響再數
+  await page.waitForFunction(() => window.__ctxs.some((c) => c.state === 'running'), { timeout: 20000 });
   const playingCtx = await page.evaluate(() => window.__ctxs.filter((c) => c.state === 'running').length);
   await page.evaluate((tid) => { location.hash = `#/trip/${tid}`; }, tidV);
-  await sleep(1200);
+  await page.waitForFunction(() => window.__ctxs.every((c) => c.state !== 'running'), { timeout: 8000 }).catch(() => {});
   const leftCtx = await page.evaluate(() => window.__ctxs.map((c) => c.state));
   yes(playingCtx >= 1, `播放中有 ${playingCtx} 個 AudioContext 在響`);
   yes(!leftCtx.includes('running'), `離開回憶頁後配樂全部停了（${JSON.stringify(leftCtx)}）`, leftCtx.join(','));

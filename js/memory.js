@@ -24,6 +24,14 @@ import * as store from './store.js';
 import * as db from './db.js';
 import { blobURL } from './photos.js';
 import { createMusic, musicFromFile } from './music.js';
+import { trackMusic, isTrackStyle, musicCredit } from './tracks.js';
+
+// 依選項回傳配樂物件：內建曲目（'track:xxx'）→ 檔案播放（循環）；其餘 → 程序合成
+async function musicFor(style, total) {
+  if (!style || style === 'none') return null;
+  if (isTrackStyle(style)) return await trackMusic(style.slice(6));
+  return createMusic(style, { duration: total });
+}
 import { aiPayload } from './aicontent.js';
 
 const W = 1080, H = 1920;
@@ -250,7 +258,8 @@ export async function buildTimeline(tripId, opts = {}) {
     });
   });
   if (tMap) segs.push({ kind: 'map', dur: tMap, spots, trip, totalSpots: store.spotsOf(tripId).length, _layout: mapLayout });
-  segs.push({ kind: 'outro', dur: T_OUTRO, trip, stats, line: aiTx.videoOutro || '', ai: usesAi });
+  segs.push({ kind: 'outro', dur: T_OUTRO, trip, stats, line: aiTx.videoOutro || '', ai: usesAi,
+    credit: opts.musicFile ? null : musicCredit(opts.music || null) });
 
   let acc = 0;
   for (const s of segs) { s.start = acc; acc += s.dur; }
@@ -872,6 +881,13 @@ function drawOutro(ctx, seg, t) {
     { maxW: W - 140, maxLines: 1, size: 40, min: 26, color: 'rgba(255,255,255,0.6)' }) + 22;
   centerText(ctx, 'TripQuest', W / 2, y + 74,
     { maxW: W - 140, maxLines: 2, size: 34, min: 24, weight: 700, color: 'rgba(255,255,255,0.4)' });
+  if (seg.credit) {
+    // CC BY 4.0 的標示：影片會被單獨分享，片尾是唯一跟著影片走的出處
+    centerText(ctx, seg.credit.line1, W / 2, H - 128,
+      { maxW: W - 90, maxLines: 1, size: 28, min: 20, color: 'rgba(255,255,255,0.45)' });
+    centerText(ctx, seg.credit.line2, W / 2, H - 84,
+      { maxW: W - 90, maxLines: 1, size: 24, min: 17, color: 'rgba(255,255,255,0.36)' });
+  }
   ctx.restore();
 }
 
@@ -910,6 +926,8 @@ export async function createPlayer(canvas, tripId, opts = {}) {
   timeline.frames.prefetch(0);
 
   let iv = 0, pf = 0, playing = false, onEnd = null, music = null, musicStyle = null;
+  let playGen = 0;    // play() 里有 await（下載+解碼內建曲目）——期間按了暫停/停止/換頁，
+                      // 世代一變，await 回來就把載好的音樂丟掉，不能開播（v147shots 抓到的競態）
   let offset = 0;                 // 暫停 / 未播時停在哪一秒
   let wall = 0;                   // 播放中：offset 對應的 performance.now()
 
@@ -945,14 +963,21 @@ export async function createPlayer(canvas, tripId, opts = {}) {
       onEnd = cb;
       if (offset >= timeline.total - 0.05) offset = 0;      // 播完再按 = 重播
       const want = style && style !== 'none' ? style : null;
+      const gen = ++playGen;
       if (music && musicStyle !== want) { music.stop(); music = null; musicStyle = null; }
+      const outroSeg = timeline.segs.find((x) => x.kind === 'outro');
+      if (outroSeg) outroSeg.credit = musicCredit(want);
       if (!music && want) {
-        music = createMusic(want, { duration: timeline.total });
+        const m = await musicFor(want, timeline.total).catch(() => null);
+        if (gen !== playGen) { try { m?.stop(); } catch { /* noop */ } return; }
+        music = m;
         musicStyle = want;
         music?.progress(clamp01(offset / timeline.total));
         await music?.start().catch(() => {});
+        if (gen !== playGen) { try { music?.stop(); } catch { /* noop */ } music = null; musicStyle = null; return; }
       } else if (music) {
         await music.resume?.().catch(() => {});
+        if (gen !== playGen) { music?.pause?.(); return; }
       }
       playing = true; wall = performance.now();
       stopClocks();
@@ -960,12 +985,13 @@ export async function createPlayer(canvas, tripId, opts = {}) {
       pf = setInterval(pump, 300);
     },
     pause() {
+      playGen++;                                 // 連「還在載入配樂」的播放也一起取消
       if (!playing) return;
       offset = now(); playing = false;
       stopClocks();
       music?.pause?.();
     },
-    stop() { playing = false; offset = 0; stopClocks(); music?.stop(); music = null; musicStyle = null; },
+    stop() { playGen++; playing = false; offset = 0; stopClocks(); music?.stop(); music = null; musicStyle = null; },
     seek(t) {
       offset = Math.max(0, Math.min(timeline.total, t));
       if (playing) wall = performance.now();
@@ -1006,7 +1032,7 @@ export async function recordVideo(tripId, opts = {}) {
   let music = null;
   try {
     if (opts.musicFile) music = await musicFromFile(opts.musicFile);
-    else if (opts.music && opts.music !== 'none') music = createMusic(opts.music, { duration: timeline.total });
+    else music = await musicFor(opts.music, timeline.total);
   } catch { music = null; }
   if (music?.stream) for (const tr of music.stream.getAudioTracks()) stream.addTrack(tr);
 

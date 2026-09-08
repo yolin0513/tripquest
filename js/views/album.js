@@ -1,22 +1,22 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, confirmDialog, fmtBytes } from '../ui.js';
+import { h, toast, confirmDialog, fmtBytes, modal } from '../ui.js';
 import { navigate } from '../router.js';
 import {
   createPlayer, buildAlbumPage, recordVideo, videoSupported,
   collectSlides, estimateDuration, LENGTHS, DEFAULT_LENGTH, ALBUM_INLINE_LIMIT,
 } from '../memory.js';
 import { STYLES } from '../music.js';
+import { TRACKS, trackMusic, ensureTrackCached, isTrackStyle, TRACK_ARTIST, TRACK_LICENSE_URL } from '../tracks.js';
 import { downloadBlob, nativeShare } from '../share.js';
 import { publishAlbum, unpublishAlbum, albumInfo, canPublish } from '../albumshare.js';
 import { exportPhotos, exportSummary } from '../photoexport.js';
 
-const MUSIC_OPTS = [
-  { id: 'gentle', label: STYLES.gentle.label + '（推薦）' },
+const SYNTH_OPTS = [
+  { id: 'gentle', label: STYLES.gentle.label },
   { id: 'bright', label: STYLES.bright.label },
   { id: 'cinematic', label: STYLES.cinematic.label },
   { id: 'folk', label: STYLES.folk.label },
-  { id: 'none', label: '🔇 沒有音樂' },
 ];
 
 const mmss = (sec) => {
@@ -35,7 +35,7 @@ export default async function album(tripId) {
     return;
   }
 
-  let music = store.getRaw(tripId)?.musicStyle || 'gentle';
+  let music = store.getRaw(tripId)?.musicStyle || 'track:warm';
   let musicFile = null;
   let length = store.getRaw(tripId)?.videoLength || DEFAULT_LENGTH;
 
@@ -87,14 +87,81 @@ export default async function album(tripId) {
     meta.textContent = `${e.photos} 張照片 · 約 ${mmss(e.seconds)}`;
   }
 
+  // ---------- 配樂試聽 ----------
+  let preview = null, previewId = null;
+  function stopPreview(fast = false) {
+    const pv = preview; preview = null;
+    const changed = previewId != null; previewId = null;
+    if (pv) { try { fast ? pv.stop() : pv.fadeOutStop(0.25); } catch { /* noop */ } }
+    if (changed) drawMusicPick();
+  }
+  async function togglePreview(tk) {
+    if (previewId === tk.id) { stopPreview(); return; }
+    stopPreview(true);
+    if (player?.playing) { player.pause(); clearInterval(barIv); syncBtn(); }
+    previewId = tk.id;
+    drawMusicPick();
+    try {
+      const m = await trackMusic(tk.id, { volume: 0.6 });
+      if (previewId !== tk.id) { m?.stop(); return; }     // 載入期間使用者已按停
+      preview = m;
+      await m.start();
+    } catch {
+      previewId = null; drawMusicPick();
+      toast('試聽不了（可能沒網路）。合成音樂不用下載，離線也有。', 4200);
+    }
+  }
+
+  async function pickTrack(tk) {
+    music = 'track:' + tk.id; musicFile = null;
+    drawMusicPick();
+    store.patch(tripId, { musicStyle: music }).catch(() => {});
+    try { await ensureTrackCached(tk.id); }               // 先下載進快取 → 之後離線也能錄
+    catch { toast('配樂下載不了（可能沒網路）。錄影時若還是不行，會自動改用合成音樂。', 4600); }
+  }
+
+  function showMusicSources() {
+    stopPreview();
+    modal({
+      title: '🎼 音樂來源與授權',
+      closeX: true,
+      body: h('div', { class: 'music-src' },
+        h('p', {}, `內建配樂都是 ${TRACK_ARTIST} 的作品，採 Creative Commons BY 4.0 授權（可自由使用，須標示出處）。App 有做轉檔壓縮；影片片尾會自動標示曲名、作者與授權。`),
+        h('ul', {}, ...TRACKS.map((tk) => h('li', {}, `${tk.emoji} ${tk.title}（${tk.mood}）`))),
+        h('p', {}, h('a', { href: TRACK_LICENSE_URL, target: '_blank', rel: 'noopener' }, '授權條款：creativecommons.org/licenses/by/4.0')),
+        h('p', {}, h('a', { href: 'https://incompetech.com', target: '_blank', rel: 'noopener' }, '曲目來源：incompetech.com')),
+        h('p', { class: 'form-hint' }, '小提醒：這些曲子在 YouTube 很常見，分享影片偶爾會遇到「誤判」的版權聲明 —— 音樂是合法授權的，片尾有標示，可以放心申訴。'),
+      ),
+      actions: [{ label: '知道了', value: true }],
+    });
+  }
+
   function drawMusicPick() {
     musicPick.replaceChildren(
-      ...MUSIC_OPTS.map((o) => h('button', {
+      h('p', { class: 'mp-head' }, '🎵 內建配樂（真實錄音；第一次點會下載，之後離線也能用）'),
+      ...TRACKS.map((tk) => h('div', { class: 'mp-row' },
+        h('button', {
+          class: music === 'track:' + tk.id ? 'on' : '',
+          onclick: () => pickTrack(tk),
+        }, `${tk.emoji} ${tk.mood} · ${tk.title}`),
+        h('button', {
+          class: 'mp-prev' + (previewId === tk.id ? ' on' : ''),
+          'aria-label': previewId === tk.id ? '停止試聽' : '試聽',
+          onclick: () => togglePreview(tk),
+        }, previewId === tk.id ? '⏹' : '▶'),
+      )),
+      h('p', { class: 'mp-head' }, '🎛️ 合成音樂（不用下載，離線一定有）'),
+      ...SYNTH_OPTS.map((o) => h('button', {
         class: music === o.id ? 'on' : '',
-        onclick: () => { music = o.id; musicFile = null; drawMusicPick(); store.patch(tripId, { musicStyle: o.id }).catch(() => {}); },
+        onclick: () => { music = o.id; musicFile = null; stopPreview(); drawMusicPick(); store.patch(tripId, { musicStyle: o.id }).catch(() => {}); },
       }, o.label)),
-      h('button', { class: music === 'file' ? 'on' : '', onclick: () => fileInput.click() },
+      h('button', { class: music === 'file' ? 'on' : '', onclick: () => { stopPreview(); fileInput.click(); } },
         musicFile ? '🎧 ' + musicFile.name : '🎧 用我手機裡的音樂'),
+      h('button', {
+        class: music === 'none' ? 'on' : '',
+        onclick: () => { music = 'none'; musicFile = null; stopPreview(); drawMusicPick(); store.patch(tripId, { musicStyle: 'none' }).catch(() => {}); },
+      }, '🔇 沒有音樂'),
+      h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:2px', onclick: showMusicSources }, '🎼 音樂來源與授權'),
     );
   }
 
@@ -178,6 +245,7 @@ export default async function album(tripId) {
     window.removeEventListener('hashchange', stopOnLeave);
     clearInterval(barIv);
     if (player) { try { player.destroy(); } catch { /* noop */ } player = null; }
+    stopPreview(true);
   };
   window.addEventListener('hashchange', stopOnLeave);
 
@@ -234,6 +302,7 @@ export default async function album(tripId) {
     return player;
   }
   async function togglePlay() {
+    stopPreview();
     const p = await ensurePlayer();
     if (p.playing) { p.pause(); clearInterval(barIv); updateBar(); syncBtn(); return; }
     clearInterval(barIv);
@@ -349,6 +418,7 @@ export default async function album(tripId) {
 
   // ---------- 錄影 ----------
   async function doVideo() {
+    stopPreview();
     if (player?.playing) { player.pause(); clearInterval(barIv); syncBtn(); }
     const est = estimateDuration(tripId, length);
     const overlay = h('div', { class: 'record-overlay' },
@@ -358,10 +428,15 @@ export default async function album(tripId) {
     );
     document.body.append(overlay);
     const pct = overlay.querySelector('.record-pct');
+    let recMusic = musicFile ? 'none' : music;
+    if (!musicFile && isTrackStyle(recMusic)) {
+      try { await ensureTrackCached(recMusic.slice(6)); }
+      catch { recMusic = 'gentle'; toast('配樂下載不了（沒網路），這支先用合成音樂。', 4600); }
+    }
     try {
       const { blob, ext } = await recordVideo(tripId, {
         length,
-        music: musicFile ? 'none' : music,
+        music: recMusic,
         musicFile,
         onProgress: (r) => { pct.textContent = Math.round(r * 100) + '%'; },
       });

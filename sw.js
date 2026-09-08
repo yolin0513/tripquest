@@ -3,8 +3,11 @@
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  */
-const VERSION = 'tripquest-v1.53.1';
+const VERSION = 'tripquest-v1.54.0';
 const SHELL = `${VERSION}-shell`;
+// 內建配樂：獨立快取、跨版本保留（檔名即版本，內容不會變）—— 15MB 不進 SHELL，
+// 不預快取、點了才下載；升版不重抓。
+const MUSIC_CACHE = 'tq-music-v1';
 
 const SHELL_ASSETS = [
   './',
@@ -57,6 +60,7 @@ const SHELL_ASSETS = [
   './js/enrich.js',
   './js/memory.js',
   './js/music.js',
+  './js/tracks.js',
   './js/albumshare.js',
   './js/photoexport.js',
   './js/worker-image.js',
@@ -120,7 +124,7 @@ self.addEventListener('message', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION) && k !== MUSIC_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -137,6 +141,20 @@ self.addEventListener('fetch', (e) => {
   if (request.mode === 'navigate') {
     e.respondWith(
       fetch(request).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // 內建配樂：cache-first 到獨立快取（不佔 SHELL、不隨版本重抓、離線可用）
+  if (url.pathname.includes('/media/music/')) {
+    e.respondWith(
+      caches.open(MUSIC_CACHE).then(async (c) => {
+        const hit = await c.match(request);
+        if (hit) return hit;
+        const res = await fetch(request);
+        if (res && res.ok) c.put(request, res.clone());
+        return res;
+      })
     );
     return;
   }
