@@ -118,15 +118,23 @@ export default async function plan(tripId) {
 
     annotateTravel().catch(() => {});
 
+    // 實機回報四顆擠一列全在折行 —— 拆兩層：天數控制一列（語意上接在最後一天
+    // 下面）、工具一列；交通方式改成分段控制（開車｜步行），不把說明寫進按鈕
     list.append(h('div', { class: 'plan-day-tools' },
       h('button', { class: 'btn btn-soft', onclick: addDay }, '＋ 多加一天'),
-      h('button', { class: 'btn btn-soft', onclick: exportText }, '📤 匯出成文字'),
-      h('button', { class: 'btn btn-soft', onclick: async () => {
-        const cur = store.getRaw(tripId)?.travelMode === 'walk' ? 'walk' : 'drive';
-        await store.patch(tripId, { travelMode: cur === 'walk' ? 'drive' : 'walk' });
-        draw();
-      } }, MODES[(t.travelMode === 'walk' ? 'walk' : 'drive')].label + '（點我切換）'),
       h('button', { class: 'btn btn-ghost', onclick: removeLastDay }, '－ 減一天'),
+    ));
+    list.append(h('div', { class: 'plan-tools2' },
+      h('button', { class: 'btn btn-soft', onclick: exportText }, '📤 匯出文字'),
+      h('div', { class: 'seg plan-modeseg', role: 'group', 'aria-label': '移動方式' },
+        ...['drive', 'walk'].map((k) => h('button', {
+          class: dayMode() === k ? 'on' : '',
+          onclick: async () => {
+            if (dayMode() === k) return;
+            await store.patch(tripId, { travelMode: k });
+            draw();
+          },
+        }, MODES[k].label))),
     ));
     list.append(h('button', {
       class: 'btn btn-primary btn-block btn-big', style: 'margin-top:18px',

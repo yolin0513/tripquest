@@ -143,16 +143,60 @@ try {
     eta: [...document.querySelectorAll('.plan-eta:not([hidden])')].map((x) => x.textContent),
     warn: document.querySelectorAll('.plan-eta.warn').length,
     opt: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('排順序')),
-    mode: [...document.querySelectorAll('button')].find((b) => b.textContent.includes('點我切換'))?.textContent || '',
+    seg: [...document.querySelectorAll('.plan-modeseg button')].map((b) => b.textContent.trim()),
     note: document.querySelector('.plan-src-note')?.textContent || '',
     pins: document.querySelectorAll('.plan-pin').length,
   }));
   yes(ui.travel.length === 4 && ui.travel[0].includes('約'), `兩點之間有移動小標 ×${ui.travel.length}（${ui.travel[0].trim()}）`);
   yes(ui.eta.some((x) => x.includes('約') && x.includes('到')), '沒固定時間的點顯示「約 HH:MM 到」');
   yes(ui.opt, '有「✨ 排順序」按鈕');
-  yes(ui.mode.includes('開車'), `交通方式切換鈕：${ui.mode.trim()}`);
+  yes(ui.seg.some((x) => x.includes('開車')) && ui.seg.some((x) => x.includes('步行')),
+    `交通方式分段控制：${ui.seg.join('｜')}`);
   yes(ui.note.includes('估計'), `來源標示誠實：「${ui.note.slice(0, 28)}…」`);
   yes(ui.pins === 5, '每一列都有 📌 釘住鈕');
+
+  // 工具區排版（實機回報四顆擠一列全折行）：兩層、全部不折行，360px＋特大字級也要
+  const toolCheck = () => page.evaluate(() => {
+    const q = (t) => [...document.querySelectorAll('.plan-day-tools .btn, .plan-tools2 .btn, .plan-modeseg button')]
+      .find((b) => b.textContent.includes(t));
+    const rowTop = (el) => Math.round(el.getBoundingClientRect().top);
+    // 「不折行」＝文字沒有被擠成多行（scrollWidth 不超寬）；按鈕因字級變高是允許的
+    const noWrap = [...document.querySelectorAll('.plan-day-tools .btn, .plan-tools2 .btn, .plan-modeseg button')]
+      .map((b) => ({ t: b.textContent.trim(), oneLine: b.scrollWidth <= b.clientWidth + 1 }));
+    const seg = document.querySelector('.plan-modeseg');
+    return {
+      dayRowSame: Math.abs(rowTop(q('多加一天')) - rowTop(q('減一天'))) <= 3,
+      toolRowSame: Math.abs(rowTop(q('匯出文字')) - rowTop(seg)) <= 10,
+      separated: rowTop(q('匯出文字')) - rowTop(q('多加一天')) > 20,
+      wrapped: noWrap.filter((x) => !x.oneLine).map((x) => x.t),
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    };
+  });
+  let tc = await toolCheck();
+  yes(tc.dayRowSame && tc.toolRowSame && tc.separated, '天數控制與工具分成兩層（各自同一列）');
+  yes(!tc.wrapped.length && !tc.overflow, '390px：所有工具按鈕不折行', tc.wrapped.join('、'));
+  await page.setViewport({ width: 360, height: 780 });
+  await page.evaluate(() => { const { setPref } = window.__prefs || {}; });
+  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'xl'));
+  await sleep(500);
+  tc = await toolCheck();
+  // 窄螢幕允許「整顆按鈕」換到下一列，但文字本身不可折行、頁面不可橫向溢出
+  yes(!tc.wrapped.length && !tc.overflow && tc.dayRowSame,
+    '360px＋特大字級：文字不折行、不橫向溢出（整顆換列是允許的）', tc.wrapped.join('、'));
+  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'm'));
+  await page.setViewport({ width: 390, height: 844 });
+  await sleep(400);
+  // 分段控制：點「步行」→ 移動方式改變、重繪
+  await page.evaluate(() => [...document.querySelectorAll('.plan-modeseg button')].find((b) => b.textContent.includes('步行')).click());
+  await sleep(900);
+  const modeNow = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    return { mode: s.getRaw(tid).travelMode,
+      on: [...document.querySelectorAll('.plan-modeseg button')].find((b) => b.classList.contains('on'))?.textContent || '' };
+  }, ids.tid);
+  yes(modeNow.mode === 'walk' && modeNow.on.includes('步行'), `分段控制切到步行（travelMode=${modeNow.mode}）`);
+  await page.evaluate(() => [...document.querySelectorAll('.plan-modeseg button')].find((b) => b.textContent.includes('開車')).click());
+  await sleep(600);
 
   // 排順序 → 預覽 → 套用
   const hitsBefore = tableHits;

@@ -127,13 +127,24 @@ export default async function findspot(tripId, query = {}) {
         const daySel = h('select', { class: 'field' },
           ...Array.from({ length: nDays }, (_, i) => i + 1).map((d) =>
             h('option', { value: d, selected: d === day }, `第 ${d} 天`)));
+        // 空的 time 欄位在 iOS 上是一片空白，看不出可以點 —— 蓋一層「未設定」，
+        // 有值就顯示值（欄位文字在沒值時設為透明，Chrome 的 --:-- 也一起蓋掉）
         const timeField = h('input', { class: 'field', type: 'time' });
+        const timeHint = h('span', { class: 'fs-time-hint' }, '未設定');
+        const syncTime = () => {
+          timeField.classList.toggle('hasval', !!timeField.value);
+          timeHint.hidden = !!timeField.value;
+        };
+        timeField.addEventListener('input', syncTime);
+        timeField.addEventListener('change', syncTime);
+        syncTime();
         const staySel = h('select', { class: 'field' },
           ...stayOptions(60).map((o) => h('option', { value: o.v, selected: o.v === '60' }, o.label)));
         panel = h('div', { class: 'fs-panel' },
           h('div', { class: 'fs-grid' },
             h('label', {}, h('span', { class: 'form-label' }, '哪一天'), daySel),
-            h('label', {}, h('span', { class: 'form-label' }, '幾點到'), timeField),
+            h('label', {}, h('span', { class: 'form-label' }, '幾點到'),
+              h('span', { class: 'fs-time' }, timeField, timeHint)),
             h('label', {}, h('span', { class: 'form-label' }, '停留多久'), staySel)),
           h('button', {
             class: 'btn btn-primary btn-block',

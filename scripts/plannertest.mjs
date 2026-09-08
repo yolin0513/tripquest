@@ -112,7 +112,37 @@ try {
   await page.waitForSelector('.fs-panel');
   const dayVal = await page.evaluate(() => document.querySelector('.fs-panel select').value);
   yes(dayVal === '2', '「哪一天」預選了網址帶的第 2 天');
+
+  // 排版：三欄標題與欄位一一對齊、欄寬一致；時間欄位空的時候要看得出「未設定」
+  const gridCheck = () => page.evaluate(() => {
+    const cells = [...document.querySelectorAll('.fs-grid > label')].map((lb) => {
+      const label = lb.querySelector('.form-label').getBoundingClientRect();
+      const field = (lb.querySelector('.field') || lb.querySelector('.fs-time')).getBoundingClientRect();
+      return { t: lb.querySelector('.form-label').textContent, dx: Math.abs(Math.round(label.left - field.left)), w: Math.round(field.width) };
+    });
+    return { cells,
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      hint: document.querySelector('.fs-time-hint') && !document.querySelector('.fs-time-hint').hidden
+        ? document.querySelector('.fs-time-hint').textContent : '' };
+  });
+  let g = await gridCheck();
+  yes(g.cells.every((c) => c.dx <= 2), `三欄標題貼齊各自的欄位（位移 ${g.cells.map((c) => c.dx).join('/')}px）`);
+  const ws = g.cells.map((c) => c.w);
+  yes(Math.max(...ws) - Math.min(...ws) <= 3, `三欄等寬（${ws.join('/')}px）`);
+  yes(g.hint === '未設定', '時間欄位空的時候顯示「未設定」');
+  // 360px + 特大字級也不能破版
+  await page.setViewport({ width: 360, height: 780 });
+  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'xl'));
+  await sleep(500);
+  g = await gridCheck();
+  yes(!g.overflow && g.cells.every((c) => c.dx <= 2), '360px＋特大字級：不破版、標題仍對齊');
+  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'm'));
+  await page.setViewport({ width: 390, height: 844 });
+  await sleep(400);
   await page.evaluate(() => { const t = document.querySelector('.fs-panel input[type=time]'); t.value = '12:30'; });
+  await page.evaluate(() => { const t = document.querySelector('.fs-panel input[type=time]'); t.dispatchEvent(new Event('input')); });
+  const hintGone = await page.evaluate(() => document.querySelector('.fs-time-hint').hidden);
+  yes(hintGone, '設定時間後「未設定」提示消失、顯示時間值');
   await page.evaluate(() => document.querySelector('.fs-panel .btn-block').click());
   await sleep(600);
   const added = await page.evaluate(async (tid) => {

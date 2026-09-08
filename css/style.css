@@ -1716,9 +1716,18 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .fs-meta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
 .fs-add { min-height: 42px; white-space: nowrap; flex: none; }
 .fs-panel { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
-.fs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.fs-grid label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.fs-grid .field { min-width: 0; padding: 8px; }
+/* 標題與欄位一一對齊的三欄格線：每欄「標題在正上方、欄位撐滿該欄」。
+   實機回報過標題等距但欄位寬度不一、整個錯位 —— 欄位一律 width:100%、min-width:0。 */
+.fs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; align-items: end; }
+.fs-grid > label { display: block; min-width: 0; }
+.fs-grid .form-label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0 0 4px; white-space: nowrap; }
+.fs-grid .field { width: 100%; min-width: 0; padding: 10px 6px; font-size: 0.95rem; }
+.fs-time { position: relative; display: block; min-width: 0; }
+.fs-time .field:not(.hasval) { color: transparent; }   /* 沒值時把 --:-- 也藏掉，只留提示 */
+.fs-time-hint {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-start;
+  padding-left: 10px; color: var(--muted); pointer-events: none; font-size: 0.95rem;
+}
 .plan-addrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .plan-addrow .plan-search { white-space: nowrap; }
 
@@ -1735,3 +1744,12 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* 名稱沒填時的視覺提示（只捲動＋toast 在手機上常被忽略） */
 .field-attn { outline: 3px solid #ffb14e; outline-offset: 2px; animation: attn 0.5s ease 2; }
 @keyframes attn { 50% { outline-color: transparent; } }
+
+/* 調整行程工具區：兩層、全部不折行 */
+.plan-day-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.plan-tools2 { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: stretch; }
+.plan-tools2 > .btn { flex: 1 1 auto; }
+.plan-modeseg { flex: 0 0 auto; }
+.plan-day-tools .btn, .plan-tools2 .btn, .plan-modeseg button { white-space: nowrap; }
+.plan-modeseg { display: flex; }
+.plan-modeseg button { min-height: 48px; padding: 6px 10px; font-size: 0.98rem; }
