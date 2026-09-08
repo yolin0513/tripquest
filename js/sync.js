@@ -59,6 +59,7 @@ export function adapterForGroup(groupId, secret) {
     },
     async push(records) {
       const r = await fetch(b + '/push' + q, {
+        signal: timeout(15000),
         method: 'POST', headers: { ...H, 'content-type': 'application/json' },
         body: JSON.stringify({ records }),
       });
@@ -66,7 +67,7 @@ export function adapterForGroup(groupId, secret) {
       return r.json();
     },
     async pull(since = 0) {
-      const r = await fetch(b + '/pull' + q + '&since=' + since, { headers: H });
+      const r = await fetch(b + '/pull' + q + '&since=' + since, { headers: H, signal: timeout(15000) });
       if (!r.ok) throw new Error('pull ' + r.status);
       return r.json();
     },
@@ -83,7 +84,7 @@ export function adapterForGroup(groupId, secret) {
       if (!r.ok) throw new Error('putBlob ' + r.status);
     },
     async getBlob(hash) {
-      const r = await fetch(b + '/blob/' + hash + q, { headers: H });
+      const r = await fetch(b + '/blob/' + hash + q, { headers: H, signal: timeout(30000) });
       return r.ok ? r.blob() : null;
     },
     // 公開相簿：發布 / 收回。發布後任何人拿到網址都看得到，所以只由使用者主動觸發。

@@ -16,6 +16,9 @@ const CODE = {
   85: ['🌨️', '陣雪'], 86: ['❄️', '強陣雪'],
   95: ['⛈️', '雷雨'], 96: ['⛈️', '雷雨冰雹'], 99: ['⛈️', '強雷雨冰雹'],
 };
+// 逾時：查不到就走「重試」畫面，不能讓轉圈永遠轉（健檢修）
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 export function wxIcon(code) { return (CODE[code] || ['🌡️', ''])[0]; }
 export function wxText(code) { return (CODE[code] || ['', '—'])[1]; }
 
@@ -49,7 +52,7 @@ export async function forecast(lat, lng) {
   u.searchParams.set('timezone', 'auto');
   u.searchParams.set('forecast_days', '16');
   try {
-    const res = await fetch(u);
+    const res = await fetch(u, { signal: _to(12000) });
     if (!res.ok) throw new Error('http ' + res.status);
     const d = await res.json();
     const dl = d.daily || {};

@@ -70,6 +70,8 @@ function addr(tags) {
 }
 
 // 回傳 { at, stale, results: [{id,kind,name,lat,lng,dist,addr,phone}] }
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false } = {}) {
   const cached = readCache(lat, lng);
   if (cached && !fresh && Date.now() - cached.at < 3 * 86400000) {
@@ -79,7 +81,7 @@ export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false 
   const body = 'data=' + encodeURIComponent(buildQuery(lat, lng, radius));
   for (const ep of ENDPOINTS) {
     try {
-      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: _to(12000) });
       if (!res.ok) continue;
       const d = await res.json();
       const items = [];

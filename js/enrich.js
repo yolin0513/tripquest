@@ -23,6 +23,8 @@ import { sha256Hex } from './ids.js';
 const THUMB = 640;          // 景點示意圖寬度（.quest-focus-photo 最大用到 240px 高）
 const DISH_THUMB = 480;     // 美食示意圖小一點就夠
 const POOL_THUMB = 480;     // 同景點其他任務的備用圖，小一點省空間
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 export const ENRICH_VERSION = 3;   // 改抓法時 +1，舊行程會自動重抓
 
 const inFlight = new Map();
@@ -39,7 +41,7 @@ async function api(host, params) {
     u.search = new URLSearchParams({
       action: 'query', format: 'json', formatversion: '2', origin: '*', ...params,
     }).toString();
-    const r = await fetch(u.toString(), { headers: { accept: 'application/json' } });
+    const r = await fetch(u.toString(), { headers: { accept: 'application/json' }, signal: _to(12000) });
     netHits++;                       // 有回應就算連得上（就算內容是「查無此頁」）
     if (!r.ok) return null;
     return await r.json();
@@ -214,7 +216,7 @@ async function langLinks(lang, title) {
 // ---------- 下載並存進 IndexedDB（之後離線也看得到）----------
 async function storeImage(url) {
   try {
-    const res = await fetch(url, { mode: 'cors' });
+    const res = await fetch(url, { mode: 'cors', signal: _to(20000) });
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob.type.startsWith('image/') || blob.size < 1500) return null;

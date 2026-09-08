@@ -15,7 +15,7 @@ import * as db from './db.js';
 import { haversine } from './geo.js';
 
 let OSRM = (typeof window !== 'undefined' && window.__TQ_OSRM_ENDPOINT) || 'https://routing.openstreetmap.de';
-export function setOsrmEndpoint(u) { OSRM = u; }
+
 
 export const MODES = {
   drive: { key: 'drive', label: '🚗 開車', profile: 'routed-car/table/v1/driving' },
@@ -196,7 +196,7 @@ export function fmtDur(sec) {
 }
 
 // ---- 順序建議：📌 是錨（位置不動），錨之間的自由段做最近鄰 + 2-opt ----
-export function totalTravelSec(orderIdx, sec) {
+function totalTravelSec(orderIdx, sec) {
   let t = 0;
   for (let i = 1; i < orderIdx.length; i++) t += sec[orderIdx[i - 1]][orderIdx[i]] || 0;
   return t;

@@ -314,18 +314,7 @@ export function inferType(name) {
 function typeEmoji(type) {
   return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🏮', park: '🌳', mountain: '🥾', water: '🌊', museum: '🖼️', street: '🏘️', station: '🚉', tower: '🗼', themepark: '🎡' })[type];
 }
-export function templateQuests(name, type) {
-  if (!_templates) return [];
-  const fill = (t) => ({ ...t, hint: t.hint.replaceAll('{spot}', name), title: t.title.replaceAll('{spot}', name) });
-  const byType = (type && _templates.byType?.[type]) ? _templates.byType[type].map(fill) : [];
-  const generic = (_templates.generic || []).map(fill);
-  const out = [...byType];
-  for (const g of generic) {
-    if (out.length >= 4) break;
-    if (!out.some((o) => o.title === g.title)) out.push(g);
-  }
-  return out.slice(0, 5).map((q, i) => ({ ...q, source: 'template', order: i }));
-}
+
 
 // ---------- 可選：Wikipedia 補圖（enrich.js 也會用）----------
 export async function enrichSpotFromWiki(spot) {

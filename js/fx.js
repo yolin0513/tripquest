@@ -24,11 +24,13 @@ function readCache() {
 }
 
 // 回傳 { base:'USD', rates:{TWD:32.1,...}, updatedAt, stale }
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 export async function getRates() {
   const cached = readCache();
   if (cached && Date.now() - cached.fetchedAt < 12 * 3600000) return { ...cached, stale: false };
   try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: _to(8000) });
     if (!res.ok) throw new Error('http ' + res.status);
     const d = await res.json();
     if (d.result !== 'success' || !d.rates) throw new Error('bad payload');

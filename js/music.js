@@ -290,8 +290,12 @@ export async function musicFromFile(file) {
     async fadeOutStop(sec = 1.2) {
       try { gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + sec); } catch { /* noop */ }
       await new Promise((r) => setTimeout(r, sec * 1000 + 100));
-      try { src.stop(); await ctx.close(); } catch { /* noop */ }
+      try { src.stop(); } catch { /* noop */ }
+      try { await ctx.close(); } catch { /* noop */ }          // src.stop() 丟例外也要關 ctx
     },
-    stop() { try { src.stop(); ctx.close(); } catch { /* noop */ } },
+    stop() {
+      try { src.stop(); } catch { /* noop */ }
+      try { ctx.close(); } catch { /* noop */ }
+    },
   };
 }

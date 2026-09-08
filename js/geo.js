@@ -32,6 +32,8 @@ export function currentPosition({ timeout = 9000, maxAgeMs = 60000 } = {}) {
 }
 
 // Nominatim 反向地理編碼（免金鑰，需 User-Agent，約 1 req/s）。結果快取。
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 export async function reverseGeocode(lat, lng) {
   const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
   try {
@@ -40,7 +42,7 @@ export async function reverseGeocode(lat, lng) {
   } catch { /* noop */ }
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&accept-language=zh-TW`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: _to(8000) });
     if (!res.ok) return null;
     const d = await res.json();
     const a = d.address || {};

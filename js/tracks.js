@@ -83,7 +83,9 @@ async function trackBuffer(id) {
   let res = null;
   try { res = await (await caches.open(MUSIC_CACHE)).match(url); } catch { /* 無 Cache API 就直接抓 */ }
   if (!res) {
-    res = await fetch(url);
+    // 逾時 25 秒：掛住的下載會讓「準備中…」覆蓋層永遠轉；斷開讓呼叫端退回合成音樂
+    const to = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(25000) : undefined;
+    res = await fetch(url, { signal: to });
     if (!res.ok) throw new Error('下載失敗 ' + res.status);
     try { await (await caches.open(MUSIC_CACHE)).put(url, res.clone()); } catch { /* noop */ }
   }
