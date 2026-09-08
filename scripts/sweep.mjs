@@ -245,8 +245,7 @@ try {
   ok('離線後恢復連線正常');
 
   // ---------- 7. 內建配樂：R2 線上供裝（21 首都要在） ----------
-  console.log('
-— 配樂（R2）—');
+  console.log('\n— 配樂（R2）—');
   const musChk = await page.evaluate(async () => {
     const T = await import('./js/tracks.js');
     const base = 'https://tripquest.yolin0513.workers.dev/music/';
