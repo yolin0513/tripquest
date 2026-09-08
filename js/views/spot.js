@@ -12,7 +12,7 @@ import * as store from '../store.js';
 import { h, toast, modal, promptDialog, confirmDialog } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { enrichSpot } from '../enrich.js';
-import { spotTimes, stayOptions, minOfInput } from '../spottime.js';
+import { spotTimes, stayOptions } from '../spottime.js';
 
 export default async function spot(tripId, spotId) {
   const s = store.get(spotId);
@@ -29,8 +29,19 @@ export default async function spot(tripId, spotId) {
     class: 'field', type: 'text', value: s.name || '', maxlength: 40, placeholder: '景點名稱',
   });
 
-  // 時間與停留沿用匯入流程那一套（原生時間選擇器 ＋ 下拉，非預設值也補成選項）
-  const timeField = h('input', { class: 'field spot-time', type: 'time', value: tm.startTime });
+  // 「幾點到」跟搜尋頁同一套：時/分 雙下拉，預設「未設定」→ 沒動就存 null。
+  // iOS 的原生 time input 在空值時會把「當下時間」畫在欄位上（v1.51.5 修過搜尋頁，
+  // 這頁是同族問題）。匯入的時間可能是 13:05 這種不在固定選項裡的分鐘，補成選項。
+  const curH = Number.isFinite(tm.startMin) ? Math.floor(tm.startMin / 60) : null;
+  const curM = Number.isFinite(tm.startMin) ? tm.startMin % 60 : null;
+  const minOpts = [...new Set([0, 5, 10, 15, 20, 30, 40, 45, 50, ...(curM != null ? [curM] : [])])].sort((a, b) => a - b);
+  const hourSel = h('select', { class: 'field' },
+    h('option', { value: '', selected: curH == null }, '未設定'),
+    ...Array.from({ length: 24 }, (_, hh) => h('option', { value: hh, selected: hh === curH }, `${hh} 時`)));
+  const minSel = h('select', { class: 'field', disabled: curH == null },
+    ...minOpts.map((mm) => h('option', { value: mm, selected: mm === (curM ?? 0) }, `${String(mm).padStart(2, '0')} 分`)));
+  hourSel.addEventListener('change', () => { minSel.disabled = hourSel.value === ''; });
+  const pickedMin = () => (hourSel.value === '' ? null : (+hourSel.value) * 60 + (+minSel.value || 0));
 
   // 位置：路線圖靠這個。查不到的店家可以手動貼 Google 地圖連結或座標。
   const posLine = h('div', { class: 'form-hint', style: 'margin:2px 0 8px' });
@@ -75,7 +86,7 @@ export default async function spot(tripId, spotId) {
   const save = async () => {
     const name = nameField.value.trim();
     if (!name) { toast('名字不能空白'); nameField.focus(); return; }
-    const startMin = minOfInput(timeField.value);
+    const startMin = pickedMin();
     const stayMin = stayField.value ? parseInt(stayField.value, 10) : null;
     const renamed = name !== s.name;
     await store.patch(spotId, {
@@ -163,10 +174,11 @@ export default async function spot(tripId, spotId) {
 
   render(h('div', { class: 'page form compact' },
     field('景點名稱', nameField),
-    field('幾點到', h('div', { class: 'spot-time-row' }, timeField,
+    field('幾點到', h('div', { class: 'spot-time-row' },
+      h('div', { class: 'fs-hm spot-time' }, hourSel, minSel),
       h('button', {
         class: 'btn btn-sm', type: 'button',
-        onclick: () => { timeField.value = ''; },
+        onclick: () => { hourSel.value = ''; minSel.disabled = true; },
       }, '清除'))),
     field('停留多久', stayField),
     h('div', { class: 'form-field' },

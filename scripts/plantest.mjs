@@ -223,7 +223,11 @@ try {
     hasMap: !!document.querySelector('a[href*="maps"]'),
     hasQuestList: !!document.querySelector('.qrow'),
     hasAddPhoto: !!document.querySelector('.addphoto-row, .addphoto-icons'),
-    time: document.querySelector('.spot-time').value,
+    time: (() => {
+      const [hh, mm] = document.querySelectorAll('.spot-time select');
+      return hh.value === '' ? '' : `${String(+hh.value).padStart(2, '0')}:${String(+mm.value).padStart(2, '0')}`;
+    })(),
+    nativeTime: !!document.querySelector('.spot-time-row input[type=time]'),
     stay: document.querySelector('.spot-stay').selectedOptions[0].textContent,
   }));
   eq(sv.labels.join('／'), '景點名稱／幾點到／停留多久／地圖位置', `欄位：${sv.labels.join('、')}（v1.48 起多了地圖位置）`);
@@ -240,7 +244,8 @@ try {
   yes(sv.buttons.some((t) => t.includes('刪除這個景點')), '有「刪除這個景點」');
 
   // 時間與停留：非預設值不能變成「不設定」
-  eq(sv.time, '11:23', `時間帶進來了（${sv.time}）`);
+  eq(sv.time, '11:23', `時間帶進來了（11:23 這種非標準分鐘也補成選項；實際 ${sv.time}）`);
+  yes(!sv.nativeTime, 'v1.53.1: 設定頁改時/分雙下拉，不再用原生 time input');
   eq(sv.stay, '3.1 小時', `停留 187 分不是預設選項，但正確顯示成「${sv.stay}」（不是「不設定」）`);
 
   // 改名 + 改時間 → 行程頁要同步更新
@@ -248,9 +253,11 @@ try {
     const n = document.querySelector('.field[type=text]');
     n.value = '香草菲菲（改過）';
     n.dispatchEvent(new Event('input', { bubbles: true }));
-    const t = document.querySelector('.spot-time');
-    t.value = '18:30';
-    t.dispatchEvent(new Event('change', { bubbles: true }));
+    const [hh, mm] = document.querySelectorAll('.spot-time select');
+    hh.value = '18';
+    hh.dispatchEvent(new Event('change', { bubbles: true }));
+    mm.value = '30';
+    mm.dispatchEvent(new Event('change', { bubbles: true }));
     const s = document.querySelector('.spot-stay');
     s.value = '90';
     s.dispatchEvent(new Event('change', { bubbles: true }));

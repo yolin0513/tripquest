@@ -151,10 +151,18 @@ try {
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/spot/${ids.sid}`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.spot-time');
+  // 景點設定頁也是 時/分 雙下拉（同族問題：iOS 原生 time input 空值畫成當下時間）
+  const blank = await page.evaluate(() => {
+    const [hh, mm] = document.querySelectorAll('.spot-time select');
+    return { native: !!document.querySelector('.spot-time-row input[type=time]'),
+      shown: hh.options[hh.selectedIndex].textContent, minDisabled: mm.disabled };
+  });
+  yes(!blank.native && blank.shown === '未設定' && blank.minDisabled,
+    `設定頁沒有原生 time input，空值顯示「${blank.shown}」（分下拉先鎖住）`);
   await page.evaluate(() => {
-    const el = document.querySelector('.spot-time');
-    el.value = '07:30';
-    el.dispatchEvent(new Event('input', { bubbles: true }));
+    const [hh, mm] = document.querySelectorAll('.spot-time select');
+    hh.value = '7'; hh.dispatchEvent(new Event('change', { bubbles: true }));
+    mm.value = '30';
   });
   await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '儲存').click());
   await page.waitForSelector('.modal-card', { timeout: 8000 });
@@ -181,6 +189,27 @@ try {
   yes(after.gone && after.photoKept && after.n === 2,
     `沒照片的夜間任務換掉、有照片的保留（現在：${after.titles.join('、')}）`);
   yes(after.allFit, '換上的任務都符合新時段');
+
+  // 資料面：設定頁完全不碰「幾點到」→ 存的是 null，不是當下時間；
+  // 匯入的 13:05（非固定分鐘選項）進設定頁再存，不能走樣
+  const keep = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const s1 = uuid(), s2 = uuid();
+    await s.put({ id: s1, type: 'spot', tripId: tid, name: '沒設時間的店', day: 1, order: 5 });
+    await s.put({ id: s2, type: 'spot', tripId: tid, name: '13:05 的店', day: 1, order: 6, startMin: 13 * 60 + 5, stayMin: 30 });
+    return { tid, s1, s2 };
+  }, ids.tid);
+  for (const [sid, expect, label] of [[keep.s1, null, '沒動「幾點到」→ 存進去是 null，不是當下時間'],
+    [keep.s2, 785, '13:05 進設定頁再存，分鐘不走樣（785 分）']]) {
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/#/trip/${keep.tid}/spot/${sid}`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.spot-time');
+    await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '儲存').click());
+    await sleep(700);
+    const got = await page.evaluate(async (sid) => (await import('./js/store.js')).getRaw(sid).startMin, sid);
+    yes(got === expect, `${label}（實際 ${got}）`);
+  }
 
   console.log('\n主題與任務測試結束');
 } catch (e) {
