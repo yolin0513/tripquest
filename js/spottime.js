@@ -31,8 +31,10 @@ export function stayOptions(currentMin) {
 
 export function fmtHHMM(min) {
   if (!Number.isFinite(min)) return '';
+  // 結束時間可能跨過午夜（23:30 停 2 小時）—— 換算成隔天並標示，不出現 25:30
+  const d = Math.floor(min / 1440);
   const h = Math.floor(min / 60) % 24, m = min % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return `${d >= 1 ? (d === 1 ? '隔天 ' : d + ' 天後 ') : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 // <input type="time"> 的值 → 分鐘數

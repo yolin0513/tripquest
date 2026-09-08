@@ -1738,6 +1738,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 
 /* ---- 規劃第 2 批：時刻鏈、移動時間、排順序 ---- */
 .plan-travel-note { font-size: 0.82rem; color: var(--muted); padding: 2px 0 4px 54px; pointer-events: none; }
+.plan-travel-note.far { color: #ffb14e; padding-right: 8px; line-height: 1.45; }
 .plan-eta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
 .plan-eta.warn { color: #ffb14e; font-weight: 700; }
 .plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }

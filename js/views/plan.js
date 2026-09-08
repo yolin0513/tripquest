@@ -7,7 +7,7 @@
 
 import { setTop, render } from '../app.js';
 import { spotTimes } from '../spottime.js';
-import { travelMatrix, chainTimes, suggestOrder, totalTravelSec, fmtMin, fmtDur } from '../route.js';
+import { travelMatrix, chainTimes, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
 import * as store from '../store.js';
 import { h, mount, toast, promptDialog, confirmDialog, modal } from '../ui.js';
 import { navigate, back } from '../router.js';
@@ -303,16 +303,22 @@ export default async function plan(tripId) {
         if (!row) return;
         // 兩點之間的移動小標（插在這一列前面）
         row.querySelector('.plan-travel-note')?.remove();
-        if (i > 0 && c.travel != null) {
-          const chip = h('div', { class: 'plan-travel-note' },
-            `↓ 移動約 ${fmtDur(c.travel)}`);
-          row.prepend(chip);
+        if (i > 0 && c.longHaul) {
+          // 跨區：開車估算沒有意義（北海道到京都是搭飛機/新幹線），明講、不給數字
+          row.prepend(h('div', { class: 'plan-travel-note far' },
+            c.longHaul.crossSea
+              ? `✈️ 跨海移動（直線約 ${c.longHaul.km} 公里）— 開車到不了，交通方式請自行安排`
+              : `✈️ 跨區移動（直線約 ${c.longHaul.km} 公里）— 通常搭飛機或高鐵／新幹線，交通請自行安排`));
+        } else if (i > 0 && c.travel != null) {
+          row.prepend(h('div', { class: 'plan-travel-note' }, `↓ 移動約 ${fmtDur(c.travel)}`));
         }
         const eta = row.querySelector('.plan-eta');
         if (!eta) return;
         const bits = [];
-        if (c.arrive != null && !c.fixed) bits.push(`約 ${fmtMin(c.arrive)} 到`);
-        if (c.late > 0) bits.push(`⚠ 比預定晚 ${c.late} 分`);
+        if (c.arrive != null && !c.fixed) {
+          bits.push(c.leave != null ? `約 ${fmtRange(c.arrive, c.leave)}` : `約 ${fmtMin(c.arrive)} 到`);
+        }
+        if (c.late > 0) bits.push(`⚠ 比預定晚 ${c.late >= 60 ? fmtDur(c.late * 60) : c.late + ' 分'}`);
         if (c.stayAssumed) bits.push('（停留未設，先用 1 小時推算）');
         eta.textContent = bits.join('　');
         eta.hidden = !bits.length;
@@ -340,11 +346,26 @@ export default async function plan(tripId) {
     const r = suggestOrder(inDay, { sec: m.sec });
     if (!r.changed) { toast('目前的順序已經很順了，不用改'); return; }
     const seq = r.order.map((i) => inDay[i]);
+    // 跨區段的「開車時間」不算進總移動（算了只會誤導）；另外提醒這天可能太滿
+    const legStats = (ord) => {
+      let sec = 0, far = 0;
+      for (let i = 1; i < ord.length; i++) {
+        const t = m.sec[ord[i - 1]][ord[i]];
+        if (longHaul(inDay[ord[i - 1]], inDay[ord[i]], t)) far++;
+        else sec += t || 0;
+      }
+      return { sec, far };
+    };
+    const sb = legStats(inDay.map((_, i) => i)), sa = legStats(r.order);
     const ok = await modal({
       title: `第 ${d} 天的建議順序`,
       body: h('div', {},
         h('p', { class: 'sm muted', style: 'margin:0 0 8px' },
-          `總移動約 ${fmtDur(r.before)} → ${fmtDur(r.after)}（粗略估計）`),
+          sa.far
+            ? `跨區以外的移動約 ${fmtDur(sa.sec)}（粗略估計，另有 ${sa.far} 段跨區移動未計）`
+            : `總移動約 ${fmtDur(sb.sec)} → ${fmtDur(sa.sec)}（粗略估計）`),
+        sa.far ? h('p', { class: 'plan-eta warn', style: 'margin:0 0 8px' },
+          '⚠ 這一天有跨區移動，可能安排得太滿 —— 交通方式與時間請自行確認。') : null,
         h('ol', { class: 'opt-list' }, ...seq.map((sp) => h('li', {},
           `${sp.pinned ? '📌 ' : ''}${sp.emoji || '📍'} ${sp.name}`))),
         h('p', { class: 'form-hint' }, '📌 釘住的位置不會動。套用後還是可以拖拉調整。'),

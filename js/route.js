@@ -102,6 +102,40 @@ export async function travelMatrix(pts, mode = 'drive') {
   return { src: 'osrm', ...remap(canonSec) };
 }
 
+// ---- 跨區移動 ----
+// 北海道到京都給「開車 19 小時」只會誤導 —— 實際是搭飛機或新幹線。
+// 直線超過 LONGHAUL_KM、或路網時間超過 LONGHAUL_SEC 的段落視為「跨區」：
+// 不顯示開車時間、不往下推算時刻、排順序的總移動也不把它算進去。
+export const LONGHAUL_KM = 150;
+export const LONGHAUL_SEC = 4 * 3600;
+
+// 粗略的「島」分類（純經緯度框，不引入相依）：只拿來把提示寫準一點
+// （跨海 → 開車到不了）。分不出來就回 null，用一般文案，不影響判斷本身。
+function islandOf(p) {
+  const { lat, lng } = p;
+  if (lat == null || lng == null) return null;
+  if (lng >= 122.5) {                                      // 日本一帶
+    if (lng >= 126.5 && lng <= 129.5 && lat <= 28) return 'jp-okinawa';
+    if (lat >= 41.4) return 'jp-hokkaido';                 // 津輕海峽以北
+    if (lat >= 30) return 'jp-main';                       // 本州/四國/九州（橋隧相連）
+    return null;
+  }
+  if (lng >= 119.9 && lng <= 122.1 && lat >= 21.8 && lat <= 25.4) return 'tw-main';
+  if (lng >= 119.3 && lng <= 119.75 && lat >= 23.1 && lat <= 23.8) return 'tw-penghu';
+  if (lng >= 118.1 && lng <= 118.6 && lat >= 24.3 && lat <= 24.65) return 'tw-kinmen';
+  if (lng >= 119.85 && lng <= 120.1 && lat >= 25.9 && lat <= 26.4) return 'tw-matsu';
+  return null;
+}
+
+// 回 null（一般段落）或 { km, crossSea }
+export function longHaul(a, b, travelSec = null) {
+  if (!a || !b || a.lat == null || b.lat == null) return null;
+  const km = haversine(a, b) / 1000;
+  if (km < LONGHAUL_KM && !(travelSec != null && travelSec > LONGHAUL_SEC)) return null;
+  const ia = islandOf(a), ib = islandOf(b);
+  return { km: Math.round(km), crossSea: !!(ia && ib && ia !== ib) };
+}
+
 // ---- 時刻鏈 ----
 // 一天的景點依 order 排好丟進來，回傳每個景點的推算到達/離開與兩點之間的移動秒數。
 // 規則：
@@ -114,11 +148,13 @@ export function chainTimes(spots, matrix, mode = 'drive') {
   for (let i = 0; i < spots.length; i++) {
     const s = spots[i];
     const fixed = Number.isFinite(s.startMin);
-    let travel = null;
+    let travel = null, far = null;
     if (i > 0) {
       const a = spots[i - 1], b = s;
       if (a.lat != null && b.lat != null) {
         travel = matrix ? matrix.sec[i - 1][i] : estimateSec(a, b, mode);
+        far = longHaul(a, b, travel);
+        if (far) travel = null;      // 跨區：開車數字沒有參考價值，不顯示、也不拿來推下一站
       }
     }
     let arrive = null, late = 0;
@@ -130,15 +166,28 @@ export function chainTimes(spots, matrix, mode = 'drive') {
     }
     const stay = Number.isFinite(s.stayMin) ? s.stayMin : (arrive != null ? 60 : null);
     const leave = arrive != null && stay != null ? arrive + stay : null;
-    out.push({ id: s.id, arrive, leave, fixed, late, travel, stayAssumed: arrive != null && !Number.isFinite(s.stayMin) });
+    out.push({ id: s.id, arrive, leave, fixed, late, travel, longHaul: far,
+      stayAssumed: arrive != null && !Number.isFinite(s.stayMin) });
     cur = leave != null ? leave : cur;
   }
   return out;
 }
 
+// 推算時刻可能跨日（例：23:30 到、停 90 分 → 離開是隔天 01:00）。
+// 「27:12」不是時間 —— 超過 24:00 一律換算成隔天並明確標示。
 export function fmtMin(min) {
   if (min == null) return '';
-  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const d = Math.floor(min / 1440);
+  const hm = `${String(Math.floor((min % 1440) / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  return d <= 0 ? hm : (d === 1 ? `隔天 ${hm}` : `${d} 天後 ${hm}`);
+}
+// 「到–離開」區間：兩端在同一天（含同為隔天）時，天的標示只寫一次
+export function fmtRange(a, b) {
+  if (a == null) return '';
+  if (b == null) return fmtMin(a);
+  const da = Math.floor(a / 1440), db = Math.floor(b / 1440);
+  if (da === db && da > 0) return `${fmtMin(a)}–${fmtMin(b).replace(/^.+ /, '')}`;
+  return `${fmtMin(a)}–${fmtMin(b)}`;
 }
 export function fmtDur(sec) {
   const m = Math.round(sec / 60);

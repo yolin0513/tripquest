@@ -132,6 +132,34 @@ try {
   yes(down.src === 'est' && down.sec > 0, `OSRM 掛掉 → 退回直線×係數（${Math.round(down.sec / 60)} 分），功能不壞`);
   osrmDown = false;
 
+  // 跨日與跨區（實機回報：新千歲→伏見稻荷顯示「移動約 19 小時」「約 27:12 到」）
+  const xday = await page.evaluate(async () => {
+    const r = await import('./js/route.js');
+    const chitose = { lat: 42.7752, lng: 141.6923 }, fushimi = { lat: 34.9671, lng: 135.7727 };
+    const taipei = { lat: 25.048, lng: 121.517 }, kaohsiung = { lat: 22.62, lng: 120.31 };
+    const taichung = { lat: 24.147, lng: 120.673 };
+    const chain = r.chainTimes([
+      { id: 'a', lat: chitose.lat, lng: chitose.lng, startMin: 420, stayMin: 60 },
+      { id: 'b', lat: fushimi.lat, lng: fushimi.lng, stayMin: 60 },
+    ], null, 'drive');
+    return {
+      f2712: r.fmtMin(27 * 60 + 12), f2d: r.fmtMin(50 * 60),
+      range: r.fmtRange(23 * 60 + 30, 25 * 60), range2: r.fmtRange(25 * 60, 25 * 60 + 30),
+      jp: r.longHaul(chitose, fushimi), tw: r.longHaul(taipei, kaohsiung), near: r.longHaul(taipei, taichung),
+      c1: { a: chain[1].arrive, t: chain[1].travel, far: !!chain[1].longHaul },
+    };
+  });
+  yes(xday.f2712 === '隔天 03:12', `27:12 顯示成「${xday.f2712}」（不出現 24 以上的時數）`);
+  yes(xday.f2d === '2 天後 02:00', `跨兩天顯示成「${xday.f2d}」`);
+  yes(xday.range === '23:30–隔天 01:00' && xday.range2 === '隔天 01:00–01:30',
+    `區間跨日標示：「${xday.range}」「${xday.range2}」`);
+  yes(xday.jp && xday.jp.crossSea && xday.jp.km > 800,
+    `新千歲→伏見稻荷判為跨海（直線 ${xday.jp && xday.jp.km} 公里）`);
+  yes(xday.tw && !xday.tw.crossSea, `台北→高雄（${xday.tw && xday.tw.km} 公里）標跨區、不標跨海`);
+  yes(!xday.near, '台北→台中（~130 公里）照常給開車估算，不標跨區');
+  yes(xday.c1.far && xday.c1.a === null && xday.c1.t === null,
+    '跨區段：不給開車時間、也不往下推算到達（不會生出 27:12）');
+
   // ---------- UI 層 ----------
   console.log('\n— 調整行程頁 —');
   await page.goto('about:blank');
@@ -151,7 +179,8 @@ try {
     pins: document.querySelectorAll('.plan-pin').length,
   }));
   yes(ui.travel.length === 4 && ui.travel[0].includes('約'), `兩點之間有移動小標 ×${ui.travel.length}（${ui.travel[0].trim()}）`);
-  yes(ui.eta.some((x) => x.includes('約') && x.includes('到')), '沒固定時間的點顯示「約 HH:MM 到」');
+  yes(ui.eta.some((x) => /約 \d\d:\d\d–\d\d:\d\d/.test(x)),
+    `沒固定時間的點顯示「約 到–離開」區間，跟固定時間的格式一致（${ui.eta[0] || ''}）`);
   yes(ui.opt, '有「✨ 排順序」按鈕');
   // v1.51.3：交通切換已依使用者要求移除 —— 不可以再出現
   yes(ui.addBtns.length === 2 && Math.abs(ui.addBtns[0].w - ui.addBtns[1].w) <= 1,
@@ -270,6 +299,63 @@ try {
   await sleep(600);
   const toastTxt = await page.evaluate(() => document.getElementById('toast')?.textContent || '');
   yes(toastTxt.includes('沒有座標'), `沒座標時擋下並引導：「${toastTxt.slice(0, 30)}…」`);
+
+  // ---------- 跨區行程（回報的實例：北海道 → 京都） ----------
+  console.log('\n— 跨區行程 —');
+  const xids = await page.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '北海道到京都', region: '日本',
+      startDate: '2026-11-01', endDate: '2026-11-02', allowWiki: false });
+    const mk = (name, day, order, lat, lng, extra = {}) =>
+      s.put({ id: uuid(), type: 'spot', tripId: tid, name, emoji: '📍', day, order, lat, lng, ...extra });
+    // 第 1 天：跨海段之後接市內段；清水寺 23:00 收尾讓下一站跨過午夜
+    await mk('新千歲機場', 1, 0, 42.7752, 141.6923, { startMin: 7 * 60, stayMin: 60 });
+    await mk('伏見稻荷大社', 1, 1, 34.9671, 135.7727, { stayMin: 90 });
+    await mk('清水寺', 1, 2, 34.9949, 135.7850, { startMin: 23 * 60, stayMin: 60 });
+    await mk('金閣寺', 1, 3, 35.0394, 135.7292, { stayMin: 30 });
+    // 第 2 天：故意把機場夾在中間，給「排順序」用
+    await mk('伏見稻荷大社', 2, 0, 34.9671, 135.7727, { stayMin: 60 });
+    await mk('新千歲機場', 2, 1, 42.7752, 141.6923, { stayMin: 60 });
+    await mk('清水寺', 2, 2, 34.9949, 135.7850, { stayMin: 60 });
+    return { tid };
+  });
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${xids.tid}/plan`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => document.querySelectorAll('.plan-travel-note.far').length >= 3, { timeout: 20000 });
+  const xui = await page.evaluate(() => ({
+    far: [...document.querySelectorAll('.plan-travel-note.far')].map((n) => n.textContent.trim()),
+    normal: [...document.querySelectorAll('.plan-travel-note:not(.far)')].map((n) => n.textContent.trim()),
+    eta: [...document.querySelectorAll('.plan-eta:not([hidden])')].map((n) => n.textContent.trim()),
+    badHour: (document.body.textContent.match(/(?<!\d)(2[4-9]|[3-9]\d|\d{3,}):[0-5]\d/g) || []).slice(0, 3),
+  }));
+  yes(xui.far.length === 3 && xui.far.every((x) => x.includes('跨海移動') && x.includes('自行安排') && x.includes('公里')),
+    `跨海段 ×${xui.far.length} 不給開車時間，改提示（${xui.far[0]}）`);
+  yes(xui.normal.length >= 2 && xui.normal.every((x) => /移動約 \d+ 分$/.test(x)),
+    `市內段照常顯示分鐘數 ×${xui.normal.length}（${xui.normal[0] || ''}）`);
+  yes(xui.eta.some((x) => x.includes('約 隔天 00:')),
+    `跨過午夜的推算標「隔天」（${xui.eta.find((x) => x.includes('隔天')) || ''}）`);
+  yes(!xui.badHour.length, '整頁沒有 24 以上的時數', xui.badHour.join('、'));
+
+  // 第 2 天排順序：跨區段不計入總移動、提醒可能安排太滿
+  await page.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('排順序'))[1].click());
+  await page.waitForSelector('.modal-card', { timeout: 20000 });
+  const xprev = await page.evaluate(() => document.querySelector('.modal-card').textContent);
+  yes(xprev.includes('1 段跨區移動未計') && !/[於約] ?\d+ 小時/.test(xprev),
+    '排順序預覽：跨區段不計入總移動（不出現 19 小時這種數字）');
+  yes(xprev.includes('安排得太滿'), '有跨區段時提醒這一天可能安排得太滿');
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('先不要')).click());
+  await sleep(400);
+
+  // 匯出文字只寫使用者自己設定的時間，不會把推算的 27:12 寫進去
+  const xtext = await page.evaluate(async (tid) => {
+    const { exportItineraryText } = await import('./js/itinexport.js');
+    return exportItineraryText(tid);
+  }, xids.tid);
+  yes(xtext.includes('07:00 新千歲機場') && !/(2[4-9]|\d{3,}):[0-5]\d/.test(xtext),
+    '匯出文字沒有 24 以上的時數');
 
   // 建立行程頁有「幫我規劃」入口
   await page.goto('about:blank');
