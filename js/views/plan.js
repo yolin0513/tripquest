@@ -7,7 +7,7 @@
 
 import { setTop, render } from '../app.js';
 import { spotTimes } from '../spottime.js';
-import { MODES, travelMatrix, chainTimes, suggestOrder, totalTravelSec, fmtMin, fmtDur } from '../route.js';
+import { travelMatrix, chainTimes, suggestOrder, totalTravelSec, fmtMin, fmtDur } from '../route.js';
 import * as store from '../store.js';
 import { h, mount, toast, promptDialog, confirmDialog, modal } from '../ui.js';
 import { navigate, back } from '../router.js';
@@ -85,10 +85,10 @@ export default async function plan(tripId) {
     list.replaceChildren();
 
     if (!spots.length) {
+      // 同一個動作不要在同一頁出現兩次：加景點／搜尋的入口就在下面第 1 天那一組，
+      // 空狀態只說明、不再放重複按鈕（實機回報上下兩組一模一樣）
       list.append(h('div', { class: 'empty' },
-        h('p', {}, '這趟還沒有景點'),
-        h('button', { class: 'btn btn-primary', onclick: () => addSpotToDay(1) }, '＋ 新增第一個景點'),
-        h('button', { class: 'btn btn-soft', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/findspot?day=1`) }, '🔍 搜尋景點加入')));
+        h('p', {}, '這趟還沒有景點 —— 用下面的「＋ 加景點」或「🔍 搜尋加入」開始')));
     }
 
     for (let d = 1; d <= days; d++) {
@@ -118,24 +118,14 @@ export default async function plan(tripId) {
 
     annotateTravel().catch(() => {});
 
-    // 實機回報四顆擠一列全在折行 —— 拆兩層：天數控制一列（語意上接在最後一天
-    // 下面）、工具一列；交通方式改成分段控制（開車｜步行），不把說明寫進按鈕
+    // 天數控制一列（文字等長：加一天／減一天）；匯出獨立一列滿版。
+    // 「開車/步行」切換已移除 —— 混合交通（大眾運輸為主）下兩個選項都是假精度，
+    // 移動時間一律標「粗略估計」並在說明講清楚不含大眾運輸。
     list.append(h('div', { class: 'plan-day-tools' },
-      h('button', { class: 'btn btn-soft', onclick: addDay }, '＋ 多加一天'),
+      h('button', { class: 'btn btn-soft', onclick: addDay }, '＋ 加一天'),
       h('button', { class: 'btn btn-ghost', onclick: removeLastDay }, '－ 減一天'),
     ));
-    list.append(h('div', { class: 'plan-tools2' },
-      h('button', { class: 'btn btn-soft', onclick: exportText }, '📤 匯出文字'),
-      h('div', { class: 'seg plan-modeseg', role: 'group', 'aria-label': '移動方式' },
-        ...['drive', 'walk'].map((k) => h('button', {
-          class: dayMode() === k ? 'on' : '',
-          onclick: async () => {
-            if (dayMode() === k) return;
-            await store.patch(tripId, { travelMode: k });
-            draw();
-          },
-        }, MODES[k].label))),
-    ));
+    list.append(h('button', { class: 'btn btn-soft btn-block', style: 'margin-top:8px', onclick: exportText }, '📤 匯出成文字'));
     list.append(h('button', {
       class: 'btn btn-primary btn-block btn-big', style: 'margin-top:18px',
       onclick: () => back(`/trip/${tripId}`),
@@ -280,7 +270,8 @@ export default async function plan(tripId) {
   // ---------- 移動時間與時刻鏈（規劃第 2 批） ----------
   // 一天一個 OSRM /table 矩陣請求（FOSSGIS），之後拖拉重排全部從快取算；
   // 失敗或沒座標退回直線×係數。UI 一律「約」，估算來源標得更明白。
-  function dayMode() { return store.getRaw(tripId)?.travelMode === 'walk' ? 'walk' : 'drive'; }
+  // 交通切換移除後內部一律用 drive 估（排序看的是相對距離，模式不影響結論）
+  function dayMode() { return 'drive'; }
 
   async function dayMatrix(inDay) {
     const mode = dayMode();
@@ -315,7 +306,7 @@ export default async function plan(tripId) {
         row.querySelector('.plan-travel-note')?.remove();
         if (i > 0 && c.travel != null) {
           const chip = h('div', { class: 'plan-travel-note' },
-            `↓ ${MODES[mode].label.slice(0, 2)}約 ${fmtDur(c.travel)}`);
+            `↓ 移動約 ${fmtDur(c.travel)}`);
           row.prepend(chip);
         }
         const eta = row.querySelector('.plan-eta');
@@ -333,8 +324,8 @@ export default async function plan(tripId) {
     note?.remove();
     if (anyEst || anyOsrm) {
       list.append(h('p', { class: 'form-hint plan-src-note' },
-        (anyEst ? '移動時間是用直線距離估的（離線或路網服務沒回應）；' : '移動時間來自 OSRM 開放路網；')
-        + '都是估計值，大眾運輸與塞車請自行斟酌。'));
+        `移動時間是${anyEst && !anyOsrm ? '用直線距離' : '依開放路網（OSRM）'}粗略估計的，`
+        + '不含大眾運輸、等車與塞車時間，僅供排順序參考。'));
     }
   }
 
@@ -354,7 +345,7 @@ export default async function plan(tripId) {
       title: `第 ${d} 天的建議順序`,
       body: h('div', {},
         h('p', { class: 'sm muted', style: 'margin:0 0 8px' },
-          `總移動約 ${fmtDur(r.before)} → ${fmtDur(r.after)}（${MODES[dayMode()].label}，估計值）`),
+          `總移動約 ${fmtDur(r.before)} → ${fmtDur(r.after)}（粗略估計）`),
         h('ol', { class: 'opt-list' }, ...seq.map((sp) => h('li', {},
           `${sp.pinned ? '📌 ' : ''}${sp.emoji || '📍'} ${sp.name}`))),
         h('p', { class: 'form-hint' }, '📌 釘住的位置不會動。套用後還是可以拖拉調整。'),

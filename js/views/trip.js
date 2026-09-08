@@ -129,7 +129,9 @@ export default async function trip(tripId, { fresh = false } = {}) {
 
   if (spots.length === 0) {
     container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'),
-      h('button', { class: 'btn btn-primary', onclick: () => addSpot(tripId) }, '＋ 新增景點')));
+      // 簡易的「景點名稱」對話框不好用（實機回報）—— 統一帶去「調整每天的行程」，
+      // 那裡有完整的加景點、搜尋加入、時間停留設定
+      h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}/plan`) }, '＋ 去安排景點')));
   } else {
     const dayNums = [...byDay.keys()].sort((a, b) => a - b);
     const todayDay = dayForToday(t);
@@ -773,23 +775,6 @@ async function doShare(tripId) {
     ),
     actions: [{ label: '關閉', value: true }],
   });
-}
-
-// ---------- 新增景點 ----------
-async function addSpot(tripId) {
-  const name = await promptDialog('景點名稱', { placeholder: '例：奈良公園', okLabel: '新增' });
-  if (!name) return;
-  const t = store.get(tripId);
-  const spots = store.spotsOf(tripId);
-  const maxDay = spots.reduce((m, s) => Math.max(m, s.day || 1), 1);
-  const { spots: gs, quests: gq } = await generateForTrip({ tripId, itineraryText: name, region: t.region || '' });
-  const spot = gs[0] || { id: uuid(), type: 'spot', tripId, name, day: maxDay, order: spots.length };
-  spot.day = maxDay; spot.order = spots.length;
-  await store.put(spot);
-  for (const q of gq) { q.spotId = spot.id; await store.put(q); }
-  toast(`已新增「${spot.name}」`);
-  enrichTrip(tripId).catch(() => {});
-  navigate(`/trip/${tripId}`);
 }
 
 // ---------- 旅程設定 ----------

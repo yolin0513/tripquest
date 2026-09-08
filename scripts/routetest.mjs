@@ -143,60 +143,84 @@ try {
     eta: [...document.querySelectorAll('.plan-eta:not([hidden])')].map((x) => x.textContent),
     warn: document.querySelectorAll('.plan-eta.warn').length,
     opt: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('排順序')),
-    seg: [...document.querySelectorAll('.plan-modeseg button')].map((b) => b.textContent.trim()),
+    addBtns: [...document.querySelectorAll('button')].filter((b) => /加一天|減一天/.test(b.textContent))
+      .map((b) => ({ t: b.textContent.trim(), w: Math.round(b.getBoundingClientRect().width) })),
+    exportBlock: (() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('匯出成文字'));
+      return b ? { w: Math.round(b.getBoundingClientRect().width), oneLine: b.scrollWidth <= b.clientWidth + 1 } : null; })(),
     note: document.querySelector('.plan-src-note')?.textContent || '',
     pins: document.querySelectorAll('.plan-pin').length,
   }));
   yes(ui.travel.length === 4 && ui.travel[0].includes('約'), `兩點之間有移動小標 ×${ui.travel.length}（${ui.travel[0].trim()}）`);
   yes(ui.eta.some((x) => x.includes('約') && x.includes('到')), '沒固定時間的點顯示「約 HH:MM 到」');
   yes(ui.opt, '有「✨ 排順序」按鈕');
-  yes(ui.seg.some((x) => x.includes('開車')) && ui.seg.some((x) => x.includes('步行')),
-    `交通方式分段控制：${ui.seg.join('｜')}`);
-  yes(ui.note.includes('估計'), `來源標示誠實：「${ui.note.slice(0, 28)}…」`);
+  // v1.51.3：交通切換已依使用者要求移除 —— 不可以再出現
+  yes(ui.addBtns.length === 2 && Math.abs(ui.addBtns[0].w - ui.addBtns[1].w) <= 1,
+    `加一天／減一天等寬（${ui.addBtns.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
+  yes(!!ui.exportBlock && ui.exportBlock.oneLine, `匯出成文字獨立滿版一列（${ui.exportBlock.w}px、單行）`);
+  const noSeg = await page.evaluate(() => !document.querySelector('.plan-modeseg')
+    && ![...document.querySelectorAll('button')].some((b) => /開車|步行/.test(b.textContent)));
+  yes(noSeg, '開車／步行切換已移除');
+  yes(ui.note.includes('粗略估計') && ui.note.includes('不含大眾運輸'),
+    `來源標示誠實：「${ui.note.slice(0, 34)}…」`);
   yes(ui.pins === 5, '每一列都有 📌 釘住鈕');
 
   // 工具區排版（實機回報四顆擠一列全折行）：兩層、全部不折行，360px＋特大字級也要
   const toolCheck = () => page.evaluate(() => {
-    const q = (t) => [...document.querySelectorAll('.plan-day-tools .btn, .plan-tools2 .btn, .plan-modeseg button')]
-      .find((b) => b.textContent.includes(t));
+    const q = (t) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(t));
     const rowTop = (el) => Math.round(el.getBoundingClientRect().top);
-    // 「不折行」＝文字沒有被擠成多行（scrollWidth 不超寬）；按鈕因字級變高是允許的
-    const noWrap = [...document.querySelectorAll('.plan-day-tools .btn, .plan-tools2 .btn, .plan-modeseg button')]
-      .map((b) => ({ t: b.textContent.trim(), oneLine: b.scrollWidth <= b.clientWidth + 1 }));
-    const seg = document.querySelector('.plan-modeseg');
+    const btns = [...document.querySelectorAll('.plan-day-tools .btn')]
+      .concat([[...document.querySelectorAll('button')].find((b) => b.textContent.includes('匯出成文字'))]);
+    const noWrap = btns.map((b) => ({ t: b.textContent.trim(), oneLine: b.scrollWidth <= b.clientWidth + 1 }));
     return {
-      dayRowSame: Math.abs(rowTop(q('多加一天')) - rowTop(q('減一天'))) <= 3,
-      toolRowSame: Math.abs(rowTop(q('匯出文字')) - rowTop(seg)) <= 10,
-      separated: rowTop(q('匯出文字')) - rowTop(q('多加一天')) > 20,
+      dayRowSame: Math.abs(rowTop(q('加一天')) - rowTop(q('減一天'))) <= 3,
+      exportBelow: rowTop(q('匯出成文字')) - rowTop(q('加一天')) > 20,
       wrapped: noWrap.filter((x) => !x.oneLine).map((x) => x.t),
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
     };
   });
   let tc = await toolCheck();
-  yes(tc.dayRowSame && tc.toolRowSame && tc.separated, '天數控制與工具分成兩層（各自同一列）');
-  yes(!tc.wrapped.length && !tc.overflow, '390px：所有工具按鈕不折行', tc.wrapped.join('、'));
+  yes(tc.dayRowSame && tc.exportBelow, '天數控制同一列、匯出在下一列');
+  yes(!tc.wrapped.length && !tc.overflow, '390px：工具按鈕不折行', tc.wrapped.join('、'));
   await page.setViewport({ width: 360, height: 780 });
-  await page.evaluate(() => { const { setPref } = window.__prefs || {}; });
   await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'xl'));
   await sleep(500);
   tc = await toolCheck();
-  // 窄螢幕允許「整顆按鈕」換到下一列，但文字本身不可折行、頁面不可橫向溢出
   yes(!tc.wrapped.length && !tc.overflow && tc.dayRowSame,
-    '360px＋特大字級：文字不折行、不橫向溢出（整顆換列是允許的）', tc.wrapped.join('、'));
+    '360px＋特大字級：文字不折行、不橫向溢出', tc.wrapped.join('、'));
   await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'm'));
   await page.setViewport({ width: 390, height: 844 });
   await sleep(400);
-  // 分段控制：點「步行」→ 移動方式改變、重繪
-  await page.evaluate(() => [...document.querySelectorAll('.plan-modeseg button')].find((b) => b.textContent.includes('步行')).click());
-  await sleep(900);
-  const modeNow = await page.evaluate(async (tid) => {
+  // 入口不重複：零景點的調整行程頁，「搜尋加入」「加景點」各只出現一組
+  const emptyTid = await page.evaluate(async () => {
     const s = await import('./js/store.js');
-    return { mode: s.getRaw(tid).travelMode,
-      on: [...document.querySelectorAll('.plan-modeseg button')].find((b) => b.classList.contains('on'))?.textContent || '' };
-  }, ids.tid);
-  yes(modeNow.mode === 'walk' && modeNow.on.includes('步行'), `分段控制切到步行（travelMode=${modeNow.mode}）`);
-  await page.evaluate(() => [...document.querySelectorAll('.plan-modeseg button')].find((b) => b.textContent.includes('開車')).click());
+    const { uuid } = await import('./js/ids.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '空', region: '宜蘭', allowWiki: false });
+    return tid;
+  });
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${emptyTid}/plan`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.plan-list');
+  const dedupe = await page.evaluate(() => ({
+    search: [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('搜尋')).length,
+    add: [...document.querySelectorAll('button')].filter((b) => /加景點|新增第一個/.test(b.textContent)).length,
+  }));
+  yes(dedupe.search === 1 && dedupe.add === 1, `零景點時入口各一組不重複（搜尋 ${dedupe.search}、加景點 ${dedupe.add}）`);
+  // 行程頁零景點：「去安排景點」帶去調整行程，不再彈簡易輸入框
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${emptyTid}`, { waitUntil: 'networkidle0' });
   await sleep(600);
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('去安排景點')).click());
+  await sleep(600);
+  const landed = await page.evaluate(() => ({
+    hash: location.hash.includes('/plan'),
+    dialog: !!document.querySelector('.modal-card'),
+  }));
+  yes(landed.hash && !landed.dialog, '行程頁「去安排景點」直達調整行程，不彈簡易輸入框');
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/plan`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.plan-travel-note', { timeout: 20000 });
 
   // 排順序 → 預覽 → 套用
   const hitsBefore = tableHits;
