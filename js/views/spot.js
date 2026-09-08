@@ -87,9 +87,48 @@ export default async function spot(tripId, spotId) {
       ...(renamed ? { _enrichV: 0, _noHero: false } : {}),
     });
     if (renamed) enrichSpot(store.getRaw(spotId)).catch(() => {});
+    // 改了時間 → 檢查有沒有任務跟新時段不合（例：改成早上、任務卻是「夜裡點燈」）。
+    // 已拍照片的任務絕不動；使用者不換也尊重（提示一次，不強迫）。
+    if (startMin !== tm.startMin || stayMin !== tm.stayMin) {
+      await offerTimeFixQuests();
+    }
     toast('已儲存');
     back(`/trip/${tripId}/plan`);
   };
+
+  async function offerTimeFixQuests() {
+    try {
+      const { timeWindow, phraseOk } = await import('../quests/compose.js');
+      const cur = store.getRaw(spotId);
+      const win = timeWindow(cur);
+      const clash = store.questsOf(spotId).filter((q) =>
+        q.when && !phraseOk({ when: q.when }, win) && !store.submissionsOf(q.id).length);
+      if (!clash.length) return;
+      const ok = await confirmDialog(
+        `有 ${clash.length} 個任務跟新的時間不太合（例如「${clash[0].title}」）。要換成合適時段的任務嗎？
+
+已拍照片的任務不會動。`,
+        { okLabel: '幫我換' });
+      if (!ok) return;
+      const { themedQuestsForSpot } = await import('../quests/generate.js');
+      const fresh = await themedQuestsForSpot(cur, tripId);   // cur 已帶新時間 → 句型已過濾
+      const keep = new Set(store.questsOf(spotId).map((q) => q.title));
+      let i = 0;
+      for (const q of clash) await store.remove(q.id);
+      for (const nq of fresh) {
+        if (i >= clash.length) break;
+        if (keep.has(nq.title)) continue;
+        const { uuid } = await import('../ids.js');
+        await store.put({
+          id: uuid(), type: 'quest', tripId, spotId,
+          title: nq.title, hint: nq.hint, kind: nq.kind || 'view',
+          source: 'template', when: nq.when || null, order: clash[i].order ?? 0, refImage: null,
+        });
+        i++;
+      }
+      toast('已換上合適時段的任務');
+    } catch { /* 換不成就算了，儲存本身不受影響 */ }
+  }
 
   const del = async () => {
     const lines = [`「${s.name}」會從行程裡移除。`];

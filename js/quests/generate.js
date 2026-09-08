@@ -269,6 +269,7 @@ function mkQuest(tripId, spotId, q) {
     id: uuid(), type: 'quest', tripId, spotId,
     title: q.title, hint: q.hint, kind: q.kind || 'thing',
     source: q.source || 'template', order: q.order ?? 0, refImage: null,
+    when: q.when || null,
   };
 }
 
@@ -282,6 +283,7 @@ export async function themedQuestsForSpot(spot, tripId) {
 
 const TAG_EMOJI = { sight: '🏛️', food: '🍜', nightmarket: '🏮', snack: '🍢', checkin: '📸', culture: '🎎', nature: '🌄', shopping: '🛍️', view: '🌇' };
 const NAME_EMOJI = [
+  [/機場|机场|空港/, '✈️'], [/車站|车站|駅$|轉運站|转运站/, '🚉'],
   [/夜市/, '🏮'], [/神社|大社|稻荷|稲荷|[^海]宮$|鳥居/, '⛩️'], [/[^醫眼]城$|城堡|天守|古堡|赤崁|砲台/, '🏯'],
   [/寺$|寺院|大佛/, '🛕'], [/廟$|祠$|天后|媽祖/, '🀄'], [/塔$|101|晴空|鐵塔|tower/i, '🗼'],
   [/步道|林道|古道|健行/, '🥾'],
