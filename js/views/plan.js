@@ -160,23 +160,25 @@ export default async function plan(tripId) {
     fillQuestBox(box, s, label);
     label();
 
-    // 📌：釘住的景點在「幫我排順序」時位置不動（規劃第 2 批）
+    // 📌 上移到名稱同一列（名稱左、釘住右）—— 動作列剩兩顆同列，整張卡壓扁，
+    // 一個畫面能看到更多景點（實機回報卡太高）
     const pinBtn = h('button', {
-      class: 'plan-mini plan-pin' + (s.pinned ? ' on' : ''),
-      title: '釘住（排順序時不移動）',
+      class: 'plan-mini plan-pin compact' + (s.pinned ? ' on' : ''),
+      title: '釘住（排順序時不移動）', 'aria-label': s.pinned ? '取消釘住' : '釘住',
       onclick: async () => { await store.patch(s.id, { pinned: !s.pinned }); draw(); },
-    }, h('span', { class: 'plan-mini-ic' }, '📌'), h('span', { class: 'plan-mini-t' }, s.pinned ? '已釘' : '釘住'));
+    }, '📌');
 
     return h('div', { class: 'plan-row', dataset: { id: s.id } },
       h('div', { class: 'plan-row-top' },
         h('button', { class: 'plan-handle', 'aria-label': '拖曳排序' }, '☰'),
         h('div', { class: 'plan-main' },
-          h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
+          h('div', { class: 'plan-name-row' },
+            h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
+            pinBtn),
           timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
           h('div', { class: 'plan-eta', hidden: true }),
           h('div', { class: 'plan-row-actions' },
             toggle,
-            pinBtn,
             h('button', { class: 'plan-mini', onclick: () => navigate(`/trip/${tripId}/spot/${s.id}`) },
               h('span', { class: 'plan-mini-ic' }, '⚙️'),
               h('span', { class: 'plan-mini-t' }, '設定'),

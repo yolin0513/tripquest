@@ -7,19 +7,20 @@
 // 3. **誠實**：景點很齊、巷弄小店常常查不到 —— 查不到就引導「手動輸入」，不假裝找得到。
 // 4. **手動輸入就在這一頁**（v1.51.4 起）：調整行程頁的手動加景點入口已移除，
 //    這裡的手動卡是唯一的手動路徑，必須能設天/時間/停留，不能是死路。
-// 5. 設定欄的版面：**「幾點到」自己一整列** —— iOS Safari 的原生 time input 實際寬度
-//    比 Chrome 大很多，三欄同列在實機上會重疊（回報過兩次）。寧可多佔高度。
+// 5. **「幾點到」不用原生 time input**：iOS 上空值會被畫成「當下時間」（實機截圖
+//    看到「下午3:01」），使用者沒動它也像選了。改成 時/分 兩個下拉，預設「未設定」，
+//    **沒動就存 null**（測試在資料面釘著）。
 //
 // 這一頁是規劃用（年輕人操作），密度可以高；產出給長輩看的行程頁維持既有原則。
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast } from '../ui.js';
+import { h, toast, modal } from '../ui.js';
 import { navigate } from '../router.js';
 import { geocodeSearch, geoTypeLabel } from '../geocode.js';
 import { searchPlaces, generateForTrip } from '../quests/generate.js';
 import { haversine, fmtDist } from '../geo.js';
-import { stayOptions, minOfInput } from '../spottime.js';
+import { stayOptions } from '../spottime.js';
 import { enrichTrip } from '../enrich.js';
 
 export default async function findspot(tripId, query = {}) {
@@ -55,33 +56,29 @@ export default async function findspot(tripId, query = {}) {
   const addedLine = h('p', { class: 'form-hint center', hidden: true });
   let addedCount = 0;
 
-  // ---------- 手動輸入（常駐在頁尾；查不到／離線時的主要退路） ----------
-  const manualName = h('input', { class: 'field', type: 'text', maxlength: 40, placeholder: '地點名稱' });
-  const manualPanelHost = h('div');
-  const manualCard = h('div', { class: 'fs-row fs-manual', hidden: true },
-    h('div', { class: 'fs-name', style: 'margin-bottom:6px' }, '✍️ 手動輸入地點'),
-    h('p', { class: 'fs-meta', style: 'margin:0 0 8px' }, '免費地圖查不到的店也能加。之後可以在「調整行程」按「自動找出景點位置」補座標。'),
-    manualName,
-    manualPanelHost,
-  );
-  let manualPanel = null;
+  // ---------- 手動輸入：彈窗（常駐卡展開後關不掉、還會殘留 —— 實機回報） ----------
   function openManual(prefill = '') {
-    manualCard.hidden = false;
-    if (prefill) manualName.value = prefill;
-    if (!manualPanel) {
-      manualPanel = settingsPanel(
-        (d, startMin, stayMin) => {
-          const name = manualName.value.trim();
-          if (!name) { toast('先填地點名稱'); manualName.focus(); return; }
-          addSpot({ name, manual: true }, d, startMin, stayMin, manualCard);
-          manualName.value = '';
-        },
-        () => `加入「${manualName.value.trim() || '這個地點'}」`,
-      );
-      manualPanelHost.append(manualPanel);
-    }
-    manualCard.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    if (!prefill) manualName.focus();
+    let closeFn = null;
+    const manualName = h('input', { class: 'field', type: 'text', maxlength: 40, placeholder: '地點名稱', value: prefill });
+    const panel = settingsPanel(
+      async (d, startMin, stayMin) => {
+        const name = manualName.value.trim();
+        if (!name) { toast('先填地點名稱'); manualName.focus(); return; }
+        await addSpot({ name, manual: true }, d, startMin, stayMin, null);
+        closeFn?.(true);                       // 加入成功就收起，回到搜尋頁原狀
+      },
+      () => `加入「${manualName.value.trim() || '這個地點'}」`,
+    );
+    modal({
+      title: '✍️ 手動輸入地點',
+      closeX: true,
+      expose: (c) => { closeFn = c; },
+      body: h('div', { class: 'fs-manual' },
+        h('p', { class: 'fs-meta', style: 'margin:0 0 8px' }, '免費地圖查不到的店也能加。之後可以在「調整行程」按「自動找出景點位置」補座標。'),
+        manualName,
+        panel),
+      actions: [{ label: '取消', value: null }],
+    });
   }
   const manualToggle = h('button', {
     class: 'btn btn-ghost btn-block', style: 'margin-top:10px',
@@ -93,7 +90,6 @@ export default async function findspot(tripId, query = {}) {
     h('p', { class: 'form-hint' }, '輸入名稱或地名後按「搜尋」。景點與地標都查得到；巷弄小店在免費地圖上常常沒有，查不到就用手動輸入。'),
     results,
     addedLine,
-    manualCard,
     manualToggle,
     h('button', {
       class: 'btn btn-soft btn-block', style: 'margin-top:12px',
@@ -111,21 +107,21 @@ export default async function findspot(tripId, query = {}) {
         h('option', { value: d, selected: d === day }, `第 ${d} 天`)));
     const staySel = h('select', { class: 'field' },
       ...stayOptions(60).map((o) => h('option', { value: o.v, selected: o.v === '60' }, o.label)));
-    const timeField = h('input', { class: 'field', type: 'time' });
-    const timeHint = h('span', { class: 'fs-time-hint' }, '未設定（可不填）');
-    const syncTime = () => {
-      timeField.classList.toggle('hasval', !!timeField.value);
-      timeHint.hidden = !!timeField.value;
-    };
-    timeField.addEventListener('input', syncTime);
-    timeField.addEventListener('change', syncTime);
-    syncTime();
+    // 時/分 雙下拉：預設「未設定」→ 沒動就存 null（不會把當下時間當成使用者的選擇）
+    const hourSel = h('select', { class: 'field' },
+      h('option', { value: '', selected: true }, '未設定'),
+      ...Array.from({ length: 24 }, (_, hh) => h('option', { value: hh }, `${hh} 時`)));
+    const minSel = h('select', { class: 'field', disabled: true },
+      ...[0, 5, 10, 15, 20, 30, 40, 45, 50].map((mm) =>
+        h('option', { value: mm, selected: mm === 0 }, `${String(mm).padStart(2, '0')} 分`)));
+    hourSel.addEventListener('change', () => { minSel.disabled = hourSel.value === ''; });
+    const pickedMin = () => (hourSel.value === '' ? null : (+hourSel.value) * 60 + (+minSel.value || 0));
     const addBtn = h('button', {
       class: 'btn btn-primary btn-block',
       onclick: () => {
         addBtn.textContent = labelFn();
         onAdd(Math.max(1, parseInt(daySel.value, 10) || day || 1),
-          minOfInput(timeField.value), staySel.value ? +staySel.value : null);
+          pickedMin(), staySel.value ? +staySel.value : null);
       },
     }, labelFn());
     return h('div', { class: 'fs-panel' },
@@ -134,7 +130,7 @@ export default async function findspot(tripId, query = {}) {
         h('label', {}, h('span', { class: 'form-label' }, '停留多久'), staySel)),
       h('label', { class: 'fs-timerow' },
         h('span', { class: 'form-label' }, '幾點到'),
-        h('span', { class: 'fs-time' }, timeField, timeHint)),
+        h('span', { class: 'fs-hm' }, hourSel, minSel)),
       addBtn,
     );
   }
@@ -235,7 +231,7 @@ export default async function findspot(tripId, query = {}) {
     addedCount++;
     addedLine.hidden = false;
     addedLine.textContent = `已加入 ${addedCount} 個景點，可以繼續搜尋下一個`;
-    if (row && !row.classList.contains('fs-manual')) {
+    if (row) {
       row.classList.add('fs-done');
       row.querySelector('.fs-panel')?.remove();
       const btn = row.querySelector('.fs-add');

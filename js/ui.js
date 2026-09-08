@@ -49,12 +49,14 @@ export function toast(msg, ms = 2400) {
 }
 
 // 通用互動對話框。回傳 Promise，resolve 值由呼叫端的按鈕決定。
-export function modal({ title, body, actions }) {
+export function modal({ title, body, actions, closeX = false, expose = null }) {
   const root = document.getElementById('modalRoot');
   return new Promise((resolve) => {
     const close = (val) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
     const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    if (expose) expose(close);
     const card = h('div', { class: 'modal-card', role: 'dialog', 'aria-modal': 'true' },
+      closeX ? h('button', { class: 'modal-x', 'aria-label': '關閉', onclick: () => close(null) }, '✕') : null,
       title && h('h2', { class: 'modal-title' }, title),
       h('div', { class: 'modal-body' }, body),   // body 可為字串（→ textNode）或節點
       h('div', { class: 'modal-actions' },

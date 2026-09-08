@@ -86,8 +86,18 @@ try {
     return bs.map((b) => ({ w: Math.round(b.getBoundingClientRect().width), t: b.innerText.replace(/s+/g, '') }));
   });
   // v1.51 起多了 📌 釘住（排順序時當錨）—— 任務/設定兩顆仍要等寬
-  eq(pair.length, 3, '一排三顆按鈕（任務／📌／設定）');
-  yes(Math.abs(pair[0].w - pair[2].w) <= 1, `任務與設定等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
+  // v1.51.5：📌 上移到名稱列，動作列回到兩顆（任務／設定）
+  eq(pair.length, 2, '動作列兩顆（任務／設定）');
+  yes(Math.abs(pair[0].w - pair[1].w) <= 1, `任務與設定等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
+  const pinRow = await page.evaluate(() => {
+    const nameRow = document.querySelector('.plan-name-row');
+    const pin = nameRow?.querySelector('.plan-pin');
+    if (!pin) return null;
+    const nr = nameRow.querySelector('.plan-name').getBoundingClientRect();
+    const pr = pin.getBoundingClientRect();
+    return { sameRow: Math.abs(nr.top - pr.top) < nr.height + 6, h: Math.round(pr.height) };
+  });
+  yes(pinRow && pinRow.sameRow && pinRow.h >= 40, `📌 在名稱同一列、觸控高度 ${pinRow && pinRow.h}px ≥ 40`);
 
   // ---------- 2. 目標在畫面外的跨天拖曳 ----------
   console.log('\n— 跨天拖曳（目標在畫面外）—');

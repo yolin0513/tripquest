@@ -1758,3 +1758,18 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-day-tools .btn, .plan-tools2 .btn, .plan-modeseg button { white-space: nowrap; }
 .plan-modeseg { display: flex; }
 .plan-modeseg button { min-height: 48px; padding: 6px 10px; font-size: 0.98rem; }
+
+/* modal 右上關閉（手動輸入等） */
+.modal-card { position: relative; }
+.modal-x {
+  position: absolute; top: 8px; right: 8px; width: 40px; height: 40px;
+  border: 0; background: transparent; color: var(--muted); font-size: 1.2rem;
+  border-radius: 10px; cursor: pointer;
+}
+.modal-x:active { background: var(--bg-elev-2); }
+/* 幾點到＝雙下拉（時/分），不再用原生 time input —— iOS 上空值會被畫成當下時間 */
+.fs-hm { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* 景點卡壓扁：名稱列右側放 📌 */
+.plan-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.plan-name-row .plan-name { flex: 1; min-width: 0; }
+.plan-pin.compact { flex: none; min-width: 46px; min-height: 40px; padding: 2px 8px; }

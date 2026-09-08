@@ -121,25 +121,26 @@ try {
     const panel = document.querySelector('.fs-results .fs-panel').getBoundingClientRect();
     const r = (el) => { const b = el.getBoundingClientRect(); return { l: Math.round(b.left), r: Math.round(b.right), t: Math.round(b.top), b2: Math.round(b.bottom), w: Math.round(b.width) }; };
     const [daySel, staySel] = [...document.querySelectorAll('.fs-results .fs-grid2 .field')].map(r);
-    const time = r(document.querySelector('.fs-results .fs-timerow .field'));
+    const [hourSel, minSel] = [...document.querySelectorAll('.fs-results .fs-hm .field')].map(r);
+    const hourEl = document.querySelectorAll('.fs-results .fs-hm select')[0];
     return {
-      daySel, staySel, time,
+      daySel, staySel, hourSel, minSel,
       panel: { l: Math.round(panel.left), r: Math.round(panel.right) },
       overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      hint: document.querySelector('.fs-time-hint') && !document.querySelector('.fs-time-hint').hidden
-        ? document.querySelector('.fs-time-hint').textContent : '' };
+      hourDefault: hourEl.value === '' ? hourEl.selectedOptions[0].textContent : hourEl.value };
   });
   const checkGeom = (g, label) => {
     yes(g.daySel.r <= g.staySel.l - 2, `${label}：哪一天(${g.daySel.l}–${g.daySel.r}) 與 停留多久(${g.staySel.l}–${g.staySel.r}) 不重疊`);
-    yes(g.time.t >= g.daySel.b2 - 1, `${label}：幾點到自己一整列（在兩欄下方，不與任何欄同列）`);
-    yes(g.daySel.l >= g.panel.l - 1 && g.staySel.r <= g.panel.r + 1 && g.time.r <= g.panel.r + 1,
-      `${label}：三個欄位都在容器內（容器 ${g.panel.l}–${g.panel.r}）`);
+    yes(g.hourSel.r <= g.minSel.l - 2, `${label}：時(${g.hourSel.l}–${g.hourSel.r}) 與 分(${g.minSel.l}–${g.minSel.r}) 不重疊`);
+    yes(g.hourSel.t >= g.daySel.b2 - 1, `${label}：幾點到那一列在兩欄下方`);
+    yes(g.daySel.l >= g.panel.l - 1 && g.staySel.r <= g.panel.r + 1 && g.minSel.r <= g.panel.r + 1,
+      `${label}：所有欄位都在容器內（容器 ${g.panel.l}–${g.panel.r}）`);
     yes(Math.abs(g.daySel.w - g.staySel.w) <= 2, `${label}：兩欄等寬（${g.daySel.w}/${g.staySel.w}px）`);
     yes(!g.overflow, `${label}：頁面不橫向溢出`);
   };
   let g = await gridCheck();
   checkGeom(g, '390px');
-  yes(g.hint.startsWith('未設定'), `時間欄位空的時候顯示「${g.hint}」`);
+  yes(g.hourDefault === '未設定', `幾點到是下拉、預設顯示「${g.hourDefault}」（不用原生 time input，iOS 不會畫成當下時間）`);
   for (const [w, fs, label] of [[360, 'xl', '360px＋特大字級'], [320, 'xl', '320px＋特大字級']]) {
     await page.setViewport({ width: w, height: 780 });
     await page.evaluate(async (v) => (await import('./js/prefs.js')).setPref('fs', v), fs);
@@ -150,10 +151,13 @@ try {
   await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'm'));
   await page.setViewport({ width: 390, height: 844 });
   await sleep(400);
-  await page.evaluate(() => { const t = document.querySelector('.fs-results .fs-panel input[type=time]'); t.value = '12:30'; });
-  await page.evaluate(() => { const t = document.querySelector('.fs-results .fs-panel input[type=time]'); t.dispatchEvent(new Event('input')); });
-  const hintGone = await page.evaluate(() => document.querySelector('.fs-time-hint').hidden);
-  yes(hintGone, '設定時間後「未設定」提示消失、顯示時間值');
+  await page.evaluate(() => {
+    const sels = document.querySelectorAll('.fs-results .fs-panel select');
+    sels[2].value = '12'; sels[2].dispatchEvent(new Event('change'));
+    sels[3].value = '30';
+  });
+  const minEnabled = await page.evaluate(() => !document.querySelectorAll('.fs-results .fs-panel select')[3].disabled);
+  yes(minEnabled, '選了小時之後，分鐘下拉解鎖');
   await page.evaluate(() => document.querySelector('.fs-results .fs-panel .btn-block').click());
   await sleep(600);
   const added = await page.evaluate(async (tid) => {
@@ -170,6 +174,23 @@ try {
   yes(added.quests >= 1, `自動產生了 ${added.quests} 個拍照任務`);
   const marked = await page.evaluate(() => document.querySelector('.fs-results .fs-row .fs-add').textContent);
   yes(marked.includes('已加入'), `列上標示：${marked.trim()}`);
+
+  // 資料面（使用者點名要驗）：完全沒動「幾點到」的加入，startMin 必須是 null，
+  // 不能把當下時間存進去
+  await page.evaluate(() => { const i = document.querySelector('.fs-bar input'); i.value = '粉鳥林'; });
+  await page.click('.fs-bar button');
+  await page.waitForFunction(() => [...document.querySelectorAll('.fs-results .fs-row')].some((r) => r.textContent.includes('粉鳥林')), { timeout: 15000 });
+  await page.evaluate(() => [...document.querySelectorAll('.fs-results .fs-row')]
+    .find((r) => r.textContent.includes('粉鳥林')).querySelector('.fs-add').click());
+  await page.waitForSelector('.fs-results .fs-panel');
+  await page.evaluate(() => document.querySelector('.fs-results .fs-panel .btn-block').click());
+  await sleep(700);
+  const untouched = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const sp = s.spotsOf(tid).find((x) => x.name.includes('粉鳥林'));
+    return sp && { startMin: sp.startMin ?? null, stayMin: sp.stayMin };
+  }, tid);
+  yes(untouched && untouched.startMin === null, `沒動「幾點到」→ 存進去是空的（startMin=${untouched && untouched.startMin}），不是當下時間`);
 
   // 日期自動延長到第 2 天之後？（原本 10/01–10/02，加到第 2 天不用延；驗不變壞即可）
   // ④ 快取：同關鍵字再搜一次 → 0 新請求
@@ -201,17 +222,35 @@ try {
   const noHit = await page.evaluate(() => document.querySelector('.fs-results button')?.textContent || '');
   yes(noHit.includes('手動輸入「完全查無此店xyz」'), `查無結果時引導：「${noHit.trim()}」`);
   await page.evaluate(() => document.querySelector('.fs-results button').click());
-  await page.waitForFunction(() => !document.querySelector('.fs-manual').hidden, { timeout: 8000 });
+  await page.waitForSelector('.modal-card .fs-manual', { timeout: 8000 });
   const manualState = await page.evaluate(() => ({
-    name: document.querySelector('.fs-manual input[type=text]').value,
-    dayOpts: document.querySelectorAll('.fs-manual select')[0].options.length,
-    hasTime: !!document.querySelector('.fs-manual input[type=time]'),
+    title: document.querySelector('.modal-title')?.textContent || '',
+    hasX: !!document.querySelector('.modal-x'),
+    hasCancel: [...document.querySelectorAll('.modal-actions .btn')].some((b) => b.textContent.includes('取消')),
+    name: document.querySelector('.modal-card input[type=text]').value,
+    dayOpts: document.querySelectorAll('.modal-card select')[0].options.length,
+    hourDefault: document.querySelectorAll('.modal-card .fs-hm select')[0].value,
   }));
-  yes(manualState.name === '完全查無此店xyz' && manualState.dayOpts >= 2 && manualState.hasTime,
-    `手動卡帶入查詢字、可設天（${manualState.dayOpts} 選項）/時間/停留`);
-  await page.evaluate(() => { document.querySelectorAll('.fs-manual select')[0].value = '2'; });
-  await page.evaluate(() => document.querySelector('.fs-manual .btn-block').click());
+  yes(manualState.title.includes('手動輸入') && manualState.hasX && manualState.hasCancel,
+    '手動輸入是彈窗：有標題、右上 ✕、底部取消');
+  yes(manualState.name === '完全查無此店xyz' && manualState.dayOpts >= 2 && manualState.hourDefault === '',
+    `彈窗帶入查詢字、可設天（${manualState.dayOpts} 選項）、時間預設未設定`);
+  // 先用 ✕ 關掉：頁面要回到原狀、不留殘影
+  await page.evaluate(() => document.querySelector('.modal-x').click());
+  await sleep(300);
+  const afterX = await page.evaluate(() => ({
+    modal: !!document.querySelector('.modal-card'),
+    input: document.querySelector('.fs-bar input').value,
+  }));
+  yes(!afterX.modal && afterX.input === '完全查無此店xyz', '✕ 關閉後回到搜尋頁原狀，不留殘影');
+  // 再開一次、真的加入（第 2 天、不動時間）→ 彈窗自動收起
+  await page.evaluate(() => document.querySelector('.fs-results button').click());
+  await page.waitForSelector('.modal-card .fs-manual');
+  await page.evaluate(() => { document.querySelectorAll('.modal-card select')[0].value = '2'; });
+  await page.evaluate(() => document.querySelector('.modal-card .btn-block').click());
   await sleep(700);
+  const modalGone = await page.evaluate(() => !document.querySelector('.modal-card'));
+  yes(modalGone, '加入成功後彈窗自動收起');
   const manualSpot = await page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
     const sp = s.spotsOf(tid).find((x) => x.name.includes('完全查無此店'));
@@ -219,6 +258,12 @@ try {
   }, tid);
   yes(manualSpot && manualSpot.day === 2 && manualSpot.lat === null && manualSpot.quests >= 1,
     `手動加入成功：第 ${manualSpot && manualSpot.day} 天、無座標（之後可自動補）、任務 ${manualSpot && manualSpot.quests} 個`);
+  const manualTime = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const sp = s.spotsOf(tid).find((x) => x.name.includes('完全查無此店'));
+    return sp.startMin ?? null;
+  }, tid);
+  yes(manualTime === null, '手動加入沒動時間 → startMin 也是空的');
 
   // ⑤ 離線
   await page.evaluate(async (u) => (await import('./js/geocode.js')).setGeoEndpoint(u), `http://localhost:${GEO}/fail`);
