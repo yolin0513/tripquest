@@ -7,7 +7,7 @@ import {
   collectSlides, estimateDuration, LENGTHS, DEFAULT_LENGTH, ALBUM_INLINE_LIMIT,
 } from '../memory.js';
 import { STYLES } from '../music.js';
-import { TRACKS, trackMusic, ensureTrackCached, isTrackStyle, TRACK_ARTIST, TRACK_LICENSE_URL } from '../tracks.js';
+import { TRACKS, CATEGORIES, tracksOfCat, trackById, trackLabel, trackMusic, ensureTrackCached, isTrackStyle, TRACK_LICENSE_URL } from '../tracks.js';
 import { downloadBlob, nativeShare } from '../share.js';
 import { publishAlbum, unpublishAlbum, albumInfo, canPublish } from '../albumshare.js';
 import { exportPhotos, exportSummary } from '../photoexport.js';
@@ -122,34 +122,76 @@ export default async function album(tripId) {
 
   function showMusicSources() {
     stopPreview();
+    const licTag = { ccby: 'CC BY 4.0（片尾標示出處）', cc0: 'CC0（免標示）', pd: '公有領域（免標示）' };
     modal({
       title: '🎼 音樂來源與授權',
       closeX: true,
       body: h('div', { class: 'music-src' },
-        h('p', {}, `內建配樂都是 ${TRACK_ARTIST} 的作品，採 Creative Commons BY 4.0 授權（可自由使用，須標示出處）。App 有做轉檔壓縮；影片片尾會自動標示曲名、作者與授權。`),
-        h('ul', {}, ...TRACKS.map((tk) => h('li', {}, `${tk.emoji} ${tk.title}（${tk.mood}）`))),
-        h('p', {}, h('a', { href: TRACK_LICENSE_URL, target: '_blank', rel: 'noopener' }, '授權條款：creativecommons.org/licenses/by/4.0')),
-        h('p', {}, h('a', { href: 'https://incompetech.com', target: '_blank', rel: 'noopener' }, '曲目來源：incompetech.com')),
-        h('p', { class: 'form-hint' }, '小提醒：這些曲子在 YouTube 很常見，分享影片偶爾會遇到「誤判」的版權聲明 —— 音樂是合法授權的，片尾有標示，可以放心申訴。'),
+        h('p', {}, `內建 ${TRACKS.length} 首配樂都是可自由使用的授權：Kevin MacLeod 的 6 首採 CC BY 4.0（影片片尾會自動標示出處）；其餘為 CC0 或公有領域錄音（不需標示，片尾仍會禮貌標出曲名與演奏者）。全部經過響度統一與轉檔。`),
+        ...CATEGORIES.map((c) => h('div', {},
+          h('p', { style: 'margin:10px 0 2px;font-weight:800' }, `${c.emoji} ${c.label}`),
+          h('ul', { style: 'margin:0' }, ...tracksOfCat(c.key).map((tk) =>
+            h('li', {}, `${trackLabel(tk)}（${tk.performer || tk.artist}）· ${licTag[tk.lic]}`))),
+        )),
+        h('p', {}, h('a', { href: TRACK_LICENSE_URL, target: '_blank', rel: 'noopener' }, 'CC BY 授權條款：creativecommons.org/licenses/by/4.0')),
+        h('p', {}, '完整逐曲記錄（來源網址、下載日期、修改說明）在專案的 MUSIC_LICENSES.md。'),
+        h('p', { class: 'form-hint' }, '小提醒：這些曲子（尤其古典名曲）分享到 YouTube 偶爾會遇到「誤判」的版權聲明 —— 音樂是合法授權的，可以放心申訴。'),
       ),
       actions: [{ label: '知道了', value: true }],
     });
   }
 
+  // 六個情緒分類、畫面永遠六列：每列顯示一首推薦曲，🔁 在同分類內輪替，
+  // 想看全部的人展開清單。使用者選過的曲目存在 trip.musicStyle（跨裝置同步）。
+  const rot = {};                                     // 分類 → 目前輪到第幾首（本頁狀態）
+  let allOpen = false;
+  function shownTrack(catKey) {
+    const list = tracksOfCat(catKey);
+    if (isTrackStyle(music)) {
+      const cur = trackById(music.slice(6));
+      if (cur && cur.cat === catKey) return cur;      // 選過的要記住：這列顯示所選那首
+    }
+    return list[(rot[catKey] || 0) % list.length];
+  }
+  function rotateCat(c) {
+    const list = tracksOfCat(c.key);
+    const now = shownTrack(c.key);
+    const next = list[(list.indexOf(now) + 1) % list.length];
+    rot[c.key] = list.indexOf(next);
+    stopPreview(true);
+    if (isTrackStyle(music) && trackById(music.slice(6))?.cat === c.key) pickTrack(next);
+    else drawMusicPick();
+  }
+  function trackRow(tk, { cat = null, compact = false } = {}) {
+    const selected = music === 'track:' + tk.id;
+    return h('div', { class: 'mp-row' + (compact ? ' compact' : '') },
+      h('button', { class: selected ? 'on' : '', onclick: () => pickTrack(tk) },
+        cat ? h('span', { class: 'mp-cat' }, `${cat.emoji} ${cat.label}`) : null,
+        h('span', { class: 'mp-title' }, (compact ? (selected ? '✓ ' : '') : '') + trackLabel(tk))),
+      cat ? h('button', { class: 'mp-alt', 'aria-label': '換一首', title: '換一首', onclick: () => rotateCat(cat) }, '🔁') : null,
+      h('button', {
+        class: 'mp-prev' + (previewId === tk.id ? ' on' : ''),
+        'aria-label': previewId === tk.id ? '停止試聽' : '試聽',
+        onclick: () => togglePreview(tk),
+      }, previewId === tk.id ? '⏹' : '▶'),
+    );
+  }
   function drawMusicPick() {
+    const allWrap = h('div', { class: 'mp-all' });
+    if (allOpen) {
+      for (const c of CATEGORIES) {
+        allWrap.append(h('p', { class: 'mp-head' }, `${c.emoji} ${c.label}`));
+        for (const tk of tracksOfCat(c.key)) allWrap.append(trackRow(tk, { compact: true }));
+      }
+    }
     musicPick.replaceChildren(
       h('p', { class: 'mp-head' }, '🎵 內建配樂（真實錄音；第一次點會下載，之後離線也能用）'),
-      ...TRACKS.map((tk) => h('div', { class: 'mp-row' },
-        h('button', {
-          class: music === 'track:' + tk.id ? 'on' : '',
-          onclick: () => pickTrack(tk),
-        }, `${tk.emoji} ${tk.mood} · ${tk.title}`),
-        h('button', {
-          class: 'mp-prev' + (previewId === tk.id ? ' on' : ''),
-          'aria-label': previewId === tk.id ? '停止試聽' : '試聽',
-          onclick: () => togglePreview(tk),
-        }, previewId === tk.id ? '⏹' : '▶'),
-      )),
+      ...CATEGORIES.map((c) => trackRow(shownTrack(c.key), { cat: c })),
+      h('button', {
+        class: 'btn btn-ghost btn-block mp-expand',
+        onclick: () => { allOpen = !allOpen; stopPreview(true); drawMusicPick(); },
+      }, allOpen ? '收起完整曲庫 ▴' : `📚 看完整曲庫（${TRACKS.length} 首）▾`),
+      allWrap,
       h('p', { class: 'mp-head' }, '🎛️ 合成音樂（不用下載，離線一定有）'),
       ...SYNTH_OPTS.map((o) => h('button', {
         class: music === o.id ? 'on' : '',

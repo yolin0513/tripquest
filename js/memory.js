@@ -882,10 +882,11 @@ function drawOutro(ctx, seg, t) {
   centerText(ctx, 'TripQuest', W / 2, y + 74,
     { maxW: W - 140, maxLines: 2, size: 34, min: 24, weight: 700, color: 'rgba(255,255,255,0.4)' });
   if (seg.credit) {
-    // CC BY 4.0 的標示：影片會被單獨分享，片尾是唯一跟著影片走的出處
-    centerText(ctx, seg.credit.line1, W / 2, H - 128,
+    // 授權標示：影片會被單獨分享，片尾是唯一跟著影片走的出處。
+    // CC BY 兩行（授權要求）；CC0/公有領域一行（零義務，禮貌標作曲/演奏者）
+    centerText(ctx, seg.credit.line1, W / 2, seg.credit.line2 ? H - 128 : H - 96,
       { maxW: W - 90, maxLines: 1, size: 28, min: 20, color: 'rgba(255,255,255,0.45)' });
-    centerText(ctx, seg.credit.line2, W / 2, H - 84,
+    if (seg.credit.line2) centerText(ctx, seg.credit.line2, W / 2, H - 84,
       { maxW: W - 90, maxLines: 1, size: 24, min: 17, color: 'rgba(255,255,255,0.36)' });
   }
   ctx.restore();

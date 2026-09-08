@@ -1,39 +1,79 @@
-// 內建配樂 —— Kevin MacLeod（incompetech.com）的 CC BY 4.0 曲目。
+// 內建配樂曲庫 —— 21 首，六個情緒分類，介面永遠六列。
 //
-// 授權（三代理獨立查證，3:0 通過，2026-09-08）：
-//   · incompetech 全站音樂採 Creative Commons BY 4.0：允許商用、再散布、修改，
-//     條件是標示作者、曲名、授權連結、註明修改。出處：
-//     https://incompetech.com/music/royalty-free/faq.html
-//   · 本 App 的標示：影片片尾（musicCredit，含授權短網址）＋ 回憶頁「音樂來源
-//     與授權」說明 ＋ repo 內 MUSIC_LICENSES.md（逐曲 ISRC、來源、下載日、修改）。
-//   · 檔案有修改：重新轉檔（320kbps → ~115kbps VBR）、去尾端靜音；
-//     mp3 的 ID3 標籤保留作者與授權資訊。
-//   · 排除過的來源：Pixabay（禁止獨立再散布）、Bensound（自有限制授權）、
-//     YouTube 匯入（違反 ToS 且無授權）—— 不要加回來。
+// 授權（兩輪三代理獨立查證，各 3:0 通過；完整記錄在 repo 的 MUSIC_LICENSES.md）：
+//   · CC BY 4.0 ×6：Kevin MacLeod（incompetech.com）。片尾兩行標示（曲名/作者/
+//     授權短網址/經轉檔）——CC BY 的要求，跟著影片走。規模維持六首，不再擴大。
+//   · CC0 / 公有領域 ×15：古典（Open Goldberg、Open WTC、Musopen Symphony、
+//     US Air Force Band、Commons CC0）與現代 CC0（Komiku、Loyalty Freak Music）。
+//     法律上零標示義務；片尾仍標一行「曲名 — 演奏/作者」以示尊重。
+//   · 第二輪投票抓掉一首：Clair de Lune（Goedhart）—— Commons 的 PD 模板只涵蓋
+//     「樂曲」，錄音本身是 CC BY 3.0（樂曲公有領域 ≠ 錄音公有領域）。已依
+//     「CC BY 不再擴大」原則換成 Ishizaka 的 WTC 前奏曲（CC0）。
 //
-// 快取：sw.js 把 /media/music/ 導進獨立的 MUSIC_CACHE（cache-first、跨版本保留，
-// 檔名即版本）；這裡另外直接寫同一個 cache，涵蓋 SW 還沒接管的第一次載入。
+// 存放與快取：
+//   · 音檔在使用者自己的 Cloudflare R2（bucket key: music/v1/<id>.mp3），
+//     由同步 Worker 的 GET /music/<id>.mp3 公開供裝（唯讀、白名單檔名、無列舉）。
+//     曲庫再大也不進 repo、不肥大部署與預快取。
+//   · 選了才下載；下載後寫進 Cache API 的 tq-music-v1（跨版本保留）→ 離線可用。
+//   · 退路：R2 取不到 → 呼叫端退回程式合成並明講（album.js）；playful 一首
+//     保留在 repo（./media/music/）當離線最終保底。
+//
+// 響度：全部經兩段式 EBU R128 loudnorm（I=-16 LUFS, TP=-1.5）——不同來源不會忽大忽小。
 
-export const TRACKS = [
-  { id: 'warm',    file: 'warm.mp3',    title: 'Wholesome',        mood: '溫暖懷舊', emoji: '🌤️', mb: 4.3 },
-  { id: 'travel',  file: 'travel.mp3',  title: 'Carefree',         mood: '輕快旅行', emoji: '🚌', mb: 3.2 },
-  { id: 'porch',   file: 'porch.mp3',   title: 'Porch Swing Days', mood: '悠閒午後', emoji: '🪑', mb: 2.7 },
-  { id: 'tender',  file: 'tender.mp3',  title: 'Heartwarming',     mood: '抒情溫馨', emoji: '💛', mb: 0.9 },
-  { id: 'playful', file: 'playful.mp3', title: 'Fluffing a Duck',  mood: '活潑家庭', emoji: '🦆', mb: 0.9 },
-  { id: 'jaunty',  file: 'jaunty.mp3',  title: 'Wallpaper',        mood: '俏皮輕鬆', emoji: '🎈', mb: 3.3 },
+const R2_BASE = (typeof window !== 'undefined' && window.__TQ_MUSIC_ENDPOINT)
+  || 'https://tripquest.yolin0513.workers.dev/music/';
+
+export const CATEGORIES = [
+  { key: 'warm',      label: '溫暖懷舊', emoji: '🌤️' },
+  { key: 'travel',    label: '輕快旅行', emoji: '🚌' },
+  { key: 'lyric',     label: '抒情',     emoji: '💛' },
+  { key: 'family',    label: '活潑家庭', emoji: '🦆' },
+  { key: 'classical', label: '古典',     emoji: '🎻' },
+  { key: 'jaunty',    label: '俏皮輕鬆', emoji: '🎈' },
 ];
 
-export const TRACK_ARTIST = 'Kevin MacLeod (incompetech.com)';
-export const TRACK_LICENSE = 'CC BY 4.0';
+// lic: 'ccby'（需標示）| 'cc0' | 'pd'（零義務，片尾禮貌標一行）
+export const TRACKS = [
+  // — 溫暖懷舊 —
+  { id: 'warm',       cat: 'warm', title: 'Wholesome', artist: 'Kevin MacLeod (incompetech.com)', lic: 'ccby', mb: 4.3 },
+  { id: 'porch',      cat: 'warm', title: 'Porch Swing Days', artist: 'Kevin MacLeod (incompetech.com)', lic: 'ccby', mb: 2.5 },
+  { id: 'ko-village', cat: 'warm', title: 'Le Grand Village', artist: 'Komiku', lic: 'cc0', mb: 1.9 },
+  // — 輕快旅行 —
+  { id: 'travel',      cat: 'travel', title: 'Carefree', artist: 'Kevin MacLeod (incompetech.com)', lic: 'ccby', mb: 3.2 },
+  { id: 'ko-horizon',  cat: 'travel', title: "Fouler l'horizon", artist: 'Komiku', lic: 'cc0', mb: 2.3 },
+  { id: 'ko-montagne', cat: 'travel', title: 'La montagne', artist: 'Komiku', lic: 'cc0', mb: 3.1 },
+  // — 抒情 —
+  { id: 'tender',    cat: 'lyric', title: 'Heartwarming', artist: 'Kevin MacLeod (incompetech.com)', lic: 'ccby', mb: 0.8 },
+  { id: 'ko-barque', cat: 'lyric', title: 'Barque sur le lac', artist: 'Komiku', lic: 'cc0', mb: 3.4 },
+  { id: 'ko-bleu',   cat: 'lyric', title: 'Bleu', artist: 'Komiku', lic: 'cc0', mb: 3.3 },
+  // — 活潑家庭 —
+  { id: 'playful',      cat: 'family', title: 'Fluffing a Duck', artist: 'Kevin MacLeod (incompetech.com)', lic: 'ccby', mb: 0.8, local: true },
+  { id: 'ko-tournesol', cat: 'family', title: 'Champ de tournesol', artist: 'Komiku', lic: 'cc0', mb: 2.3 },
+  { id: 'lf-picnic',    cat: 'family', title: 'Go to the Picnic', artist: 'Loyalty Freak Music', lic: 'cc0', mb: 2.4 },
+  // — 古典（錄音本身皆 CC0/PD，逐一查證過）—
+  { id: 'cl-aria',    cat: 'classical', title: '郭德堡變奏曲：詠嘆調', composer: '巴哈', performer: 'Kimiko Ishizaka', lic: 'cc0', mb: 3.0 },
+  { id: 'cl-prelude', cat: 'classical', title: '平均律：C 大調前奏曲', composer: '巴哈', performer: 'Kimiko Ishizaka', lic: 'cc0', mb: 1.6 },
+  { id: 'cl-morning', cat: 'classical', title: '皮爾金：晨歌', composer: '葛利格', performer: 'Musopen Symphony', lic: 'pd', mb: 2.7 },
+  { id: 'cl-anitra',  cat: 'classical', title: '皮爾金：安妮特拉之舞', composer: '葛利格', performer: 'Musopen Symphony', lic: 'pd', mb: 3.0 },
+  { id: 'cl-flowers', cat: 'classical', title: '胡桃鉗：花之圓舞曲', composer: '柴可夫斯基', performer: 'US Air Force Band', lic: 'pd', mb: 5.2 },
+  { id: 'cl-gymno',   cat: 'classical', title: '第一號吉諾佩第', composer: '薩提', performer: 'Teknopazzo', lic: 'cc0', mb: 2.0 },
+  // — 俏皮輕鬆 —
+  { id: 'jaunty',      cat: 'jaunty', title: 'Wallpaper', artist: 'Kevin MacLeod (incompetech.com)', lic: 'ccby', mb: 3.1 },
+  { id: 'lf-sweetsun', cat: 'jaunty', title: 'Sweet Sun', artist: 'Loyalty Freak Music', lic: 'cc0', mb: 1.7 },
+  { id: 'lf-yippee',   cat: 'jaunty', title: 'Yippee !', artist: 'Loyalty Freak Music', lic: 'cc0', mb: 1.9 },
+];
+
 export const TRACK_LICENSE_URL = 'https://creativecommons.org/licenses/by/4.0/';
 
 export const trackById = (id) => TRACKS.find((t) => t.id === id) || null;
+export const tracksOfCat = (cat) => TRACKS.filter((t) => t.cat === cat);
 export const isTrackStyle = (s) => typeof s === 'string' && s.startsWith('track:');
 
 const MUSIC_CACHE = 'tq-music-v1';
 
 function trackUrl(t) {
-  return new URL('../media/music/' + t.file, import.meta.url).href;
+  if (t.local) return new URL('../media/music/' + t.id + '.mp3', import.meta.url).href;
+  return R2_BASE + t.id + '.mp3';
 }
 
 async function trackBuffer(id) {
@@ -92,14 +132,24 @@ export async function trackMusic(id, { volume = 0.7 } = {}) {
   };
 }
 
-// 片尾的授權標示 —— CC BY 4.0 要求：作者、曲名、授權連結、註明修改。
-// 影片會被單獨分享出去（LINE/YouTube），片尾是唯一跟著影片走的標示，不能省。
+// 顯示用：一首曲子的完整名（分類頁與清單用）
+export function trackLabel(t) {
+  return t.composer ? `${t.title} — ${t.composer}` : t.title;
+}
+
+// 片尾標示 —— 只標實際用到的那一首：
+//   CC BY：曲名/作者/授權短網址/經轉檔（授權要求，兩行）
+//   CC0/PD：零義務，禮貌標一行「曲名 — 演奏者」（作曲者含在曲名裡）
 export function musicCredit(style) {
   if (!isTrackStyle(style)) return null;
   const t = trackById(style.slice(6));
   if (!t) return null;
-  return {
-    line1: `音樂：${t.title} — ${TRACK_ARTIST}`,
-    line2: 'Creative Commons BY 4.0 · creativecommons.org/licenses/by/4.0 · 經轉檔',
-  };
+  if (t.lic === 'ccby') {
+    return {
+      line1: `音樂：${t.title} — ${t.artist}`,
+      line2: 'Creative Commons BY 4.0 · creativecommons.org/licenses/by/4.0 · 經轉檔',
+    };
+  }
+  const who = t.performer ? `${t.composer} 曲，${t.performer} 演奏` : t.artist;
+  return { line1: `音樂：${t.title} — ${who}`, line2: null };
 }

@@ -880,7 +880,16 @@ textarea.field { resize: vertical; line-height: 1.6; }
 }
 .music-pick button.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, transparent); }
 .mp-head { font-size: 0.82rem; color: var(--muted); margin: 6px 0 0; }
-.mp-row { display: grid; grid-template-columns: 1fr 56px; gap: 8px; }
+.mp-row { display: grid; grid-template-columns: 1fr 52px 52px; gap: 8px; }
+.mp-row.compact { grid-template-columns: 1fr 52px; }
+.mp-row.compact > button:first-child { min-height: 44px; padding: 8px 12px; }
+.mp-cat { display: block; font-weight: 800; }
+.mp-title { display: block; font-size: 0.86rem; color: var(--muted); margin-top: 2px; }
+.mp-row button.on .mp-title { color: inherit; }
+.music-pick .mp-alt { min-height: 48px; text-align: center; padding: 0; font-size: 1.0rem; }
+.mp-all:empty { display: none; }
+.mp-all { border-left: 3px solid var(--line, #39415a); padding-left: 8px; display: flex; flex-direction: column; gap: 8px; }
+.mp-expand { margin: 2px 0; }
 .music-pick .mp-prev { min-height: 48px; text-align: center; padding: 0; font-size: 1.05rem; }
 .music-src ul { margin: 8px 0; padding-left: 20px; }
 .music-src li { margin: 4px 0; }

@@ -34,6 +34,23 @@ export default {
     if (request.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
     if (path === '/health') return json({ ok: true, ts: Date.now() });
 
+    // 內建配樂（公開授權內容：CC0/PD/CC BY，見 repo 的 MUSIC_LICENSES.md）。
+    // 只開 GET/HEAD、檔名白名單格式、固定前綴 music/v1/ —— 沒有列舉、沒有上傳，
+    // 不會變成任意存取 bucket 的破口。檔名即版本（內容不變），給長快取。
+    const mus = path.match(/^\/music\/([a-z0-9-]{1,40}\.mp3)$/);
+    if (mus) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'method' }, 405);
+      const obj = await env.PHOTOS.get('music/v1/' + mus[1]);
+      if (!obj) return new Response('not found', { status: 404 });
+      return cors(new Response(request.method === 'HEAD' ? null : obj.body, {
+        headers: {
+          'content-type': 'audio/mpeg',
+          'content-length': String(obj.size),
+          'cache-control': 'public, max-age=31536000, immutable',
+        },
+      }));
+    }
+
     // 公開相簿：唯一不需要祕鑰的路徑（網址本身就是憑證，albumId 是 128-bit 亂數）
     const pub = path.match(/^\/a\/([a-f0-9]{24,64})(?:\/p\/([a-f0-9]{16,64}))?$/);
     if (pub) {

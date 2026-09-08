@@ -287,7 +287,8 @@ try {
     const gid = uuid(), tid = uuid(), m = uuid();
     await s.put({ id: gid, type: 'group', name: 'g' });
     await s.put({ id: m, type: 'member', groupId: gid, displayName: '媽媽' });
-    await s.put({ id: tid, type: 'trip', groupId: gid, title: '進度條測試', region: '宜蘭', allowWiki: false });
+    // 固定用合成音樂：這段測的是拖桿/暫停/離場，不該吃 R2 下載的網路時序
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '進度條測試', region: '宜蘭', allowWiki: false, musicStyle: 'gentle' });
     const sid = uuid();
     await s.put({ id: sid, type: 'spot', tripId: tid, name: '夜市', emoji: '📍', day: 1, order: 0, lat: 24.67, lng: 121.77 });
     const sid2 = uuid();

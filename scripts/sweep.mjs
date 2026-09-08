@@ -243,6 +243,25 @@ try {
   await page.setOfflineMode(false);
   await page.waitForFunction(() => navigator.onLine, { timeout: 15000 });
   ok('離線後恢復連線正常');
+
+  // ---------- 7. 內建配樂：R2 線上供裝（21 首都要在） ----------
+  console.log('
+— 配樂（R2）—');
+  const musChk = await page.evaluate(async () => {
+    const T = await import('./js/tracks.js');
+    const base = 'https://tripquest.yolin0513.workers.dev/music/';
+    const out = { total: T.TRACKS.length, okN: 0, bad: [], ct: '' };
+    for (const t of T.TRACKS) {
+      try {
+        const r = await fetch(base + t.id + '.mp3', { method: 'HEAD' });
+        if (r.ok) { out.okN++; out.ct = r.headers.get('content-type') || ''; }
+        else out.bad.push(t.id + ':' + r.status);
+      } catch (e) { out.bad.push(t.id + ':ERR'); }
+    }
+    return out;
+  });
+  if (musChk.okN === musChk.total && musChk.ct.includes('audio/mpeg')) ok(`R2 配樂 ${musChk.okN}/${musChk.total} 首可取（audio/mpeg）`);
+  else bad(`R2 配樂缺檔：${musChk.bad.join('、')}`);
 } catch (e) {
   bad('巡檢中斷：' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 3).join('\n'));
 } finally {
