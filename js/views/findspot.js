@@ -25,11 +25,18 @@ export default async function findspot(tripId, query = {}) {
   setTop({ title: '搜尋景點' });
 
   let day = Math.max(1, parseInt(query.day, 10) || 1);
-  const totalDays = () => Math.max(day, ...store.spotsOf(tripId).map((s) => s.day || 1), tripDays());
+  // 「幫我規劃」建立的行程可以沒有日期 —— new Date('') 是 Invalid Date，
+  // 算出 NaN 天的話「哪一天」下拉會變成空的、加入的景點 day=NaN 在任何頁面
+  // 都看不到（實機回報「建好了卻什麼都不能做」的元兇）。每一步都要防 NaN。
   function tripDays() {
     if (!t.startDate || !t.endDate) return 1;
-    return Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000) + 1);
+    const n = Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000) + 1;
+    return Number.isFinite(n) && n > 0 ? n : 1;
   }
+  const totalDays = () => {
+    const ds = store.spotsOf(tripId).map((s) => s.day).filter((x) => Number.isFinite(x) && x > 0);
+    return Math.max(day, tripDays(), ...(ds.length ? ds : [1]));
+  };
   const centroid = () => {
     const has = store.spotsOf(tripId).filter((s) => s.lat != null && s.lng != null);
     if (!has.length) return null;
@@ -116,8 +123,9 @@ export default async function findspot(tripId, query = {}) {
       function openSettings() {
         if (panel) { panel.remove(); panel = null; addBtn.textContent = '＋ 加入'; return; }
         addBtn.textContent = '收合';
+        const nDays = Math.max(1, totalDays()) + 1;      // 永遠多給一天可選，且絕不為空
         const daySel = h('select', { class: 'field' },
-          ...Array.from({ length: Math.max(totalDays(), day) + 1 }, (_, i) => i + 1).map((d) =>
+          ...Array.from({ length: nDays }, (_, i) => i + 1).map((d) =>
             h('option', { value: d, selected: d === day }, `第 ${d} 天`)));
         const timeField = h('input', { class: 'field', type: 'time' });
         const staySel = h('select', { class: 'field' },
@@ -129,7 +137,8 @@ export default async function findspot(tripId, query = {}) {
             h('label', {}, h('span', { class: 'form-label' }, '停留多久'), staySel)),
           h('button', {
             class: 'btn btn-primary btn-block',
-            onclick: () => addSpot(cand, +daySel.value, minOfInput(timeField.value), staySel.value ? +staySel.value : null, row),
+            onclick: () => addSpot(cand, Math.max(1, parseInt(daySel.value, 10) || day || 1),
+              minOfInput(timeField.value), staySel.value ? +staySel.value : null, row),
           }, `加入「${cand.name}」`),
         );
         row.append(panel);

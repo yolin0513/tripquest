@@ -26,6 +26,10 @@ const FIX = {
     { lat: '24.9986', lon: '121.5112', display_name: '林場肉羹 分店, 某路, 新北市, 臺灣',
       class: 'amenity', type: 'restaurant', address: { country: '臺灣', city: '新北市' } },
   ],
+  '粉鳥林': [
+    { lat: '24.4736', lon: '121.8355', display_name: '粉鳥林漁港, 東澳, 南澳鄉, 宜蘭縣, 臺灣',
+      class: 'natural', type: 'beach', address: { country: '臺灣', county: '宜蘭縣', town: '南澳鄉' } },
+  ],
   '粉鳥林 宜蘭': [
     { lat: '24.4736', lon: '121.8355', display_name: '粉鳥林漁港, 東澳, 南澳鄉, 宜蘭縣, 臺灣',
       class: 'natural', type: 'beach', address: { country: '臺灣', county: '宜蘭縣', town: '南澳鄉' } },
@@ -183,6 +187,64 @@ try {
   }
   yes(!mismatch, '每一筆的 天/名稱/時間/停留 都 round-trip 相等', mismatch);
   console.log('  匯出樣本：\n' + rt.text.split('\n').slice(0, 6).map((l) => '    ' + l).join('\n'));
+
+  // ---------- 完整真實流程（實機回報的死路，逐步釘住） ----------
+  console.log('\n— 完整流程：新建 → 幫我規劃 → 加第一個景點 → 每頁都有下一步 —');
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/new`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.page');
+  // ① 沒填名稱：要聚焦到欄位＋明確提示，不是只捲動
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('幫我規劃行程')).click());
+  await sleep(400);
+  const guard = await page.evaluate(() => ({
+    toast: document.getElementById('toast')?.textContent || '',
+    focused: document.activeElement?.placeholder || '',
+    attn: !!document.querySelector('.field-attn'),
+  }));
+  yes(guard.toast.includes('取個名字'), `未填名稱有明確提示：「${guard.toast}」`);
+  yes(guard.focused.includes('京都'), '而且直接聚焦到名稱欄位');
+  yes(guard.attn, '欄位有視覺強調（不是只捲動）');
+  // ② 填名稱（不填日期 —— 實機就是這樣觸發 NaN 天的）→ 建立 → 應落在搜尋頁
+  await page.type('input[placeholder*="京都"]', '流程驗證');
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('幫我規劃行程')).click());
+  await page.waitForSelector('.fs-bar input', { timeout: 20000 });
+  ok('建立成功，直接落在搜尋頁');
+  const tid2 = await page.evaluate(() => location.hash.match(/trip\/([^/]+)\//)[1]);
+  // ③ 搜尋並加入第一個景點：沒有日期時「哪一天」也要有選項
+  await page.evaluate(() => { document.querySelector('.fs-bar input').value = '粉鳥林'; });
+  await page.click('.fs-bar button');
+  await page.waitForSelector('.fs-row', { timeout: 15000 });
+  await page.evaluate(() => document.querySelector('.fs-row .fs-add').click());
+  await page.waitForSelector('.fs-panel');
+  const dayOpts = await page.evaluate(() => [...document.querySelectorAll('.fs-panel select')[0].options].length);
+  yes(dayOpts >= 2, `沒有日期的行程「哪一天」仍有 ${dayOpts} 個選項（NaN 天已防呆）`);
+  await page.evaluate(() => document.querySelector('.fs-panel .btn-block').click());
+  await sleep(700);
+  const flowSpot = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const sp = s.spotsOf(tid)[0];
+    return sp && { day: sp.day, finite: Number.isFinite(sp.day), lat: sp.lat };
+  }, tid2);
+  yes(flowSpot && flowSpot.finite && flowSpot.day >= 1, `加入的景點 day=${flowSpot && flowSpot.day}（不是 NaN）`);
+  // ④ 回到各頁：零/一個景點的每一頁都要有可用的下一步
+  for (const [name, path] of [
+    ['行程頁', ''], ['調整行程', '/plan'], ['照片', '/people'],
+    ['分帳', '/expenses'], ['回顧', '/memories'],
+  ]) {
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/#/trip/${tid2}${path}`, { waitUntil: 'networkidle0' });
+    await sleep(600);
+    const info = await page.evaluate(() => ({
+      btns: [...document.querySelectorAll('#view button')].filter((b) => b.offsetParent && b.textContent.trim()).length,
+    }));
+    yes(info.btns >= 1, `「${name}」有 ${info.btns} 顆可按的按鈕（不是死路）`);
+  }
+  // ⑤ 行程頁看得到剛加的景點
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${tid2}`, { waitUntil: 'networkidle0' });
+  await sleep(700);
+  const tripTxt = await page.evaluate(() => document.getElementById('view').innerText);
+  yes(tripTxt.includes('粉鳥林'), '行程頁看得到剛剛加入的景點');
 
   console.log('\n規劃第 1 批測試結束');
 } catch (e) {

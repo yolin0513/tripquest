@@ -1731,3 +1731,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-divider { display: flex; align-items: center; gap: 10px; }
 .opt-list { margin: 0; padding-left: 22px; line-height: 1.9; }
 .plan-src-note { margin-top: 10px; }
+
+/* 名稱沒填時的視覺提示（只捲動＋toast 在手機上常被忽略） */
+.field-attn { outline: 3px solid #ffb14e; outline-offset: 2px; animation: attn 0.5s ease 2; }
+@keyframes attn { 50% { outline-color: transparent; } }

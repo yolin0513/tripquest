@@ -240,19 +240,29 @@ export default async function create() {
   // 建立行程的另一條路（規劃第 2 批）：不先選景點，建好就進「搜尋景點」邊查邊排
   const plannerBtn = h('button', {
     class: 'btn btn-soft btn-block', style: 'margin-top:8px',
-    onclick: () => { state.plannerMode = true; submit(); },
+    onclick: () => submit({ planner: true }),
   }, '🔍 幫我規劃行程（用搜尋一個一個加）');
 
   draw();
 
-  async function submit() {
+  async function submit(opts = {}) {
+    // planner 只屬於這一次按鈕：不能存在 state —— 存了的話，名稱沒填被擋下之後，
+    // 使用者改按「產生拍照任務」也會被帶去規劃流程（實機回報的怪流程之一）
+    const planner = !!opts.planner;
     const title = titleField.value.trim();
-    if (!title) { toast('先幫這趟旅程取個名字'); titleField.focus(); return; }
+    if (!title) {
+      toast('先幫這趟旅程取個名字');
+      titleField.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      titleField.focus();
+      titleField.classList.add('field-attn');
+      setTimeout(() => titleField.classList.remove('field-attn'), 1800);
+      return;
+    }
     if (memberField.value.trim()) addMember(memberField.value);
     if (!state.members.length) state.members.push('我');
 
     const itineraryText = itinField.value.trim();
-    if (!state.picked.size && !itineraryText && !state.imported.length && !state.plannerMode) {
+    if (!state.picked.size && !itineraryText && !state.imported.length && !planner) {
       toast('選幾個景點，或按「幫我規劃行程」用搜尋來排'); return;
     }
 
@@ -288,14 +298,14 @@ export default async function create() {
       }
 
       const { spots, quests } = await generateForTrip({ tripId, items, itineraryText, region });
-      if (!spots.length && !state.plannerMode) { toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitBtn.textContent = '產生拍照任務'; return; }
+      if (!spots.length && !planner) { toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitBtn.textContent = '產生拍照任務'; return; }
       for (const s of spots) await store.put(s);
       for (const q of quests) await store.put(q);
 
       const { syncEnabled } = await import('../sync.js');
       if (syncEnabled()) { const { ensureGroupSync } = await import('../share.js'); await ensureGroupSync(groupId); }
 
-      if (state.plannerMode) {
+      if (planner) {
         toast('旅程建好了，開始搜尋景點');
         navigate(`/trip/${tripId}/findspot?day=1`, { replace: true });
       } else {
