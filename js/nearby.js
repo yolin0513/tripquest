@@ -121,3 +121,97 @@ function rank(items, lat, lng) {
 }
 
 export { KIND };
+
+// ---------- 生活設施「找附近」（v1.59）----------
+// 自駕與帶長輩出遊最常要的：停車場、廁所、便利商店、加油站、藥局。
+// 跟上面的緊急設施同一套 Overpass（免金鑰、雙鏡像、12 秒逾時），但分開快取：
+// 語境不同（緊急 vs 生活）、欄位不同、半徑不同、也不要求有名字（停車場多半沒有）。
+// 誠實原則：capacity 是地圖登記的「總車位」靜態資料，不是即時剩餘——介面要講明。
+
+export const LIFE = {
+  parking:     { label: '停車場',   emoji: '🅿️', radius: 1500, sel: '[amenity=parking]' },
+  toilets:     { label: '廁所',     emoji: '🚻', radius: 1200, sel: '[amenity=toilets]' },
+  convenience: { label: '便利商店', emoji: '🏪', radius: 1500, sel: '[shop=convenience]' },
+  fuel:        { label: '加油站',   emoji: '⛽', radius: 4000, sel: '[amenity=fuel]' },
+  pharmacy:    { label: '藥局',     emoji: '💊', radius: 2000, sel: '[amenity=pharmacy]' },
+};
+
+const PTYPE = { surface: '平面', underground: '地下', 'multi-storey': '立體', rooftop: '頂樓', street_side: '路邊', lane: '路邊' };
+
+const LIFE_CACHE = 'tripquest.nearlife';
+function lifeKey(kind, lat, lng) { return `v1:${kind}:${lat.toFixed(2)},${lng.toFixed(2)}`; }
+function lifeRead(kind, lat, lng) {
+  try { return (JSON.parse(localStorage.getItem(LIFE_CACHE) || '{}'))[lifeKey(kind, lat, lng)] || null; } catch { return null; }
+}
+function lifeWrite(kind, lat, lng, data) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LIFE_CACHE) || '{}');
+    all[lifeKey(kind, lat, lng)] = { at: Date.now(), data };
+    const keys = Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(0, 12);
+    const trimmed = {};
+    for (const k of keys) trimmed[k] = all[k];
+    localStorage.setItem(LIFE_CACHE, JSON.stringify(trimmed));
+  } catch { /* noop */ }
+}
+
+function lifeParse(el, kind) {
+  const t = el.tags || {};
+  const p = el.center || el;
+  if (p.lat == null) return null;
+  const it = { id: el.type[0] + el.id, kind, lat: p.lat, lng: p.lon, name: t.name || t.brand || '', hours: t.opening_hours || '' };
+  if (kind === 'parking') {
+    if (t.access === 'private' || t.access === 'no') return null;   // 住戶/員工專用，導航過去也不能停
+    it.cap = parseInt(t.capacity, 10) || 0;
+    it.capDis = parseInt(t['capacity:disabled'], 10) || 0;
+    it.fee = t.fee === 'yes' ? '收費' : t.fee === 'no' ? '免費' : '';
+    it.ptype = PTYPE[t.parking] || '';
+    it.customers = t.access === 'customers';           // 消費者限定（店家附設）
+  } else if (kind === 'toilets') {
+    it.wheelchair = t.wheelchair === 'yes';
+    it.changing = t.changing_table === 'yes';
+    it.fee = t.fee === 'yes' ? '收費' : t.fee === 'no' ? '免費' : '';
+  } else {
+    it.h24 = t.opening_hours === '24/7';
+  }
+  return it;
+}
+
+// 8 方位（「往東北 350 公尺」——開車時比左右可靠、比方位角度好懂）
+export function bearingText(from, to) {
+  const dLng = (to.lng - from.lng) * Math.cos(((from.lat + to.lat) / 2) * Math.PI / 180);
+  const dLat = to.lat - from.lat;
+  const deg = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+  return ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round(deg / 45) % 8];
+}
+
+// 回傳 { at, stale, results:[{id,kind,name,lat,lng,dist,dir,…欄位}], failed? }
+export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
+  const meta = LIFE[kind];
+  if (!meta) return { at: 0, stale: true, results: [], failed: true };
+  const cached = lifeRead(kind, lat, lng);
+  if (cached && !fresh && Date.now() - cached.at < 86400000) {
+    return { at: cached.at, stale: false, results: lifeRank(cached.data, lat, lng) };
+  }
+  const q = `[out:json][timeout:25];nwr${meta.sel}(around:${meta.radius},${lat},${lng});out center tags 120;`;
+  const body = 'data=' + encodeURIComponent(q);
+  const eps = (typeof window !== 'undefined' && window.__TQ_OVERPASS_ENDPOINT) ? [window.__TQ_OVERPASS_ENDPOINT] : ENDPOINTS;
+  for (const ep of eps) {
+    try {
+      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: _to(12000) });
+      if (!res.ok) continue;
+      const d = await res.json();
+      const items = [];
+      for (const el of d.elements || []) { const it = lifeParse(el, kind); if (it) items.push(it); }
+      lifeWrite(kind, lat, lng, items);
+      return { at: Date.now(), stale: false, results: lifeRank(items, lat, lng) };
+    } catch { /* 換下一個鏡像 */ }
+  }
+  if (cached) return { at: cached.at, stale: true, results: lifeRank(cached.data, lat, lng) };
+  return { at: 0, stale: true, results: [], failed: true };
+}
+
+function lifeRank(items, lat, lng) {
+  return (items || [])
+    .map((it) => ({ ...it, dist: Math.round(haversine({ lat, lng }, { lat: it.lat, lng: it.lng })), dir: bearingText({ lat, lng }, { lat: it.lat, lng: it.lng }) }))
+    .sort((a, b) => a.dist - b.dist);
+}

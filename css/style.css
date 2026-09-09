@@ -1873,3 +1873,26 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .plan-name-row .plan-name { flex: 1; min-width: 0; }
 .plan-pin.compact { flex: none; min-width: 46px; min-height: 40px; padding: 2px 8px; }
+
+/* ---------- 找附近（v1.59） ---------- */
+.nl-center { margin-bottom: 2px; }
+.nl-centerline { margin: 2px 2px 8px; }
+.nl-cats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+.nl-cat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px 8px;
+  border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); }
+.nl-cat.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--card)); }
+.nl-cat-emoji { font-size: 26px; line-height: 1.1; }
+.nl-cat-label { font-size: 13px; }
+.nl-note { font-size: 14px; line-height: 1.55; color: var(--muted); background: var(--card);
+  border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
+.nl-loading { display: flex; align-items: center; gap: 10px; padding: 14px 4px; color: var(--muted); font-size: 15px; }
+.nl-count { margin: 2px 2px 6px; }
+.nl-card { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px; }
+.nl-card-main { flex: 1; min-width: 0; }
+.nl-name { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+.nl-dist { font-size: 15px; color: var(--muted); margin-top: 1px; }
+.nl-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.nl-chip { font-size: 13.5px; background: color-mix(in srgb, var(--fg) 8%, var(--card));
+  border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.nl-go { flex: none; text-decoration: none; padding: 10px 14px; font-size: 15px; }

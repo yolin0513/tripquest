@@ -149,6 +149,7 @@ route('/trip/:id/poster', async ({ params }) => (await import('./views/poster.js
 route('/trip/:id/plan', async ({ params }) => (await import('./views/plan.js')).default(params.id));
 route('/trip/:id/findspot', async ({ params, query }) => (await import('./views/findspot.js')).default(params.id, query));
 route('/trip/:id/sos', async ({ params }) => (await import('./views/sos.js')).default(params.id));
+route('/trip/:id/nearby', async ({ params }) => (await import('./views/nearby.js')).default(params.id));
 route('/sos', async () => (await import('./views/sos.js')).default(null));
 route('/trip/:id/weather', async ({ params }) => (await import('./views/weather.js')).default(params.id));
 route('/trip/:id/expenses', async ({ params }) => (await import('./views/expenses.js')).default(params.id));
