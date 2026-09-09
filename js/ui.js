@@ -154,13 +154,14 @@ export async function confirmDialog(message, { danger = false, okLabel = '確定
   });
 }
 
-export async function promptDialog(message, { value = '', placeholder = '', okLabel = '確定', multiline = false } = {}) {
+export async function promptDialog(message, { value = '', placeholder = '', okLabel = '確定', multiline = false, hint = '' } = {}) {
   const input = multiline
     ? h('textarea', { class: 'field', rows: 4, placeholder })
     : h('input', { class: 'field', type: 'text', placeholder, value });
   input.value = value;
   const res = await modal({
-    body: h('div', {}, h('p', { style: 'margin:0 0 8px' }, message), input),
+    body: h('div', {}, h('p', { style: 'margin:0 0 8px' }, message), input,
+      hint ? h('p', { class: 'form-hint', style: 'margin:8px 0 0' }, hint) : null),
     actions: [
       { label: '取消', value: false },
       { label: okLabel, value: true, primary: true },

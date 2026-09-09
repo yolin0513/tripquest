@@ -9,6 +9,7 @@
 |---|---|
 | 前端（GitHub Pages） | https://yolin0513.github.io/tripquest/ （repo `yolin0513/tripquest`，push main 即部署；`sw.js` 的 VERSION 每版必 bump） |
 | 同步 Worker | https://tripquest.yolin0513.workers.dev （`workers/`，`npx wrangler deploy`；綁 D1 `tripquest` 與 R2 `tripquest-photos`） |
+| 地圖短網址 | Worker `GET /resolve?u=<短網址>`（白名單 maps.app.goo.gl／goo.gl/maps，只讀轉址標頭、不讀內容、無祕鑰、no-store） |
 | 配樂 | Worker `GET /music/<id>.mp3` → R2 `music/v1/`（唯讀、白名單檔名、無列舉） |
 | LAN 自架模式 | `server/index.mjs`（synctest 預設走這個；與 Worker 共用 `js/merge.js`） |
 
@@ -29,7 +30,7 @@
 
 ## 測試
 
-- `npm test` 一次跑 **32 支**（validate-places → … → albumtest → jointest，全綠才算過）。較大的：plannertest 62、jointest 22、albumtest 27、mergetest 27、musictest 30、routetest 43、v147shots 45。
+- `npm test` 一次跑 **33 支**（validate-places → … → albumtest → jointest，全綠才算過）。較大的：plannertest 62、jointest 22、albumtest 27、mergetest 27、musictest 30、routetest 43、v147shots 45。
 - **手動跑**（不在 npm test，因為打真網路／真伺服器）：
   - `npm run sweep` — 對**線上正式站**巡檢 67 項（含 R2 配樂 21 首 HEAD）。每次上版後必跑。
   - `npm run livetest` — 線上端到端（會在正式 D1 建「線上驗證團」，跑完記得清）。
@@ -48,6 +49,7 @@
 5. **原生 PWA、無框架無打包**；IndexedDB＋版本化 SW；h() 全 textNode＋URL 白名單（無 XSS 面）；CSP script-src 'self'。
 6. **iOS 教訓**：原生 time input 空值畫成當下時間＋寬度不可控 → 全 App 改時/分下拉；主畫面 App 與 Safari 儲存分離 → 邀請流程 iPhone 先裝後加入。
 7. 外部請求全部有逾時（AbortSignal.timeout 守門），失敗走各自降級（v1.55.1 健檢）。
+10. **貼地圖連結取位置（v1.61）**：`parseCoordInput` 支援 Google 完整網址（@／!3d!4d／ll／center）、Apple 地圖（ll／sll／daddr）、`geo:` URI、純數字（全形逗號／空格）、多行分享文字。**短網址**（maps.app.goo.gl）本身不含座標 → Worker `/resolve` 跟隨轉址；**只讀 location 標頭、永不讀內容**：既不當內容代理，也避開實測到的陷阱——Google 地圖 HTML 裡的 `center=` 是**預設地圖中心**（貼蘇澳的連結、HTML 卻寫台北），讀 HTML 會給出「看似合理其實全錯」的座標。不跟進 `/sorry/`（Google 對雲端 IP 的機器人驗證頁，其 `q=` 是內部 token）。轉址後常只有「地址＋店名」→ `placeCandidates` 依「像不像地標名」拆解（地名字尾優先於地址判定、去掉「國道五號」這類前綴、丟掉切壞的碎片、3 字 CJK 地名不降級），多候選結果**合併後用原文的鄉鎮名評分**（實測兩個坑：先中的候選給了 3 公里外的飯店、22 公里外的同連鎖分店），且**一律讓使用者確認**、可自己改搜尋詞。失敗訊息列出三種可貼格式並教「在地圖上長按會出現座標」；離線時明講要連線。
 9. **旅伴位置分享（v1.60，三代理 3:0 GO-with-changes，必修項全數落地）**：新型別 `memberPos`，id = `pos:<tripId>:<memberId>:<deviceId>`（多裝置不互蓋），走整筆 updatedAt LWW（**不進 APPEND_ONLY** —— 那是「已存在就跳過」，位置會停在第一筆；也不進 TRACKED）。座標降到小數 4 位（~11m，帶 accM；>300m 只說「大約在附近」）。**隱私三道**：①`store.exportRecords()` 預設排除 SENSITIVE_TYPES（全 App 35 處通用資料源自動乾淨，只有 exportGroup 明確包含）②關閉/過期寫**不含座標的墓碑**（`store.remove` 是 patch 展開語意，會把 lat/lng 留在墓碑裡——這是「我關掉了啊」最會被背叛的地方）③伺服器 48 小時 TTL：Worker cron 每日把過期的改寫成無座標墓碑並佔新 seq（**不是 DELETE**——客戶端游標是 seq，刪列的話別台永遠不知道要清本機副本），pull 端另有即時保險；LAN server 同一套。**單筆推送**（一般 put 會把整個群組幾百筆推一遍）。同意畫面講五件事（誰看得到＋實際名字／看得到什麼／多久／怎麼關／關了會怎樣）、行程頁常駐指示、SOS 頁一鍵停止。文案誠實：PWA 無背景定位 → 一律講「最後一次打開 App 時的位置」，不講即時追蹤。
 9.5 **SOS 醫院只列大醫院（v1.60）**：只查 `amenity=hospital`（國術館在 OSM 常被標成 `amenity=clinic`），上限 80→300（**根因**：80 是「任意取前 N 筆」，台北 8km 內有 312 家診所，真正的醫院整個擠不進回應——石牌實測回應裡只有 1 家醫院、清單前幾名是診所與國術館）。emergency 填寫率實測：大台北 46%、札幌 15%、京都 1% → 需名稱後備（台「醫院」日「病院」優先；「診所/クリニック/医院/Clinic」降級；畫了院區的 way/relation 再加分）。同名去重（大醫院常有多個節點，實測京都第一赤十字病院 ×2）。急診標示三態：明說有→🚨、明說沒有→灰標、沒資料→不寫（不裝懂）。藥局維持現狀。
 8.5 **找附近（v1.59）**：放獨立頁不進 SOS——SOS 是走失/急救的緊急畫面，生活設施會稀釋緊急性（藥局兩邊都有，語境不同）。與 SOS 共用 Overpass 機制（免金鑰雙鏡像、12 秒逾時、離線回快取），分開快取（tripquest.nearlife，1 天）；濾掉 access=private 停車場。**誠實標示**：capacity＝總車位非即時剩餘（實測填寫率：羅東夜市 1/67、清水寺 25/206——有就顯示、不當賣點）；即時剩餘車位查證結論＝台北市舊免金鑰 JSON（tcgbusfs）已 404、主管道 TDX 要註冊金鑰、台中等縣市有零散自建端點但格式不一、日本無可靠免費來源 → 不接，介面講明，未來列 TDX 自帶金鑰選配。
@@ -63,6 +65,7 @@
 - 同步為欄位組級 LWW：同一天兩台同時重排順序仍可能交錯（可解釋但非誰的原意）；時鐘偏移影響同現況。
 - 長輩實機待確認：iOS 滑桿手感、相簿檢視器手勢、吉諾佩第音質（使用者已說 OK）、旅伴清單新版。
 - **git 作者 email**：歷史檔案內容已洗（filter-repo，力推 `b8107c1`）；commit 作者欄仍是帳號 email（公開資訊），要藏需改 GitHub noreply（未做）。
+- 貼地圖短網址需要連線（網址本身沒有座標，要跟隨轉址）；轉址後只有地名時，能不能定位取決於免費地圖資料有沒有收錄該地標——查不到時會請使用者改貼座標。
 - 位置分享的已知取捨：PWA 沒有背景定位 → App 沒開就不更新（介面已明講「最後看到」）；邀請連結**永久有效、無輪替、無成員移除**，所以「拿過連結的人」在行程期間都看得到位置——文案有列出誰看得到，祕鑰輪替仍是待辦（加了位置之後優先度升高）。
 - 照片 EXIF 座標的「只存本機」承諾 v1.60 前其實是破的（submission 整筆會同步）——現已在 `exportGroup` 上傳前剝除 `gps`，本機保留供相簿地圖用。
 - 記錄膨脹：spot 的 heroPool/_f 讓記錄變胖，尚無清理 UI。

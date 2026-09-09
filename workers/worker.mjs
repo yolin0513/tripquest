@@ -95,6 +95,12 @@ export default {
       catch (e) { return new Response('相簿讀取失敗：' + String(e && e.message || e), { status: 500 }); }
     }
 
+    // 地圖短網址解析（v1.61）。Google 的 maps.app.goo.gl 短網址本身不含座標，
+    // 要跟隨轉址才拿得到；瀏覽器端直接 fetch 會被 CORS 擋，所以借道這裡。
+    if (path === '/resolve' && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handleResolve(request, url);
+    }
+
     const groupId = url.searchParams.get('g');
     const secret = bearer(request) || url.searchParams.get('s');
     if (!groupId || !secret) return json({ error: 'missing group or secret' }, 400);
@@ -261,6 +267,97 @@ async function handlePull(env, url, groupId, secret) {
   const maxSeq = rows.length ? rows[rows.length - 1].seq : since;
   return json({ records, seq: rows.length === PULL_LIMIT ? maxSeq : group.seq, more: rows.length === PULL_LIMIT });
 }
+
+// ---------- /resolve（地圖短網址 → 座標或地名）----------
+//
+// 這是唯一不需要祕鑰的「對外請求」端點，所以邊界要收得很緊：
+//
+// 1) **來源與每一跳都走白名單**（只有 Google 的短網址與地圖網域）——不然這裡就成了
+//    任意網址的代理／SSRF 跳板；轉址鏈也可能被導去內網或第三方，所以每一跳都要再驗一次。
+// 2) **只讀 location 標頭，永遠不讀內容**（redirect:'manual'）。除了不當內容代理之外，
+//    還有一個實測到的正確性理由：Google 地圖頁面的 HTML 裡有個 center= 參數，
+//    但那是**預設地圖中心**（實測貼蘇澳的連結、HTML 裡卻是台北的座標）——
+//    讀 HTML 會回一個看起來很合理、其實完全錯的位置，比解析失敗糟得多。
+// 3) 最多 5 跳、每跳 6 秒逾時；回應只有座標或地名字串，不轉發任何其他內容。
+// 4) 不記錄使用者貼的網址（沒有任何 log/儲存），回應 no-store。
+// 不綁祕鑰是刻意的：單機模式（沒設同步）的使用者也要能用這個功能，而端點本身
+// 讀不到、也吐不出任何使用者資料。
+const SHORT_HOSTS = new Set(['maps.app.goo.gl', 'goo.gl', 'www.goo.gl']);
+const HOP_OK = (h) => SHORT_HOSTS.has(h) || /(^|\.)google\.(com?|[a-z]{2})(\.[a-z]{2})?$/.test(h);
+
+function coordsFromUrl(u) {
+  const pats = [
+    /@(-?\d{1,2}\.\d{3,}),(-?\d{1,3}\.\d{3,})/,
+    /!3d(-?\d{1,2}\.\d{3,})!4d(-?\d{1,3}\.\d{3,})/,
+    /[?&](?:ll|sll|center|daddr|saddr)=(-?\d{1,2}\.\d{3,})(?:,|%2C)(-?\d{1,3}\.\d{3,})/,
+    /[?&]q=(?:loc:)?(-?\d{1,2}\.\d{3,})(?:,|%2C)\s*(-?\d{1,3}\.\d{3,})/,
+  ];
+  for (const p of pats) {
+    const m = u.match(p);
+    if (!m) continue;
+    const lat = +m[1], lng = +m[2];
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+  }
+  return null;
+}
+
+async function handleResolve(request, url) {
+  const raw = url.searchParams.get('u') || '';
+  let target;
+  try { target = new URL(raw); } catch { return noStore(json({ error: 'bad url' }, 400)); }
+  if (target.protocol !== 'https:' || !SHORT_HOSTS.has(target.hostname)
+      || (target.hostname !== 'maps.app.goo.gl' && !/^\/maps\b/.test(target.pathname))) {
+    return noStore(json({ error: 'unsupported host' }, 400));
+  }
+
+  let current = target.toString();
+  for (let hop = 0; hop < 5; hop++) {
+    let res;
+    try {
+      res = await fetch(current, {
+        redirect: 'manual',
+        headers: { 'user-agent': 'Mozilla/5.0 (compatible; TripQuest/1.0)', 'accept-language': 'zh-TW,zh;q=0.9' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
+      });
+    } catch { return noStore(json({ error: 'fetch failed' }, 502)); }
+    const loc = res.headers.get('location');
+    if (!loc) break;                                   // 不再轉址：current 就是最終網址
+    let next;
+    try { next = new URL(loc, current); } catch { break; }
+    if (next.protocol !== 'https:' || !HOP_OK(next.hostname)) {
+      return noStore(json({ error: 'redirect blocked' }, 400));   // 轉址跳出白名單就停手
+    }
+    // Google 對雲端 IP 常在第二跳丟出 /sorry/ 機器人驗證頁，它的 q= 是一串內部 token
+    // ——跟進去只會拿到垃圾。上一跳的網址通常已經帶著我們要的東西了。
+    if (/^\/sorry\b/.test(next.pathname)) break;
+    current = next.toString();
+    const hit = readPlace(current);
+    if (hit) return noStore(json(hit));                // 拿到座標或地名就停，不用跟到底
+  }
+  const hit = readPlace(current);
+  if (hit) return noStore(json(hit));
+  return noStore(json({ error: 'no coords' }, 404));
+}
+
+// 從網址讀出「座標」或「地名」。地名要看起來像地名——Google 的內部 token
+// （一長串沒有空格與中文的英數字）不能當地名回去，不然客戶端會拿它去查一個不存在的地方。
+function readPlace(u) {
+  const c = coordsFromUrl(u);
+  if (c) return { ...c, src: 'url' };
+  let q = '';
+  try { q = new URL(u).searchParams.get('q') || ''; } catch { q = ''; }
+  if (!q) {
+    const m = u.match(/\/maps\/place\/([^/@?]+)/);
+    if (m) { try { q = decodeURIComponent(m[1]).replace(/\+/g, ' '); } catch { q = ''; } }
+  }
+  q = q.trim();
+  if (!q) return null;
+  const looksLikeToken = q.length > 24 && !/[\s\u3000-\u9fff,]/.test(q);
+  if (looksLikeToken) return null;
+  return { query: q.slice(0, 200), src: 'name' };
+}
+
+function noStore(res) { res.headers.set('cache-control', 'no-store'); return res; }
 
 // ---------- /invite（邀請摘要）----------
 // 短邀請連結（v1.58）點開時拿摘要用。只收 Bearer 祕鑰——這個端點的回應含成員名，

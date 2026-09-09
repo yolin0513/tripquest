@@ -288,14 +288,23 @@ export async function fillTripCoords(tripId, { onProgress = () => {} } = {}) {
   return { tried: missing.length, found, byPhoto, still: missing.length - found };
 }
 
-// 「貼上座標或地圖連結」：接受 24.67,121.77、Google 地圖網址（@lat,lng、!3d..!4d..、q=lat,lng）
+// 「貼上座標或地圖連結」。支援（v1.61 擴充）：
+//   · 純數字：24.677, 121.767 ／ 24.677 121.767 ／ 全形逗號
+//   · Google 完整網址：@lat,lng、!3d..!4d..、?q=lat,lng、ll=、center=
+//   · Apple 地圖：maps.apple.com/?ll=25.03,121.56 或 &sll=、&daddr=
+//   · geo: URI（Android 分享）：geo:24.677,121.767
+//   · 多行文字（App 的「分享」常是「地名\n網址」）—— regex 本來就會全文搜尋
+// 短網址（maps.app.goo.gl）本身不含座標，要走 resolveMapLink（需要連線）。
 export function parseCoordInput(text) {
   const s = String(text || '');
   const pats = [
     /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/,
     /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/,
-    /[?&]q=(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/,
+    /[?&](?:ll|sll|center|daddr|saddr)=(-?\d{1,2}\.\d+)(?:,|%2C)\s*(-?\d{1,3}\.\d+)/,
+    /[?&]q=(?:loc:)?(-?\d{1,2}\.\d+)\s*(?:,|%2C)\s*(-?\d{1,3}\.\d+)/,
+    /\bgeo:(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/i,
     /(-?\d{1,2}\.\d{2,})\s*[,，]\s*(-?\d{1,3}\.\d{2,})/,
+    /(-?\d{1,2}\.\d{4,})\s+(-?\d{1,3}\.\d{4,})/,          // 只有空格分隔（要夠多小數位才敢猜）
   ];
   for (const p of pats) {
     const m = s.match(p);
@@ -305,3 +314,96 @@ export function parseCoordInput(text) {
   }
   return null;
 }
+
+// 貼進來的文字裡有沒有 Google 地圖短網址？
+const SHORT_RE = /https?:\/\/(?:maps\.app\.goo\.gl\/[A-Za-z0-9]+|(?:www\.)?goo\.gl\/maps\/[A-Za-z0-9]+)[^\s]*/;
+export function findShortMapLink(text) {
+  const m = String(text || '').match(SHORT_RE);
+  return m ? m[0] : null;
+}
+
+// 短網址 → { lat, lng } 或 { query }（需要連線；瀏覽器不能直接跟隨轉址，走自家 Worker）
+export async function resolveMapLink(shortUrl, { timeoutMs = 12000 } = {}) {
+  const base = (typeof window !== 'undefined' && window.__TQ_RESOLVE_ENDPOINT)
+    || 'https://tripquest.yolin0513.workers.dev/resolve';
+  const res = await fetch(`${base}?u=${encodeURIComponent(shortUrl)}`, {
+    signal: AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) { const e = new Error('resolve ' + res.status); e.status = res.status; throw e; }
+  return res.json();
+}
+
+// Google 給的地名常是「郵遞區號＋整串地址＋店名」黏在一起，例如
+//「270宜蘭縣蘇澳鎮新城里蘇新路81號諾貝爾奶凍 國道五號蘇澳服務區 - 蘇澳店」。
+// 整串丟去查一定摃龜，所以拆成候選——**順序照「像不像地標名」排，不是照長度**。
+// 實測踩過的兩個坑：
+//   · 先試「地址＋店名」那串會模糊命中三公里外的飯店（比查不到還糟）
+//   · 「蘇澳服務區」在 OSM 的名字沒有「國道五號」前綴 → 要生出去掉前綴的變體
+//   · 太短又太通用的段（「蘇澳店」）會命中中國的地名 → 一律排到最後
+const PLACE_SUFFIX = /(服務區|休息站|轉運站|交流道|夜市|老街|車站|機場|漁港|園區|商圈|公園|步道|瀑布|溫泉|農場|牧場|博物館|美術館|紀念館|文化館|體育館|大學|醫院|市場|大橋|燈塔|海灘|沙灘|水庫|神社|寺|廟|宮|城|館|山|湖|潭|谷|港)$/;
+// 地址判定：門牌（阿拉伯數字＋號）或「…縣/市…」開頭的行政區串。
+// 注意不能只看單一個「區」字——「服務區」「園區」都會被誤判成地址（實測踩過）。
+const ADDRESSY = /\d+\s*號|[縣市][^\s]{2,}[鄉鎮市區村里]/;
+
+// 從貼上的原文抽出行政區（宜蘭縣、蘇澳鎮…）。用來替搜尋結果評分：
+// 同一家連鎖店在別的鄉鎮也有分店（實測「諾貝爾奶凍」先查到 22 公里外的礁溪店），
+// 靠原文裡的鄉鎮名才分得出哪一筆才是使用者釘的那個點。
+export function adminTokens(text) {
+  const out = [];
+  for (const m of String(text || '').matchAll(/[^\s\d]{1,3}[縣市鄉鎮區]/g)) {
+    const t = m[0];
+    if (t.length >= 2 && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+export function placeCandidates(q) {
+  const raw = String(q || '').trim();
+  if (!raw) return [];
+  const landmark = [], addressy = [], weak = [];
+  const add = (arr, x) => {
+    const v = String(x || '').replace(/\s+/g, ' ').trim();
+    if (v.length >= 2 && !arr.includes(v)) arr.push(v);
+  };
+
+  const noZip = raw.replace(/^\d{3,6}\s*/, '');
+  // 門牌之後黏著的通常就是店名／地標名
+  const m = noZip.match(/^(.*?[路街道段巷弄]\s*\d+\s*號)(.+)$/);
+  const tail = m ? m[2] : '';
+  const segs = [...(tail ? tail.split(/\s+-\s+|\s+/) : []), ...noZip.split(/\s+-\s+|\s+/)]
+    .map((x) => x.trim()).filter((x) => x.length >= 2);
+
+  for (const seg of segs) {
+    const isPlace = PLACE_SUFFIX.test(seg);                   // 地名字尾優先於地址判定
+    if (!isPlace && ADDRESSY.test(seg)) { add(addressy, seg); continue; }
+    // 太短又沒有地名字尾的（「蘇澳店」）容易命中八竿子打不著的地方，排最後。
+    // 但中文/日文的三字地名很常見（清水寺、龍山寺、九份老街），有地名字尾就不算短。
+    if (!isPlace && seg.length <= 3) { add(weak, seg); continue; }
+    add(landmark, seg);
+    const noBranch = stripBranch(seg);
+    if (noBranch) add(landmark, noBranch);
+    // 「國道五號蘇澳服務區」→「蘇澳服務區」、「…16號礁溪溫泉公園」→「礁溪溫泉公園」：
+    // OSM 上的名字常常沒有那些前綴。長的變體先試（比較specific），
+    // 而開頭是「號」或數字的一定是切壞的碎片，直接丟掉。
+    const sm = seg.match(PLACE_SUFFIX);
+    if (sm) {
+      const suffix = sm[1];
+      const head = seg.slice(0, seg.length - suffix.length);
+      for (const n of [4, 3, 2]) {
+        if (head.length <= n) continue;
+        const cand = head.slice(-n) + suffix;
+        if (/^[號段巷弄0-9０-９一二三四五六七八九十]/.test(cand)) continue;
+        add(landmark, cand);
+      }
+    }
+  }
+  // 地標名 → 門牌後的整串 → 地址 → 原文 → 太通用的短詞
+  const out = [...landmark];
+  const push = (x) => { const v = String(x || '').replace(/\s+/g, ' ').trim(); if (v.length >= 2 && !out.includes(v)) out.push(v); };
+  if (tail) push(tail);
+  for (const x of addressy) push(x);
+  push(noZip);
+  for (const x of weak) push(x);
+  return out.slice(0, 8);
+}
+

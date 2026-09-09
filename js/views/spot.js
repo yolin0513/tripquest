@@ -64,13 +64,13 @@ export default async function spot(tripId, spotId) {
       } catch (e) { toast('查詢失敗：' + e.message); }
     } }, '🔍 查位置'),
     h('button', { class: 'btn btn-soft', onclick: async () => {
-      const v = await promptDialog('貼上座標（例如 24.677, 121.767）或 Google 地圖的連結：', { placeholder: '24.677, 121.767' });
+      const v = await promptDialog('貼上地圖連結或座標', {
+        placeholder: '24.677, 121.767',
+        hint: '可以貼：Google 地圖的分享連結（含 maps.app.goo.gl 短網址）、Apple 地圖連結，或直接貼「緯度, 經度」兩個數字。',
+      });
       if (!v) return;
-      const { parseCoordInput } = await import('../geocode.js');
-      const c = parseCoordInput(v);
-      if (!c) { toast('看不懂這個內容 —— 要有「緯度, 經度」兩個數字'); return; }
-      await store.patch(spotId, { lat: c.lat, lng: c.lng, geoSrc: 'manual' });
-      drawPos(); toast('已存位置');
+      const ok = await applyPastedLocation(spotId, v, t);
+      if (ok) drawPos();
     } }, '📋 貼座標'),
   );
   const posClear = h('button', { class: 'btn btn-ghost btn-block', onclick: async () => {
@@ -192,6 +192,133 @@ export default async function spot(tripId, spotId) {
       h('button', { class: 'btn btn-danger btn-block', onclick: del }, '🗑️ 刪除這個景點'),
     ),
   ));
+}
+
+// 貼上的內容 → 位置。三條路：
+//   1) 文字裡直接有座標（完整網址／純數字／geo:／Apple 地圖）→ 立刻存
+//   2) Google 短網址 → 借道自家 Worker 跟隨轉址；轉址後有座標就用，
+//      只有地名（Google 常給「地址＋店名」）就拿去查，查到幾個讓使用者挑
+//   3) 都不行 → 講清楚可以貼什麼、以及「在地圖上長按會出現座標」這條替代路
+async function applyPastedLocation(spotId, text, trip) {
+  const geo = await import('../geocode.js');
+  const direct = geo.parseCoordInput(text);
+  if (direct) {
+    await store.patch(spotId, { lat: direct.lat, lng: direct.lng, geoSrc: 'manual' });
+    toast('已存位置');
+    return true;
+  }
+
+  const short = geo.findShortMapLink(text);
+  if (short) {
+    if (navigator.onLine === false) {
+      await explainPaste('短網址要連上網才能查出位置（網址本身沒有座標）。');
+      return false;
+    }
+    toast('正在查這個連結…');
+    let r = null;
+    try { r = await geo.resolveMapLink(short); }
+    catch { await explainPaste('這個短網址查不出來（可能是網路不順，或連結已失效）。'); return false; }
+    if (r && r.lat != null) {
+      await store.patch(spotId, { lat: r.lat, lng: r.lng, geoSrc: 'manual' });
+      toast('已存位置');
+      return true;
+    }
+    if (r && r.query) {
+      const picked = await pickFromQuery(r.query, trip);
+      if (picked === 'none') {
+        await explainPaste(`連結指到「${r.query.slice(0, 30)}」，但這個名字在免費地圖資料裡查不到。`);
+        return false;
+      }
+      if (!picked) return false;                        // 使用者自己取消
+      await store.patch(spotId, { lat: picked.lat, lng: picked.lng, geoSrc: 'manual' });
+      toast('已存位置');
+      return true;
+    }
+    await explainPaste('這個連結裡沒有位置資訊。');
+    return false;
+  }
+
+  await explainPaste('這段文字裡找不到座標，也沒有地圖連結。');
+  return false;
+}
+
+// 地名 → 候選清單 → 讓使用者確認是哪一個。
+// 一律讓人確認、不自動挑：免費地圖資料對「地址＋店名」的模糊比對會給出很遠的結果
+//（實測踩過兩次：三公里外的飯店、22 公里外的同連鎖分店），自動套用等於默默存錯位置。
+async function pickFromQuery(query, trip) {
+  const geo = await import('../geocode.js');
+  const admins = geo.adminTokens(query);          // 原文裡的鄉鎮名（蘇澳鎮…）
+  const found = [];
+  // 多試幾個候選並把結果**合起來**排序 —— 只取「第一個有結果的候選」會挑到別家分店
+  for (const q of geo.placeCandidates(query).slice(0, 4)) {
+    let hits = [];
+    try { hits = await geo.geocodeSearch(q, { limit: 4, region: trip?.region || '' }); }
+    catch { hits = []; }
+    for (const h of hits || []) {
+      if (found.some((f) => f.hit.name === h.name && Math.abs(f.hit.lat - h.lat) < 0.002)) continue;
+      found.push({ hit: h, from: q, score: scoreHit(h, q, admins) });
+    }
+    if (found.length >= 6) break;
+  }
+  if (!found.length) return 'none';
+  found.sort((a, b) => b.score - a.score);
+  return chooseHit(found, trip);
+}
+
+// 結果評分：地址對得上原文的鄉鎮 > 名字跟搜尋詞吻合
+function scoreHit(hit, q, admins) {
+  const full = String(hit.fullName || '') + ' ' + String(hit.name || '');
+  let sc = 0;
+  for (const a of admins) if (full.includes(a)) sc += a.endsWith('縣') || a.endsWith('市') ? 1 : 3;
+  if (String(hit.name || '').includes(q) || q.includes(String(hit.name || ''))) sc += 1;
+  if (hit.wiki) sc += 0.5;
+  return sc;
+}
+
+async function chooseHit(found, trip) {
+  const geo = await import('../geocode.js');
+  let close = null;
+  const res = await modal({
+    title: '是這個地方嗎？',
+    expose: (fn) => { close = fn; },
+    body: h('div', {},
+      h('p', { class: 'form-hint', style: 'margin:0 0 8px' }, '從連結的地址找到這幾個，請確認是哪一個：'),
+      h('div', { class: 'stack' }, ...found.slice(0, 4).map((f) => h('button', {
+        class: 'btn btn-soft btn-block', style: 'text-align:left',
+        onclick: () => close && close(f.hit),
+      },
+        h('div', { style: 'font-weight:700' }, f.hit.name || '這個地點'),
+        h('div', { class: 'form-hint' }, String(f.hit.fullName || '').slice(0, 44))))),
+    ),
+    actions: [{ label: '都不是，我自己找', value: 'retry' }, { label: '取消', value: null }],
+  });
+  if (res !== 'retry') return res;
+  // 讓使用者自己改搜尋詞（連鎖店、地標的正式名稱常常跟連結上的不一樣）
+  const q2 = await promptDialog('要找的地方叫什麼？', { value: found[0]?.from || '', okLabel: '搜尋' });
+  if (!q2) return null;
+  let hits2 = [];
+  try { hits2 = await geo.geocodeSearch(q2, { limit: 4, region: trip?.region || '' }); }
+  catch { hits2 = []; }
+  if (!hits2 || !hits2.length) { toast('這個名字查不到，可以改貼座標'); return null; }
+  return chooseHit(hits2.map((x) => ({ hit: x, from: q2, score: 0 })), trip);
+}
+
+// 失敗時要講「可以怎麼做」，不是只說看不懂
+async function explainPaste(why) {
+  await modal({
+    title: '這個貼上的內容用不了',
+    body: h('div', {},
+      h('p', { style: 'margin:0 0 10px' }, why),
+      h('div', { class: 'form-hint', style: 'line-height:1.7' },
+        h('div', { style: 'font-weight:700;margin-bottom:4px' }, '可以貼這幾種：'),
+        h('div', {}, '· Google 地圖的分享連結（包含 maps.app.goo.gl 短網址）'),
+        h('div', {}, '· Apple 地圖的連結'),
+        h('div', {}, '· 直接貼兩個數字：24.677, 121.767'),
+        h('div', { style: 'font-weight:700;margin:10px 0 4px' }, '都不行的話（最保險）：'),
+        h('div', {}, '在 Google 地圖上「長按」那個地點，畫面下方會出現一組座標數字，點一下複製，再貼回這裡。'),
+      )),
+    actions: [{ label: '知道了', value: true }],
+  });
 }
 
 function field(label, control) {
