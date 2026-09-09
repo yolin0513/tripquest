@@ -974,6 +974,7 @@ export async function createPlayer(canvas, tripId, opts = {}) {
         music = m;
         musicStyle = want;
         music?.progress(clamp01(offset / timeline.total));
+        music?.seek?.(offset);                       // 從進度條停的地方接著播（串流曲目可精準對位）
         await music?.start().catch(() => {});
         if (gen !== playGen) { try { music?.stop(); } catch { /* noop */ } music = null; musicStyle = null; return; }
       } else if (music) {
@@ -1001,6 +1002,7 @@ export async function createPlayer(canvas, tripId, opts = {}) {
       draw(offset);
       timeline.frames.ensure(i).then(() => { if (!playing) draw(offset); });
       music?.progress(clamp01(offset / timeline.total));
+      music?.seek?.(offset);                       // 拖進度條 → 音樂跟著跳到同一秒
     },
     destroy() { this.stop(); timeline.frames.clear(); },
   };

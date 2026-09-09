@@ -15,6 +15,7 @@
 //     由同步 Worker 的 GET /music/<id>.mp3 公開供裝（唯讀、白名單檔名、無列舉）。
 //     曲庫再大也不進 repo、不肥大部署與預快取。
 //   · 選了才下載；下載後寫進 Cache API 的 tq-music-v1（跨版本保留）→ 離線可用。
+//   · 播放：串流（<audio>+MediaElementSource，見 trackMusic），長曲不再整段解碼
 //   · 退路：R2 取不到 → 呼叫端退回程式合成並明講（album.js）；playful 一首
 //     保留在 repo（./media/music/）當離線最終保底。
 //
@@ -96,14 +97,90 @@ async function trackBuffer(id) {
 export async function ensureTrackCached(id) { await trackBuffer(id); }
 
 // 回傳與 createMusic / musicFromFile 同介面的配樂物件：
-// {stream, start, progress, pause, resume, fadeOutStop, stop}
-// 循環播放（影片比曲長就從頭接續），結尾淡出由呼叫端的 fadeOutStop 處理。
+// {stream, start, progress, pause, resume, seek, fadeOutStop, stop, duration}
+//
+// v1.56.1 改為串流播放：<audio> 元素吃 blob URL（壓縮的 mp3，2–5MB），經
+// createMediaElementSource 接進 Web Audio → 錄影的 MediaStreamDestination ＋ 喇叭。
+// 之前是 decodeAudioData 整段解成 PCM：6 分鐘立體聲 ≈ 127MB，舊手機錄影時很吃緊；
+// 媒體元素是邊播邊解，記憶體只剩壓縮檔本身。
+//   · 循環：audio.loop（影片比曲長就接續；瀏覽器在接縫可能有幾十毫秒空隙）
+//   · 跳轉：seek(sec) → currentTime = sec % duration（進度條拖到哪、音樂就對到哪）
+//   · 淡出：gain ramp → pause → 釋放 blob URL、關 ctx
+//   · iOS Safari 已知限制：createMediaElementSource 要在使用者手勢後建立（播放/錄影
+//     鈕的點擊符合）；接進 Web Audio 後音量會跟隨 Web Audio 的規則（跟現在的合成
+//     音樂一樣）。任一步失敗就退回原本的 BufferSource 路徑（同介面）。
 export async function trackMusic(id, { volume = 0.7 } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   const data = await trackBuffer(id);
+  try {
+    return await streamMusic(id, data, volume, Ctx);
+  } catch (e) {
+    console.warn('串流播放不可用，退回整段解碼', e && e.message);
+    return await bufferMusic(id, data, volume, Ctx);
+  }
+}
+
+async function streamMusic(id, data, volume, Ctx) {
+  const blob = new Blob([data], { type: 'audio/mpeg' });
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.loop = true;
+  audio.crossOrigin = 'anonymous';
+  audio.src = url;
+  // 等中繼資料（拿 duration）；壞檔或不支援 → reject → 退回解碼路徑
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('metadata timeout')), 15000);
+    audio.addEventListener('loadedmetadata', () => { clearTimeout(t); resolve(); }, { once: true });
+    audio.addEventListener('error', () => { clearTimeout(t); reject(new Error('audio error')); }, { once: true });
+  });
+  if (!Number.isFinite(audio.duration) || audio.duration <= 0) throw new Error('no duration');
   const ctx = new Ctx();
-  try { await ctx.suspend(); } catch { /* noop */ }   // 解碼要一兩秒，期間不該算「在響」；start() 會 resume
+  try { await ctx.suspend(); } catch { /* noop */ }
+  const src = ctx.createMediaElementSource(audio);
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  const dest = ctx.createMediaStreamDestination();
+  src.connect(gain); gain.connect(dest); gain.connect(ctx.destination);
+  const cleanup = async () => {
+    try { audio.pause(); } catch { /* noop */ }
+    try { audio.removeAttribute('src'); audio.load(); } catch { /* noop */ }
+    try { URL.revokeObjectURL(url); } catch { /* noop */ }
+    try { await ctx.close(); } catch { /* noop */ }
+  };
+  return {
+    stream: dest.stream,
+    style: 'track:' + id,
+    duration: audio.duration,
+    mode: 'stream',
+    async start() {
+      if (ctx.state === 'suspended') await ctx.resume();
+      await audio.play();
+    },
+    progress() { /* 真實曲目不做段落編排 */ },
+    seek(sec) {
+      try { audio.currentTime = Math.max(0, sec) % audio.duration; } catch { /* noop */ }
+    },
+    pos() { return audio.currentTime; },
+    async pause() { try { audio.pause(); await ctx.suspend(); } catch { /* noop */ } },
+    async resume() { try { await ctx.resume(); await audio.play(); } catch { /* noop */ } },
+    async fadeOutStop(sec = 1.2) {
+      try {
+        gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + sec);
+      } catch { /* noop */ }
+      await new Promise((r) => setTimeout(r, sec * 1000 + 100));
+      await cleanup();
+    },
+    stop() { cleanup(); },
+  };
+}
+
+// 退路：整段解碼（v1.54 的做法）。短曲記憶體無感，長曲才是問題，所以只當退路。
+async function bufferMusic(id, data, volume, Ctx) {
+  const ctx = new Ctx();
+  try { await ctx.suspend(); } catch { /* noop */ }
   const buf = await ctx.decodeAudioData(data);
   const src = ctx.createBufferSource();
   src.buffer = buf;
@@ -112,13 +189,23 @@ export async function trackMusic(id, { volume = 0.7 } = {}) {
   gain.gain.value = volume;
   const dest = ctx.createMediaStreamDestination();
   src.connect(gain); gain.connect(dest); gain.connect(ctx.destination);
-  let started = false;
+  let started = false, startedAt = 0, offset = 0;
+  const restartAt = (sec) => {
+    // BufferSource 不能改位置：停掉、重建一顆從 sec 開始
+    try { src.stop(); } catch { /* noop */ }
+    const s2 = ctx.createBufferSource(); s2.buffer = buf; s2.loop = true; s2.connect(gain);
+    s2.start(0, sec % buf.duration); return s2;
+  };
+  let cur = src;
   return {
     stream: dest.stream,
     style: 'track:' + id,
     duration: buf.duration,
-    async start() { if (ctx.state === 'suspended') await ctx.resume(); if (!started) { src.start(); started = true; } },
-    progress() { /* 真實曲目不做段落編排 */ },
+    mode: 'buffer',
+    async start() { if (ctx.state === 'suspended') await ctx.resume(); if (!started) { cur.start(0, offset); started = true; startedAt = ctx.currentTime; } },
+    progress() { /* noop */ },
+    seek(sec) { offset = sec; if (started) { cur = restartAt(sec); startedAt = ctx.currentTime; } },
+    pos() { return started ? (offset + ctx.currentTime - startedAt) % buf.duration : offset; },
     async pause() { try { await ctx.suspend(); } catch { /* noop */ } },
     async resume() { try { await ctx.resume(); } catch { /* noop */ } },
     async fadeOutStop(sec = 1.2) {
@@ -127,10 +214,10 @@ export async function trackMusic(id, { volume = 0.7 } = {}) {
         gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + sec);
       } catch { /* noop */ }
       await new Promise((r) => setTimeout(r, sec * 1000 + 100));
-      try { src.stop(); } catch { /* noop */ }
+      try { cur.stop(); } catch { /* noop */ }
       try { await ctx.close(); } catch { /* noop */ }
     },
-    stop() { try { src.stop(); } catch { /* noop */ } try { ctx.close(); } catch { /* noop */ } },
+    stop() { try { cur.stop(); } catch { /* noop */ } try { ctx.close(); } catch { /* noop */ } },
   };
 }
 

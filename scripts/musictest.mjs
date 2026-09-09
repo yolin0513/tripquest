@@ -83,14 +83,36 @@ try {
     const tracks = m.stream.getAudioTracks().length;
     await m.start();
     await new Promise((r) => setTimeout(r, 300));
+    // v1.56.1 串流播放：不整段解碼；seek 要精準對到秒（拖進度條用）
+    m.seek(20);
+    await new Promise((r) => setTimeout(r, 200));
+    const mode = m.mode;
     await m.fadeOutStop(0.2);
     const c = await caches.open('tq-music-v1');
     const hit = !!(await c.match(new URL('./media/music/playful.mp3', location.href).href));
     let missErr = '';
     try { await T.ensureTrackCached('porch'); } catch (e) { missErr = String(e.message || e); }
-    return { tracks, dur: m.duration, hit, missErr };
+    return { tracks, dur: m.duration, hit, missErr, mode };
   });
-  yes(pm.tracks === 1 && pm.dur > 30, `保底曲解碼成功（${Math.round(pm.dur)} 秒）、有可錄影的音軌`);
+  yes(pm.tracks === 1 && pm.dur > 30, `保底曲載入成功（${Math.round(pm.dur)} 秒）、有可錄影的音軌`);
+  yes(pm.mode === 'stream', `播放模式＝串流（${pm.mode}），不再整段解碼成 PCM`);
+  // seek 精準度：串流物件直接量 audio.currentTime
+  const seekChk = await page.evaluate(async () => {
+    const T = await import('./js/tracks.js');
+    const m = await T.trackMusic('playful');
+    await m.start();
+    m.seek(20.5);
+    await new Promise((r) => setTimeout(r, 250));
+    const p1 = m.pos();                              // 應該在 20.5～21.0 之間
+    m.seek(65);                                      // 超過曲長（64s）→ 取餘循環
+    await new Promise((r) => setTimeout(r, 150));
+    const p2 = m.pos();
+    const r = { mode: m.mode, dur: m.duration, p1, p2 };
+    await m.fadeOutStop(0.2);
+    return r;
+  });
+  yes(seekChk.mode === 'stream' && seekChk.p1 >= 20.4 && seekChk.p1 < 21.2, `拖到 20.5s → 音樂位置 ${seekChk.p1.toFixed(2)}s（精準對位）`);
+  yes(seekChk.p2 >= 0.9 && seekChk.p2 < 1.6, `seek 超過曲長取餘循環（65s → ${seekChk.p2.toFixed(2)}s，曲長 ${Math.round(seekChk.dur)}s）`);
   yes(pm.hit, '下載後寫進 tq-music-v1 快取');
   yes(pm.missErr.includes('下載失敗'), `R2 曲拿不到時拋明確錯誤（呼叫端據此退回合成）：${pm.missErr}`);
 
