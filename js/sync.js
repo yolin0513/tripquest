@@ -30,6 +30,10 @@ export function getConfig() {
   try { stored = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch { /* noop */ }
   // 使用者存過設定 → 以他的為準；沒存過 → 用內建預設（若有）
   if (stored && (stored.mode || stored.url)) return { mode: 'local', url: '', ...stored };
+  // 本機開發/測試（localhost）沒存過設定 → 絕不連正式 Worker：之前每跑一次測試就在正式 D1
+  // 留下一個「台北匯入測試」「流程驗證」群組（健檢清掉 200 多個）。要測真伺服器的腳本
+  // （synctest --url、livetest）都是用 setConfig 明確指定，不受影響。
+  if (typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return { mode: 'local', url: '' };
   if (BUILT_IN.url) return { mode: BUILT_IN.mode || (BUILT_IN.url.includes('workers.dev') ? 'cloud' : 'lan'), url: BUILT_IN.url };
   return { mode: 'local', url: '' };
 }
