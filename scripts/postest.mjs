@@ -294,6 +294,9 @@ try {
   yes(nearbySrc.includes('out center tags 300'),
     '查詢上限放寬到 300（80 筆會被診所塞滿，真正的大醫院整個不在回應裡）');
 
+  yes(nearbySrc.includes('dedupeByName'),
+    '同名去重：大醫院在 OSM 常有多個節點（京都第一赤十字病院 ×2），不重複列出');
+
   console.log('\n位置分享測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

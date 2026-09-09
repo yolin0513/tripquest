@@ -128,7 +128,7 @@ export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false 
 }
 
 function rank(items, lat, lng) {
-  return (items || [])
+  return dedupeByName((items || [])
     .map((it) => ({ ...it, dist: Math.round(haversine({ lat, lng }, { lat: it.lat, lng: it.lng })) }))
     .sort((a, b) => {
       // 醫院：先照分級（有急診的大醫院優先），同級再比距離
@@ -136,7 +136,19 @@ function rank(items, lat, lng) {
         return (a.tier || 0) - (b.tier || 0);
       }
       return a.dist - b.dist;
-    });
+    }));
+}
+
+// 同名去重（排序後呼叫，留最前面那筆）。大醫院在 OSM 常有好幾個節點/面
+// （門診處、各棟、院區），全列會像三家不同的醫院（實測京都第一赤十字病院 ×2）。
+function dedupeByName(items) {
+  const seen = new Set();
+  return items.filter((it) => {
+    const k = it.kind + '|' + String(it.name || '').trim();
+    if (!it.name || seen.has(k)) return !it.name;
+    seen.add(k);
+    return true;
+  });
 }
 
 export { KIND };
