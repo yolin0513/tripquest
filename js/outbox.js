@@ -107,9 +107,13 @@ export async function drain({ onProgress, force = false } = {}) {
       if (pushEntry || force) {
         p('上傳資料…');
         try {
-          await adapter.push(store.exportGroup(group.id));
+          const pushed = await adapter.push(store.exportGroup(group.id));
           await db.outboxDelete('push:' + group.id);
           totals.pushed++;
+          // 伺服器合併後跟送出的不同（別台改了其他欄位）→ 立刻套用，不用等下一輪 pull
+          if (pushed && Array.isArray(pushed.merged) && pushed.merged.length) {
+            await store.importRecords(pushed.merged, { merge: true });
+          }
         } catch (e) {
           const t = (pushEntry?.tries || 0) + 1;
           await db.outboxPut({ id: 'push:' + group.id, op: 'push', groupId: group.id, tries: t, nextAt: backoff(t - 1), lastError: String(e.message || e) });

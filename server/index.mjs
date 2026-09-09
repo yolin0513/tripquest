@@ -21,6 +21,7 @@ import { readFile, writeFile, mkdir, stat, rm } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize } from 'node:path';
+import { mergeRecord, sanitizeF } from '../js/merge.js';
 import { networkInterfaces } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -133,21 +134,26 @@ const server = createServer(async (req, res) => {
         const { g, code, err } = authGroup(groupId, secret, true);
         if (err) return send(res, code, { error: err });
         let wrote = 0;
-        for (const rec of body.records || []) {
-          if (!rec || !rec.id || typeof rec !== 'object') continue;
+        const mergedBack = [];
+        for (const rec0 of body.records || []) {
+          if (!rec0 || !rec0.id || typeof rec0 !== 'object') continue;
+          const rec = sanitizeF(rec0);
           const cur = g.records[rec.id];
+          let toWrite = rec;
           if (cur) {
             if (APPEND_ONLY.has(rec.type)) continue;
-            const incWins = (rec.updatedAt || 0) > (cur.rec.updatedAt || 0) ||
-              ((rec.updatedAt || 0) === (cur.rec.updatedAt || 0) && String(rec.deviceId) > String(cur.rec.deviceId));
-            if (!incWins) continue;
+            // v1.56 欄位級合併（js/merge.js，與 Worker、客戶端同一份純函式）
+            const { rec: merged, changed } = mergeRecord(cur.rec, rec);
+            if (!changed) continue;                     // 結果沒變 → 不寫、不佔 seq
+            toWrite = merged;
+            if (JSON.stringify(merged) !== JSON.stringify(rec)) mergedBack.push(merged);
           }
           g.seq += 1;
-          g.records[rec.id] = { seq: g.seq, rec };
+          g.records[rec.id] = { seq: g.seq, rec: toWrite };
           wrote++;
         }
         if (wrote) scheduleSave();
-        return send(res, 200, { ok: true, seq: g.seq, wrote });
+        return send(res, 200, { ok: true, seq: g.seq, wrote, merged: mergedBack });
       }
 
       // ---- /pull ----

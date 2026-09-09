@@ -6,6 +6,7 @@
 
 import * as db from './db.js';
 import { uuid, deviceId } from './ids.js';
+import { mergeRecord, groupsOf, seedF, groupChanged, APPEND_ONLY } from './merge.js';
 
 const state = {
   ready: false,
@@ -47,8 +48,9 @@ export async function init() {
 }
 
 // ---------- 寫入基本操作 ----------
-function stamp(rec) {
-  rec.updatedAt = Date.now();
+// v1.56：時間戳單調 —— max(now, 先前+1)。時鐘慢的裝置改了東西，也一定贏過它看過的版本
+function stamp(rec, prev = null) {
+  rec.updatedAt = Math.max(Date.now(), ((prev && prev.updatedAt) || 0) + 1);
   rec.deviceId = deviceId();
   return rec;
 }
@@ -56,7 +58,8 @@ function stamp(rec) {
 export async function put(rec) {
   if (!rec.id) rec.id = uuid();
   if (!rec.createdAt) rec.createdAt = Date.now();
-  stamp(rec);
+  stamp(rec, state.byId.get(rec.id));
+  if (groupsOf(rec.type)) rec._f = seedF(rec, rec.updatedAt);   // 欄位級合併的時間戳（merge.js）
   state.byId.set(rec.id, rec);
   await db.putRecord(rec);
   emit();
@@ -68,7 +71,18 @@ export async function patch(id, changes) {
   const cur = state.byId.get(id);
   if (!cur) throw new Error('找不到記錄 ' + id);
   const next = { ...cur, ...changes };
-  stamp(next);
+  const groups = groupsOf(cur.type);
+  if (groups) {
+    // 沒有 _f 的舊記錄：先以「patch 前」的 updatedAt 播種全部欄位組（不允許部分 _f）
+    const f = seedF(cur, cur.updatedAt || cur.createdAt || 0);
+    const now = Date.now();
+    for (const [g, fields] of Object.entries(groups)) {
+      // 表單會把沒動的欄位一起送 —— 值沒變就不 bump，不然會搶走別人真正的修改
+      if (fields.some((k) => k in changes) && groupChanged(cur, next, fields)) f[g] = Math.max(now, (f[g] || 0) + 1);
+    }
+    next._f = f;
+  }
+  stamp(next, cur);
   state.byId.set(id, next);
   await db.putRecord(next);
   emit();
@@ -405,17 +419,18 @@ export function groupForHash(hash) {
   return group && group.syncSecret ? group : null;
 }
 export async function importRecords(incoming, { merge = true } = {}) {
+  const heal = new Set();                       // 本機持有伺服器沒有的欄位 → 之後再 push 一次
   for (const inc of incoming) {
     const cur = state.byId.get(inc.id);
     if (!cur) { state.byId.set(inc.id, inc); continue; }
     if (!merge) { state.byId.set(inc.id, inc); continue; }
-    // append-only：已存在就跳過
-    if (['submission', 'reaction', 'comment', 'retraction', 'memberClaim'].includes(inc.type)) continue;
-    // 後寫入者勝，deviceId 決勝
-    const incWins = (inc.updatedAt || 0) > (cur.updatedAt || 0) ||
-      ((inc.updatedAt || 0) === (cur.updatedAt || 0) && String(inc.deviceId) > String(cur.deviceId));
-    if (incWins) state.byId.set(inc.id, inc);
+    if (APPEND_ONLY.has(inc.type)) continue;    // append-only：已存在就跳過
+    // 欄位級合併（merge.js；追蹤型別逐組 LWW，其餘整筆 LWW）
+    const { rec, changed } = mergeRecord(cur, inc);
+    if (changed) state.byId.set(inc.id, rec);
+    if (JSON.stringify(rec) !== JSON.stringify(inc)) { const gid = groupIdOfRecord(rec); if (gid) heal.add(gid); }
   }
   await db.putRecords([...state.byId.values()]);
   emit();
+  for (const gid of heal) queueSync('push', { type: 'group', id: gid }).catch(() => {});
 }

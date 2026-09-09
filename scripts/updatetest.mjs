@@ -71,6 +71,9 @@ try {
     const s = await import('./js/store.js');
     const db = await import('./js/db.js');
     const { uuid } = await import('./js/ids.js');
+    // 這裡的群組帶 syncSecret 是為了測 outbox 能撐過更新 —— 但同步端點要指到一個
+    // 打不通的本機位址，不然每跑一次都會在正式 D1 建一個「更新測試」群組（健檢清掉 200 多個）
+    (await import('./js/sync.js')).setConfig({ mode: 'lan', url: 'http://127.0.0.1:9' });
     const gid = uuid(), tid = uuid();
     await s.put({ id: gid, type: 'group', name: '更新測試', syncSecret: 'a'.repeat(32) });
     await s.put({ id: tid, type: 'trip', groupId: gid, title: '更新前就有的行程', allowWiki: false });

@@ -23,7 +23,7 @@
 // 這個 Worker 只做同步（/health /push /pull /blob）。
 // AI 不經 Worker —— 每個行程由建立者在 App 內輸入自己的金鑰，瀏覽器直連供應商。
 
-const APPEND_ONLY = new Set(['submission', 'reaction', 'comment', 'retraction', 'memberClaim']);
+import { mergeRecord, sanitizeF, APPEND_ONLY } from '../js/merge.js';
 const PULL_LIMIT = 500;
 
 export default {
@@ -95,57 +95,109 @@ async function authGroup(env, groupId, secret, { createIfMissing = false } = {})
 async function handlePush(request, env, groupId, secret) {
   const body = await request.json().catch(() => ({}));
   const records = Array.isArray(body.records) ? body.records : [];
-  const { group, error } = await authGroup(env, groupId, secret, { createIfMissing: true });
+  const { error } = await authGroup(env, groupId, secret, { createIfMissing: true });
   if (error) return error;
 
   // 撈出這批 id 目前的狀態。D1 一條敘述最多約 100 個綁定參數（含 groupId 這個），
   // 超過的話這條查詢會讓整個 Worker 直接被平台中止（不是普通的 JS 例外，try/catch
   // 接不住，使用者那端只會看到一個沒有 CORS 標頭的錯誤頁）。這裡一批最多帶 99 個
   // id（+1 個 groupId＝100，貼著上限但不超過）。
+  // v1.56 欄位級合併：追蹤型別（spot/trip/quest）要讀 json 才能逐組合併；其他型別只讀 meta。
   const ids = [...new Set(records.map((r) => r && r.id).filter(Boolean))];
-  const existing = new Map();
   const ID_CHUNK = 99;
-  for (let i = 0; i < ids.length; i += ID_CHUNK) {
-    const chunk = ids.slice(i, i + ID_CHUNK);
-    const rs = await env.DB.prepare(
-      `SELECT id, updated_at, device_id, type FROM records WHERE group_id = ? AND id IN (${chunk.map(() => '?').join(',')})`
-    ).bind(groupId, ...chunk).all();
-    for (const row of rs.results || []) existing.set(row.id, row);
-  }
+  const loadExisting = async () => {
+    const existing = new Map();
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const chunk = ids.slice(i, i + ID_CHUNK);
+      const rs = await env.DB.prepare(
+        `SELECT id, seq, updated_at, device_id, type,
+                CASE WHEN type IN ('spot','trip','quest') THEN json ELSE NULL END AS json
+           FROM records WHERE group_id = ? AND id IN (${chunk.map(() => '?').join(',')})`
+      ).bind(groupId, ...chunk).all();
+      for (const row of rs.results || []) existing.set(row.id, row);
+    }
+    return existing;
+  };
 
-  let seq = group.seq;
-  const stmts = [];
-  for (const rec of records) {
-    if (!rec || !rec.id || typeof rec !== 'object') continue;
-    const cur = existing.get(rec.id);
-    const appendOnly = APPEND_ONLY.has(rec.type);
-    if (cur) {
-      if (appendOnly) continue; // 已存在，不動
-      const incWins = (rec.updatedAt || 0) > (cur.updated_at || 0) ||
-        ((rec.updatedAt || 0) === (cur.updated_at || 0) && String(rec.deviceId) > String(cur.device_id));
-      if (!incWins) continue;
+  // 決定每筆要寫什麼：回 { rec, mergedBack } 或 null（不用寫）
+  const plan = (rec, cur) => {
+    if (!rec || !rec.id || typeof rec !== 'object') return null;
+    sanitizeF(rec);
+    if (!cur) return { rec, mergedBack: false };
+    if (APPEND_ONLY.has(rec.type)) return null;                       // 已存在，不動
+    // 快速路徑：同一版本（同 updatedAt+deviceId）→ 不 parse、不寫
+    if ((rec.updatedAt || 0) === (cur.updated_at || 0) && String(rec.deviceId || '') === String(cur.device_id || '')) return null;
+    if (cur.json) {
+      let curRec = null;
+      try { curRec = JSON.parse(cur.json); } catch { curRec = null; }
+      if (curRec) {
+        const { rec: merged, changed } = mergeRecord(curRec, rec);
+        if (!changed) return null;                                     // 合併結果＝現存 → 不寫、不佔 seq
+        return { rec: merged, mergedBack: JSON.stringify(merged) !== JSON.stringify(rec) };
+      }
     }
-    seq += 1;
-    stmts.push(env.DB.prepare(
-      `INSERT INTO records (group_id, id, seq, type, updated_at, device_id, json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(group_id, id) DO UPDATE SET
-         seq = excluded.seq, type = excluded.type, updated_at = excluded.updated_at,
-         device_id = excluded.device_id, json = excluded.json`
-    ).bind(groupId, rec.id, seq, rec.type || null, rec.updatedAt || null, rec.deviceId || null, JSON.stringify(rec)));
-  }
-  if (stmts.length) {
-    // D1 的 batch() 一次最多約 100 條陳述式，超過會整批失敗（且失敗時 Cloudflare
-    // Workers 平台回的錯誤頁沒有 CORS 標頭，瀏覽器那端只會看到一個看不懂的
-    // 「CORS policy blocked / Failed to fetch」，訊息完全對不上真正原因）。
-    // 拆成安全的小批依序送，一個行程景點任務多的時候才不會整包推送失敗。
+    const incWins = (rec.updatedAt || 0) > (cur.updated_at || 0) ||
+      ((rec.updatedAt || 0) === (cur.updated_at || 0) && String(rec.deviceId) > String(cur.device_id));
+    return incWins ? { rec, mergedBack: false } : null;
+  };
+
+  // 樂觀鎖：寫入以「讀到時的 seq」為條件；沒寫進去的（有人搶先寫）重讀重合併，最多再試 2 輪。
+  let pending = records;
+  let wrote = 0;
+  const mergedBack = [];
+  let lastSeq = null;
+  for (let round = 0; round < 3 && pending.length; round++) {
+    const existing = await loadExisting();
+    const todo = [];
+    for (const rec of pending) {
+      const cur = existing.get(rec && rec.id);
+      const p = plan(rec, cur);
+      if (p) todo.push({ rec: p.rec, prevSeq: cur ? cur.seq : null, mergedBack: p.mergedBack });
+    }
+    if (!todo.length) break;
+    // 先原子預留一段 seq（修掉並發 push 互相覆蓋 groups.seq 的既有競態）
+    const g = await env.DB.prepare('UPDATE groups SET seq = seq + ? WHERE id = ? RETURNING seq').bind(todo.length, groupId).first();
+    const top = Number(g && g.seq);
+    let seq = top - todo.length;
+    const stmts = [];
+    for (const t of todo) {
+      seq += 1;
+      const r = t.rec;
+      if (t.prevSeq == null) {
+        stmts.push(env.DB.prepare(
+          `INSERT INTO records (group_id, id, seq, type, updated_at, device_id, json) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(group_id, id) DO NOTHING`
+        ).bind(groupId, r.id, seq, r.type || null, r.updatedAt || null, r.deviceId || null, JSON.stringify(r)));
+      } else {
+        stmts.push(env.DB.prepare(
+          `UPDATE records SET seq = ?, type = ?, updated_at = ?, device_id = ?, json = ?
+            WHERE group_id = ? AND id = ? AND seq = ?`
+        ).bind(seq, r.type || null, r.updatedAt || null, r.deviceId || null, JSON.stringify(r), groupId, r.id, t.prevSeq));
+      }
+    }
+    // D1 的 batch() 一次最多約 100 條，超過整批失敗（且錯誤頁沒有 CORS 標頭，瀏覽器只看到
+    // 看不懂的「Failed to fetch」）。拆成小批依序送。
     const D1_BATCH_LIMIT = 90;
+    const results = [];
     for (let i = 0; i < stmts.length; i += D1_BATCH_LIMIT) {
-      await env.DB.batch(stmts.slice(i, i + D1_BATCH_LIMIT));
+      const out = await env.DB.batch(stmts.slice(i, i + D1_BATCH_LIMIT));
+      results.push(...out);
     }
-    await env.DB.prepare('UPDATE groups SET seq = ? WHERE id = ?').bind(seq, groupId).run();
+    const retry = [];
+    todo.forEach((t, i) => {
+      const ok = results[i] && results[i].meta && results[i].meta.changes > 0;
+      if (ok) { wrote += 1; if (t.mergedBack) mergedBack.push(t.rec); }
+      else retry.push(t.rec);                                          // 被搶先寫了 → 下一輪重讀重合併
+    });
+    lastSeq = top;
+    pending = retry;
   }
-  return json({ ok: true, seq, wrote: stmts.length });
+  if (lastSeq == null) {
+    const row = await env.DB.prepare('SELECT seq FROM groups WHERE id = ?').bind(groupId).first();
+    lastSeq = Number(row && row.seq) || 0;
+  }
+  // merged：伺服器合併後與送來的不同 → 客戶端立刻套用，不用等下一輪 pull
+  return json({ ok: true, seq: lastSeq, wrote, merged: mergedBack });
 }
 
 // ---------- /pull ----------
