@@ -65,6 +65,12 @@ export default async function album(tripId) {
   function drawLenPick() {
     const est = {};
     for (const k of Object.keys(LENGTHS)) est[k] = estimateDuration(tripId, k);
+    // 照片牆數的是「投稿」、影片數的是「不重複的照片」——同一張圖被重複上傳
+    // （或掛到兩個任務）時兩個數字會差開，不講清楚會像「影片漏了我的照片」
+    //（實際回報：牆上 174、影片 171，差的 3 張是重複內容）。
+    const subCount = store.submissionsOfTrip(tripId).length;
+    const dup = Math.max(0, subCount - est[length].total);
+    const dupNote = dup ? `（照片共 ${subCount} 張、其中 ${dup} 張內容重複——同一張只放一次）` : '';
     lenPick.replaceChildren(...Object.values(LENGTHS).map((o) => h('button', {
       class: 'len-btn' + (length === o.key ? ' on' : ''),
       onclick: () => {
@@ -81,9 +87,9 @@ export default async function album(tripId) {
     const e = est[length];
     lenNote.textContent = length === 'short'
       ? (e.total > e.photos
-        ? `從 ${e.total} 張裡挑 ${e.photos} 張，每個景點、每個人都會出現到。這是預設——家人真的會看完的長度。`
-        : '這趟的照片不多，精華版一張都不會少。')
-      : `全部 ${e.total} 張都放進去，約 ${mmss(e.seconds)}。影片是即時錄的，所以錄多久就要等多久。`;
+        ? `從 ${e.total} 張裡挑 ${e.photos} 張——有人按讚、有寫說明、必拍任務的照片優先，且每個景點、每個人都保證出現到；不是每張都會入選。${dupNote}`
+        : `這趟的照片不多，精華版一張都不會少。${dupNote}`)
+      : `全部 ${e.total} 張不重複的照片都放進去，約 ${mmss(e.seconds)}。${dupNote}影片是即時錄的，所以錄多久就要等多久。`;
     meta.textContent = `${e.photos} 張照片 · 約 ${mmss(e.seconds)}`;
   }
 

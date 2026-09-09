@@ -133,7 +133,11 @@ export const LIFE = {
   // 「入口」節點、場體本身沒有 amenity=parking（實例：石牌國小地下停車場）。
   // 對開車的人來說，導航到「入口」本來就是最想要的點。
   parking:     { label: '停車場',   emoji: '🅿️', radius: 1500, sel: '[amenity=parking]', sel2: '[amenity=parking_entrance]' },
-  toilets:     { label: '廁所',     emoji: '🚻', radius: 1200, sel: '[amenity=toilets]' },
+  // 廁所連「附設廁所」一起查（咖啡店、超商、市場、捷運站等）：使用者要的是
+  // 「附近哪裡有廁所」，不是「哪裡有獨立的公廁設施」。台灣圖客常只標
+  // toilets:wheelchair 這類子鍵（=no 也代表「有廁所、只是無障礙不行」），
+  // 所以用鍵的正則抓所有 toilets* 標記，值為 toilets=no 的在解析時排除。
+  toilets:     { label: '廁所',     emoji: '🚻', radius: 1200, sel: '[amenity=toilets]', sel2: '[~"^toilets"~"."]' },
   convenience: { label: '便利商店', emoji: '🏪', radius: 1500, sel: '[shop=convenience]' },
   fuel:        { label: '加油站',   emoji: '⛽', radius: 4000, sel: '[amenity=fuel]' },
 };
@@ -188,10 +192,16 @@ function lifeParse(el, kind) {
     it.named = !!(t.name || t.brand || t.operator);    // 真實名稱才參與同名去重
     it.name = it.entrance ? (t.name || '') : parkName(t);
   } else if (kind === 'toilets') {
-    it.name = t.name || t.operator || '';              // 有的公廁掛的是管理單位名，也比空白好
-    it.wheelchair = t.wheelchair === 'yes';
+    if (t.toilets === 'no') return null;               // 明確標了「沒有廁所」
+    it.attached = t.amenity !== 'toilets';             // 經 toilets* 標記撈到的「某店附設」
+    if (it.attached && !(t.name || t.brand || t.operator)) return null;   // 無名附設講不出是哪裡
+    it.name = t.name || t.brand || t.operator || '';   // 公廁有的掛管理單位名，也比空白好
+    // 附設的 ♿ 只看 toilets:wheelchair——店家的 wheelchair=yes 是「門口進得去」，
+    // 不代表它的廁所無障礙（石牌 7-Eleven：店 yes、廁所 no）
+    it.wheelchair = it.attached ? t['toilets:wheelchair'] === 'yes'
+      : (t.wheelchair === 'yes' || t['toilets:wheelchair'] === 'yes');
     it.changing = t.changing_table === 'yes';
-    it.fee = t.fee === 'yes' ? '收費' : t.fee === 'no' ? '免費' : '';
+    it.fee = it.attached ? '' : (t.fee === 'yes' ? '收費' : t.fee === 'no' ? '免費' : '');
   } else {
     it.name = t.name || t.brand || t.operator || '';   // 超商優先品牌
     it.h24 = t.opening_hours === '24/7';

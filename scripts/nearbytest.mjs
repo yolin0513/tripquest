@@ -37,6 +37,10 @@ const FIX = {
   'amenity=toilets': [
     el(21001, 0.001, -0.001, { amenity: 'toilets', wheelchair: 'yes', changing_table: 'yes', fee: 'no' }),
     el(21002, 0.004, 0.002, { amenity: 'toilets', operator: '北投區公所' }),                             // 沒 name 但有管理單位
+    el(21003, 0.002, 0.002, { amenity: 'cafe', name: '丹提咖啡', 'toilets:wheelchair': 'yes' }),       // 附設（石牌實際標法：只有子鍵）
+    el(21006, 0.0025, 0.0025, { amenity: 'cafe', name: '無障礙只在門口', wheelchair: 'yes', 'toilets:wheelchair': 'no' }),  // 店可進、廁所不行 → 不給 ♿
+    el(21004, 0.003, -0.002, { amenity: 'restaurant', toilets: 'yes' }),                                 // 無名附設 → 不列
+    el(21005, 0.002, -0.003, { amenity: 'cafe', name: '無廁咖啡', toilets: 'no' }),                       // 明確沒有廁所 → 不列
   ],
   'shop=convenience': [
     el(21, 0.002, 0.001, { shop: 'convenience', name: '7-Eleven 羅東門市', opening_hours: '24/7' }),
@@ -147,10 +151,17 @@ try {
   await page.waitForFunction(() => document.querySelector('.nl-count')?.textContent.includes('廁所'), { timeout: 8000 });
   const wc = await page.evaluate(() => [...document.querySelectorAll('.nl-card')].map((c) => ({
     name: c.querySelector('.nl-name').textContent, chips: [...c.querySelectorAll('.nl-chip')].map((x) => x.textContent) })));
-  yes(wc.length === 2 && wc[0].chips.includes('♿ 無障礙') && wc[0].chips.includes('🚼 尿布台') && wc[0].chips.includes('免費'),
+  yes(wc.length === 4 && wc[0].chips.includes('♿ 無障礙') && wc[0].chips.includes('🚼 尿布台') && wc[0].chips.includes('免費'),
     `廁所：無障礙＋尿布台＋免費（${wc[0].chips.join(' / ')}）`);
   yes(wc.some((c) => c.name.includes('公共廁所')), '無名廁所給通用名「公共廁所」');
   yes(wc.some((c) => c.name.includes('北投區公所')), '沒名字但有管理單位的廁所 → 顯示管理單位');
+  const dante = wc.find((c) => c.name.includes('丹提咖啡'));
+  yes(dante && dante.chips.includes('附設廁所') && dante.chips.includes('♿ 無障礙'),
+    'toilets=yes 的店家也列出：「丹提咖啡」標「附設廁所」＋無障礙（石牌案例）');
+  yes(wc.length === 4 && !wc.some((c) => c.name.includes('無廁咖啡')), '無名附設與 toilets=no 都不列（6 筆進 4 筆出）');
+  const gate = wc.find((c) => c.name.includes('無障礙只在門口'));
+  yes(gate && gate.chips.includes('附設廁所') && !gate.chips.includes('♿ 無障礙'),
+    '店門口無障礙≠廁所無障礙：附設的 ♿ 只看 toilets:wheelchair（石牌 7-Eleven 案例）');
   const noteHidden = await page.evaluate(() => document.querySelector('.nl-note').hidden);
   yes(noteHidden, '車位數的說明只在停車場分類出現');
 

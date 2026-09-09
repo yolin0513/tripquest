@@ -114,6 +114,7 @@ export default async function nearbyView(tripId) {
       if (it.fee) chips.push(it.fee);
       if (it.customers) chips.push('限顧客');
     } else if (it.kind === 'toilets') {
+      if (it.attached) chips.push('附設廁所');          // 掛在店家/車站上的，不是獨立公廁
       if (it.wheelchair) chips.push('♿ 無障礙');
       if (it.changing) chips.push('🚼 尿布台');
       if (it.fee) chips.push(it.fee);

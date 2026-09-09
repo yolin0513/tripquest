@@ -256,6 +256,46 @@ try {
   yes(alb.missing === 0, '沒有照片被漏掉');
   yes(!alb.hasScript, '相簿頁不含 <script>（分享網址那條路會被 CSP 擋掉腳本）');
 
+  // ---------- 重複照片：影片去重＋介面講清楚；重新產生一定納入新照片 ----------
+  console.log('\n— 張數與重新產生 —');
+  const dup = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js'); const { uuid } = await import('./js/ids.js');
+    const { importPhoto } = await import('./js/photos.js');
+    const mem = await import('./js/memory.js');
+    const mk = (i) => { const c = document.createElement('canvas'); c.width = 300; c.height = 200; const x = c.getContext('2d'); x.fillStyle = `hsl(${i},60%,50%)`; x.fillRect(0, 0, 300, 200); return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9)); };
+    const q = s.questsOfTrip(tid)[0];
+    const mA = s.membersOf(s.get(tid).groupId)[0].id;
+    const sameBlob = await mk(123);
+    await importPhoto(new File([sameBlob], 'x.jpg', { type: 'image/jpeg' }), { tripId: tid, questId: q.id, memberId: mA, allowGeo: false });
+    const before = mem.collectSlides(tid).length;
+    // 同一張圖再傳一次（重複內容）＋一張全新的
+    await importPhoto(new File([sameBlob], 'x2.jpg', { type: 'image/jpeg' }), { tripId: tid, questId: q.id, memberId: mA, allowGeo: false });
+    await importPhoto(new File([await mk(321)], 'y.jpg', { type: 'image/jpeg' }), { tripId: tid, questId: q.id, memberId: mA, allowGeo: false });
+    const after = mem.collectSlides(tid).length;
+    const tl = await mem.buildTimeline(tid, { length: 'full' });
+    return { before, after, tlPhotos: tl.photoCount, subs: s.submissionsOfTrip(tid).length };
+  }, ids.tid);
+  yes(dup.after === dup.before + 1 && dup.tlPhotos === dup.after,
+    `重新產生一定重新蒐集：新照片入片、重複內容只放一次（投稿 ${dup.subs}、影片 ${dup.tlPhotos}）`);
+  await page.evaluate((t) => { location.hash = '#/trip/' + t + '/album'; }, ids.tid);
+  await page.waitForSelector('.len-pick', { timeout: 15000 });
+  const lenNote = () => page.evaluate(() =>
+    [...document.querySelectorAll('.form-hint')].map((x) => x.textContent).find((t) => t.includes('張')) || '');
+  const noteS = await lenNote();                        // 預設精華版（這組資料照片少 → 走「一張都不會少」分支）
+  yes(noteS.includes('內容重複') && noteS.includes('同一張只放一次'),
+    `介面講清楚重複張數：「${noteS.slice(noteS.indexOf('（'), noteS.indexOf('）') + 1)}」`);
+  // 取樣說明的文案（照片多才會出現）用原始碼守衛，避免被改掉
+  {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(ROOT + 'js/views/album.js', 'utf8');
+    yes(src.includes('不是每張都會入選') && src.includes('必拍任務的照片優先'),
+      '精華版取樣規則文案在（讚/說明/必拍優先、不是每張都入選）');
+  }
+  await page.evaluate(() => [...document.querySelectorAll('.len-btn')].find((b) => b.textContent.includes('完整版'))?.click());
+  await new Promise((r) => setTimeout(r, 400));
+  const noteF = await lenNote();
+  yes(noteF.includes('不重複的照片都放進去') && noteF.includes('內容重複'), '完整版：講明「全部不重複的照片都放進去」＋重複張數');
+
   console.log('\n影片測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
