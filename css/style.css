@@ -475,7 +475,10 @@ body.pv-open { overflow: hidden; }
 .pv-close { font-size: 1.6rem; }
 .pv-stage { position: absolute; inset: 0; overflow: hidden; }
 .pv-track { display: flex; width: 300%; height: 100%; transform: translateX(calc(-100% / 3)); transition: transform .28s ease-out; }
-.pv-slide { width: calc(100% / 3); height: 100%; display: flex; align-items: center; justify-content: center; }
+.pv-slide { position: relative; width: calc(100% / 3); height: 100%; display: flex; align-items: center; justify-content: center; }
+.pv-img.pv-fadein { position: absolute; inset: 0; opacity: 0; transition: opacity .15s linear; }
+.pv-img.pv-fadein.on { opacity: 1; }
+.reduce-motion .pv-img.pv-fadein { transition: none; }
 .pv-img { width: 100%; height: 100%; object-fit: contain; transform-origin: center center; transition: transform .08s linear; }  /* 滿版：縮圖放大到與全圖同版面，換圖不跳尺寸 */
 .pv-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 10px 12px calc(env(safe-area-inset-bottom) + 12px); background: linear-gradient(transparent, rgba(0,0,0,.8)); transition: opacity .2s; }
 .pv-hide-ui .pv-top, .pv-hide-ui .pv-bottom { opacity: 0; pointer-events: none; }

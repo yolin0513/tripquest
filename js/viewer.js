@@ -78,8 +78,22 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
           const pre = new Image();
           pre.src = full;
           try { await pre.decode(); } catch { await new Promise((r) => { pre.onload = r; pre.onerror = r; }); }
-          img.src = full;                   // 已解碼：換上只有清晰度變化
-          img.dataset.full = '1';
+          // 縮圖→全圖：150ms 交叉淡入（全圖疊在縮圖上淡入，底圖一直在 → 不可能空窗；
+          // 版面同尺寸 → 不跳大小）。使用者開了「減少動態」就直接換。
+          const reduced = document.documentElement.classList.contains('reduce-motion');
+          if (reduced || !thumb) {
+            img.src = full;                 // 已解碼：換上只有清晰度變化
+            img.dataset.full = '1';
+          } else {
+            const top = h('img', { class: 'pv-img pv-fadein', alt: '', draggable: false, src: full });
+            slide.append(top);
+            requestAnimationFrame(() => requestAnimationFrame(() => top.classList.add('on')));
+            setTimeout(() => {
+              img.src = full;               // 底圖也換成全圖（同一張、已解碼），再拿掉疊層
+              img.dataset.full = '1';
+              top.remove();
+            }, 200);
+          }
         } else if (!thumb && sub.photoHash) {
           const full = await blobURL(sub.photoHash).catch(() => '');
           if (full) img.src = full;

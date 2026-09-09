@@ -92,7 +92,7 @@ try {
   ok('灌入合成照片 + 讚 + 留言');
 
   await go(`/#/trip/${tripId}/people`);
-  await page.waitForSelector('.people-row');
+  await page.waitForSelector('.wall-modes');
   await shot('05-people');
   ok('照片牆 / 按讚留言');
 

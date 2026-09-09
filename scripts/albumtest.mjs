@@ -127,6 +127,43 @@ try {
   yes(v.counter === '5 / 210' && v.imgSrc && v.imgOnScreen, `點第 5 格 → 全螢幕「${v.counter}」、圖片有載且在畫面中央（不是黑的）`);
   yes(v.closeH >= 48 && v.reactH >= 44 && v.reacts === 4, `✕ ${v.closeH}px、按讚鈕 ${v.reactH}px、四種讚`);
   yes(v.full, '縮圖先秀、全圖到了無縫換上（本機兩份都在 → 已是全圖）');
+  // 交叉淡入（v1.57.2）：疊層出現期間底圖必須還在（不可能空窗）；減少動態時不做淡入
+  const fadeChk = await page.evaluate(async () => {
+    const pv = document.querySelector('.pv');
+    // 淡入發生在「剛建立的相鄰格」載入時 —— 邊往前滑邊掃整個軌道
+    let sawFade = false, baseAlways = true;
+    const scan = () => {
+      for (const f of pv.querySelectorAll('.pv-fadein')) {
+        sawFade = true;
+        const base = f.parentElement.querySelector('img:not(.pv-fadein)');
+        if (!base || !base.currentSrc) baseAlways = false;
+      }
+    };
+    for (let k = 0; k < 2; k++) {
+      pv.__tq.go(1);
+      const t0 = Date.now();
+      while (Date.now() - t0 < 420) { scan(); await new Promise((r) => requestAnimationFrame(r)); }
+    }
+    for (let k = 0; k < 2; k++) { pv.__tq.go(-1); await new Promise((r) => setTimeout(r, 360)); }
+    return { sawFade, baseAlways };
+  });
+  yes(fadeChk.sawFade && fadeChk.baseAlways, `交叉淡入有發生、且淡入期間底圖始終在（sawFade=${fadeChk.sawFade}）`);
+  // 減少動態：開偏好 → 換到下一張沒看過的 → 不出現淡入疊層
+  const rm = await page.evaluate(async () => {
+    document.documentElement.classList.add('reduce-motion');
+    const pv = document.querySelector('.pv');
+    for (let k = 0; k < 3; k++) { pv.__tq.go(1); await new Promise((r) => setTimeout(r, 360)); }
+    let seen = false;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 700) {
+      if (pv.querySelector('.pv-fadein')) seen = true;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    document.documentElement.classList.remove('reduce-motion');
+    for (let k = 0; k < 3; k++) { pv.__tq.go(-1); await new Promise((r) => setTimeout(r, 360)); }
+    return seen;
+  });
+  yes(!rm, '「減少動態」開啟時直接切換、不做淡入');
   yes(v.cap.includes('第1天景點') && v.cap.includes('任務1'), `說明列：${v.cap}`);
   // 轉場逐幀驗證（v1.57.1 修閃爍；照 v1.49 flashback=0 的做法）：連滑 8 次，
   // 每一個 rAF 幀檢查 (a) 畫面中央永遠有一張已解碼的圖蓋住（沒有空/黑幀）

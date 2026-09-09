@@ -247,7 +247,7 @@ await page.evaluate(() => { document.querySelector('.celebrate')?.remove(); docu
 
 // ---------- 8-9. 照片牆 ----------
 await go(`/#/trip/${tripId}/people`);
-await page.waitForSelector('.people-row');
+await page.waitForSelector('.wall-modes');
 await sleep(400);
 await shot('08-people-progress');
 // 捲到「有留言 + 有讚」的那則動態

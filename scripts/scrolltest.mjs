@@ -225,7 +225,7 @@ try {
   await sleep(300);
   const parked = await F.page.evaluate(() => Math.round(window.scrollY));
   await F.page.evaluate((tid) => { location.hash = `#/trip/${tid}/people`; }, tidF);
-  await F.page.waitForSelector('.people-row');
+  await F.page.waitForSelector('.wall-modes, .empty');
   await sleep(400);
   await F.page.evaluate(() => history.back());
   await F.page.waitForSelector('.daycollapse');
@@ -240,7 +240,7 @@ try {
   await sleep(300);
   const parked2 = await F.page.evaluate(() => Math.round(window.scrollY));
   await F.page.evaluate((tid) => { location.hash = `#/trip/${tid}/people`; }, tidF);
-  await F.page.waitForSelector('.people-row');
+  await F.page.waitForSelector('.wall-modes, .empty');
   await sleep(300);
   await F.page.evaluate((tid) => { location.hash = `#/trip/${tid}/expenses`; }, tidF);
   await sleep(600);
@@ -298,7 +298,7 @@ try {
   await sleep(400);
   const keep = await T.page.evaluate(() => Math.round(window.scrollY));
   await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('照片')).click());
-  await T.page.waitForSelector('.people-row, .empty');
+  await T.page.waitForSelector('.wall-modes, .empty');
   await sleep(700);
   await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('任務')).click());
   await T.page.waitForSelector('.qline');
@@ -308,7 +308,7 @@ try {
   else fail(`切回來位置不對：${keep} → ${backY}`);
 
   await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('照片')).click());
-  await T.page.waitForSelector('.people-row, .empty');
+  await T.page.waitForSelector('.wall-modes, .empty');
   await sleep(900);
   await T.page.evaluate(() => window.scrollTo(0, 600));
   await sleep(400);
@@ -316,7 +316,8 @@ try {
   await T.page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.classList.contains('active')).click());
   await sleep(900);
   const pTop = await T.page.evaluate(() => Math.round(window.scrollY));
-  if (pParked > 200 && pTop === 0) ok(`照片分頁也一樣（${pParked} → ${pTop}）`);
+  // v1.57.2 進度區移到回顧後照片頁變短，捲不到 600 —— 只要真的有捲動且回到頂端就算對
+  if (pParked > 100 && pTop === 0) ok(`照片分頁也一樣（${pParked} → ${pTop}）`);
   else fail(`照片分頁不一致：${pParked} → ${pTop}`);
 
   await T.page.goto('about:blank');
@@ -370,7 +371,7 @@ try {
     what: document.querySelector('.qline') ? '任務清單'
       : document.querySelector('.qrow') ? '景點頁'
       : document.querySelector('.quest-focus') ? '任務詳情'
-      : document.querySelector('.people-row, .wall-bar') ? '照片牆'
+      : document.querySelector('.wall-modes, .wall-bar') ? '照片牆'
       : document.querySelector('.exp-summary, .exp-total, .exp-form, .exp-item, .numpad') ? '分帳'
       : document.querySelector('.mem-card') ? '回顧'
       : document.querySelector('.hero') ? '我的旅程'

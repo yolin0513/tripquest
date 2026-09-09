@@ -5,7 +5,7 @@ import { navigate, back } from '../router.js';
 import { hashHue } from '../ids.js';
 import { subPhoto } from '../photoimg.js';
 import { ensureMember, activeMemberId } from '../claim.js';
-import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges } from '../badges.js';
+import { shooterOf, subjectsOf } from '../badges.js';
 import { openTagger } from '../phototag.js';
 import { openViewer } from '../viewer.js';
 import { blobURL } from '../photos.js';
@@ -63,31 +63,10 @@ export default async function people(tripId) {
   setTop({ title: '照片牆' });
 
   const members = store.membersOf(t.groupId);
-  const prog = store.tripProgress(tripId);
   const page = h('div', { class: 'page' });
 
-  // 每個人的進度（歸屬一律走標記，改標記後回到這頁就是新數字）
-  page.append(h('div', { class: 'section-label' }, `大家一起完成了 ${prog.done} / ${prog.total}`));
+  // 「大家的進度」區塊已移到「回顧」分頁（v1.57.2）—— 照片頁只留照片
   const allSubs = store.submissionsOfTrip(tripId);
-  for (const m of members) {
-    const credited = new Set(allSubs.filter((s) => creditOf(s) === m.id).map((s) => s.questId));
-    const shot = allSubs.filter((s) => shooterOf(s) === m.id);
-    const forOthers = shot.filter((s) => helpedOthers(s, m.id)).length;
-    const inPhotos = allSubs.filter((s) => subjectsOf(s).includes(m.id)).length;
-    const ratio = prog.total ? credited.size / prog.total : 0;
-    const bCount = earnedBadges(tripId, m.id).length;
-    page.append(h('div', { class: 'people-row' },
-      avatar(m.displayName, hashHue(m.id)),
-      h('div', { class: 'pr-main' },
-        h('div', { class: 'pr-name' }, m.displayName, bCount ? h('span', { class: 'pr-badges' }, `🏅${bCount}`) : null),
-        h('div', { class: 'pr-count' },
-          `完成 ${credited.size} 個任務 · 拍 ${shot.length} 張`
-          + (forOthers ? ` · 幫拍 ${forOthers}` : '')
-          + (inPhotos ? ` · 入鏡 ${inPhotos}` : '')),
-        h('div', { class: 'pr-mini-track' }, h('i', { style: `width:${Math.round(ratio * 100)}%` })),
-      ),
-    ));
-  }
 
   // 還沒標記的照片 —— 不吵，但看得到，一按就進連續標記
   const untagged = store.untaggedPhotos(tripId);
