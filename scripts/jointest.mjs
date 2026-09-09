@@ -82,7 +82,8 @@ try {
   await B.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('加入這個旅程')).click());
   await B.waitForSelector('.join-progress:not([hidden])', { timeout: 5000 });
   const prog = await B.evaluate(() => document.querySelector('.join-progress').textContent);
-  yes(/連線|接收|整理/.test(prog), `按下去原地出現進度卡：「${prog.replace(/\s+/g, ' ').slice(0, 30)}…」`);
+  // 本機伺服器可能快到讀取時已是完成文案「好了，帶你進行程…」—— 一樣算進度卡有出現
+  yes(/連線|接收|整理|好了/.test(prog), `按下去原地出現進度卡：「${prog.replace(/\s+/g, ' ').slice(0, 30)}…」`);
   // 資料到了先問「這是誰的手機？」→ 選爸爸 → 進行程頁
   await B.waitForFunction(() => [...document.querySelectorAll('.modal-card button')].some((x) => x.textContent.includes('爸爸')), { timeout: 30000 });
   await B.evaluate(() => { const b = [...document.querySelectorAll('.modal-card button')].find((x) => x.textContent.includes('爸爸')); b && b.click(); });
