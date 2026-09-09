@@ -26,6 +26,33 @@ export async function ensureMember(tripId, { force = false } = {}) {
   return picked;
 }
 
+// 建立者的身分（v1.63）。實機踩到的問題：建立行程的人從來沒走過「這是誰的手機」，
+// 所以他沒有 memberClaim ——
+//   · 旅伴那邊看到「建立者還沒加入」（資料面沒錯，語意完全錯）
+//   · 他的位置永遠傳不出去（updateNow 找不到 activeMemberId 就直接 return）
+//   · 他拍的照片也沒有歸屬
+// 建立當下就問一次「哪一位是你」，一勞永逸；只有一位成員時直接認領、不打擾。
+export async function claimAsCreator(tripId) {
+  const trip = store.get(tripId);
+  if (!trip) return null;
+  if (activeMemberId(tripId)) return activeMemberId(tripId);
+  const members = store.membersOf(trip.groupId);
+  if (!members.length) return null;
+  if (members.length === 1) { await claim(tripId, members[0].id); return members[0].id; }
+  return ensureMember(tripId, { force: true });
+}
+
+// 舊行程的修復：這台就是建立者的裝置、卻沒有身分 → 進行程頁時補問一次。
+// 不用猜是哪一位（猜錯會把照片算到別人頭上），但要主動問，不能只放一顆軟性按鈕
+// ——實機就是那顆按鈕被忽略了，結果位置與加入狀態都不對。
+export function creatorNeedsClaim(tripId) {
+  const trip = store.get(tripId);
+  if (!trip || activeMemberId(tripId)) return false;
+  if (trip.createdByDevice && trip.createdByDevice !== myDeviceId()) return false;
+  if (!trip.createdByDevice) return false;                 // 不是建立者的裝置就不要亂問
+  return store.membersOf(trip.groupId).length > 0;
+}
+
 export async function claim(tripId, memberId) {
   store.setActiveMember(tripId, memberId);
   const m = store.getRaw(memberId);

@@ -218,10 +218,31 @@ async function drainOnce({ onProgress, force = false } = {}) {
   }
 }
 
+// 背景同步的節奏。原本固定 90 秒——實機回報「B 加入了，A 停在任務頁一直沒看到」，
+// 因為 PWA 沒有推播，對方的動作只能靠我們自己去拉，而 90 秒對「人正看著螢幕等」
+// 來說太久了。改成：畫面在前景 20 秒一次、切到背景 90 秒一次（省電；而且手機把
+// 背景分頁的計時器降頻本來就會拉長，不用再自己加碼）。
+const FG_MS = 20 * 1000, BG_MS = 90 * 1000;
+let cycle = null, cycleMs = 0;
+function schedule() {
+  const want = (typeof document !== 'undefined' && document.hidden) ? BG_MS : FG_MS;
+  if (cycle && cycleMs === want) return;
+  cycleMs = want;
+  clearInterval(cycle);
+  cycle = setInterval(() => drain().catch(() => {}), want);
+}
+
 export function startAutoDrain() {
   if (typeof window === 'undefined') return;
   window.addEventListener('online', () => drain().catch(() => {}));
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) drain().catch(() => {}); });
-  setInterval(() => drain().catch(() => {}), 90 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    schedule();
+    if (!document.hidden) drain().catch(() => {});     // 切回前景先拉一次，不用等下一輪
+  });
+  schedule();
   setTimeout(() => drain().catch(() => {}), 2500);
 }
+
+// 開啟某一頁時「立刻拉一次」。人剛打開行程頁／SOS 頁就是最想看到最新狀態的時候，
+// 不該讓他等下一次排程。多個頁面同時呼叫會被 drain 自己合併成一次。
+export function refreshNow() { return drain({ force: true }).catch(() => {}); }

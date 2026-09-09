@@ -99,8 +99,10 @@ export default async function sos(tripId) {
     drawNearby(nearbyBox, pos);
   }
   if (crewBox) {
-    // 進 SOS 頁就更新一次自己的位置（有開分享才會動），家人那端才看得到新的
-    if (tripId) pos2.updateNow(tripId, { force: true, high: true }).catch(() => {});
+    // 進 SOS 頁就更新一次自己的位置（有開分享才會動），家人那端才看得到新的；
+    // 同時立刻拉一次別人的（不然要等下一輪排程，緊急的時候等不起）
+    if (tripId) pos2.updateNow(tripId, { force: true, high: true })
+      .then(() => import('../outbox.js')).then((o) => o.refreshNow()).catch(() => {});
     drawCrew(crewBox, tripId, trip, pos);
     const off = store.subscribe(() => { if (document.body.contains(crewBox)) drawCrew(crewBox, tripId, trip, pos); });
     window.addEventListener('hashchange', () => { if (!document.body.contains(crewBox)) off(); }, { once: true });
@@ -141,7 +143,19 @@ function drawCrew(box, tripId, trip, myPos) {
     rows.length ? h('div', { class: 'stack' }, ...rows)
       : h('p', { class: 'muted sm', style: 'padding:4px 2px' }, '這趟還沒有其他旅伴。'),
     h('p', { class: 'form-hint' },
-      '顯示的是對方「最後一次打開 App 時」的位置——手機沒開著就不會更新，不是即時追蹤。'),
+      '顯示的是對方「最後一次打開 App 時」的位置——手機沒開著就不會更新，不是即時追蹤。'
+      + '這個畫面每 20 秒自己更新一次；等不及就按下面的按鈕。'),
+    h('button', {
+      class: 'btn btn-soft btn-block', style: 'margin-top:6px',
+      onclick: async (e) => {
+        const b = e.currentTarget; b.disabled = true; b.textContent = '更新中…';
+        try {
+          const o = await import('../outbox.js');
+          if (tripId) await pos2.updateNow(tripId, { force: true, high: true }).catch(() => {});
+          await o.refreshNow();
+        } finally { drawCrew(box, tripId, trip, myPos); }
+      },
+    }, '🔄 立刻更新旅伴位置'),
     sharing
       ? h('button', {
           class: 'btn btn-soft btn-block', style: 'margin-top:6px',

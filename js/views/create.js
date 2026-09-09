@@ -302,6 +302,9 @@ export default async function create() {
       for (const s of spots) await store.put(s);
       for (const q of quests) await store.put(q);
 
+      // 建立者也要有身分：不然旅伴會看到「他還沒加入」、他的位置也傳不出去（v1.63）
+      try { await (await import('../claim.js')).claimAsCreator(tripId); } catch { /* 之後行程頁還會問 */ }
+
       const { syncEnabled } = await import('../sync.js');
       if (syncEnabled()) { const { ensureGroupSync } = await import('../share.js'); await ensureGroupSync(groupId); }
 

@@ -30,12 +30,13 @@
 
 ## 測試
 
-- `npm test` 一次跑 **35 支**（validate-places → … → albumtest → jointest，全綠才算過）。較大的：plannertest 62、jointest 22、albumtest 27、mergetest 27、musictest 30、routetest 43、v147shots 45。
+- `npm test` 一次跑 **36 支**（validate-places → … → albumtest → jointest，全綠才算過）。較大的：plannertest 62、jointest 22、albumtest 27、mergetest 27、musictest 30、routetest 43、v147shots 45。
 - **手動跑**（不在 npm test，因為打真網路／真伺服器）：
   - `npm run sweep` — 對**線上正式站**巡檢 67 項（含 R2 配樂 21 首 HEAD）。每次上版後必跑。
   - `npm run livetest` — 線上端到端（會在正式 D1 建「線上驗證團」，跑完記得清）。
   - `node scripts/synctest.mjs --url https://tripquest.yolin0513.workers.dev` — 兩台裝置打真 Worker。
   - `scripts/v148shots.mjs` — 真 Nominatim 的地理編碼覆蓋率（宜蘭實測行程）。
+  - `npm run livesynctest` — 兩台模擬裝置量「多久看得到對方的動作」（已在 npm test 內；改同步排程時務必重跑並看實際秒數）。
 - 慣例：每版 bump `sw.js` VERSION → `npm test` → commit/push → curl 確認線上 VERSION → `npm run sweep` → 截圖放 `screenshots/features/`＋鏡像資料夾。
 - 注意：**localhost 沒存過同步設定時一律單機**（v1.56.3）——測試不會再打正式 Worker；要測真伺服器的腳本都用 `setConfig` 明確指定。
 
@@ -49,6 +50,7 @@
 5. **原生 PWA、無框架無打包**；IndexedDB＋版本化 SW；h() 全 textNode＋URL 白名單（無 XSS 面）；CSP script-src 'self'。
 6. **iOS 教訓**：原生 time input 空值畫成當下時間＋寬度不可控 → 全 App 改時/分下拉；主畫面 App 與 Safari 儲存分離 → 邀請流程 iPhone 先裝後加入。
 7. 外部請求全部有逾時（AbortSignal.timeout 守門），失敗走各自降級（v1.55.1 健檢）。
+12. **即時感（v1.63）**：實機回報「B 加入了，A 停在任務頁一直沒看到」「兩台都開位置分享卻互看不到」。三個獨立根因：①**建立者從來沒有 memberClaim**——建立流程不會問「這是誰的手機」，所以旅伴看到「建立者未加入」（資料面對、語意錯），而且 `pos.updateNow` 找不到 activeMemberId 就直接 return，**他的位置永遠傳不出去**（這也解釋了「A 重啟後 B 才看到 A」：重啟後那顆軟性按鈕被按了才有 claim）→ `claimAsCreator()` 在建立當下就問一次（單一成員直接認領），舊行程進行程頁時補問。②**背景 pull 固定 90 秒**且開頁不觸發 → 前景 20 秒／背景 90 秒，並在行程頁、SOS 頁、照片牆開啟時 `refreshNow()` 立刻拉一次。③**行程頁只在「現在這一站」或 claim 數變動時重繪**，旅伴新增的景點/照片不會讓畫面更新 → 改看一份輕量內容簽章（景點數、任務數、照片數、成員數、最大 updatedAt）。誠實提示：PWA 沒有推播，所以是「每 20 秒去問一次」，旅伴清單與 SOS 頁都給了「立刻更新」按鈕。**兩台裝置實測（livesynctest）**：看到有人加入 17.0 秒、打開 SOS 看到對方位置 0.5／0.0 秒、旅伴新增的景點 18.5 秒自己出現（修正前全部逾時 >45 秒）。
 11. **移除旅程＝只影響這台裝置（v1.62，三代理 3:0）**：舊版的「刪除旅程」是同步刪除——任一成員按下去全家的行程與照片一起消失（使用者實機踩到）。現在 `store.forgetGroup()` 硬刪本機記錄，**不寫墓碑、不排同步**。三個必修細節（三位代理各自獨立指出）：①**記憶體與 IndexedDB 必須一起清**——`importRecords` 結尾是 `db.putRecords([...state.byId.values()])`，只刪 IndexedDB 的話下一次任何同步都會整趟寫回來；②**drain 競態**——群組清單是迴圈開始前的快照，所以加了 `forgotten` 名單＋`outbox.idle()`＋迴圈內重查；③群組底下還有別的行程時只清這一趟。另清：outbox 待送項（殘留會讓 drain 每 2 秒空轉）、`seq:<gid>` 游標（不歸零則日後還原只拿得到殘缺的一半）、tripSecrets、全部 per-trip/per-spot localStorage 旗標；先 `pos.stopSharing` 再移除。**未上傳的照片會擋門**（只有這台有）。**祕鑰留在本機 meta**（不同步、不匯出）→ 設定頁「已移除的旅程 → 加回來／徹底忘掉」，長輩不用去 LINE 翻連結。文案分支：有同步→「其他旅伴不受影響」；單機→「移除等於永久刪除」並引導先匯出備份。**不提供全群組刪除**（沒有帳號系統，「建立者」只能靠可被覆寫的本機欄位判斷，撐不起這種權限）、**不忽略外來墓碑**（刪一個景點是日常操作，忽略會壞掉；三代理一致）。舊版並存：舊版裝置按刪除仍會影響所有人，直到它更新——這點無法從新版擋住。
 10. **貼地圖連結取位置（v1.61）**：`parseCoordInput` 支援 Google 完整網址（@／!3d!4d／ll／center）、Apple 地圖（ll／sll／daddr）、`geo:` URI、純數字（全形逗號／空格）、多行分享文字。**短網址**（maps.app.goo.gl）本身不含座標 → Worker `/resolve` 跟隨轉址；**只讀 location 標頭、永不讀內容**：既不當內容代理，也避開實測到的陷阱——Google 地圖 HTML 裡的 `center=` 是**預設地圖中心**（貼蘇澳的連結、HTML 卻寫台北），讀 HTML 會給出「看似合理其實全錯」的座標。不跟進 `/sorry/`（Google 對雲端 IP 的機器人驗證頁，其 `q=` 是內部 token）。轉址後常只有「地址＋店名」→ `placeCandidates` 依「像不像地標名」拆解（地名字尾優先於地址判定、去掉「國道五號」這類前綴、丟掉切壞的碎片、3 字 CJK 地名不降級），多候選結果**合併後用原文的鄉鎮名評分**（實測兩個坑：先中的候選給了 3 公里外的飯店、22 公里外的同連鎖分店），且**一律讓使用者確認**、可自己改搜尋詞。失敗訊息列出三種可貼格式並教「在地圖上長按會出現座標」；離線時明講要連線。
 9. **旅伴位置分享（v1.60，三代理 3:0 GO-with-changes，必修項全數落地）**：新型別 `memberPos`，id = `pos:<tripId>:<memberId>:<deviceId>`（多裝置不互蓋），走整筆 updatedAt LWW（**不進 APPEND_ONLY** —— 那是「已存在就跳過」，位置會停在第一筆；也不進 TRACKED）。座標降到小數 4 位（~11m，帶 accM；>300m 只說「大約在附近」）。**隱私三道**：①`store.exportRecords()` 預設排除 SENSITIVE_TYPES（全 App 35 處通用資料源自動乾淨，只有 exportGroup 明確包含）②關閉/過期寫**不含座標的墓碑**（`store.remove` 是 patch 展開語意，會把 lat/lng 留在墓碑裡——這是「我關掉了啊」最會被背叛的地方）③伺服器 48 小時 TTL：Worker cron 每日把過期的改寫成無座標墓碑並佔新 seq（**不是 DELETE**——客戶端游標是 seq，刪列的話別台永遠不知道要清本機副本），pull 端另有即時保險；LAN server 同一套。**單筆推送**（一般 put 會把整個群組幾百筆推一遍）。同意畫面講五件事（誰看得到＋實際名字／看得到什麼／多久／怎麼關／關了會怎樣）、行程頁常駐指示、SOS 頁一鍵停止。文案誠實：PWA 無背景定位 → 一律講「最後一次打開 App 時的位置」，不講即時追蹤。
@@ -66,6 +68,7 @@
 - 同步為欄位組級 LWW：同一天兩台同時重排順序仍可能交錯（可解釋但非誰的原意）；時鐘偏移影響同現況。
 - 長輩實機待確認：iOS 滑桿手感、相簿檢視器手勢、吉諾佩第音質（使用者已說 OK）、旅伴清單新版。
 - **git 作者 email**：歷史檔案內容已洗（filter-repo，力推 `b8107c1`）；commit 作者欄仍是帳號 email（公開資訊），要藏需改 GitHub noreply（未做）。
+- 同步是輪詢不是推播（PWA 沒有推播）：前景每 20 秒問一次，所以旅伴的動作最慢 20 秒左右才出現；介面已講明並提供「立刻更新」。App 切到背景時手機會降頻計時器，回到前景會立刻補拉一次。
 - 家裡若還有裝置停在 v1.61 以前，它按「刪除旅程」仍會同步刪除給所有人——請家人開一次 App 更新到 v1.62 以後。
 - 貼地圖短網址需要連線（網址本身沒有座標，要跟隨轉址）；轉址後只有地名時，能不能定位取決於免費地圖資料有沒有收錄該地標——查不到時會請使用者改貼座標。
 - 位置分享的已知取捨：PWA 沒有背景定位 → App 沒開就不更新（介面已明講「最後看到」）；邀請連結**永久有效、無輪替、無成員移除**，所以「拿過連結的人」在行程期間都看得到位置——文案有列出誰看得到，祕鑰輪替仍是待辦（加了位置之後優先度升高）。

@@ -66,6 +66,7 @@ export default async function people(tripId) {
   const page = h('div', { class: 'page' });
 
   // 「大家的進度」區塊已移到「回顧」分頁（v1.57.2）—— 照片頁只留照片
+  import('../outbox.js').then((o) => o.refreshNow()).catch(() => {});   // 開照片牆先拉一次
   const allSubs = store.submissionsOfTrip(tripId);
 
   // 還沒標記的照片 —— 不吵，但看得到，一按就進連續標記

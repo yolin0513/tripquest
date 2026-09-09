@@ -12,7 +12,7 @@ import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
 import { addPhotoButtons } from '../addphoto.js';
-import { activeMemberId, ensureMember } from '../claim.js';
+import { activeMemberId, ensureMember, creatorNeedsClaim } from '../claim.js';
 import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
@@ -220,6 +220,18 @@ export default async function trip(tripId, { fresh = false } = {}) {
   }
 
   watchHere(tripId);
+  // 剛打開行程頁就是最想看到最新狀態的時候 —— 立刻拉一次，不等下一輪排程
+  import('../outbox.js').then((o) => o.refreshNow()).catch(() => {});
+
+  // 舊行程的補救：建立者這台還沒有身分 → 主動問一次（不問的話旅伴會一直看到
+  // 「他還沒加入」，而且他開了位置分享也傳不出去）
+  if (creatorNeedsClaim(tripId)) {
+    setTimeout(async () => {
+      if (!location.hash.includes(`/trip/${tripId}`)) return;
+      const got = await ensureMember(tripId, { force: true }).catch(() => null);
+      if (got) { toast('好了，旅伴現在看得到你了'); trip(tripId); }
+    }, 900);
+  }
 
   // 背景補示意圖。抓好一張就把那一張換上去，不整頁重畫 —— 大行程要抓一分鐘，
   // 整頁重畫會讓使用者看到一半的畫面突然跳掉。
@@ -583,20 +595,34 @@ function spotSection(s, tripId, focusId, hereId) {
   return sec;
 }
 
-// 旅伴改了「現在這一站」→ 同步進來之後把這一頁重畫，讓大家看到的是同一站。
-// 只在那一站真的變了才重畫（同步每次拉取都會 emit，不能每次都整頁重畫）。
+// 同步進來的東西要自己出現在畫面上，不用使用者重開 App。
+// 原本只看「現在這一站」與 claim 數，所以旅伴新增的景點、改的名字、新照片
+// 都不會讓這頁重畫（實機回報「一直沒更新」的一半原因）。改成看一份輕量的
+// 內容簽章：同步每次拉取都會 emit，簽章沒變就不重畫（避免整頁狂重繪）。
 let hereWatch = null;
+function tripSignature(tripId) {
+  const t = store.get(tripId);
+  if (!t) return '';
+  const recs = store.exportRecords();
+  let claims = 0, maxUp = t.updatedAt || 0;
+  for (const r of recs) {
+    if (r.tripId !== tripId) continue;
+    if (r.type === 'memberClaim') claims++;
+    if (r.updatedAt > maxUp) maxUp = r.updatedAt;
+  }
+  const spots = store.spotsOf(tripId);
+  const quests = store.questsOfTrip(tripId);
+  return [store.getHereSpot(tripId) || '', claims, spots.length, quests.length,
+    store.submissionsOfTrip(tripId).length, store.membersOf(t.groupId).length, maxUp].join('|');
+}
 function watchHere(tripId) {
   if (hereWatch) { hereWatch(); hereWatch = null; }
-  let last = store.getHereSpot(tripId);
-  let lastClaims = store.exportRecords().filter((r) => r.type === 'memberClaim' && r.tripId === tripId).length;
+  let last = tripSignature(tripId);
   hereWatch = store.subscribe(() => {
     if (!location.hash.includes(`/trip/${tripId}`) || location.hash.match(/\/(spot|plan|poster|weather|people|expenses|memories)/)) return;
-    const now = store.getHereSpot(tripId);
-    // 有人新加入（同步拉到新的 memberClaim）也要重畫 —— 橫幅與「N/N 位已加入」才會即時更新
-    const claimN = store.exportRecords().filter((r) => r.type === 'memberClaim' && r.tripId === tripId).length;
-    if (now === last && claimN === lastClaims) return;
-    last = now; lastClaims = claimN;
+    const now = tripSignature(tripId);
+    if (now === last) return;
+    last = now;
     trip(tripId);
   });
 }
@@ -645,7 +671,9 @@ async function openCrew(tripId, t) {
   const { modal } = await import('../ui.js');
   const info = crewInfo(tripId, t).sort((a, b) => (b.joined - a.joined) || (a.joinedAt || 0) - (b.joinedAt || 0));
   const anyPending = info.some((x) => !x.joined);
+  let close = null;
   const v = await modal({
+    expose: (fn) => { close = fn; },
     title: '👥 旅伴',
     closeX: true,
     body: h('div', {},
@@ -663,7 +691,15 @@ async function openCrew(tripId, t) {
         ),
       )),
       h('p', { class: 'form-hint', style: 'margin-top:10px' },
-        '「加入」以選過「這是誰的手機」為準 —— 名字被列出來但還沒點過自己名字的人，會顯示還沒加入。'),
+        '「加入」以選過「這是誰的手機」為準 —— 名字被列出來但還沒點過自己名字的人，會顯示還沒加入。'
+        + '手機沒有推播，所以旅伴的動作是每 20 秒去問一次伺服器；剛加入的人可能要等一下才出現。'),
+      h('button', {
+        class: 'btn btn-soft btn-block', style: 'margin-top:8px',
+        onclick: async (e) => {
+          const b = e.currentTarget; b.disabled = true; b.textContent = '更新中…';
+          try { await (await import('../outbox.js')).refreshNow(); } finally { close && close('refresh'); }
+        },
+      }, '🔄 立刻檢查有沒有新的旅伴'),
     ),
     actions: [
       // 「還沒加入——把邀請連結傳給他」不能是一句沒有按鈕的話
@@ -672,6 +708,7 @@ async function openCrew(tripId, t) {
     ],
   });
   if (v === 'share') doShare(tripId);
+  if (v === 'refresh') { await openCrew(tripId, t); }        // 更新完直接把清單重開，看得到新結果
 }
 // 有人新加入 → 一次性橫幅（本機記住看過哪些 claim；claim 會同步，所以旅伴的手機也會看到）
 function joinBanner(tripId, members) {
