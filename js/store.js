@@ -91,6 +91,58 @@ export async function patch(id, changes) {
   return next;
 }
 
+// ---------- 本機移除（v1.62，三代理 3:0）----------
+//
+// 「移除」跟「刪除」是兩回事。這個 App 沒有帳號、每個成員拿的是同一把群組祕鑰，
+// 所以「同步刪除整趟旅程」等於把全家的照片交給最手滑的那一位——使用者實機踩到了。
+// 現在的移除**只作用在這台裝置**：硬刪、不寫墓碑、不排同步。
+//
+// 三個非做不可的細節（三位代理各自獨立指出）：
+// 1) **記憶體與 IndexedDB 要一起清**。importRecords 結尾是
+//    `db.putRecords([...state.byId.values()])` —— 只刪 IndexedDB 的話，
+//    下一次任何群組的同步都會把整趟旅程原封不動寫回去。
+// 2) **要擋住同步把它拉回來**。syncedGroups() 讀的是本機有沒有群組記錄，
+//    硬刪後 drain 就不碰它了；但正在跑的那一輪 drain 已經把群組清單抓在手上，
+//    pull 回來的記錄會被塞回 state —— 所以另外記一個「已遺忘」名單當保險。
+// 3) 群組底下若還有別的行程，只清這一趟，不動群組與成員。
+const forgotten = new Set();
+export const isForgotten = (groupId) => forgotten.has(groupId);
+export function unforget(groupId) { forgotten.delete(groupId); }
+
+// 列出「這一趟」或「這個群組」在本機的所有記錄 id（跟 exportGroup 同一套判斷）
+export function recordsOfGroup(groupId, { onlyTripId = null } = {}) {
+  const trips = list().filter((r) => r.type === 'trip' && r.groupId === groupId);
+  const tripIds = new Set(onlyTripId ? [onlyTripId] : trips.map((r) => r.id));
+  const wholeGroup = !onlyTripId || trips.length <= 1;
+  return list().filter((r) => {
+    if (r.id === groupId) return wholeGroup;
+    if (r.groupId === groupId) return wholeGroup;             // member / 群組層記錄
+    if (r.tripId && tripIds.has(r.tripId)) return true;
+    return false;
+  });
+}
+
+// 本機移除。回傳被刪掉的統計，讓 UI 可以照實說。
+export async function forgetGroup(groupId, { onlyTripId = null } = {}) {
+  const recs = recordsOfGroup(groupId, { onlyTripId });
+  const trips = list().filter((r) => r.type === 'trip' && r.groupId === groupId);
+  const wholeGroup = !onlyTripId || trips.length <= 1;
+  const hashes = [];
+  for (const r of recs) {
+    if (r.type === 'submission') hashes.push(r.photoHash, r.thumbHash, r.originalHash);
+    if (r.heroHash) hashes.push(r.heroHash);
+    if (r.refHash) hashes.push(r.refHash);
+  }
+  if (wholeGroup) forgotten.add(groupId);                     // 先立旗標，再刪
+  for (const r of recs) {
+    state.byId.delete(r.id);                                  // 記憶體與 IndexedDB 一起清
+    await db.deleteRecordHard(r.id);
+  }
+  emit();
+  await gcBlobs(hashes.filter(Boolean));                      // 記錄清掉之後才算得準（跨行程共用的會留著）
+  return { records: recs.length, wholeGroup };
+}
+
 // 中繼資料刪除 = 立墓碑（未來同步時對方才知道「這筆被刪了」）
 export async function remove(id) {
   const cur = state.byId.get(id);
@@ -408,6 +460,16 @@ export function mergeLocal(recs) {
 
 // ---------- 同步用 ----------
 // 有設定同步祕鑰的群組
+function isForgottenRecord(rec) {
+  if (!rec) return false;
+  if (forgotten.has(rec.id) || forgotten.has(rec.groupId)) return true;
+  if (rec.tripId) {
+    const t = state.byId.get(rec.tripId);
+    if (t && forgotten.has(t.groupId)) return true;
+  }
+  return false;
+}
+
 export function syncedGroups() {
   return list().filter((r) => r.type === 'group' && r.syncSecret && !r.deleted);
 }
@@ -443,6 +505,9 @@ export function groupForHash(hash) {
 export async function importRecords(incoming, { merge = true } = {}) {
   const heal = new Set();                       // 本機持有伺服器沒有的欄位 → 之後再 push 一次
   for (const inc of incoming) {
+    // 已經從這台裝置移除的群組：正在跑的那一輪 drain 可能還會送記錄進來，全部丟掉
+    // （不然移除完幾秒後整趟旅程又長回來）。重新用邀請加入時會 unforget。
+    if (forgotten.size && isForgottenRecord(inc)) continue;
     const cur = state.byId.get(inc.id);
     if (!cur) { state.byId.set(inc.id, inc); continue; }
     if (!merge) { state.byId.set(inc.id, inc); continue; }

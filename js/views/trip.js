@@ -910,6 +910,97 @@ function questLine(q, spot, themeKey) {
   return row;
 }
 
+// 從這台裝置移除旅程（v1.62，三代理 3:0）。
+//
+// 之前這裡是「同步刪除」：任何一位成員按下去，全家的行程與照片一起消失，
+// 連建立者都救不回來（使用者實機回報）。現在只清這台裝置，伺服器與旅伴不受影響。
+// 全群組刪除這一版**不提供**——沒有帳號系統，「建立者」只能靠可被覆寫的本機欄位
+// 判斷，撐不起「把全家資料一次清掉」這種權限。
+async function removeTrip(tripId, t) {
+  const store2 = store;
+  const g = store2.getRaw(t.groupId);
+  const outbox = await import('../outbox.js');
+  const { syncEnabled } = await import('../sync.js');
+  const shared = !!(g && g.syncSecret) && syncEnabled();
+
+  // 還沒送出去的照片只有這台有 —— 移除等於全家一起失去，先擋下來
+  const pending = await outbox.pendingOf(t.groupId);
+  if (pending.total) {
+    await modal({
+      title: '先等照片上傳完',
+      body: h('div', {},
+        h('p', {}, `還有 ${pending.blobs || pending.total} 張照片沒有傳給旅伴。現在移除的話，那些照片只存在這台手機，會跟著一起不見。`),
+        h('p', { class: 'form-hint' }, '請連上網路，等行程頁的「正在傳照片」跑完再移除。')),
+      actions: [{ label: '知道了', value: true }],
+    });
+    return;
+  }
+
+  const subs = store2.submissionsOfTrip(tripId);
+  const originals = subs.filter((s) => s.originalHash).length;
+  const ok = await modal({
+    title: shared ? '從我的手機移除這趟旅程' : '刪除這趟旅程',
+    body: h('div', {},
+      shared
+        ? h('div', {},
+            h('p', { style: 'margin:0 0 8px' }, `「${t.title}」會從這台手機消失，${subs.length} 張照片的本機副本也會清掉。`),
+            h('p', { class: 'form-hint', style: 'line-height:1.7' },
+              '· 其他旅伴看得到的內容完全不受影響\n· 之後想看，用邀請連結就能加回來（下面會幫你把連結留著）'.split('\n').map((x) => h('div', {}, x))))
+        : h('div', {},
+            h('p', { style: 'margin:0 0 8px' }, `這趟旅程只存在這台手機（沒有同步給任何人），移除就等於永久刪除，${subs.length} 張照片一起沒有，無法復原。`),
+            h('p', { class: 'form-hint' }, '建議先按上面的「匯出完整備份」再移除。')),
+      originals ? h('p', { class: 'form-hint', style: 'margin-top:8px' },
+        `※ 其中 ${originals} 張有保留原始檔，原始檔只存在這台手機，會一起清掉。`) : null,
+    ),
+    actions: [{ label: '取消', value: false }, { label: shared ? '移除' : '永久刪除', value: true, danger: true }],
+  });
+  if (!ok) return;
+
+  // 1) 先把位置分享關掉（自己的座標不要留在伺服器與旅伴手機上）
+  try { const pos2 = await import('../pos.js'); await pos2.stopSharing(tripId); } catch { /* noop */ }
+  // 2) 等在途的同步跑完，不然它會把剛清掉的記錄塞回來
+  await outbox.idle();
+  // 3) 留一份祕鑰在本機 meta（不是記錄、不同步、不進匯出）→ 之後可以一鍵加回來
+  if (shared) {
+    try {
+      const db2 = await import('../db.js');
+      const { getConfig } = await import('../sync.js');
+      const kept = (await db2.metaGet('removedGroups')) || [];
+      const next = kept.filter((x) => x.groupId !== g.id);
+      next.unshift({ groupId: g.id, secret: g.syncSecret, url: getConfig().url || '', title: t.title || '旅程', tripId, at: Date.now() });
+      await db2.metaSet('removedGroups', next.slice(0, 10));
+    } catch { /* 留不住也還有旅伴的連結可用 */ }
+  }
+  // 4) 清本機：記錄＋照片＋待送佇列＋同步游標＋AI 金鑰＋各種旗標
+  await store2.forgetGroup(t.groupId, { onlyTripId: tripId });
+  await outbox.forgetGroup(t.groupId);
+  try {
+    const db2 = await import('../db.js');
+    await db2.metaSet('seq:' + t.groupId, 0);
+    await db2.tripSecretDelete(tripId);
+  } catch { /* noop */ }
+  clearTripKeys(tripId);
+  try { (await import('../photos.js')).revokeAll(); } catch { /* noop */ }
+
+  toast(shared ? '已從這台手機移除' : '已刪除');
+  navigate('/', { replace: true });
+}
+
+// 這趟旅程在本機留下的所有 localStorage 旗標
+function clearTripKeys(tripId) {
+  const spotIds = store.spotsOf(tripId).map((s) => s.id);
+  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here'].map((k) => `tripquest.${k}.${tripId}`);
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (keys.includes(k)) { localStorage.removeItem(k); continue; }
+      if (k.startsWith(`tripquest.dayOpen.${tripId}`)) { localStorage.removeItem(k); continue; }
+      if (spotIds.some((sid) => k === `tripquest.spotOpen.${sid}`)) localStorage.removeItem(k);
+    }
+  } catch { /* noop */ }
+}
+
 // 位置分享開關（旅程設定）。預設關；開之前一定先過同意畫面。
 function posShareRow(tripId, t) {
   const box = h('div', { class: 'switch-row' });
@@ -1053,16 +1144,8 @@ export async function settings(tripId) {
         const blob = await exportBundle(tripId);
         downloadBlob(blob, `${t.title || 'trip'}.tripquest.json`);
       } }, '⬇️ 匯出完整備份（含照片）'),
-      h('button', { class: 'btn btn-danger btn-block', onclick: async () => {
-        if (await confirmDialog(`確定刪除「${t.title}」？照片也會一起刪掉，無法復原。`, { danger: true, okLabel: '刪除' })) {
-          for (const q of store.questsOfTrip(tripId)) for (const sub of store.submissionsOf(q.id)) await store.deleteSubmission(sub.id);
-          for (const s of store.spotsOf(tripId)) await store.remove(s.id);
-          for (const q of store.questsOfTrip(tripId)) await store.remove(q.id);
-          await store.remove(tripId);
-          toast('已刪除');
-          navigate('/', { replace: true });
-        }
-      } }, '🗑️ 刪除這個旅程'),
+      h('button', { class: 'btn btn-danger btn-block', onclick: () => removeTrip(tripId, t) },
+        '🗑️ 從我的手機移除這趟旅程'),
     ),
   ));
 }

@@ -81,6 +81,26 @@ function soon() { clearTimeout(timer); timer = setTimeout(() => drain().catch(()
 // 忙碌時不要直接回「busy」：呼叫端（剛加入、按了立即同步、拍完照）都是「我現在有東西
 // 要同步」的意思 —— 排隊等這一輪跑完再跑一次（多個呼叫合併成一次），結果回給等的人。
 let current = null, queued = null;
+// 等目前這一輪 drain 跑完（移除旅程前要先讓同步靜下來，不然它會把記錄塞回來）
+export function idle() { return current ? current.catch(() => {}) : Promise.resolve(); }
+
+// 清掉某個群組的所有待送項目。孤兒項目不只是垃圾：drainOnce 的 finally 會依
+// 剩餘項目排下一輪，永遠消化不掉的項目會讓它每 2 秒空轉一次（耗電），
+// 而且 pendingCount/syncStatus 會一直顯示「還有 N 張待上傳」。
+export async function forgetGroup(groupId) {
+  for (const e of await db.outboxAll()) {
+    if (e.groupId === groupId || e.id === 'push:' + groupId) await db.outboxDelete(e.id);
+  }
+  emit();
+}
+
+// 這個群組還有沒有東西沒送出去？有的話不能讓使用者移除——那些照片只有這台有。
+export async function pendingOf(groupId) {
+  const all = await db.outboxAll();
+  const mine = all.filter((e) => e.groupId === groupId || e.id === 'push:' + groupId);
+  return { total: mine.length, blobs: mine.filter((e) => e.op === 'blob').length };
+}
+
 export function drain(opts = {}) {
   if (current) {
     if (!queued) queued = current.catch(() => {}).then(() => { queued = null; return drain(opts); });
@@ -106,6 +126,9 @@ async function drainOnce({ onProgress, force = false } = {}) {
     const outbox = await db.outboxAll();
 
     for (const group of groups) {
+      // 群組清單是迴圈開始前抓的快照；使用者可能在這中間把旅程從這台移除了。
+      // 每一輪都重新確認，不然 pull 回來的記錄會把剛移除的東西塞回去。
+      if (!store.getRaw(group.id) || store.isForgotten(group.id)) continue;
       const adapter = sync.adapterForGroup(group.id, group.syncSecret);
 
       // 1. 拉他人的更新
@@ -118,6 +141,7 @@ async function drainOnce({ onProgress, force = false } = {}) {
             await store.importRecords(res.records, { merge: true });
             totals.pulled += res.records.length;
           }
+          if (store.isForgotten(group.id)) break;     // 移除發生在 pull 的途中 → 這批不要進來
           if (typeof res.seq === 'number') { since = res.seq; await sync.setCursor(group.id, res.seq); }
           if (!res.more) break;
         }
@@ -128,6 +152,7 @@ async function drainOnce({ onProgress, force = false } = {}) {
       if (pushEntry || force) {
         p('上傳資料…');
         try {
+          if (store.isForgotten(group.id)) throw new Error('forgotten');
           const pushed = await adapter.push(store.exportGroup(group.id));
           await db.outboxDelete('push:' + group.id);
           totals.pushed++;

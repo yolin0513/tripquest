@@ -157,6 +157,7 @@ export default async function settings() {
     // ---- 加入 / 匯入 ----
     h('div', { class: 'section-label' }, '加入 / 匯入'),
     h('button', { class: 'btn btn-soft btn-block', onclick: () => joinByCode(settings) }, '🔗 用邀請連結加入旅伴的旅程'),
+    removedTripsCard(settings),
     h('button', { class: 'btn btn-soft btn-block', onclick: () => bundleInput.click() }, '📥 匯入備份檔（.tripquest.json）'),
     bundleInput,
 
@@ -302,6 +303,50 @@ function emergencyContactEditor(refresh) {
 
 // 從一段文字（整條連結或純代碼）加入。首頁的剪貼簿流程也用這一支。
 // 回傳成功與否，讓呼叫端決定失敗後要不要再請使用者自己貼一次。
+// 從這台裝置移除過的旅程（v1.62）。移除時把群組祕鑰留在本機 meta，
+// 這樣長輩不用去 LINE 翻當初的邀請連結就能加回來 —— 三代理都指出「請他自己
+// 留著連結」對這個族群不可靠，而且獨自建立的行程移除後連結就不存在於任何地方了。
+function removedTripsCard(refresh) {
+  const box = h('div', { class: 'stack', style: 'margin-top:6px' });
+  (async () => {
+    const db = await import('../db.js');
+    const kept = (await db.metaGet('removedGroups')) || [];
+    if (!kept.length) return;
+    box.append(h('p', { class: 'form-hint', style: 'margin:8px 2px 2px' }, '從這台手機移除過的旅程：'));
+    for (const it of kept) {
+      box.append(h('div', { class: 'setting-row' },
+        h('span', { style: 'font-weight:700' }, it.title || '旅程'),
+        h('div', { class: 'row2' },
+          h('button', {
+            class: 'btn btn-soft', onclick: async () => {
+              toast('加回來中…');
+              try {
+                const store = await import('../store.js');
+                store.unforget(it.groupId);
+                const { joinInvite } = await import('../share.js');
+                const tid = await joinInvite({ kind: 'sync', short: true, groupId: it.groupId, secret: it.secret,
+                  url: it.url || '', tripPrefix: String(it.tripId || '').slice(0, 8) });
+                const rest = ((await db.metaGet('removedGroups')) || []).filter((x) => x.groupId !== it.groupId);
+                await db.metaSet('removedGroups', rest);
+                toast('已加回來');
+                navigate(`/trip/${tid}`, { replace: true });
+              } catch (e) { toast('加不回來：' + e.message, 4000); }
+            },
+          }, '加回來'),
+          h('button', {
+            class: 'btn btn-ghost', onclick: async () => {
+              if (!(await confirmDialog(`要徹底忘掉「${it.title || '這趟旅程'}」嗎？之後只能請旅伴重新傳邀請連結。`, { danger: true, okLabel: '忘掉' }))) return;
+              const rest = ((await db.metaGet('removedGroups')) || []).filter((x) => x.groupId !== it.groupId);
+              await db.metaSet('removedGroups', rest);
+              refresh();
+            },
+          }, '徹底忘掉'),
+        )));
+    }
+  })();
+  return box;
+}
+
 export async function joinByText(raw) {
   const s = String(raw || '').trim();
   if (!s) return false;

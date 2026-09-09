@@ -10,7 +10,7 @@ import { spotTimes } from '../spottime.js';
 import { travelMatrix, chainTimes, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
 import * as store from '../store.js';
 import { h, mount, toast, promptDialog, confirmDialog, modal } from '../ui.js';
-import { navigate, back } from '../router.js';
+import { navigate } from '../router.js';
 import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
 import { generateForTrip } from '../quests/generate.js';
@@ -125,7 +125,7 @@ export default async function plan(tripId) {
     list.append(h('button', { class: 'btn btn-soft btn-block', style: 'margin-top:8px', onclick: exportText }, '📤 匯出成文字'));
     list.append(h('button', {
       class: 'btn btn-primary btn-block btn-big', style: 'margin-top:18px',
-      onclick: () => back(`/trip/${tripId}`),
+      onclick: () => navigate(`/trip/${tripId}`),      // 同上：寫「回旅程」就要真的回旅程頁
     }, '完成，回旅程'));
   }
 

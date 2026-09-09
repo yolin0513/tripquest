@@ -1,7 +1,7 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, avatar, toast, chooseFrom } from '../ui.js';
-import { navigate, back } from '../router.js';
+import { navigate } from '../router.js';
 import { hashHue } from '../ids.js';
 import { subPhoto } from '../photoimg.js';
 import { ensureMember, activeMemberId } from '../claim.js';
@@ -151,7 +151,9 @@ export default async function people(tripId) {
 
   if (!allSubs.length) {
     page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'),
-      h('button', { class: 'btn btn-primary', onclick: () => back(`/trip/${tripId}`) }, '回任務清單')));
+      // 按鈕文字說了目的地就要真的去那裡：back() 是「回上一頁」，從分帳分頁切過來時
+      // 會退回分帳（使用者實機回報的正是這個）。標了地名的按鈕一律用 navigate。
+      h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單')));
   } else if (!subs.length) {
     page.append(h('div', { class: 'empty' },
       h('p', {}, '這個條件下沒有照片'),
