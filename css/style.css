@@ -657,6 +657,32 @@ body.pv-open { overflow: hidden; }
 .people-row .pr-count { color: var(--muted); margin-top: 2px; }
 .people-row .pr-mini-track { height: 8px; border-radius: 999px; background: var(--bg-elev-2); overflow: hidden; margin-top: 8px; }
 .people-row .pr-mini-track > i { display: block; height: 100%; background: var(--primary); }
+/* 資訊區（回顧頁「大家的表現」）：平底、無邊框、無箭頭 —— 跟可按的入口卡明確分開 */
+.info-block { background: var(--bg-elev-2); border-radius: var(--radius); padding: 12px 14px 6px; margin: 0 0 12px; }
+.info-block .ib-head { font-weight: 800; margin-bottom: 8px; }
+.info-block .people-row { background: transparent; border: 0; padding: 8px 0; margin-bottom: 0; }
+.info-block .people-row + .people-row { border-top: 1px solid var(--line); }
+.hero.hero-tight { padding: 6px 2px 10px; }
+.hero.hero-tight h2 { font-size: 1.35rem; }
+.hero.hero-tight p { font-size: 0.95rem; }
+/* 旅伴列（行程頁）：可點開清單；未加入的頭像半透明、24 小時內加入的掛「新」 */
+.crew-btn { appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; background: transparent; border: 0; padding: 10px 2px; margin: 2px 0 4px; }
+.crew-btn .avatars { margin: 0; flex: 1; }
+.crew-btn .crew-label { flex: none; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.crew-btn .avatar.ghost { opacity: 0.38; }
+.crew-wrap { position: relative; display: inline-flex; }
+.crew-new { position: absolute; right: -4px; top: -6px; background: var(--heart); color: #fff; font-size: 0.62rem; font-weight: 800; border-radius: 999px; padding: 1px 5px; box-shadow: 0 0 0 2px var(--bg); }
+.crew-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 2px; }
+.crew-row + .crew-row { border-top: 1px solid var(--line); }
+.crew-row .cr-main { flex: 1; min-width: 0; }
+.crew-row .cr-name { font-weight: 800; font-size: 1.05rem; }
+.crew-row .cr-line { color: var(--muted); font-size: 0.92rem; margin-top: 2px; }
+.crew-row .cr-line.ok { color: var(--ok, #6cd39a); }
+/* 有人加入的橫幅（行程頁，一次性） */
+.join-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin: 0 0 10px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--heart) 16%, var(--bg-elev)); border: 1px solid var(--heart); font-weight: 800; }
+.join-banner .jb-x { margin-left: auto; min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text); }
 
 .feed-item {
   background: var(--bg-elev); border: 1px solid var(--line);

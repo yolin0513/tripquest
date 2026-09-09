@@ -29,48 +29,48 @@ export default async function memories(tripId) {
   const myBadges = me ? earnedBadges(tripId, me).length : 0;
 
   render(h('div', { class: 'page' },
-    h('div', { class: 'hero', style: 'padding-bottom:8px' },
+    // v1.57.3 排版（使用者回饋）：
+    //   · 一進來第一畫面就要看到「可以按的成果入口」——長輩不捲動就看不到下面。
+    //     順序：影片相簿 → 海報 → 最終回顧（入口都有一致的卡片外觀＋›），
+    //     「大家的表現」（資訊區）與徽章往下放。
+    //   · 資訊區（大家一起完成了）用平底、無邊框、無箭頭 —— 跟「可按的入口」
+    //     視覺上分開，之間有分節標題當分隔。
+    h('div', { class: 'hero hero-tight' },
       h('h2', {}, ready ? '這趟的回顧' : '旅程進行中'),
       h('p', { class: 'muted' }, ready
-        ? '把這趟的照片與數字整理成可以留念、可以分享的東西。'
-        : `目前完成 ${prog.done} / ${prog.total} 個任務。全部完成（或回程日過了）之後，這裡會有回憶影片和最終回顧。`),
+        ? '把照片與數字整理成可以留念、分享的東西。'
+        : `完成 ${prog.done} / ${prog.total} 個任務。全部完成或回程日過了，就能做影片與回顧。`),
     ),
 
-    // 大家的進度（v1.57.2 從照片頁移來 —— 進度屬於「回顧」的語意，照片頁只留照片）。
-    // 放在頂端說明之後、徽章之前：先看整體與每個人做了多少，再往下是徽章與成果。
-    teamProgress(tripId, t),
-
-    // 成就徽章 —— 隨時可看
-    bigCard('🏅', '成就徽章', me ? `你已解鎖 ${myBadges} / ${BADGES.length} 個` : '看看大家的徽章',
-      () => navigate(`/trip/${tripId}/badges`), true),
-
-    // 回憶影片
+    h('div', { class: 'section-label' }, '🎁 留念與分享'),
     bigCard('🎬', '回憶影片與相簿',
       ready ? '做成短片，或產生一個給家人看的相簿網址' : `還差 ${prog.total - prog.done} 個任務就能做`,
       ready ? () => navigate(`/trip/${tripId}/album`) : () => toast(`還有 ${prog.total - prog.done} 個任務`),
       ready),
-
-    // 最終回顧
+    bigCard('🎨', '行程海報', '把行程排成一張手繪水彩風的長圖，傳 LINE 或列印',
+      () => navigate(`/trip/${tripId}/poster`), true),
     bigCard('🎁', '最終回顧',
-      ready ? '走了多遠、吃了哪些、每個人的貢獻…整理成一份成果報告' : '旅程結束後才會有完整數字',
+      ready ? '走了多遠、吃了哪些、每個人的貢獻…一份成果報告' : '旅程結束後才會有完整數字',
       ready ? () => navigate(`/trip/${tripId}/recap`) : () => toast('旅程結束後再回來看'),
       ready),
 
-    // 行程海報（不分階段，屬於「留念」）
-    bigCard('🎨', '行程海報', '把行程排成一張手繪水彩風的長圖，傳 LINE 或列印',
-      () => navigate(`/trip/${tripId}/poster`), true),
+    h('div', { class: 'section-label', style: 'margin-top:22px' }, '👣 大家的表現'),
+    teamProgress(tripId, t),
+    bigCard('🏅', '成就徽章', me ? `你已解鎖 ${myBadges} / ${BADGES.length} 個` : '看看大家的徽章',
+      () => navigate(`/trip/${tripId}/badges`), true),
   ));
 }
 
 // 每個人的進度（歸屬一律走照片標記，改標記後回到這頁就是新數字）。
-// 零成員或還沒有任務就不畫 —— 頂端的 hero 已經講了整體狀態，不用再空一塊。
+// 零成員或還沒有任務就不畫。
 function teamProgress(tripId, t) {
   const members = store.membersOf(t.groupId);
   const prog = store.tripProgress(tripId);
   if (!members.length || !prog.total) return null;
   const allSubs = store.submissionsOfTrip(tripId);
-  const wrap = h('div', { class: 'team-progress' },
-    h('div', { class: 'section-label' }, `👣 大家一起完成了 ${prog.done} / ${prog.total}`));
+  // 資訊區：跟「可按的入口卡」長得明確不一樣（平底、無邊框、無 ›），這裡沒有東西能按
+  const wrap = h('div', { class: 'team-progress info-block' },
+    h('div', { class: 'ib-head' }, `一起完成了 ${prog.done} / ${prog.total} 個任務`));
   for (const m of members) {
     const credited = new Set(allSubs.filter((s) => creditOf(s) === m.id).map((s) => s.questId));
     const shot = allSubs.filter((s) => shooterOf(s) === m.id);

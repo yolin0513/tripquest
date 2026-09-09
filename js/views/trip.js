@@ -3,7 +3,8 @@ import * as store from '../store.js';
 import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META } from '../ui.js';
 import { navigate, back, navRestoredScroll } from '../router.js';
 import { getPrefs } from '../prefs.js';
-import { uuid, hashHue } from '../ids.js';
+import { uuid, hashHue, deviceId } from '../ids.js';
+import { shooterOf } from '../badges.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
@@ -102,8 +103,8 @@ export default async function trip(tripId, { fresh = false } = {}) {
       ring(prog.ratio, { size: 64, label: `${prog.done}/${prog.total}` }),
     ),
 
-    members.length ? h('div', { class: 'avatars pad-x', style: 'margin:12px 0' },
-      ...members.map((m) => avatar(m.displayName, hashHue(m.id)))) : null,
+    joinBanner(tripId, members),
+    members.length ? crewButton(tripId, t, members) : null,
 
     // 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
     (store.getRaw(t.groupId)?.syncSecret && !activeMemberId(tripId) && members.length > 1)
@@ -580,13 +581,104 @@ let hereWatch = null;
 function watchHere(tripId) {
   if (hereWatch) { hereWatch(); hereWatch = null; }
   let last = store.getHereSpot(tripId);
+  let lastClaims = store.exportRecords().filter((r) => r.type === 'memberClaim' && r.tripId === tripId).length;
   hereWatch = store.subscribe(() => {
     if (!location.hash.includes(`/trip/${tripId}`) || location.hash.match(/\/(spot|plan|poster|weather|people|expenses|memories)/)) return;
     const now = store.getHereSpot(tripId);
-    if (now === last) return;
-    last = now;
+    // 有人新加入（同步拉到新的 memberClaim）也要重畫 —— 橫幅與「N/N 位已加入」才會即時更新
+    const claimN = store.exportRecords().filter((r) => r.type === 'memberClaim' && r.tripId === tripId).length;
+    if (now === last && claimN === lastClaims) return;
+    last = now; lastClaims = claimN;
     trip(tripId);
   });
+}
+
+// ---------- 旅伴：誰真的加入了（v1.57.3）----------
+// 資料依據：memberClaim（append-only、會同步）＝某台裝置認領了某個成員。
+//   有 claim ＝ 真的有人用這個名字在用 App（取最早的 claimedAt 當「加入時間」）；
+//   沒有 claim ＝ 名字被列出來但還沒有人認領 —— 顯示「還沒加入」。
+//   限制：建立者自己也要選過一次「這是誰的手機」才算（第一次拍照/按讚時會問）。
+function crewInfo(tripId, t) {
+  const recs = store.exportRecords();
+  const claims = recs.filter((r) => r.type === 'memberClaim' && r.tripId === tripId);
+  const subs = store.submissionsOfTrip(tripId);
+  const members = store.membersOf(t.groupId);
+  return members.map((m) => {
+    const mine = claims.filter((c) => c.memberId === m.id);
+    const joinedAt = mine.length ? Math.min(...mine.map((c) => c.claimedAt || Infinity)) : null;
+    const shot = subs.filter((s) => shooterOf(s) === m.id);
+    let lastAt = Math.max(0, ...mine.map((c) => c.claimedAt || 0),
+      ...shot.map((s) => s.takenAt || s.createdAt || 0),
+      ...recs.filter((r) => (r.type === 'reaction' || r.type === 'comment') && r.actorId === m.id && r.tripId === tripId)
+        .map((r) => r.createdAt || 0));
+    return { m, joined: !!mine.length, joinedAt: Number.isFinite(joinedAt) ? joinedAt : null,
+      devices: mine.length, photos: shot.length, lastAt: lastAt || null,
+      isNew: !!mine.length && Date.now() - joinedAt < 24 * 3600000 };
+  });
+}
+const fmtDT = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function fmtAgo(ts) {
+  const s = (Date.now() - ts) / 1000;
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))} 分鐘前`;
+  if (s < 86400) return `${Math.round(s / 3600)} 小時前`;
+  return `${Math.round(s / 86400)} 天前`;
+}
+function crewButton(tripId, t, members) {
+  const info = crewInfo(tripId, t);
+  return h('button', { class: 'crew-btn', 'aria-label': '看旅伴清單', onclick: () => openCrew(tripId, t) },
+    h('div', { class: 'avatars' }, ...info.map((x) => h('span', { class: 'crew-wrap' },
+      (() => { const a = avatar(x.m.displayName, hashHue(x.m.id)); if (!x.joined) a.classList.add('ghost'); return a; })(),
+      x.isNew ? h('span', { class: 'crew-new' }, '新') : null,
+    ))),
+    h('span', { class: 'crew-label' }, `${info.filter((x) => x.joined).length}/${info.length} 位已加入 ›`),
+  );
+}
+async function openCrew(tripId, t) {
+  const { modal } = await import('../ui.js');
+  const info = crewInfo(tripId, t).sort((a, b) => (b.joined - a.joined) || (a.joinedAt || 0) - (b.joinedAt || 0));
+  modal({
+    title: '👥 旅伴',
+    closeX: true,
+    body: h('div', {},
+      ...info.map((x) => h('div', { class: 'crew-row' },
+        h('span', { class: 'crew-wrap' },
+          (() => { const a = avatar(x.m.displayName, hashHue(x.m.id)); if (!x.joined) a.classList.add('ghost'); return a; })(),
+          x.isNew ? h('span', { class: 'crew-new' }, '新') : null),
+        h('div', { class: 'cr-main' },
+          h('div', { class: 'cr-name' }, x.m.displayName),
+          x.joined
+            ? h('div', { class: 'cr-line ok' }, `✓ ${fmtDT(x.joinedAt)} 加入${x.devices > 1 ? `（${x.devices} 台裝置）` : ''}`)
+            : h('div', { class: 'cr-line' }, '⏳ 還沒加入 — 把邀請連結傳給他就能加入'),
+          x.joined ? h('div', { class: 'cr-line' },
+            `拍了 ${x.photos} 張` + (x.lastAt ? ` · 最後活動 ${fmtAgo(x.lastAt)}` : '')) : null,
+        ),
+      )),
+      h('p', { class: 'form-hint', style: 'margin-top:10px' },
+        '「加入」以選過「這是誰的手機」為準 —— 名字被列出來但還沒點過自己名字的人，會顯示還沒加入。'),
+    ),
+    actions: [{ label: '知道了', value: true }],
+  });
+}
+// 有人新加入 → 一次性橫幅（本機記住看過哪些 claim；claim 會同步，所以旅伴的手機也會看到）
+function joinBanner(tripId, members) {
+  const key = 'tripquest.claimseen.' + tripId;
+  const claims = store.exportRecords().filter((r) => r.type === 'memberClaim' && r.tripId === tripId);
+  let seen = null;
+  try { seen = JSON.parse(localStorage.getItem(key) || 'null'); } catch { seen = null; }
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(claims.map((c) => c.id))); } catch { /* noop */ } };
+  if (!Array.isArray(seen)) { save(); return null; }   // 第一次看這頁：全部記為已看，不對歷史轟炸
+  const fresh = claims.filter((c) => !seen.includes(c.id) && c.deviceId !== deviceId());
+  if (!fresh.length) { save(); return null; }
+  const names = [...new Set(fresh.map((c) => store.getRaw(c.memberId)?.displayName).filter(Boolean))];
+  if (!names.length) { save(); return null; }
+  const el = h('div', { class: 'join-banner' },
+    h('span', {}, `🎉 ${names.join('、')} 加入了旅程`),
+    h('button', { class: 'jb-x', 'aria-label': '知道了', onclick: () => { save(); el.remove(); } }, '✕'),
+  );
+  // 背景同步會觸發重繪 —— 不能「顯示即算看過」，不然橫幅幾秒就消失。
+  // 按 ✕ 或停留 8 秒才算；重繪期間 seen 還沒存 → 橫幅繼續在。
+  setTimeout(save, 8000);
+  return el;
 }
 
 // ---------- 剛加入的第一分鐘（v1.57）----------

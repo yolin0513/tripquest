@@ -126,6 +126,70 @@ try {
   await sleep(500);
   yes(await B.evaluate(() => !document.querySelector('.welcome-card')), '歡迎卡關掉後不再出現');
 
+  // ---------- 旅伴清單與加入橫幅（v1.57.3）----------
+  console.log('\n— 旅伴與加入提示 —');
+  // A 先看一次行程頁（把目前的 claim 記為已看），B 已在剛剛 ensureMember 認領了「爸爸」
+  await A.goto('about:blank');
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
+  await A.waitForSelector('.crew-btn', { timeout: 15000 });
+  const crew0 = await A.evaluate(() => document.querySelector('.crew-btn .crew-label').textContent);
+  await A.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
+  await sleep(800);
+  // 確定性重現「看頁之後才同步到新 claim」：把已看清單清空再重載 → 爸爸的 claim 是新的
+  await A.evaluate((tid) => localStorage.setItem('tripquest.claimseen.' + tid, '[]'), setup.tid);
+  await A.goto('about:blank');
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
+  await A.waitForSelector('.crew-btn', { timeout: 15000 });
+  const after = await A.evaluate(() => ({
+    banner: document.querySelector('.join-banner')?.textContent || '',
+    label: document.querySelector('.crew-btn .crew-label').textContent,
+    newDots: document.querySelectorAll('.crew-btn .crew-new').length,
+    ghosts: document.querySelectorAll('.crew-btn .avatar.ghost').length,
+  }));
+  yes(after.banner.includes('爸爸') && after.banner.includes('加入了旅程'), `同步後 A 看到加入橫幅：「${after.banner.replace('✕','').trim()}」`);
+  yes(after.label.includes('1/2 位已加入'), `旅伴列標示 ${after.label.trim()}（媽媽還沒認領）`);
+  yes(after.newDots === 1 && after.ghosts === 1, `新加入掛「新」×${after.newDots}、未加入頭像半透明 ×${after.ghosts}`);
+  void crew0;
+  // 點開旅伴清單
+  await A.evaluate(() => document.querySelector('.crew-btn').click());
+  await A.waitForSelector('.crew-row', { timeout: 8000 });
+  const crew = await A.evaluate(() => [...document.querySelectorAll('.crew-row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim()));
+  yes(crew.length === 2 && crew[0].includes('爸爸') && crew[0].includes('加入') && /拍了 \d+ 張/.test(crew[0]),
+    `清單第一列：${crew[0].slice(0, 40)}…`);
+  yes(crew[1].includes('媽媽') && crew[1].includes('還沒加入'), `清單第二列：${crew[1].slice(0, 34)}…`);
+  await A.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('知道了'))?.click());
+  await sleep(300);
+  // 按 ✕ → 橫幅看過就不再出現（背景重繪期間則會繼續在）
+  await A.evaluate(() => document.querySelector('.join-banner .jb-x')?.click());
+  await sleep(200);
+  await A.goto('about:blank');
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
+  await A.waitForSelector('.crew-btn', { timeout: 15000 });
+  await sleep(400);
+  yes(await A.evaluate(() => !document.querySelector('.join-banner')), '加入橫幅看過一次就不再出現');
+
+  // ---------- 回顧頁：第一畫面就看得到成果入口（v1.57.3 驗收指標）----------
+  console.log('\n— 回顧頁排版 —');
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/memories`, { waitUntil: 'networkidle0' });
+  await A.waitForSelector('.mem-card', { timeout: 15000 });
+  await sleep(400);
+  const mem = await A.evaluate(() => {
+    const cards = [...document.querySelectorAll('.mem-card')];
+    const firstScreen = cards.filter((c) => c.getBoundingClientRect().bottom <= 780).map((c) => c.querySelector('.mem-card-title').textContent);
+    const info = document.querySelector('.info-block');
+    const order = [...document.querySelectorAll('.mem-card, .info-block')].map((e) => e.classList.contains('info-block') ? 'INFO' : e.querySelector('.mem-card-title').textContent);
+    return {
+      firstScreen,
+      infoIsButton: info ? info.tagName === 'BUTTON' : null,
+      infoHasArrow: info ? !!info.querySelector('.mem-card-arrow') : null,
+      order,
+    };
+  });
+  yes(mem.firstScreen.length >= 3 && mem.firstScreen.includes('回憶影片與相簿') && mem.firstScreen.includes('行程海報'),
+    `390×844 第一畫面可按入口 ${mem.firstScreen.length} 個：${mem.firstScreen.join('、')}（改版前 0 個）`);
+  yes(mem.order.indexOf('回憶影片與相簿') < mem.order.indexOf('INFO'), '成果入口在資訊區之前');
+  yes(mem.infoIsButton === false && mem.infoHasArrow === false, '「大家的表現」是資訊區：不是按鈕、沒有箭頭');
+
   // ---------- 伺服器上還沒資料：不是技術錯誤 ----------
   console.log('\n— 失敗路徑 —');
   const C = await device('C');
