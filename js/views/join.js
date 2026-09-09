@@ -46,21 +46,47 @@ export default async function join(query) {
   // 儲存空間，先加入再安裝完全沒問題，不要拿同一套嚇他。
   const iosRisk = !std && p.os === 'ios';
 
+  // 加入：按鈕原地變成進度卡（連線 → 接收 N 筆 → 整理），成功就進行程頁；
+  // 失敗不只 toast，卡片留在原地講清楚原因並給「再試一次」
+  const progress = h('div', { class: 'join-progress', hidden: true });
   const doJoin = async (btn) => {
     btn.disabled = true;
     const original = btn.textContent;
-    btn.textContent = '加入中…（大行程最多約 1 分鐘，請稍候）';
+    btn.hidden = true;
+    progress.hidden = false;
+    const line = h('div', {}, '連線中…'), sub = h('div', { class: 'jp-sub' }, '通常幾秒就好；大行程最多約 1 分鐘');
+    progress.replaceChildren(h('div', { class: 'spinner', style: 'margin:0 auto 8px' }), line, sub);
     try {
-      const tripId = syncCode ? await joinInvite(syncCode) : await importShareCode(copyCode);
-      toast('已加入！');
+      const tripId = syncCode
+        ? await joinInvite(syncCode, { onProgress: (m) => { line.textContent = m; } })
+        : await importShareCode(copyCode);
+      line.textContent = '好了，帶你進行程…';
       if (syncCode && tripId) await ensureMember(tripId, { force: true });   // 「這是誰的手機？」
       navigate(`/trip/${tripId}`, { replace: true });
     } catch (err) {
-      toast('加入失敗：' + err.message);
-      btn.disabled = false;
-      btn.textContent = original;
+      progress.replaceChildren(
+        h('div', {}, '這次沒加入成功'),
+        h('div', { class: 'jp-sub' }, err.message),
+        h('button', { class: 'btn btn-primary btn-block', style: 'margin-top:10px', onclick: () => { progress.hidden = true; btn.hidden = false; btn.disabled = false; btn.textContent = original; doJoin(btn); } }, '再試一次'),
+      );
     }
   };
+  // 連線前就看得到的骨架：日期、誰邀請、前幾個景點（v4 連結才有；舊連結沒有就不畫）
+  const fmtDates = (d) => (d && d[0] ? (d[1] && d[1] !== d[0] ? `${d[0]} ～ ${d[1]}` : d[0]) : '');
+  const previewBox = (() => {
+    const pv = info.preview || [];
+    if (!pv.length && !(info.who || []).length && !fmtDates(info.dates)) return null;
+    const byDay = new Map();
+    for (const x of pv) { if (!byDay.has(x.d)) byDay.set(x.d, []); byDay.get(x.d).push(x.n); }
+    return h('div', { class: 'join-preview' },
+      fmtDates(info.dates) ? h('div', {}, '📅 ' + fmtDates(info.dates)) : null,
+      (info.who || []).length ? h('div', { style: 'margin-top:4px' }, '👥 ' + info.who.join('、') + (info.members > info.who.length ? ` 等 ${info.members} 人` : '')) : null,
+      ...[...byDay.keys()].sort((a, b) => a - b).slice(0, 3).map((d) => h('div', {},
+        h('div', { class: 'jp-day' }, `第 ${d} 天`),
+        ...byDay.get(d).slice(0, 4).map((n) => h('div', { class: 'jp-spot' }, '· ' + n)))),
+      pv.length && info.spots > pv.length ? h('div', { class: 'jp-spot' }, `…還有 ${info.spots - pv.length} 個景點`) : null,
+    );
+  })();
 
   // 兩邊儲存空間不通，剪貼簿是唯一過得去的橋 —— 裝好 App 之後靠它把邀請帶過去
   const copyInvite = async () => {
@@ -94,6 +120,8 @@ export default async function join(query) {
       h('p', { class: 'sm muted' }, `${info.spots} 個景點 · ${info.quests} 個拍照任務`),
       info.sync ? h('p', { class: 'sm muted' }, '加入後大家的照片會自動同步') : null,
     ),
+    previewBox,
+    progress,
 
     iosRisk ? installFirst : null,
 

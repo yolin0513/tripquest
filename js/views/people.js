@@ -7,6 +7,8 @@ import { subPhoto } from '../photoimg.js';
 import { ensureMember, activeMemberId } from '../claim.js';
 import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges } from '../badges.js';
 import { openTagger } from '../phototag.js';
+import { openViewer } from '../viewer.js';
+import { blobURL } from '../photos.js';
 
 const REACTIONS = ['❤️', '👍', '😍', '👏'];
 
@@ -19,15 +21,24 @@ const SORTS = [
 ];
 const VIEW_KEY = (tripId) => 'tripquest.wall.' + tripId;
 
+// v1.57：兩種檢視 —— 相簿（格狀，一眼看很多張、好找）與動態（誰拍的、留言）。
+// 預設相簿：手機相簿與 LINE 相簿都是格狀，長輩最熟；動態流保留給「看誰拍了什麼」。
+const MODES = [
+  { id: 'grid', label: '▦ 相簿' },
+  { id: 'feed', label: '☰ 動態' },
+];
 function loadView(tripId) {
   try {
     const v = JSON.parse(localStorage.getItem(VIEW_KEY(tripId)) || '{}');
     // 舊的 'spot' / 'person' 會落回 'new'
-    return { sort: SORTS.some((s) => s.id === v.sort) ? v.sort : 'new', spot: v.spot || '', untagged: !!v.untagged };
-  } catch { return { sort: 'new', spot: '', untagged: false }; }
+    // 檢視偏好跨行程記住（tripquest.wall.mode）：這趟沒選過就用上次的選擇，都沒有就相簿
+    const globalMode = localStorage.getItem('tripquest.wall.mode');
+    const mode = MODES.some((m) => m.id === v.mode) ? v.mode : (MODES.some((m) => m.id === globalMode) ? globalMode : 'grid');
+    return { sort: SORTS.some((s) => s.id === v.sort) ? v.sort : 'new', spot: v.spot || '', untagged: !!v.untagged, mode };
+  } catch { return { sort: 'new', spot: '', untagged: false, mode: 'grid' }; }
 }
 function saveView(tripId, v) {
-  try { localStorage.setItem(VIEW_KEY(tripId), JSON.stringify(v)); } catch { /* noop */ }
+  try { localStorage.setItem(VIEW_KEY(tripId), JSON.stringify(v)); if (v.mode) localStorage.setItem('tripquest.wall.mode', v.mode); } catch { /* noop */ }
 }
 
 // 排序與篩選都在這裡，畫面只負責顯示
@@ -138,6 +149,11 @@ export default async function people(tripId) {
     const sortNow = SORTS.find((x) => x.id === view.sort) || SORTS[0];
     const toggleSort = () => apply({ sort: view.sort === 'old' ? 'new' : 'old' });
 
+    page.append(h('div', { class: 'wall-modes' }, ...MODES.map((m) => h('button', {
+      class: 'wall-mode' + (view.mode === m.id ? ' on' : ''),
+      'aria-pressed': String(view.mode === m.id),
+      onclick: () => { if (view.mode !== m.id) apply({ mode: m.id }); },
+    }, m.label))));
     page.append(h('div', { class: 'wall-bar' },
       h('span', { class: 'wall-bar-title' }, title),
       h('button', { class: 'wall-ctl' + (filtered ? ' on' : ''), onclick: openFilter },
@@ -168,9 +184,83 @@ export default async function people(tripId) {
 
   render(page);
 
+  if (view.mode === 'grid') {
+    if (subs.length) page.append(gridView(tripId, t, subs, spotOf, members.length > 1));
+    return;
+  }
   for (const sub of subs) {
     page.append(await feedItem(sub, tripId, subs, members.length > 1));
   }
+}
+
+// ---------- 相簿（格狀）----------
+// 依天分組（景點的天數；沒有就用拍攝日期對照行程起日），一天一段、標題貼頂。
+// 200 張以上也要順：縮圖用 IntersectionObserver 快到可視範圍才解碼，離開後不釋放（縮圖很小）。
+function gridView(tripId, trip, subs, spotOf, multi) {
+  const dayOf = (sub) => {
+    const sid = spotOf(sub);
+    const sp = sid ? store.getRaw(sid) : null;
+    if (sp && sp.day) return sp.day;
+    if (trip.startDate && (sub.takenAt || sub.createdAt)) {
+      const d0 = new Date(trip.startDate + 'T00:00:00').getTime();
+      const d = Math.floor(((sub.takenAt || sub.createdAt) - d0) / 86400000) + 1;
+      if (d >= 1 && d < 60) return d;
+    }
+    return 0;
+  };
+  const dateOfDay = (d) => {
+    if (!trip.startDate || !d) return '';
+    const x = new Date(new Date(trip.startDate + 'T00:00:00').getTime() + (d - 1) * 86400000);
+    return `${x.getMonth() + 1}/${x.getDate()}`;
+  };
+  const groups = new Map();
+  for (const s of subs) { const d = dayOf(s); if (!groups.has(d)) groups.set(d, []); groups.get(d).push(s); }
+  const order = [...groups.keys()].sort((a, b) => (a || 99) - (b || 99));
+  const wrap = h('div', { class: 'pg' });
+  const io = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { loadCell(e.target); io.unobserve(e.target); }
+  }, { rootMargin: '600px 0px' }) : null;
+  const loadCell = (cell) => {
+    if (cell.dataset.loaded) return;
+    cell.dataset.loaded = '1';
+    const sub = subs[+cell.dataset.i];
+    (async () => {
+      const url = await blobURL(sub.thumbHash).catch(() => '') || await blobURL(sub.photoHash).catch(() => '');
+      const img = cell.querySelector('img');
+      if (url) { img.src = url; img.hidden = false; cell.classList.remove('pg-wait'); }
+      else cell.classList.add('pg-miss');
+    })();
+  };
+  let idx = 0;
+  for (const d of order) {
+    const list = groups.get(d);
+    wrap.append(h('div', { class: 'pg-day' },
+      h('span', {}, d ? `第 ${d} 天` : '其他'), dateOfDay(d) ? h('span', { class: 'pg-date' }, dateOfDay(d)) : null,
+      h('span', { class: 'pg-n' }, `${list.length} 張`)));
+    const grid = h('div', { class: 'pg-grid' });
+    for (const sub of list) {
+      const i = subs.indexOf(sub);
+      const likes = store.reactionsOf(sub.id).length;
+      const cell = h('button', {
+        class: 'pg-cell pg-wait', dataset: { i: String(i) }, 'aria-label': `第 ${idx + 1} 張照片`,
+        onclick: async () => {
+          const { changed } = await openViewer(tripId, subs, i, {
+            onTag: async (s) => { if (await openTagger(tripId, s.id, subs)) people(tripId); },
+          });
+          if (changed) people(tripId);
+        },
+      },
+        h('img', { alt: '', hidden: true, draggable: false }),
+        likes ? h('span', { class: 'pg-likes' }, `❤️ ${likes}`) : null,
+        (multi && !store.isPhotoTagged(sub)) ? h('span', { class: 'pg-untag' }, '未標記') : null,
+      );
+      if (io) io.observe(cell); else loadCell(cell);
+      grid.append(cell);
+      idx++;
+    }
+    wrap.append(grid);
+  }
+  return wrap;
 }
 
 async function feedItem(sub, tripId, allSubs, multi) {
@@ -194,10 +284,15 @@ async function feedItem(sub, tripId, allSubs, multi) {
     ),
   ));
 
-  // 點照片 → 標記畫面（也能在那裡加說明、刪除）
+  // 點照片 → 全螢幕放大（左右滑、按讚、留言）；標記／說明從檢視器右上角 ✏️ 進
   const photoWrap = h('button', {
     class: 'fi-photo-btn',
-    onclick: async () => { if (await openTagger(tripId, sub.id, allSubs)) people(tripId); },
+    onclick: async () => {
+      const { changed } = await openViewer(tripId, allSubs, allSubs.indexOf(sub), {
+        onTag: async (s) => { if (await openTagger(tripId, s.id, allSubs)) people(tripId); },
+      });
+      if (changed) redraw();
+    },
   },
     subPhoto(sub, { className: 'fi-photo', alt: caption || '' }),
     needsTag ? h('span', { class: 'untag-dot' }, '未標記') : null,

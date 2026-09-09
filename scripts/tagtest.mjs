@@ -64,6 +64,7 @@ const fail = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 async function device(name) {
   const ctx = await browser.createBrowserContext();
   const page = await ctx.newPage();
+  await page.evaluateOnNewDocument(() => { try { localStorage.setItem('tripquest.wall.mode', 'feed'); } catch {} });   // 這支測的是動態流（v1.57 起預設相簿格狀）
   page.on('pageerror', (e) => { console.log(`  [${name} pageerror]`, e.message); process.exitCode = 1; });
   page.on('console', (m) => { if (m.type() === 'error') console.log(`  [${name} console]`, m.text()); });
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });

@@ -91,6 +91,8 @@ export default async function trip(tripId, { fresh = false } = {}) {
   }
 
   const container = h('div', { class: 'page' },
+    welcomeCard(tripId),
+    syncBanner(tripId, t),
     h('div', { class: 'progress-banner' },
       h('div', { class: 'pb-text' },
         h('div', { class: 'pb-title' }, allDone ? '全部完成了！🎉' : `已完成 ${prog.done} / ${prog.total}`),
@@ -585,6 +587,51 @@ function watchHere(tripId) {
     last = now;
     trip(tripId);
   });
+}
+
+// ---------- 剛加入的第一分鐘（v1.57）----------
+// 歡迎卡只出現一次（加入時 share.js 立旗）；同步進度列只在還有待抓照片時出現，
+// 每 1.5 秒問一次 outbox，抓完變「已是最新」再淡出。
+function welcomeCard(tripId) {
+  const key = 'tripquest.welcome.' + tripId;
+  let on = false;
+  try { on = localStorage.getItem(key) === '1'; } catch { /* noop */ }
+  if (!on) return null;
+  const card = h('div', { class: 'welcome-card' },
+    h('div', {},
+      h('div', { class: 'wc-t' }, '👋 歡迎加入！拍照任務這樣玩'),
+      h('div', { class: 'wc-p' }, '點下面的景點 → 看任務 → 按 📷 拍一張。大家的照片會自動同步到「📸 照片」。')),
+    h('button', { class: 'wc-x', 'aria-label': '知道了', onclick: () => { try { localStorage.removeItem(key); } catch { /* noop */ } card.remove(); } }, '✕'),
+  );
+  return card;
+}
+function syncBanner(tripId, t) {
+  const group = store.getRaw(t.groupId);
+  if (!group || !group.syncSecret) return null;
+  const line = h('span', {}, '正在接收照片…');
+  const el = h('div', { class: 'sync-banner', hidden: true }, h('div', { class: 'spinner' }), line);
+  let shown = false, timer = 0;
+  let idle = 0;
+  const tick = async () => {
+    if (!document.body.contains(el) && shown) { clearInterval(timer); return; }
+    let n = 0, st = null;
+    try {
+      const o = await import('../outbox.js');
+      st = await o.syncStatus(tripId);
+      n = st.missing + st.uploads;
+      // 缺縮圖但沒有在同步 → 主動拉一次（剛加入、或上次被切到背景中斷）；連續三次沒進展就不再催
+      if (st.missing > 0 && !st.draining && idle < 3) { idle++; o.drain().catch(() => {}); }
+    } catch { n = 0; }
+    if (n > 0) { el.hidden = false; shown = true; line.textContent = st && st.uploads && !st.missing ? `正在上傳照片… 還有 ${st.uploads} 張` : `正在接收照片… 還有 ${n} 張`; }
+    else if (shown) {
+      clearInterval(timer);
+      el.classList.add('done'); el.querySelector('.spinner')?.remove(); line.textContent = '✓ 照片都到齊了';
+      setTimeout(() => el.remove(), 2500);
+      store.notifyExternalChange();
+    } else { clearInterval(timer); el.remove(); }
+  };
+  tick(); timer = setInterval(tick, 1500);
+  return el;
 }
 
 // ---------- 背景補示意圖 ----------

@@ -88,6 +88,15 @@ try {
   const joinRes = await B.page.evaluate(async (code) => {
     const { joinInvite } = await import('./js/share.js');
     const tid = await joinInvite(code);
+    // v1.57：加入不再等照片（縮圖在背景抓，行程頁有進度列）→ 這裡等到縮圖到齊再驗
+    {
+      const db0 = await import('./js/db.js'); const s0 = await import('./js/store.js');
+      for (let i = 0; i < 50; i++) {
+        const keys0 = new Set(await db0.allBlobKeys());
+        if (s0.submissionsOfTrip(tid).every((x) => keys0.has(x.thumbHash))) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
     const s = await import('./js/store.js');
     const subs = s.submissionsOfTrip(tid);
     const spots = s.spotsOf(tid);

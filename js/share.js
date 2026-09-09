@@ -45,6 +45,18 @@ export async function ensureGroupSync(groupId) {
   if (!g.syncSecret) patch.syncSecret = newSecret();
   if (cfg.url && g.syncUrl !== cfg.url) patch.syncUrl = cfg.url;
   if (Object.keys(patch).length) await store.patch(groupId, patch);
+  // 祕鑰產生「之前」就拍的照片從沒排進上傳佇列（onSubmission 那時看群組沒祕鑰就略過）
+  // → 第一次分享前拍的照片永遠傳不上去、旅伴那邊只看到「重新下載」。這裡補排一次；
+  // enqueueBlob 依 id 去重、drain 上傳前會 HEAD，不會重傳已在伺服器的。
+  try {
+    const o = await import('./outbox.js');
+    for (const r of store.exportGroup(groupId)) {
+      if (r.type !== 'submission' || r.deleted) continue;
+      await o.enqueueBlob(groupId, r.thumbHash);
+      await o.enqueueBlob(groupId, r.photoHash);
+    }
+    await o.enqueuePush(groupId);
+  } catch { /* 沒設同步就算了 */ }
   return store.getRaw(groupId);
 }
 
@@ -139,12 +151,17 @@ export async function shareURL(tripId) {
       const pushJob = pushAllChunked(adapter, store.exportGroup(group.id)).catch(() => {});
       await Promise.race([pushJob, new Promise((r) => setTimeout(r, 6000))]);
     } catch { /* 推不上去也繼續給連結；outbox 背景會重試，加入時也會再拉一次 */ }
+    // v1.57：連結多帶一份小摘要（日期、旅伴名、前幾個景點）—— 點連結的人連線前就看得到
+    // 「這是誰的什麼行程」，按加入後同步進行中也先有骨架可看。壓縮後多幾百 bytes。
     const payload = {
-      v: 3, kind: 'sync',
+      v: 4, kind: 'sync',
       url: getConfig().url,
       groupId: group.id, secret: group.syncSecret, tripId,
       title: trip.title, groupName: group.name || '旅伴',
       spots: spots.length, quests: quests.length, members: members.length,
+      dates: [trip.startDate || '', trip.endDate || ''],
+      who: members.slice(0, 4).map((m) => m.displayName).filter(Boolean),
+      preview: spots.slice(0, 12).map((s) => ({ n: s.name, d: s.day || 1 })),
     };
     return `${base}#/join?j=${await gzip(JSON.stringify(payload))}`;
   }
@@ -163,10 +180,12 @@ export async function peekInvite(code) {
     const grp = p.records.find((r) => r.type === 'group');
     return { sync: true, group: grp?.name || '旅伴', title: p.title || '行程', spots, quests, url: p.url };
   }
-  return { sync: true, group: p.groupName || '旅伴', title: p.title || '行程', spots: p.spots || 0, quests: p.quests || 0, url: p.url };
+  return { sync: true, group: p.groupName || '旅伴', title: p.title || '行程', spots: p.spots || 0, quests: p.quests || 0, url: p.url,
+    dates: Array.isArray(p.dates) ? p.dates : [], who: Array.isArray(p.who) ? p.who : [], preview: Array.isArray(p.preview) ? p.preview : [] };
 }
 
-export async function joinInvite(code) {
+export async function joinInvite(code, { onProgress = null } = {}) {
+  const prog = (m) => { try { onProgress && onProgress(m); } catch { /* noop */ } };
   const p = JSON.parse(await gunzip(code));
   if (p.kind !== 'sync') throw new Error('邀請格式不符');
   // 設定同步後端（若本機還沒設）
@@ -193,7 +212,7 @@ export async function joinInvite(code) {
         let res;
         try { res = await adapter.pull(since); }
         catch { return { all, since }; }               // 404 / 網路問題 → 當作這次還拉不到
-        if (res.records && res.records.length) all.push(...res.records);
+        if (res.records && res.records.length) { all.push(...res.records); prog(`正在接收行程… ${all.length} 筆`); }
         if (typeof res.seq === 'number') since = res.seq;
         if (!res.more) break;
       }
@@ -205,17 +224,20 @@ export async function joinInvite(code) {
     // 給伺服器足夠時間跟上——分享那邊的背景推送最多留了 40 秒的預算。
     let all = [], since = 0;
     const delays = [2000, 3000, 5000, 8000, 10000, 12000];
+    prog('連線到旅伴的伺服器…');
     for (let i = 0; i <= delays.length; i++) {
       ({ all, since } = await pullAll());
       if (all.length) break;
-      if (i < delays.length) await new Promise((r) => setTimeout(r, delays[i]));
+      if (i < delays.length) { prog(`旅伴的資料還在上傳中，等一下再試（第 ${i + 1} 次）`); await new Promise((r) => setTimeout(r, delays[i])); }
     }
     if (!all.length) throw new Error('伺服器上還沒有這趟旅程的資料，可能是行程比較大、推送還沒完成。請等旅伴那邊網路穩定一點後再分享一次連結，或請他到「設定 → 多人同步」按「立即同步」後再分享。');
+    prog(`整理 ${all.length} 筆資料…`);
     await store.importRecords(all, { merge: true });
     await setCursor(p.groupId, since);
   }
-  // 立刻同步一輪，把成員 / 投稿 / 照片補回來
-  try { const { drain } = await import('./outbox.js'); await drain(); } catch { /* 稍後自動重試 */ }
+  // 照片縮圖在背景繼續抓（行程頁會顯示「正在接收照片」進度列），不讓使用者等它
+  try { const { drain } = await import('./outbox.js'); drain().catch(() => {}); } catch { /* 稍後自動重試 */ }
+  try { localStorage.setItem('tripquest.welcome.' + p.tripId, '1'); } catch { /* noop */ }
   return p.tripId;
 }
 
@@ -337,3 +359,7 @@ export async function nativeShare({ title, text, url, files }) {
   }
   return false;
 }
+
+// 測試用（jointest 需要偽造一個「伺服器上還沒有資料」的連結）
+export const __gzip = gzip;
+export const __gunzip = gunzip;

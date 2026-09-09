@@ -450,6 +450,61 @@ button.card { appearance: none; font: inherit; }
 .wall-ctl.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 20%, transparent); }
 .wall-ctl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wall-ctl-chev { flex: none; color: var(--muted); font-size: 0.8rem; }
+/* 動態／相簿 檢視切換（v1.57） */
+.wall-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg-elev-2); border-radius: 14px; padding: 4px; margin: 8px 0 6px; }
+.wall-mode { appearance: none; border: 0; background: transparent; color: var(--muted); font-weight: 800; font-size: 1rem; min-height: 46px; border-radius: 11px; cursor: pointer; }
+.wall-mode.on { background: var(--bg-elev); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+/* 相簿格狀 */
+.pg { margin: 4px 0 12px; }
+.pg-day { position: sticky; top: var(--topbar-h, 56px); z-index: 2; display: flex; align-items: baseline; gap: 10px; padding: 8px 4px 6px; background: var(--bg); font-weight: 800; }
+.pg-day .pg-date { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+.pg-day .pg-n { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+.pg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.pg-cell { position: relative; appearance: none; border: 0; padding: 0; margin: 0; background: var(--bg-elev-2); aspect-ratio: 1; overflow: hidden; border-radius: 6px; cursor: pointer; }
+.pg-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pg-cell.pg-wait::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, var(--bg-elev-2), var(--bg-elev)); }
+.pg-cell.pg-miss::after { content: '下載中'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.8rem; color: var(--muted); }
+.pg-likes { position: absolute; left: 4px; bottom: 4px; font-size: 0.75rem; font-weight: 800; background: rgba(0,0,0,.55); color: #fff; border-radius: 999px; padding: 2px 7px; }
+.pg-untag { position: absolute; right: 5px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: #ffb14e; box-shadow: 0 0 0 2px rgba(0,0,0,.45); font-size: 0; overflow: hidden; }
+/* 全螢幕檢視器 */
+body.pv-open { overflow: hidden; }
+.pv { position: fixed; inset: 0; z-index: 400; background: #000; color: #fff; display: flex; flex-direction: column; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pv-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 10px 8px; background: linear-gradient(rgba(0,0,0,.65), transparent); transition: opacity .2s; }
+.pv-counter { flex: 1; text-align: center; font-weight: 800; font-size: 1.05rem; }
+.pv-btn { appearance: none; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.45); color: #fff; min-width: 52px; min-height: 52px; border-radius: 14px; font-size: 1.35rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; }
+.pv-close { font-size: 1.6rem; }
+.pv-stage { position: absolute; inset: 0; overflow: hidden; }
+.pv-track { display: flex; width: 300%; height: 100%; transform: translateX(calc(-100% / 3)); transition: transform .28s ease-out; }
+.pv-slide { width: calc(100% / 3); height: 100%; display: flex; align-items: center; justify-content: center; }
+.pv-img { max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: transform .08s linear; }
+.pv-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 10px 12px calc(env(safe-area-inset-bottom) + 12px); background: linear-gradient(transparent, rgba(0,0,0,.8)); transition: opacity .2s; }
+.pv-hide-ui .pv-top, .pv-hide-ui .pv-bottom { opacity: 0; pointer-events: none; }
+.pv-cap-1 { font-weight: 800; font-size: 1rem; }
+.pv-cap-2 { color: rgba(255,255,255,.8); font-size: 0.92rem; margin-top: 2px; }
+.pv-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.pv-reacts { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+.pv-react { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.3); color: #fff; padding: 8px 12px; min-height: 48px; }
+.pv-react.on { background: color-mix(in srgb, var(--heart) 45%, transparent); border-color: var(--heart); }
+.pv-cbtn { font-size: 1rem; white-space: nowrap; }
+.pv-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; background: var(--bg-elev); color: var(--text); border-radius: 18px 18px 0 0; padding: 10px 14px calc(env(safe-area-inset-bottom) + 12px); max-height: 60vh; display: flex; flex-direction: column; box-shadow: 0 -6px 24px rgba(0,0,0,.5); }
+.pv-sheet-head { display: flex; align-items: center; justify-content: space-between; font-weight: 800; font-size: 1.05rem; }
+.pv-sheet-head .pv-btn { background: var(--bg-elev-2); color: var(--text); border-color: var(--line); }
+.pv-clist { overflow: auto; flex: 1; margin: 6px 0; }
+.pv-cadd { display: flex; gap: 8px; }
+.pv-cadd .field { flex: 1; }
+/* 邀請加入（v1.57 第一分鐘） */
+.join-preview { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 10px 0; }
+.join-preview .jp-day { font-weight: 800; margin: 6px 0 2px; }
+.join-preview .jp-spot { color: var(--muted); font-size: 0.95rem; padding: 2px 0 2px 6px; }
+.join-progress { background: var(--bg-elev); border: 1px solid var(--primary); border-radius: var(--radius); padding: 14px; margin: 12px 0; text-align: center; font-weight: 700; }
+.join-progress .jp-sub { color: var(--muted); font-weight: 600; font-size: 0.9rem; margin-top: 4px; }
+.welcome-card { background: color-mix(in srgb, var(--primary) 14%, var(--bg-elev)); border: 1px solid var(--primary); border-radius: var(--radius); padding: 12px 14px; margin: 0 0 10px; display: flex; gap: 10px; align-items: flex-start; }
+.welcome-card .wc-t { font-weight: 800; margin-bottom: 4px; }
+.welcome-card .wc-p { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+.welcome-card .wc-x { margin-left: auto; min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text); font-size: 1.1rem; }
+.sync-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 10px; border-radius: 12px; background: var(--bg-elev-2); color: var(--muted); font-weight: 600; font-size: 0.95rem; }
+.sync-banner .spinner { width: 18px; height: 18px; border-width: 2px; }
+.sync-banner.done { color: var(--ok, #6cd39a); }
 .wall-ctl.on .wall-ctl-chev { color: var(--text); }
 /* 排序只有新／舊兩種，做成「按一下就換」的切換鈕，按鈕上直接寫現在是哪一種 */
 .wall-ctl-sort { padding: 0 12px; }

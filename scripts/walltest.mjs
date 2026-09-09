@@ -20,6 +20,7 @@ const ok = (m) => console.log('✓ ' + m);
 const fail = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 
 const page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => { try { localStorage.setItem('tripquest.wall.mode', 'feed'); } catch {} });   // 這支測的是動態流（v1.57 起預設相簿格狀）
 await page.setViewport({ width: 390, height: 844 });
 page.on('pageerror', (e) => { console.log('  [pageerror]', e.message); process.exitCode = 1; });
 await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
@@ -35,6 +36,7 @@ try {
   const dev = async (name) => {
     const ctx = await browser.createBrowserContext();
     const pg = await ctx.newPage();
+  await pg.evaluateOnNewDocument(() => { try { localStorage.setItem('tripquest.wall.mode', 'feed'); } catch {} });   // 這支測的是動態流（v1.57 起預設相簿格狀）
     await pg.setViewport({ width: 390, height: 844 });
     pg.on('pageerror', (e) => { console.log(`  [${name} pageerror]`, e.message); process.exitCode = 1; });
     await pg.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });

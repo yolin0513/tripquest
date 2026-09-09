@@ -66,10 +66,31 @@ export async function pendingCount() {
   return { total: all.length, blobs: all.filter((e) => e.op === 'blob').length };
 }
 
+// 行程頁的同步進度列用：待上傳的照片數 ＋ 這趟還缺的縮圖數（別人的照片還沒抓到）
+export async function syncStatus(tripId) {
+  const store = await import('./store.js');
+  const all = await db.outboxAll();
+  const have = new Set(await db.allBlobKeys());
+  const subs = store.submissionsOfTrip(tripId);
+  const missing = subs.filter((s) => s.thumbHash && !have.has(s.thumbHash)).length;
+  return { uploads: all.filter((e) => e.op === 'blob').length, missing, draining };
+}
+
 function soon() { clearTimeout(timer); timer = setTimeout(() => drain().catch(() => {}), 800); }
 
-export async function drain({ onProgress, force = false } = {}) {
-  if (draining) return { skipped: 'busy' };
+// 忙碌時不要直接回「busy」：呼叫端（剛加入、按了立即同步、拍完照）都是「我現在有東西
+// 要同步」的意思 —— 排隊等這一輪跑完再跑一次（多個呼叫合併成一次），結果回給等的人。
+let current = null, queued = null;
+export function drain(opts = {}) {
+  if (current) {
+    if (!queued) queued = current.catch(() => {}).then(() => { queued = null; return drain(opts); });
+    return queued;
+  }
+  current = drainOnce(opts).finally(() => { current = null; });
+  return current;
+}
+
+async function drainOnce({ onProgress, force = false } = {}) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return { skipped: 'offline' };
   if (!(await enabled())) return { skipped: 'local' };
 
