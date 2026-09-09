@@ -388,9 +388,22 @@ export function spotProgress(spotId) {
   return { done, total: qs.length, ratio: qs.length ? done / qs.length : 0 };
 }
 
+// 只在同步管線裡流動、絕不進任何「匯出／分享／給 AI」的型別（v1.60 三代理必修項）。
+// 位置就是這種資料：exportRecords() 是全 App 的通用資料源（回顧、海報、匯出檔、
+// AI payload 都吃它），所以預設就不吐 —— 未來新增的任何匯出功能預設安全，
+// 不用每加一個出口就記得過濾一次。只有 exportGroup（同步）明確拿得到。
+export const SENSITIVE_TYPES = new Set(['memberPos']);
+
 // ---------- 匯出用：全部存活記錄 ----------
-export function exportRecords() {
-  return list();
+// all:true 只給位置模組自己用（要讀自己那筆來比對/寫墓碑）
+export function exportRecords({ all = false } = {}) {
+  return all ? list() : list().filter((r) => !SENSITIVE_TYPES.has(r.type));
+}
+
+// 把外來/本機直寫的記錄併進記憶體狀態（不觸發 queueSync —— 位置走自己的單筆推送）
+export function mergeLocal(recs) {
+  for (const r of recs) state.byId.set(r.id, r);
+  emit();
 }
 
 // ---------- 同步用 ----------
@@ -399,7 +412,8 @@ export function syncedGroups() {
   return list().filter((r) => r.type === 'group' && r.syncSecret && !r.deleted);
 }
 
-// 某個群組相關的所有記錄（含墓碑，要送出去）
+// 某個群組相關的所有記錄（含墓碑，要送出去）。
+// 這是唯一會拿到 SENSITIVE_TYPES 的地方（位置要同步給旅伴才有意義）。
 export function exportGroup(groupId) {
   const tripIds = new Set(list().filter((r) => r.type === 'trip' && r.groupId === groupId).map((r) => r.id));
   return list().filter((r) => {
@@ -407,7 +421,15 @@ export function exportGroup(groupId) {
     if (r.groupId === groupId) return true;           // member
     if (r.tripId && tripIds.has(r.tripId)) return true; // spot / quest / submission / reaction / comment
     return false;
-  });
+  }).map(stripForSync);
+}
+
+// 照片的 EXIF 座標「只存本機」是設定頁對使用者的承諾（allowGeo 的說明文字），
+// 但 submission 記錄本來會整筆同步上去 —— 承諾其實是破的（v1.60 三代理查證發現）。
+// 上傳前剝掉：本機留著（相簿地圖照用），伺服器與其他裝置永遠看不到。
+function stripForSync(r) {
+  if (r.type === 'submission' && r.gps) { const { gps, ...rest } = r; return rest; }
+  return r;
 }
 
 // 依照片雜湊找出它屬於哪個群組（延遲下載全圖用）

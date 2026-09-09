@@ -11,7 +11,7 @@ const ENDPOINTS = [
 
 const KIND = {
   police: { label: '警察局', emoji: '🚓', q: 'amenity=police' },
-  hospital: { label: '醫院 / 急診', emoji: '🏥', q: 'amenity~"^(hospital|clinic)$"' },
+  hospital: { label: '醫院（急診）', emoji: '🏥', q: 'amenity=hospital' },
   pharmacy: { label: '藥局', emoji: '💊', q: 'amenity=pharmacy' },
 };
 
@@ -42,24 +42,41 @@ function buildQuery(lat, lng, radius) {
   const parts = [
     `nwr[amenity=police](around:${radius},${lat},${lng});`,
     `nwr[amenity=pharmacy](around:${radius},${lat},${lng});`,
-    `nwr[amenity~"^(hospital|clinic)$"](around:${hospRadius},${lat},${lng});`,
+    // 只查 amenity=hospital。緊急時列出小診所、國術館是有害的（實測石牌：
+    // 現行查詢的前 5 名全是診所與中醫，振興醫院排第 6、北榮第 7）。
+    // 台灣的國術館/整復多半標成 shop=massage 或 healthcare=alternative，
+    // 但也有標成 amenity=clinic 的（實測大台北 6 筆）—— 不查 clinic 就一起解決。
+    `nwr[amenity=hospital](around:${hospRadius},${lat},${lng});`,
   ].join('');
-  return `[out:json][timeout:25];(${parts});out center tags 80;`;
+  // 上限 80 是「任意取前 80 筆」不是「最近的 80 筆」。台北 8 公里內光是診所就有 300+ 筆，
+  // 80 筆會被小診所塞滿、真正的大醫院整個不在回應裡（實測石牌：振興、北榮都沒進來，
+  // 只擠進 1 筆醫院，清單前幾名變成診所與被標成 clinic 的國術館 —— 使用者回報的正是這個）。
+  // 現在只查 amenity=hospital，筆數本來就少，上限再放寬當保險。
+  return `[out:json][timeout:25];(${parts});out center tags 300;`;
 }
 
 function classify(tags) {
   const a = tags.amenity;
   if (a === 'police') return 'police';
-  if (a === 'hospital' || a === 'clinic') return 'hospital';
+  if (a === 'hospital') return 'hospital';
   if (a === 'pharmacy') return 'pharmacy';
   return null;
 }
-// 醫療院所的分級：有急診的大醫院 > 醫院 > 診所
-function hospTier(t) {
-  if (t.amenity === 'hospital') return t.emergency === 'yes' ? 0 : 1;
-  if (t.emergency === 'yes') return 1;                 // 有掛急診的診所
-  if (t.healthcare === 'hospital') return 1;
-  return 3;                                             // 一般診所
+// 醫院分級。emergency 標記的實測填寫率：大台北 25/54（46%）、京都 1/100（1%）、
+// 札幌 14/89（15%）—— 只靠它會把日本的大醫院全部埋掉，所以要有後備判斷。
+// 後備用「名稱型態」：台灣的「醫院/醫學中心」與日本的「病院」幾乎都是有病床的醫院，
+// 而「診所」「クリニック」「医院」「Clinic」在日文語境是小診所（例如「兵医院」）。
+// 面狀資料（way/relation）代表有人把整個院區畫出來 = 規模較大（台北 49/54 是面狀，
+// 但京日全是點，所以只能當加分、不能當門檻）。
+export function hospTier(t, isArea) {
+  if (t.emergency === 'yes') return 0;                  // 明確有急診
+  if (t.emergency === 'no') return 3;                   // 明確沒有 → 排最後
+  const n = String(t.name || '') + ' ' + String(t['name:en'] || '');
+  const small = /診所|クリニック|医院(?!.*病院)|[Cc]linic|薬局|歯科|皮膚科|眼科|整形外科/.test(n);
+  const big = /醫院|医院大学|病院|醫學中心|医療センター|[Hh]ospital|[Mm]edical\s*C?enter/.test(n);
+  if (small && !/病院|醫院|[Hh]ospital/.test(n)) return 2;   // 名稱像診所 → 後段
+  if (big) return isArea ? 1 : 1.5;                     // 名稱像醫院（畫了院區的再前面一點）
+  return 2.5;                                            // 判斷不出來
 }
 
 function addr(tags) {
@@ -95,8 +112,10 @@ export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false 
           id: el.type[0] + el.id, kind, name: t.name,
           lat: p.lat, lng: p.lon,
           addr: addr(t), phone: t.phone || t['contact:phone'] || t['emergency:phone'] || '',
-          tier: kind === 'hospital' ? hospTier(t) : 0,
-          er: kind === 'hospital' && (t.emergency === 'yes' || (t.amenity === 'hospital' && t.emergency !== 'no')),
+          tier: kind === 'hospital' ? hospTier(t, el.type !== 'node') : 0,
+          // 只有 OSM 明說 emergency=yes 才敢寫「有急診」；沒資料就不裝懂（見 sos.js）
+          er: kind === 'hospital' && t.emergency === 'yes',
+          erNo: kind === 'hospital' && t.emergency === 'no',
         });
       }
       writeCache(lat, lng, items);

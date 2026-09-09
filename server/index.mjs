@@ -57,6 +57,21 @@ function timingSafeEqual(a, b) {
   return d === 0;
 }
 
+// 位置保留期限（跟 workers/worker.mjs 同一套）：超期就改成無座標墓碑並佔新 seq，
+// 不直接刪 —— 客戶端游標是 seq，刪列的話別台永遠不會知道要清掉本機副本。
+const POS_TTL_MS = 48 * 3600 * 1000;
+function sweepPositions(g) {
+  const cutoff = Date.now() - POS_TTL_MS;
+  for (const entry of Object.values(g.records)) {
+    const r = entry.rec;
+    if (!r || r.type !== 'memberPos' || r.lat == null) continue;
+    if ((r.at || r.updatedAt || 0) >= cutoff) continue;
+    entry.rec = { id: r.id, type: 'memberPos', tripId: r.tripId || null, memberId: r.memberId || null,
+      deleted: true, deviceId: r.deviceId || null, updatedAt: Date.now() };
+    entry.seq = ++g.seq;
+  }
+}
+
 function authGroup(groupId, secret, createIfMissing) {
   let g = state.groups[groupId];
   if (g) {
@@ -176,6 +191,7 @@ const server = createServer(async (req, res) => {
       if (path === '/pull' && req.method === 'GET') {
         const { g, code, err } = authGroup(groupId, secret, false);
         if (err) return send(res, code, { error: err });
+        sweepPositions(g);                                   // 與 Worker 同一套保留期限
         const since = Number(u.searchParams.get('since') || 0);
         const rows = Object.values(g.records).filter((x) => x.seq > since).sort((a, b) => a.seq - b.seq).slice(0, PULL_LIMIT);
         const more = rows.length === PULL_LIMIT;

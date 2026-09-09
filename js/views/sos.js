@@ -3,10 +3,14 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, mount } from '../ui.js';
+import { h, toast, mount, avatar } from '../ui.js';
 import { back } from '../router.js';
 import { currentPosition, reverseGeocode, navUrl, mapUrl, fmtDist, lastKnown } from '../geo.js';
+import { activeMemberId } from '../claim.js';
+import { askShare } from './posconsent.js';
 import { nearbyFacilities, KIND } from '../nearby.js';
+import * as pos2 from '../pos.js';
+import { hashHue } from '../ids.js';
 import { loadEmergency, emergencyFor, countryOfTrip, getContacts } from '../emergency.js';
 
 export default async function sos(tripId) {
@@ -64,7 +68,12 @@ export default async function sos(tripId) {
     em.touristNote ? h('p', { class: 'form-hint' }, `旅客專線：${em.touristNote}`) : null,
   ));
 
-  // ---- 3. 附近設施 ----
+  // ---- 3. 旅伴在哪（v1.60）----
+  // 放在附近設施之前：走失的時候「家人在哪」比「警局在哪」更早需要。
+  const crewBox = tripId ? h('div', { class: 'sos-section' }) : null;
+  if (crewBox) page.append(crewBox);
+
+  // ---- 4. 附近設施 ----
   const nearbyBox = h('div', { class: 'sos-section' },
     h('h3', {}, '附近的警局 / 醫院 / 藥局'),
     h('p', { class: 'muted', style: 'padding:4px 2px' }, '正在定位、查詢附近設施…'),
@@ -89,6 +98,65 @@ export default async function sos(tripId) {
     }).catch(() => {});
     drawNearby(nearbyBox, pos);
   }
+  if (crewBox) {
+    // 進 SOS 頁就更新一次自己的位置（有開分享才會動），家人那端才看得到新的
+    if (tripId) pos2.updateNow(tripId, { force: true, high: true }).catch(() => {});
+    drawCrew(crewBox, tripId, trip, pos);
+    const off = store.subscribe(() => { if (document.body.contains(crewBox)) drawCrew(crewBox, tripId, trip, pos); });
+    window.addEventListener('hashchange', () => { if (!document.body.contains(crewBox)) off(); }, { once: true });
+  }
+}
+
+// 旅伴的位置：只顯示「最後看到」，不假裝是即時的（PWA 沒有背景定位，
+// App 沒開就不會更新 —— 這件事一定要在畫面上講清楚，不然家人會跑去撲空）。
+function drawCrew(box, tripId, trip, myPos) {
+  const members = trip ? store.membersOf(trip.groupId) : [];
+  const me = activeMemberId(tripId);
+  const shots = pos2.positionsOf(tripId);
+  const sharing = pos2.sharing(tripId);
+  const rows = [];
+  for (const m of members) {
+    if (m.id === me) continue;                          // 自己不用列
+    const rec = shots.get(m.id);
+    const d = rec ? pos2.describe(rec, myPos) : null;
+    rows.push(h('div', { class: 'sos-crew' + (d && d.sos ? ' sos-crew-alert' : '') },
+      avatar(m.displayName, hashHue(m.id)),
+      h('div', { class: 'sc-main' },
+        h('div', { class: 'sc-name' }, m.displayName,
+          d && d.sos ? h('span', { class: 'tag tag-er' }, '⚠️ 按了求助') : null),
+        d
+          ? h('div', { class: 'sc-line' },
+              (myPos
+                ? (d.coarse ? '大約在附近' : distWord(d.dist))
+                : '（先開定位才算得出距離）')
+              + ` · 最後看到 ${d.when}（${d.ago}）`
+              + (d.stale ? ' · 較舊' : ''))
+          : h('div', { class: 'sc-line muted' }, '沒有分享位置'),
+      ),
+      d ? h('a', { class: 'btn btn-soft sm-btn', href: mapUrl(rec.lat, rec.lng), target: '_blank', rel: 'noopener' }, '🧭') : null,
+    ));
+  }
+  mount(box,
+    h('h3', {}, '👨‍👩‍👧 旅伴在哪'),
+    rows.length ? h('div', { class: 'stack' }, ...rows)
+      : h('p', { class: 'muted sm', style: 'padding:4px 2px' }, '這趟還沒有其他旅伴。'),
+    h('p', { class: 'form-hint' },
+      '顯示的是對方「最後一次打開 App 時」的位置——手機沒開著就不會更新，不是即時追蹤。'),
+    sharing
+      ? h('button', {
+          class: 'btn btn-soft btn-block', style: 'margin-top:6px',
+          onclick: async (e) => { e.currentTarget.disabled = true; await pos2.setSharing(tripId, false); toast('已停止分享，並刪除伺服器上的位置'); drawCrew(box, tripId, trip, myPos); },
+        }, '🛑 停止分享我的位置')
+      : h('button', {
+          class: 'btn btn-soft btn-block', style: 'margin-top:6px',
+          onclick: async () => { if (await askShare(tripId, trip)) { await pos2.setSharing(tripId, true); toast('已開始分享'); drawCrew(box, tripId, trip, myPos); } },
+        }, '📍 讓家人看到我在哪'),
+  );
+}
+
+function distWord(m) {
+  if (m == null) return '';
+  return m < 1000 ? `${Math.round(m / 10) * 10} 公尺` : `${(m / 1000).toFixed(1)} 公里`;
 }
 
 function drawLocLine(el, pos, geo) {
@@ -171,7 +239,9 @@ function nearItem(it) {
   return h('div', { class: 'sos-near-item' },
     h('div', { class: 'sos-near-main' },
       h('div', { class: 'sos-near-name' }, it.name,
-        it.er ? h('span', { class: 'tag tag-er' }, '🚨 有急診') : null),
+        // 三態：OSM 明說有 → 紅標；明說沒有 → 灰標；沒資料 → 什麼都不寫（不裝懂）
+        it.er ? h('span', { class: 'tag tag-er' }, '🚨 有急診')
+          : it.erNo ? h('span', { class: 'tag tag-todo' }, '沒有急診') : null),
       h('div', { class: 'muted sm' }, [fmtDist(it.dist), it.addr].filter(Boolean).join(' · ')),
     ),
     h('div', { class: 'sos-near-acts' },

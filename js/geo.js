@@ -11,7 +11,8 @@ function saveLast(loc) {
 }
 
 // 取得目前位置。maxAgeMs 內的快取可接受；拿不到新的就回快取（帶 stale 標記）。
-export function currentPosition({ timeout = 9000, maxAgeMs = 60000 } = {}) {
+// high:false（預設）→ 不開高精度：背景的順風更新不該為了幾公尺狂開 GPS
+export function currentPosition({ timeout = 9000, maxAgeMs = 60000, high = true } = {}) {
   return new Promise((resolve) => {
     const cached = lastKnown();
     if (cached && Date.now() - cached.at < maxAgeMs) { resolve({ ...cached, stale: false }); return; }
@@ -25,7 +26,7 @@ export function currentPosition({ timeout = 9000, maxAgeMs = 60000 } = {}) {
         finish({ ...loc, stale: false });
       },
       () => finish(cached ? { ...cached, stale: true } : null),
-      { enableHighAccuracy: true, timeout, maximumAge: maxAgeMs },
+      { enableHighAccuracy: !!high, timeout, maximumAge: maxAgeMs },
     );
     setTimeout(() => finish(cached ? { ...cached, stale: true } : null), timeout + 500);
   });

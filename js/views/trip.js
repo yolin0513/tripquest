@@ -1,11 +1,13 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, ring, toast, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META } from '../ui.js';
+import { h, ring, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META } from '../ui.js';
 import { navigate, back, navRestoredScroll } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
 import { shooterOf } from '../badges.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
+import * as pos from '../pos.js';
+import { askShare } from './posconsent.js';
 import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
@@ -113,6 +115,8 @@ export default async function trip(tripId, { fresh = false } = {}) {
           onclick: async () => { await ensureMember(tripId, { force: true }); trip(tripId); },
         }, '👋 告訴大家你是誰（拍照前先選一次）')
       : null,
+
+    posBanner(tripId),
 
     // 全部完成 / 旅程結束 → 直接把「回顧」拉到最上面
     // 旅程結束／全部完成時給回顧入口，但「帶我去下一站」還是要留著 ——
@@ -906,6 +910,48 @@ function questLine(q, spot, themeKey) {
   return row;
 }
 
+// 位置分享開關（旅程設定）。預設關；開之前一定先過同意畫面。
+function posShareRow(tripId, t) {
+  const box = h('div', { class: 'switch-row' });
+  const draw = () => {
+    const on = pos.sharing(tripId);
+    const cb = h('input', { type: 'checkbox', checked: on });
+    cb.addEventListener('change', async () => {
+      if (cb.checked) {
+        if (!(await askShare(tripId, t))) { cb.checked = false; return; }
+        await pos.setSharing(tripId, true);
+        toast('已開始分享位置給旅伴');
+      } else {
+        await pos.setSharing(tripId, false);
+        toast('已停止分享，伺服器上的位置也刪掉了');
+      }
+      draw();
+      trip(tripId);                                     // 行程頁的常駐指示要跟著變
+    });
+    mount(box,
+      h('div', {},
+        h('div', { style: 'font-weight:700' }, '📍 讓家人看到我在哪'),
+        h('div', { class: 'form-hint' }, on
+          ? '分享中：家人在「緊急求助」頁看得到你最後的位置。隨時可以關。'
+          : '預設關閉。走失時家人可以看到你最後一次打開 App 的位置，只在這趟旅行期間。')),
+      cb);
+  };
+  draw();
+  return box;
+}
+
+// 分享中的常駐指示 —— 長輩的手機常是子女設定的，這一條是手機主人唯一會看到的提醒
+function posBanner(tripId) {
+  if (!pos.sharing(tripId)) return null;
+  return h('div', { class: 'pos-banner' },
+    h('span', {}, '📍 正在跟旅伴分享你的位置'),
+    h('button', {
+      class: 'pos-banner-off',
+      onclick: async () => { await pos.setSharing(tripId, false); toast('已停止分享'); trip(tripId); },
+    }, '停止'),
+  );
+}
+
 // ---------- 分享 ----------
 async function doShare(tripId) {
   toast('產生分享連結中…');
@@ -983,6 +1029,7 @@ export async function settings(tripId) {
     // 分享＝邀請旅伴加入，放在旅伴名單正上方（v1.59.1 從行程頁移來）
     h('button', { class: 'btn btn-primary btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
     h('p', { class: 'form-hint', style: 'margin:4px 2px 10px' }, '旅伴點連結就能加入，照片會自動同步。'),
+    posShareRow(tripId, t),
     memberEditor(tripId, t.groupId),
 
     h('label', { class: 'switch-row' },

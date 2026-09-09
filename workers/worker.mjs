@@ -27,7 +27,43 @@ import { mergeRecord, sanitizeF, APPEND_ONLY } from '../js/merge.js';
 import { inviteSummary } from '../js/invite.js';
 const PULL_LIMIT = 500;
 
+// 位置的保留期限（v1.60）。客戶端會自己過期，但「最後一台裝置再也沒開 App」時
+// 那筆座標會永遠留在 D1 —— 所以伺服器端也要有一道。
+// 刻意**不是 DELETE**：客戶端的同步游標是 seq，直接刪列的話已經拉過的手機永遠
+// 不會知道，本機副本反而留著。改寫成「無座標墓碑」並佔新 seq，才會傳播出去。
+const POS_TTL_MS = 48 * 3600 * 1000;
+
+async function sweepPositions(env) {
+  const cutoff = Date.now() - POS_TTL_MS;
+  const rs = await env.DB.prepare(
+    `SELECT group_id, id, json FROM records
+      WHERE type = 'memberPos' AND updated_at < ? LIMIT 200`
+  ).bind(cutoff).all();
+  const rows = rs.results || [];
+  let cleaned = 0;
+  for (const row of rows) {
+    let rec = null;
+    try { rec = JSON.parse(row.json); } catch { rec = null; }
+    if (!rec) continue;
+    if (rec.deleted && rec.lat == null) continue;              // 已經是乾淨墓碑
+    const tomb = { id: rec.id, type: 'memberPos', tripId: rec.tripId || null,
+      memberId: rec.memberId || null, deleted: true,
+      deviceId: rec.deviceId || null, createdAt: rec.createdAt || null, updatedAt: Date.now() };
+    const g = await env.DB.prepare('UPDATE groups SET seq = seq + 1 WHERE id = ? RETURNING seq').bind(row.group_id).first();
+    await env.DB.prepare(
+      `UPDATE records SET seq = ?, updated_at = ?, json = ? WHERE group_id = ? AND id = ?`
+    ).bind(Number(g && g.seq), tomb.updatedAt, JSON.stringify(tomb), row.group_id, row.id).run();
+    cleaned++;
+  }
+  return cleaned;
+}
+
 export default {
+  // 每天清一次過期位置（wrangler.toml 的 triggers）
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sweepPositions(env).catch((e) => console.error('sweepPositions', e)));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -213,6 +249,15 @@ async function handlePull(env, url, groupId, secret) {
   ).bind(groupId, since, PULL_LIMIT).all();
   const rows = rs.results || [];
   const records = rows.map((r) => JSON.parse(r.json));
+  // 保險：就算 cron 還沒跑到，超期的位置也不會離開伺服器（不改資料庫、只改這次的回應）
+  const posCut = Date.now() - POS_TTL_MS;
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i];
+    if (r && r.type === 'memberPos' && r.lat != null && (r.at || r.updatedAt || 0) < posCut) {
+      records[i] = { id: r.id, type: 'memberPos', tripId: r.tripId || null, memberId: r.memberId || null,
+        deleted: true, deviceId: r.deviceId || null, updatedAt: r.updatedAt || Date.now() };
+    }
+  }
   const maxSeq = rows.length ? rows[rows.length - 1].seq : since;
   return json({ records, seq: rows.length === PULL_LIMIT ? maxSeq : group.seq, more: rows.length === PULL_LIMIT });
 }

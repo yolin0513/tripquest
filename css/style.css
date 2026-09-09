@@ -1896,3 +1896,18 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .nl-chip { font-size: 13.5px; background: color-mix(in srgb, var(--fg) 8%, var(--card));
   border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
 .nl-go { flex: none; text-decoration: none; padding: 10px 14px; font-size: 15px; }
+
+/* ---------- 旅伴位置分享（v1.60） ---------- */
+.sos-crew { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 12px; padding: 10px 12px; }
+.sos-crew-alert { border: 2px solid var(--danger); }
+.sc-main { flex: 1; min-width: 0; }
+.sc-name { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sc-line { font-size: 14.5px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.pos-banner { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 12px;
+  border-radius: 10px; background: color-mix(in srgb, var(--primary) 16%, var(--card)); font-size: 14.5px; }
+.pos-banner span { flex: 1; }
+.pos-banner-off { border: none; background: transparent; color: var(--primary); font-weight: 700; font-size: 14.5px; padding: 4px 6px; }
+.pc-lead { margin: 0 0 10px; font-size: 15px; line-height: 1.6; }
+.pc-row { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.pc-k { flex: none; width: 5.6em; font-weight: 700; font-size: 14.5px; }
+.pc-v { flex: 1; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
