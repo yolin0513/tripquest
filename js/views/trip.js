@@ -900,7 +900,14 @@ function questLine(q, spot, themeKey) {
 async function doShare(tripId) {
   toast('產生分享連結中…');
   const url = await shareURL(tripId);
-  if (await nativeShare({ title: 'TripQuest 拍照任務', text: '一起來完成這趟旅程的拍照任務！', url })) return;
+  // 訊息文字本身就是最快的「摘要」：對方還沒點連結、在聊天室裡就看到是誰的什麼行程
+  //（v1.58 連結縮短後不再帶完整摘要，這行字接手 0 秒信任訊號的工作）。
+  const t = store.get(tripId);
+  const meId = activeMemberId(tripId);
+  const meName = (meId && store.getRaw(meId)?.displayName) || '';
+  const dates = t?.startDate ? (t.endDate && t.endDate !== t.startDate ? `${t.startDate}～${t.endDate}` : t.startDate) : '';
+  const text = `${meName ? meName + ' ' : ''}邀請你加入「${t?.title || '旅程'}」${dates ? `（${dates}）` : ''}的拍照任務！`;
+  if (await nativeShare({ title: 'TripQuest 拍照任務', text, url })) return;
   await modal({
     title: '分享給旅伴',
     body: h('div', {},

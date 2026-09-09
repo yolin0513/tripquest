@@ -7,13 +7,19 @@
 import * as store from './store.js';
 import * as db from './db.js';
 import { uuid } from './ids.js';
-import { getConfig, setConfig, syncEnabled } from './sync.js';
+import { getConfig, setConfig, syncEnabled, DEFAULT_CLOUD_URL } from './sync.js';
 
-// 128-bit 群組祕鑰（放在邀請連結的 #fragment，永不進伺服器紀錄）
+// 128-bit 群組祕鑰（放在邀請連結的 #fragment，永不進伺服器的網址記錄）。
+// v1.58 起用 base64url（22 字，比 hex 省 10 字）；既有群組的 hex 祕鑰不輪替，
+// 伺服器兩種都收。頭尾避開 - 和 _：有些通訊軟體長按選取會把頭尾符號切掉，
+// 重骰一次成本為零。
 function newSecret() {
-  const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
-  return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  for (;;) {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    const s = base64urlFromBytes(b);
+    if (!/^[-_]|[-_]$/.test(s)) return s;
+  }
 }
 
 // 分批推送——避免行程大（照片留言讚多）時整包塞進一次 POST 在慢的行動網路上逾時。
@@ -89,6 +95,26 @@ function bytesFromBase64url(s) {
   return out;
 }
 
+// UUID（36 字）↔ base64url（22 字）無損互轉——短邀請連結用。
+// 解碼錯不會馬上噴錯，而是往後默默指到一個不存在的群組（pull 端 404 空轉），
+// 所以這是全連結最脆的一環：兩個方向只有這一份實作，jointest 有 round-trip 測試。
+export function uuidToB64(id) {
+  const hex = String(id).replace(/-/g, '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(hex)) return '';
+  const b = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return base64urlFromBytes(b);
+}
+export function b64ToUuid(s) {
+  let b;
+  try { b = bytesFromBase64url(String(s || '')); } catch { return ''; }
+  if (b.length !== 16) return '';
+  const hex = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+function b64urlUtf8(str) { return base64urlFromBytes(new TextEncoder().encode(str)); }
+function utf8FromB64url(s) { try { return new TextDecoder().decode(bytesFromBase64url(String(s || ''))); } catch { return ''; } }
+
 // ---------- 任務代碼（無照片）----------
 export async function makeShareCode(tripId) {
   const trip = store.get(tripId);
@@ -151,8 +177,22 @@ export async function shareURL(tripId) {
       const pushJob = pushAllChunked(adapter, store.exportGroup(group.id)).catch(() => {});
       await Promise.race([pushJob, new Promise((r) => setTimeout(r, 6000))]);
     } catch { /* 推不上去也繼續給連結；outbox 背景會重試，加入時也會再拉一次 */ }
-    // v1.57：連結多帶一份小摘要（日期、旅伴名、前幾個景點）—— 點連結的人連線前就看得到
-    // 「這是誰的什麼行程」，按加入後同步進行中也先有骨架可看。壓縮後多幾百 bytes。
+    // v1.58：短連結（~150 字；v4 帶摘要時約 700 字）。摘要不再塞連結——改由伺服器
+    // GET /invite 用群組記錄現算（伺服器本來就存明文記錄、也在每次 API 收 Bearer 祕鑰，
+    // 這不會讓它多看到任何東西；反而 v4 連結被貼到公開場合時，任何人都能離線解碼出
+    // 成員名與 12 個景點名——新格式要通過祕鑰驗證才讀得到摘要，是隱私改善）。
+    // 祕鑰照樣只在 # fragment，不進任何伺服器的網址記錄。三代理投票 3:0 採此案。
+    // n=行程名：分享後推送還沒到伺服器的頭幾秒（push 競態），對方秒點連結時 /invite
+    // 還查不到——至少行程名要立刻出現，這是「家人傳的、不是詐騙」的第一眼訊號。
+    const gcode = uuidToB64(group.id);
+    if (gcode) {
+      const parts = [`g=${gcode}`, `k=${group.syncSecret}`, `t=${tripId.slice(0, 8)}`];
+      if (trip.title) parts.push(`n=${b64urlUtf8(String(trip.title).slice(0, 24))}`);
+      const cfgUrl = getConfig().url || '';
+      if (cfgUrl && cfgUrl !== DEFAULT_CLOUD_URL) parts.push(`u=${encodeURIComponent(cfgUrl)}`);
+      return `${base}#/join?${parts.join('&')}`;
+    }
+    // 極罕見：群組 id 不是標準 UUID（很早期的資料）—— 退回 v4 長連結，至少能用
     const payload = {
       v: 4, kind: 'sync',
       url: getConfig().url,
@@ -186,11 +226,15 @@ export async function peekInvite(code) {
 
 export async function joinInvite(code, { onProgress = null } = {}) {
   const prog = (m) => { try { onProgress && onProgress(m); } catch { /* noop */ } };
-  const p = JSON.parse(await gunzip(code));
+  // v1.58：也接受已解析的短連結物件（parseShortInvite 的結果）；字串則是舊版 gzip 碼
+  const p = typeof code === 'string' ? JSON.parse(await gunzip(code)) : code;
   if (p.kind !== 'sync') throw new Error('邀請格式不符');
   // 設定同步後端（若本機還沒設）
   if (p.url && getConfig().mode === 'local') {
     setConfig({ mode: p.url.includes('workers.dev') ? 'cloud' : 'lan', url: p.url });
+  } else if (!p.url && p.short && getConfig().mode === 'local') {
+    // 短連結不帶 u= 代表用內建雲端；這台還在單機（剛裝好）就先指回內建，加入才有地方拉
+    setConfig({ mode: 'cloud', url: DEFAULT_CLOUD_URL });
   }
   if (Array.isArray(p.records) && p.records.length) {
     // 舊版連結相容：資料本來就帶在連結裡
@@ -237,8 +281,62 @@ export async function joinInvite(code, { onProgress = null } = {}) {
   }
   // 照片縮圖在背景繼續抓（行程頁會顯示「正在接收照片」進度列），不讓使用者等它
   try { const { drain } = await import('./outbox.js'); drain().catch(() => {}); } catch { /* 稍後自動重試 */ }
-  try { localStorage.setItem('tripquest.welcome.' + p.tripId, '1'); } catch { /* noop */ }
-  return p.tripId;
+  // 短連結只帶 tripId 前 8 碼：資料拉完後在本機解析成完整 id；比不到（那個行程
+  // 已被刪）就退到這個群組最近更新的行程——按了「加入」不能沒有下一頁。
+  let tripId = p.tripId || '';
+  if (!tripId) {
+    const trips = store.exportGroup(p.groupId).filter((r) => r.type === 'trip' && !r.deleted);
+    const hit = (p.tripPrefix && trips.find((t) => String(t.id).startsWith(p.tripPrefix)))
+      || trips.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    if (!hit) throw new Error('這個群組裡還沒有行程資料，請旅伴稍後重新分享一次連結。');
+    tripId = hit.id;
+  }
+  try { localStorage.setItem('tripquest.welcome.' + tripId, '1'); } catch { /* noop */ }
+  return tripId;
+}
+
+// ---------- v1.58 短邀請連結 ----------
+// 格式：#/join?g=<groupId b64url 22>&k=<祕鑰>&t=<tripId 前 8>&n=<行程名 b64url>[&u=<自架網址>]
+// 祕鑰照樣只在 # fragment；摘要改由伺服器 GET /invite 現算（見 shareURL 的說明）。
+export function parseShortInvite(query) {
+  const groupId = b64ToUuid(query.g || '');
+  const secret = String(query.k || '');
+  if (!groupId || !/^[A-Za-z0-9_-]{22,64}$/.test(secret)) return null;
+  return {
+    kind: 'sync', short: true, groupId, secret,
+    tripPrefix: String(query.t || '').slice(0, 8),
+    title: utf8FromB64url(query.n || ''),
+    url: String(query.u || ''),                       // router 的 URLSearchParams 已解碼過
+  };
+}
+
+// 從貼上的整串文字撈出短連結參數（前後可能帶字、可能被斷行）。
+// 每個值後面都加負向斷言：連結被多貼了字時寧可不認，也不要吞下錯位的識別碼。
+export function parseInviteText(s) {
+  const t = String(s || '');
+  const pick = (name, re) => {
+    const m = t.match(new RegExp('[?&#]' + name + '=(' + re + ')(?![A-Za-z0-9_-])'));
+    return m ? m[1] : '';
+  };
+  const g = pick('g', '[A-Za-z0-9_-]{22}');
+  const k = pick('k', '[A-Za-z0-9_-]{22,64}');
+  if (!g || !k) return null;
+  let u = '';
+  const um = t.match(/[?&]u=([^&#\s]+)/);
+  if (um) { try { u = decodeURIComponent(um[1]); } catch { u = ''; } }
+  return parseShortInvite({ g, k, t: pick('t', '[0-9a-f]{1,8}'), n: pick('n', '[A-Za-z0-9_-]+'), u });
+}
+
+// 跟伺服器拿邀請摘要（祕鑰走 Authorization header，不進網址）。
+// 404 = 旅伴的資料還沒推完（分享當下的 push 競態）；403 = 祕鑰不對（連結多半被截斷）。
+export async function fetchInviteSummary(p, { timeoutMs = 12000 } = {}) {
+  const base = String(p.url || getConfig().url || DEFAULT_CLOUD_URL).replace(/\/+$/, '');
+  const res = await fetch(`${base}/invite?g=${encodeURIComponent(p.groupId)}&t=${encodeURIComponent(p.tripPrefix || '')}`, {
+    headers: { authorization: 'Bearer ' + p.secret },
+    signal: AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined,
+  });
+  if (!res.ok) { const e = new Error('讀取邀請摘要失敗（' + res.status + '）'); e.status = res.status; throw e; }
+  return res.json();
 }
 
 export async function peekShareCode(code) {

@@ -1,5 +1,5 @@
-// 邀請加入的第一分鐘（npm run jointest，v1.57）—— 兩台裝置走 LAN 伺服器：
-//   · 點連結：連線前就看到行程名、日期、誰邀請、前幾個景點（摘要在連結裡）
+// 邀請加入的第一分鐘（npm run jointest，v1.57；v1.58 起連結改短格式）—— 兩台裝置走 LAN 伺服器：
+//   · 點連結：行程名直接出現（連結帶 n=），日期／誰邀請／景點由伺服器 /invite 補上
 //   · 按加入：原地進度卡（連線 → 接收 N 筆 → 整理），照片不用等，直接進行程頁
 //   · 行程頁：一次性的歡迎卡（關掉不再出現）、「正在接收照片… 還有 N 張」進度列 → 到齊淡出
 //   · 伺服器上還沒資料：不是技術錯誤，卡片留在原地講原因並給「再試一次」
@@ -57,21 +57,57 @@ try {
     for (let i = 0; i < 6; i++) await importPhoto(new File([await mk(i)], `p${i}.jpg`, { type: 'image/jpeg' }), { tripId: tid, questId: quests[i % 4], memberId: mA, allowGeo: false });
     await ensureGroupSync(gid);
     const url = await shareURL(tid);
-    return { tid, gid, url, code: url.split('j=')[1] };
+    return { tid, gid, url, secret: s.getRaw(gid).syncSecret };
   });
   await A.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
-  yes(setup.code.length > 40, `A 建立行程（4 景點、6 張照片）並產生邀請連結（${setup.code.length} 字）`);
+  // v1.58 短連結：g/k/t/n 必帶；LAN 模式（非內建雲端）要多帶 u=
+  yes(setup.url.includes('#/join?g=') && /[?&]k=/.test(setup.url) && /[?&]t=/.test(setup.url) && /[?&]u=/.test(setup.url),
+    `A 產生短邀請連結（${setup.url.length} 字元；帶 g/k/t/n/u）`);
+  yes(setup.url.length < 260, `短連結長度 ${setup.url.length} < 260（雲端模式不帶 u= 會再短 ~30 字）`);
+  yes(/^[A-Za-z0-9_-]{22}$/.test(setup.secret) && !/^[-_]|[-_]$/.test(setup.secret),
+    `新群組祕鑰是 base64url 22 字、頭尾不是 - 或 _（${setup.secret.slice(0, 4)}…）`);
+
+  // ---------- 編解碼與文字解析（單元層）----------
+  const unit = await A.evaluate(async (u) => {
+    const sh = await import('./js/share.js');
+    const { uuid } = await import('./js/ids.js');
+    let okRT = 0;
+    for (let i = 0; i < 200; i++) { const id = uuid(); if (sh.b64ToUuid(sh.uuidToB64(id)) === id) okRT++; }
+    const msg = `早安！點這個加入我們的旅行 ${u} 謝謝大家`;
+    const p = sh.parseInviteText(msg);
+    const cut = sh.parseInviteText(u.replace(/([?&]k=)([A-Za-z0-9_-]{12})/, '$1'));   // 被截短的祕鑰要拒收
+    return { okRT, gid: p && p.groupId, url: p && p.url, cutNull: cut === null };
+  }, setup.url);
+  yes(unit.okRT === 200, 'UUID ↔ base64url 編解碼 round-trip 200/200');
+  yes(unit.gid === setup.gid && String(unit.url).includes('localhost'), 'parseInviteText：從整段訊息文字撈出 g/k/u');
+  yes(unit.cutNull, 'parseInviteText：祕鑰被截短（<22 字）就拒收，不吞錯位識別碼');
+
+  // ---------- /invite 端點本身 ----------
+  {
+    const apiBase = `http://localhost:${API}`;
+    const noAuth = await fetch(`${apiBase}/invite?g=${setup.gid}&s=${setup.secret}`);
+    yes(noAuth.status === 400, `/invite 不收 ?s= 祕鑰（只收 Bearer）→ ${noAuth.status}`);
+    const r = await fetch(`${apiBase}/invite?g=${setup.gid}&t=${setup.tid.slice(0, 8)}`, { headers: { authorization: 'Bearer ' + setup.secret } });
+    const sum = await r.json();
+    yes(r.status === 200 && sum.tripId === setup.tid && sum.title === '宜蘭家族旅行', '/invite 回完整 tripId 與行程名');
+    yes(sum.preview.length === 4 && sum.who.length === 2 && sum.dates[0] === '2026-10-10', `/invite 摘要齊全（${sum.preview.length} 景點、${sum.who.join('、')}）`);
+    yes((r.headers.get('cache-control') || '').includes('no-store'), '/invite 回應 no-store（摘要含成員名，不給中繼快取留底）');
+    const bad = await fetch(`${apiBase}/invite?g=${setup.gid}`, { headers: { authorization: 'Bearer ' + setup.secret.slice(0, 21) + (setup.secret[21] === 'A' ? 'B' : 'A') } });
+    yes(bad.status === 403, `/invite 錯祕鑰 → 403（${bad.status}）`);
+  }
 
   // ---------- B 點連結：連線前的摘要 ----------
   console.log('\n— 點連結 —');
   const B = await device('B');
-  await B.goto(`http://localhost:${WEB}/#/join?j=${setup.code}`, { waitUntil: 'networkidle0' });
+  await B.goto(setup.url, { waitUntil: 'networkidle0' });
   await B.waitForSelector('.join-preview', { timeout: 15000 });
+  // 行程名來自連結的 n=，其餘摘要是 /invite 補上的（LAN 幾十 ms；給它 8 秒裕度）
+  await B.waitForFunction(() => document.querySelector('.page')?.innerText.includes('羅東夜市'), { timeout: 8000 });
   const card = await B.evaluate(() => ({
     txt: document.querySelector('.page').innerText.replace(/\s+/g, ' '),
     joinBtn: [...document.querySelectorAll('button')].find((b) => b.textContent.includes('加入這個旅程'))?.getBoundingClientRect().height,
   }));
-  yes(card.txt.includes('宜蘭家族旅行') && card.txt.includes('2026-10-10') && card.txt.includes('2026-10-12'), '連線前就看到行程名與日期');
+  yes(card.txt.includes('宜蘭家族旅行') && card.txt.includes('2026-10-10') && card.txt.includes('2026-10-12'), '行程名（連結自帶）＋日期（伺服器摘要）都在卡片上');
   yes(card.txt.includes('媽媽') && card.txt.includes('爸爸'), '看到是誰邀請（旅伴名）');
   yes(card.txt.includes('第 1 天') && card.txt.includes('羅東夜市') && card.txt.includes('第 2 天') && card.txt.includes('太平山'), '看到前幾個景點的骨架（依天）');
   yes(card.joinBtn >= 52, `「加入這個旅程」大按鈕 ${Math.round(card.joinBtn)}px`);
@@ -194,21 +230,75 @@ try {
   console.log('\n— 失敗路徑 —');
   const C = await device('C');
   // 用一個沒推上伺服器的新群組產生連結：直接改 payload 的 groupId（同一份摘要）
-  const fakeCode = await A.evaluate(async (code) => {
+  const fakeUrl = await A.evaluate(async (u) => {
     const sh = await import('./js/share.js');
-    const p = JSON.parse(await sh.__gunzip(code));
-    p.groupId = 'nothere-' + p.groupId.slice(8); p.secret = 'a'.repeat(32);
-    return sh.__gzip(JSON.stringify(p));
-  }, setup.code).catch(() => null);
-  if (fakeCode) {
-    await C.goto(`http://localhost:${WEB}/#/join?j=${fakeCode}`, { waitUntil: 'networkidle0' });
+    const { uuid } = await import('./js/ids.js');
+    // 換成一個伺服器沒見過的群組（祕鑰格式合法）——摘要 404、加入 pull 也 404
+    return u.replace(/([?&]g=)[A-Za-z0-9_-]{22}/, '$1' + sh.uuidToB64(uuid()));
+  }, setup.url).catch(() => null);
+  if (fakeUrl) {
+    await C.goto(fakeUrl, { waitUntil: 'networkidle0' });
     await C.waitForSelector('.join-preview', { timeout: 15000 });
+    // 摘要拿不到不能擋加入：按鈕要照常在、照常能按
     await C.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('加入這個旅程')).click());
     await C.waitForFunction(() => document.querySelector('.join-progress')?.textContent.includes('再試一次'), { timeout: 90000 });
     const err = await C.evaluate(() => document.querySelector('.join-progress').textContent.replace(/\s+/g, ' '));
     yes(err.includes('沒加入成功') && err.includes('再試一次') && !/404|Error|undefined/.test(err), `伺服器沒資料 → 講人話並給重試：「${err.slice(0, 40)}…」`);
   } else {
     console.log('  （share.js 沒開放 __gzip/__gunzip，跳過失敗路徑的 UI 驗證）');
+  }
+
+  // ---------- 舊 v4 長連結：已寄出的邀請要繼續能用 ----------
+  console.log('\n— 舊 v4 連結回歸 —');
+  const v4code = await A.evaluate(async (tid) => {
+    const sh = await import('./js/share.js');
+    const st = await import('./js/store.js');
+    const { getConfig } = await import('./js/sync.js');
+    const trip = st.get(tid); const g = st.getRaw(trip.groupId);
+    const payload = { v: 4, kind: 'sync', url: getConfig().url, groupId: g.id, secret: g.syncSecret, tripId: tid,
+      title: trip.title, groupName: g.name, spots: 4, quests: 4, members: 2,
+      dates: [trip.startDate, trip.endDate], who: ['媽媽', '爸爸'], preview: [{ n: '羅東夜市', d: 1 }] };
+    return sh.__gzip(JSON.stringify(payload));
+  }, setup.tid).catch(() => null);
+  if (v4code) {
+    const D = await device('D');
+    await D.goto(`http://localhost:${WEB}/#/join?j=${v4code}`, { waitUntil: 'networkidle0' });
+    await D.waitForSelector('.join-preview', { timeout: 15000 });
+    const dTxt = await D.evaluate(() => document.querySelector('.page').innerText.replace(/\s+/g, ' '));
+    yes(dTxt.includes('宜蘭家族旅行') && dTxt.includes('羅東夜市'), '舊 v4 連結照樣解析（摘要在連結裡）');
+    await D.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('加入這個旅程')).click());
+    await D.waitForFunction(() => [...document.querySelectorAll('.modal-card button')].some((x) => x.textContent.includes('媽媽')), { timeout: 30000 });
+    await D.evaluate(() => { const b = [...document.querySelectorAll('.modal-card button')].find((x) => x.textContent.includes('媽媽')); b && b.click(); });
+    await D.waitForFunction(() => location.hash.includes('/trip/') && !location.hash.includes('/join'), { timeout: 15000 });
+    yes(true, '舊 v4 連結照樣加入成功');
+  } else {
+    console.log('  （share.js 沒開放 __gzip，跳過 v4 回歸）');
+  }
+
+  // ---------- t= 前綴比不到（行程已刪）：退到群組最新行程，不能白屏 ----------
+  console.log('\n— t= 前綴 fallback —');
+  {
+    const E = await device('E');
+    const wrongT = setup.url.replace(/([?&]t=)[0-9a-f]{1,8}/, '$1ffffffff');
+    await E.goto(wrongT, { waitUntil: 'networkidle0' });
+    await E.waitForSelector('.join-preview', { timeout: 15000 });
+    await E.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('加入這個旅程')).click());
+    await E.waitForFunction(() => [...document.querySelectorAll('.modal-card button')].some((x) => x.textContent.includes('媽媽')), { timeout: 30000 });
+    await E.evaluate(() => { const b = [...document.querySelectorAll('.modal-card button')].find((x) => x.textContent.includes('媽媽')); b && b.click(); });
+    await E.waitForFunction(() => location.hash.includes('/trip/'), { timeout: 15000 });
+    const eHash = await E.evaluate(() => location.hash);
+    yes(eHash.includes(setup.tid), `t= 比不到 → 落到群組最新行程（${eHash.slice(0, 30)}…）`);
+  }
+
+  // ---------- 祕鑰錯（連結被截斷）：講人話、跟「還在上傳」分開 ----------
+  console.log('\n— 連結被截斷（403）—');
+  {
+    const F = await device('F');
+    const badK = setup.url.replace(/([?&]k=)([A-Za-z0-9_-]{22})/, (m, a, b) => a + b.slice(0, 21) + (b[21] === 'A' ? 'B' : 'A'));
+    await F.goto(badK, { waitUntil: 'networkidle0' });
+    await F.waitForFunction(() => document.querySelector('.join-preview')?.textContent.includes('不完整'), { timeout: 10000 });
+    const fTxt = await F.evaluate(() => document.querySelector('.join-preview').textContent);
+    yes(fTxt.includes('重新傳一次') && !/403|Error/.test(fTxt), `403 → 講「連結不完整、請重傳」不是技術錯誤（「${fTxt.slice(0, 24)}…」）`);
   }
 
   console.log('\n邀請加入測試結束');

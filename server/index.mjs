@@ -17,6 +17,7 @@
 // 資料：server/data/  —— 想全部清空就刪掉這個資料夾。
 
 import { createServer } from 'node:http';
+import { inviteSummary } from '../js/invite.js';
 import { readFile, writeFile, mkdir, stat, rm } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -63,7 +64,8 @@ function authGroup(groupId, secret, createIfMissing) {
     return { g };
   }
   if (!createIfMissing) return { code: 404, err: 'unknown group' };
-  if (!/^[a-f0-9]{24,64}$/i.test(secret)) return { code: 400, err: 'weak secret' };
+  // v1.58 起新群組的祕鑰是 base64url 22 字；既有 hex 祕鑰是子集，照舊可用
+  if (!/^[A-Za-z0-9_-]{22,64}$/.test(secret)) return { code: 400, err: 'weak secret' };
   g = state.groups[groupId] = { secret, seq: 0, records: {} };
   return { g };
 }
@@ -118,6 +120,20 @@ const server = createServer(async (req, res) => {
         'content-security-policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'none'",
       });
       return createReadStream(page).pipe(res);
+    }
+
+    // ---- /invite（邀請摘要；只收 Bearer，跟 workers/worker.mjs 同一套）----
+    if (path === '/invite' && req.method === 'GET') {
+      const gid = u.searchParams.get('g');
+      const auth = (req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+      const secret = auth ? auth[1].trim() : '';
+      if (!gid || !secret) return send(res, 400, { error: 'missing group or secret' });
+      const { g, code, err } = authGroup(gid, secret, false);
+      if (err) return send(res, code, { error: err });
+      const sum = inviteSummary(Object.values(g.records).map((x) => x.rec), u.searchParams.get('t') || '');
+      if (!sum) return send(res, 404, { error: 'no trip yet' });
+      cors(res); res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify(sum));
     }
 
     const isApi = path === '/push' || path === '/pull' || path.startsWith('/blob/') || path.startsWith('/album/');

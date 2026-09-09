@@ -4,7 +4,7 @@ import * as store from '../store.js';
 import { h, toast, confirmDialog, promptDialog, modal, fmtBytes } from '../ui.js';
 import { navigate } from '../router.js';
 import { estimate, isPersisted, requestPersist, wipeAll } from '../db.js';
-import { importBundle, importShareCode, joinInvite } from '../share.js';
+import { importBundle, importShareCode, joinInvite, parseInviteText } from '../share.js';
 import { getPrefs, setPref, FS_LABELS } from '../prefs.js';
 import { getConfig, setConfig, modeLabel, syncEnabled, testConnection, syncNow } from '../sync.js';
 import { myName, setMyName, exportCard, encodeCard, decodeCard, importCard } from '../identity.js';
@@ -306,9 +306,16 @@ export async function joinByText(raw) {
   const s = String(raw || '').trim();
   if (!s) return false;
   try {
+    const short = parseInviteText(s);
     if (s.includes('j=')) {
       toast('加入中…（大行程最多約 1 分鐘，請稍候）', 4000);
       const tripId = await joinInvite(s.split('j=')[1].trim().split(/[&\s]/)[0]);
+      toast('已加入');
+      navigate(`/trip/${tripId}`, { replace: true });
+    } else if (short) {
+      // v1.58 短連結——貼進來的可能是整段訊息文字，parseInviteText 會自己撈參數
+      toast('加入中…（大行程最多約 1 分鐘，請稍候）', 4000);
+      const tripId = await joinInvite(short);
       toast('已加入');
       navigate(`/trip/${tripId}`, { replace: true });
     } else {

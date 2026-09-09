@@ -80,14 +80,13 @@ try {
 
   // 產生邀請連結
   const invite = await A.page.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), setup.tid);
-  if (invite.includes('#/join?j=')) ok('產生同步邀請連結'); else fail('邀請連結格式：' + invite.slice(0, 60));
+  if (invite.includes('#/join?g=') && /[?&]k=/.test(invite)) ok(`產生短邀請連結（${invite.length} 字元）`); else fail('邀請連結格式：' + invite.slice(0, 80));
 
   // ---- 裝置 B：用邀請連結加入 ----
   const B = await device('B');
-  const code = invite.split('j=')[1];
-  const joinRes = await B.page.evaluate(async (code) => {
-    const { joinInvite } = await import('./js/share.js');
-    const tid = await joinInvite(code);
+  const joinRes = await B.page.evaluate(async (inviteUrl) => {
+    const { joinInvite, parseInviteText } = await import('./js/share.js');
+    const tid = await joinInvite(parseInviteText(inviteUrl));
     // v1.57：加入不再等照片（縮圖在背景抓，行程頁有進度列）→ 這裡等到縮圖到齊再驗
     {
       const db0 = await import('./js/db.js'); const s0 = await import('./js/store.js');
@@ -106,7 +105,7 @@ try {
     const keys = new Set(await db.allBlobKeys());
     const thumbsLocal = subs.filter((x) => keys.has(x.thumbHash)).length;
     return { tid, subs: subs.length, spots: spots.length, members: members.length, thumbsLocal };
-  }, code);
+  }, invite);
   if (joinRes.spots === 2 && joinRes.members === 2) ok(`裝置 B 加入：${joinRes.spots} 景點、${joinRes.members} 成員`);
   else fail('裝置 B 骨架同步異常：' + JSON.stringify(joinRes));
   if (joinRes.subs === 2) ok('裝置 B 收到 2 筆投稿'); else fail('裝置 B 投稿數：' + joinRes.subs);

@@ -130,7 +130,7 @@ try {
     await drain({ force: true });
     return await shareURL(tid);
   });
-  yes(/[?&#].*j=/.test(invite), `產生邀請連結（${invite.length} 字元）`);
+  yes(invite.includes('#/join?g=') && /[?&]k=/.test(invite), `產生短邀請連結（${invite.length} 字元）`);
   const inviteHash = '#' + invite.split('#')[1];
 
   // ---------- 4. iPhone Safari 點連結：先教裝，再讓他選 ----------
@@ -161,7 +161,7 @@ try {
     const svgs = await pg.$$eval('.ig-ic svg, .ig-ic .ig-emoji', (e) => e.length);
     yes(svgs >= 3, `教學：每一步都有圖示（${svgs} 個）`);
     const copied = await pg.evaluate(() => window.__written || '');
-    yes(copied.includes('j='), '教學跳出時順便把邀請連結複製起來了');
+    yes(/[?&][gk]=/.test(copied), '教學跳出時順便把邀請連結複製起來了');
 
     // 「不要再提醒」
     yes(await clickText(pg, '.modal-actions .btn', '不要再提醒'), '有「不要再提醒」可以按');
@@ -259,8 +259,8 @@ try {
     yes(invite.includes('?openExternalBrowser=1#'), `邀請連結帶了參數：${invite.split('#')[0]}`);
     const u = new URL(invite);
     eq(u.searchParams.get('openExternalBrowser'), '1', '參數是真正的查詢字串');
-    yes(u.search.length > 0 && u.hash.startsWith('#/join?j='),
-      '順序正確：openExternalBrowser 在 # 之前、邀請碼在 fragment 裡');
+    yes(u.search.length > 0 && u.hash.startsWith('#/join?g='),
+      '順序正確：openExternalBrowser 在 # 之前、識別碼與祕鑰在 fragment 裡');
     eq((invite.match(/openExternalBrowser/g) || []).length, 1, '只會出現一次，不會越分享越長');
 
     const pg = await dev(UA.iosSafari);
@@ -270,7 +270,7 @@ try {
     yes(await has(pg, '宜蘭遊'), '帶參數的網址照樣解析得出邀請內容');
     const st = await pg.evaluate(() => ({ search: location.search, hash: location.hash }));
     eq(st.search, '?openExternalBrowser=1', '參數留在網址上（LINE 才看得到）');
-    yes(st.hash.startsWith('#/join?j='), '邀請碼沒有被參數影響');
+    yes(st.hash.startsWith('#/join?g='), '邀請碼沒有被參數影響');
 
     // 在這個網址上再分享一次，不能把參數疊起來
     const again = await pg.evaluate(async () => (await import('./js/share.js')).inviteBase());

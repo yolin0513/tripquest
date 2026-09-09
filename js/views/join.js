@@ -1,13 +1,14 @@
 import { setTop, render } from '../app.js';
 import { h, toast, spinnerBox, modal } from '../ui.js';
 import { navigate } from '../router.js';
-import { importShareCode, peekShareCode, peekInvite, joinInvite } from '../share.js';
+import { importShareCode, peekShareCode, peekInvite, joinInvite, parseShortInvite, parseInviteText, fetchInviteSummary } from '../share.js';
 import { ensureMember } from '../claim.js';
 import { isStandalone, platform, shouldOfferInstall } from '../install.js';
 import { openInstallGuide } from './installguide.js';
 
 // 由分享連結進入：
-//   #/join?j=<code>  同步邀請（加入同一個群組）
+//   #/join?g=..&k=..&t=..&n=..[&u=..]  短邀請（v1.58；摘要跟伺服器拿，見 share.js）
+//   #/join?j=<code>  舊版同步邀請（整包資料壓在連結裡，繼續相容）
 //   #/join?d=<code>  任務清單（複製一份，單機）
 //
 // iPhone 的坑（Apple 官方說法，見 js/install.js 的註解）：主畫面 App 與 Safari
@@ -19,26 +20,39 @@ export default async function join(query) {
   setTop({ title: '加入旅程', back: false });
   const syncCode = query.j;
   const copyCode = query.d;
-  if (!syncCode && !copyCode) { navigate('/', { replace: true }); return; }
-
-  render(h('div', { class: 'page' }, spinnerBox('正在讀這個邀請…', '大行程可能要等一下')));
+  const short = (!syncCode && !copyCode) ? parseShortInvite(query) : null;
+  if (!syncCode && !copyCode && !short) { navigate('/', { replace: true }); return; }
 
   let info;
-  try {
-    info = syncCode ? await peekInvite(syncCode) : await peekShareCode(copyCode);
-  } catch (e) {
-    render(h('div', { class: 'page' }, h('div', { class: 'empty' },
-      h('p', {}, '這個邀請連結無法解析'),
-      h('p', { class: 'form-hint' }, e.message),
-      h('button', { class: 'btn btn-soft', onclick: () => navigate('/') }, '回首頁'))));
-    return;
+  if (short) {
+    // v1.58 短連結：連結只帶識別碼與行程名。行程名直接畫（0 秒的「這是誰的行程」），
+    // 其餘摘要在頁面畫好之後跟伺服器拿——拿不到也**不擋加入**：識別碼都在手上，
+    // 加入流程自己有退避重試（見 render 之後那段）。
+    info = { sync: true, group: '', title: short.title || '行程', spots: 0, quests: 0, members: 0, dates: [], who: [], preview: [] };
+  } else {
+    render(h('div', { class: 'page' }, spinnerBox('正在讀這個邀請…', '大行程可能要等一下')));
+    try {
+      info = syncCode ? await peekInvite(syncCode) : await peekShareCode(copyCode);
+    } catch (e) {
+      render(h('div', { class: 'page' }, h('div', { class: 'empty' },
+        h('p', {}, '這個邀請連結無法解析'),
+        h('p', { class: 'form-hint' }, e.message),
+        h('button', { class: 'btn btn-soft', onclick: () => navigate('/') }, '回首頁'))));
+      return;
+    }
   }
 
   // 群組名稱預設是「<行程名> 旅伴」，跟行程名一起顯示會變成「京都三日遊 旅伴 · 京都三日遊」
   // 這種重複又難讀的字串。名稱已經包含行程名時就只顯示行程名。
-  const groupName = String(info.group || '').trim();
-  const tripTitle = String(info.title || '行程').trim();
-  const heading = (!groupName || groupName.includes(tripTitle)) ? tripTitle : `${tripTitle}（${groupName}）`;
+  const headingOf = (inf) => {
+    const groupName = String(inf.group || '').trim();
+    const tripTitle = String(inf.title || '行程').trim();
+    return (!groupName || groupName.includes(tripTitle)) ? tripTitle : `${tripTitle}（${groupName}）`;
+  };
+  // 短連結的摘要是之後才到的：標題與「N 個景點」做成節點，摘要到了原地更新
+  const headingEl = h('p', { class: 'muted lg' }, headingOf(info));
+  const countEl = h('p', { class: 'sm muted' },
+    short ? '正在讀行程內容…' : `${info.spots} 個景點 · ${info.quests} 個拍照任務`);
 
   const std = isStandalone();
   const p = platform();
@@ -57,11 +71,11 @@ export default async function join(query) {
     const line = h('div', {}, '連線中…'), sub = h('div', { class: 'jp-sub' }, '通常幾秒就好；大行程最多約 1 分鐘');
     progress.replaceChildren(h('div', { class: 'spinner', style: 'margin:0 auto 8px' }), line, sub);
     try {
-      const tripId = syncCode
-        ? await joinInvite(syncCode, { onProgress: (m) => { line.textContent = m; } })
+      const tripId = (syncCode || short)
+        ? await joinInvite(syncCode || short, { onProgress: (m) => { line.textContent = m; } })
         : await importShareCode(copyCode);
       line.textContent = '好了，帶你進行程…';
-      if (syncCode && tripId) await ensureMember(tripId, { force: true });   // 「這是誰的手機？」
+      if ((syncCode || short) && tripId) await ensureMember(tripId, { force: true });   // 「這是誰的手機？」
       navigate(`/trip/${tripId}`, { replace: true });
     } catch (err) {
       progress.replaceChildren(
@@ -71,22 +85,29 @@ export default async function join(query) {
       );
     }
   };
-  // 連線前就看得到的骨架：日期、誰邀請、前幾個景點（v4 連結才有；舊連結沒有就不畫）
+  // 行程骨架：日期、誰邀請、前幾個景點。舊 v4 連結自帶（同步渲染）；
+  // 短連結是伺服器摘要到了才補進 pvWrap（見 render 之後那段）。
   const fmtDates = (d) => (d && d[0] ? (d[1] && d[1] !== d[0] ? `${d[0]} ～ ${d[1]}` : d[0]) : '');
-  const previewBox = (() => {
-    const pv = info.preview || [];
-    if (!pv.length && !(info.who || []).length && !fmtDates(info.dates)) return null;
+  const buildPreview = (inf) => {
+    const pv = inf.preview || [];
+    if (!pv.length && !(inf.who || []).length && !fmtDates(inf.dates)) return null;
     const byDay = new Map();
     for (const x of pv) { if (!byDay.has(x.d)) byDay.set(x.d, []); byDay.get(x.d).push(x.n); }
     return h('div', { class: 'join-preview' },
-      fmtDates(info.dates) ? h('div', {}, '📅 ' + fmtDates(info.dates)) : null,
-      (info.who || []).length ? h('div', { style: 'margin-top:4px' }, '👥 ' + info.who.join('、') + (info.members > info.who.length ? ` 等 ${info.members} 人` : '')) : null,
+      fmtDates(inf.dates) ? h('div', {}, '📅 ' + fmtDates(inf.dates)) : null,
+      (inf.who || []).length ? h('div', { style: 'margin-top:4px' }, '👥 ' + inf.who.join('、') + (inf.members > inf.who.length ? ` 等 ${inf.members} 人` : '')) : null,
       ...[...byDay.keys()].sort((a, b) => a - b).slice(0, 3).map((d) => h('div', {},
         h('div', { class: 'jp-day' }, `第 ${d} 天`),
         ...byDay.get(d).slice(0, 4).map((n) => h('div', { class: 'jp-spot' }, '· ' + n)))),
-      pv.length && info.spots > pv.length ? h('div', { class: 'jp-spot' }, `…還有 ${info.spots - pv.length} 個景點`) : null,
+      pv.length && inf.spots > pv.length ? h('div', { class: 'jp-spot' }, `…還有 ${inf.spots - pv.length} 個景點`) : null,
     );
-  })();
+  };
+  const pvWrap = h('div');
+  {
+    const first = buildPreview(info);
+    if (first) pvWrap.append(first);
+    else if (short) pvWrap.append(h('div', { class: 'join-preview' }, '⏳ 正在讀行程內容…'));
+  }
 
   // 兩邊儲存空間不通，剪貼簿是唯一過得去的橋 —— 裝好 App 之後靠它把邀請帶過去
   const copyInvite = async () => {
@@ -116,11 +137,11 @@ export default async function join(query) {
   const page = h('div', { class: 'page' },
     h('div', { class: 'hero' },
       h('h2', {}, '旅伴邀請你加入'),
-      h('p', { class: 'muted lg' }, heading),
-      h('p', { class: 'sm muted' }, `${info.spots} 個景點 · ${info.quests} 個拍照任務`),
+      headingEl,
+      countEl,
       info.sync ? h('p', { class: 'sm muted' }, '加入後大家的照片會自動同步') : null,
     ),
-    previewBox,
+    pvWrap,
     progress,
 
     iosRisk ? installFirst : null,
@@ -145,6 +166,36 @@ export default async function join(query) {
   );
   render(page);
 
+  // 短連結：摘要（日期／旅伴／景點）在背景跟伺服器拿，到了原地補畫。
+  // 三種失敗長相分開講：403＝連結被截斷（重傳才有救）、離線＝等網路就好、
+  // 404 與其他＝旅伴的資料還在上傳（退避重試）。無論哪種都不動「加入」按鈕——
+  // 識別碼都在連結裡，摘要只是預告片。
+  if (short) (async () => {
+    const note = (msg) => pvWrap.replaceChildren(h('div', { class: 'join-preview' }, msg));
+    const delays = [1500, 3000, 5000, 8000, 12000];
+    for (let i = 0; i <= delays.length; i++) {
+      if (!document.body.contains(page)) return;      // 使用者已離開這一頁
+      try {
+        const s = await fetchInviteSummary(short);
+        info = { ...info, ...s, group: s.groupName || '', preview: s.preview || [] };
+        headingEl.textContent = headingOf(info);
+        countEl.textContent = `${info.spots} 個景點 · ${info.quests} 個拍照任務`;
+        const box = buildPreview(info);
+        pvWrap.replaceChildren();
+        if (box) pvWrap.append(box);
+        return;
+      } catch (e) {
+        if (e && e.status === 403) { countEl.textContent = ''; note('這個連結好像不完整（複製時可能少了幾個字）。請旅伴長按整段重新傳一次。'); return; }
+        note(navigator.onLine === false
+          ? '📶 現在沒有網路——行程內容連上網就會出現。'
+          : '⏳ 旅伴的行程還在上傳，馬上就好…');
+        if (i < delays.length) await new Promise((r) => setTimeout(r, delays[i]));
+      }
+    }
+    countEl.textContent = '';
+    note('行程內容暫時讀不到，不影響加入——按下面的按鈕就可以開始。');
+  })();
+
   // 第一次點連結就主動跳引導。先讓他看到「誰邀請我、什麼行程」再跳，
   // 不然一進來就是一個不知道在講什麼的對話框。
   // 已經是主畫面 App、或按過「不要再提醒」就不跳。
@@ -168,7 +219,7 @@ export async function inviteFromClipboard() {
   let text = '';
   try { text = await navigator.clipboard.readText(); } catch { text = ''; }
   const t = String(text || '').trim();
-  if (!/[?&][jd]=/.test(t) && !/^[A-Za-z0-9_\-=]{24,}$/.test(t)) return null;
+  if (!/[?&][jd]=/.test(t) && !parseInviteText(t) && !/^[A-Za-z0-9_\-=]{24,}$/.test(t)) return null;
   const ok = await modal({
     title: '找到一個邀請連結',
     body: h('div', {},

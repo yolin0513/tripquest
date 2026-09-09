@@ -24,6 +24,8 @@ const CFG_KEY = 'tripquest.sync';
 // 部署後把 Worker 網址填在這裡 → 家人開網址就自動連同步，連「設定同步伺服器」都不用點。
 // 留空 = 預設單機，使用者可自行在設定頁填。
 const BUILT_IN = { mode: 'cloud', url: 'https://tripquest.yolin0513.workers.dev' };
+// 邀請連結用：目前設定＝這個預設時，連結就不用帶 u=（省 40 幾個字）
+export const DEFAULT_CLOUD_URL = BUILT_IN.url;
 
 export function getConfig() {
   let stored = {};

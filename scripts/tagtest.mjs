@@ -302,14 +302,13 @@ try {
   // ================= 標記與說明要真的同步到另一台手機 =================
   await drain(A.page);
   const invite = await A.page.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), setup.tid);
-  const code = invite.split('j=')[1];
-
   const B = await device('B');
-  const joined = await B.page.evaluate(async (c) => {
-    const tid = await (await import('./js/share.js')).joinInvite(c);
+  const joined = await B.page.evaluate(async (u) => {
+    const sh = await import('./js/share.js');
+    const tid = await sh.joinInvite(sh.parseInviteText(u));
     const s = await import('./js/store.js');
     return { tid, subs: s.submissionsOfTrip(tid).length };
-  }, code);
+  }, invite);
   if (joined.subs === 3) ok('裝置 B 加入後收到 3 張照片');
   else fail('裝置 B 收到的照片數：' + joined.subs);
 

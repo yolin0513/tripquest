@@ -24,6 +24,7 @@
 // AI 不經 Worker —— 每個行程由建立者在 App 內輸入自己的金鑰，瀏覽器直連供應商。
 
 import { mergeRecord, sanitizeF, APPEND_ONLY } from '../js/merge.js';
+import { inviteSummary } from '../js/invite.js';
 const PULL_LIMIT = 500;
 
 export default {
@@ -68,6 +69,7 @@ export default {
       if (blobMatch) return handleBlob(request, env, url, groupId, secret, blobMatch[1]);
       if (path === '/push' && request.method === 'POST') return handlePush(request, env, groupId, secret);
       if (path === '/pull') return handlePull(env, url, groupId, secret);
+      if (path === '/invite' && request.method === 'GET') return handleInvite(request, env, url, groupId);
       const albumMatch = path.match(/^\/album\/([a-f0-9]{24,64})$/);
       if (albumMatch) return handleAlbum(request, env, groupId, secret, albumMatch[1]);
       return json({ error: 'not found' }, 404);
@@ -85,7 +87,8 @@ async function authGroup(env, groupId, secret, { createIfMissing = false } = {})
     return { group: row };
   }
   if (!createIfMissing) return { error: json({ error: 'unknown group' }, 404) };
-  if (!/^[a-f0-9]{24,64}$/i.test(secret)) return { error: json({ error: 'weak secret' }, 400) };
+  // v1.58 起新群組的祕鑰是 base64url 22 字；既有 hex 祕鑰是這個字元集的子集，照舊可用
+  if (!/^[A-Za-z0-9_-]{22,64}$/.test(secret)) return { error: json({ error: 'weak secret' }, 400) };
   await env.DB.prepare('INSERT INTO groups (id, secret, seq, created_at) VALUES (?, ?, 0, ?)')
     .bind(groupId, secret, Date.now()).run();
   return { group: { id: groupId, secret, seq: 0 } };
@@ -212,6 +215,24 @@ async function handlePull(env, url, groupId, secret) {
   const records = rows.map((r) => JSON.parse(r.json));
   const maxSeq = rows.length ? rows[rows.length - 1].seq : since;
   return json({ records, seq: rows.length === PULL_LIMIT ? maxSeq : group.seq, more: rows.length === PULL_LIMIT });
+}
+
+// ---------- /invite（邀請摘要）----------
+// 短邀請連結（v1.58）點開時拿摘要用。只收 Bearer 祕鑰——這個端點的回應含成員名，
+// 不讓祕鑰有走 ?s= 進網址記錄的路。no-store：摘要要即時（分享後資料陸續到），
+// 也不該被中繼快取留底。摘要計算與 LAN server 共用 js/invite.js。
+async function handleInvite(request, env, url, groupId) {
+  const secret = bearer(request);
+  if (!secret) return json({ error: 'missing secret' }, 400);
+  const { error } = await authGroup(env, groupId, secret);
+  if (error) return error;
+  const rs = await env.DB.prepare('SELECT json FROM records WHERE group_id = ?').bind(groupId).all();
+  const recs = (rs.results || []).map((r) => { try { return JSON.parse(r.json); } catch { return null; } });
+  const sum = inviteSummary(recs, url.searchParams.get('t') || '');
+  if (!sum) return json({ error: 'no trip yet' }, 404);
+  const res = json(sum);
+  res.headers.set('cache-control', 'no-store');
+  return res;
 }
 
 // ---------- /blob ----------

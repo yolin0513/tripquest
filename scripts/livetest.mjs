@@ -89,13 +89,13 @@ try {
   else fail(`裝置 A 推送異常：伺服器上 ${aOnServer} 筆、drain=${JSON.stringify(aPush)}`);
 
   const invite = await A.page.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), setup.tid);
-  if (invite.includes('#/join?j=')) ok('產生邀請連結'); else fail('邀請連結：' + invite.slice(0, 60));
+  if (invite.includes('#/join?g=') && /[?&]k=/.test(invite)) ok(`產生短邀請連結（${invite.length} 字元）`); else fail('邀請連結：' + invite.slice(0, 80));
 
   // 2) 裝置 B 用邀請連結加入（另一個 context = 另一台手機）
   const B = await device('B');
-  const code = invite.split('j=')[1];
-  const joinRes = await B.page.evaluate(async (code) => {
-    const tid = await (await import('./js/share.js')).joinInvite(code);
+  const joinRes = await B.page.evaluate(async (inviteUrl) => {
+    const sh = await import('./js/share.js');
+    const tid = await sh.joinInvite(sh.parseInviteText(inviteUrl));
     const s = await import('./js/store.js');
     const db = await import('./js/db.js');
     const keys = new Set(await db.allBlobKeys());
@@ -105,7 +105,7 @@ try {
       members: s.membersOf(s.get(tid).groupId).length,
       thumbsLocal: subs.filter((x) => keys.has(x.thumbHash)).length,
     };
-  }, code);
+  }, invite);
   if (joinRes.spots === 2 && joinRes.members === 2) ok(`裝置 B 加入：${joinRes.spots} 景點、${joinRes.members} 成員`);
   else fail('裝置 B 骨架同步：' + JSON.stringify(joinRes));
   if (joinRes.subs === 2) ok('裝置 B 收到 2 筆投稿'); else fail('裝置 B 投稿數：' + joinRes.subs);

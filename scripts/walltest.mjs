@@ -451,7 +451,7 @@ try {
 
   const invite = await A.evaluate(async (tid) => (await import('./js/share.js')).shareURL(tid), shared.tid);
   const B = await dev('B');
-  await B.evaluate(async (c) => { await (await import('./js/share.js')).joinInvite(c); }, invite.split('j=')[1]);
+  await B.evaluate(async (u) => { const sh = await import('./js/share.js'); await sh.joinInvite(sh.parseInviteText(u)); }, invite);
   await B.evaluate(async (m) => { (await import('./js/store.js')).setActiveMember(m.tid, m.mB); }, shared);
   ok('兩台裝置加入同一個群組');
 

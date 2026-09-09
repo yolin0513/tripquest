@@ -137,7 +137,7 @@ try {
     return { gid, tid, sid, sid2, invite: await shareURL(tid) };
   });
   await drain(A);
-  await B.evaluate(async (code) => { const { joinInvite } = await import('./js/share.js'); await joinInvite(code); }, setup.invite.split('j=')[1]);
+  await B.evaluate(async (u) => { const sh = await import('./js/share.js'); await sh.joinInvite(sh.parseInviteText(u)); }, setup.invite);
   const joined = await spotOf(B, setup.sid);
   yes(joined && joined.name === '清水寺' && joined._f && Number.isFinite(joined._f.name), 'B 加入群組，拿到帶 _f 的景點');
 
