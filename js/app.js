@@ -159,7 +159,12 @@ route('/trip/:id/memories', async ({ params }) => (await import('./views/memorie
 route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
 route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
 route('/settings', async () => (await import('./views/settings.js')).default());
-setNotFound(() => { navigate('/', { replace: true }); });
+setNotFound(() => {
+  // 版本混搭的保險絲：/trip/<id>/ 底下對不上的路，退回該行程頁而不是首頁——
+  // 新版畫面配舊版路由表的空窗期（SW 換版當下），點到新入口至少留在原地附近。
+  const m = location.hash.match(/^#\/trip\/([A-Za-z0-9-]{8,})/);
+  navigate(m ? `/trip/${m[1]}` : '/', { replace: true });
+});
 
 // ---- 啟動 ----
 (async function boot() {

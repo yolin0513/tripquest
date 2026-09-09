@@ -128,7 +128,9 @@ export default async function trip(tripId, { fresh = false } = {}) {
       // 找附近（v1.59）：自駕最常用——獨立入口、不塞 SOS（緊急頁不放生活設施）
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
-      h('button', { class: 'btn btn-ghost btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
+      // 「把任務分享給旅伴」移到旅程設定（v1.59.1）——分享＝邀請旅伴加入，
+      // 語意屬於「旅伴與電話」那一區；行程頁保持「出遊當下」的操作。
+      // 不另留快速入口：⚙️ 一步就到，而且旅伴清單（頭像列點開）裡也有「分享邀請連結」。
     ),
   );
 
@@ -638,7 +640,8 @@ function crewButton(tripId, t, members) {
 async function openCrew(tripId, t) {
   const { modal } = await import('../ui.js');
   const info = crewInfo(tripId, t).sort((a, b) => (b.joined - a.joined) || (a.joinedAt || 0) - (b.joinedAt || 0));
-  modal({
+  const anyPending = info.some((x) => !x.joined);
+  const v = await modal({
     title: '👥 旅伴',
     closeX: true,
     body: h('div', {},
@@ -658,8 +661,13 @@ async function openCrew(tripId, t) {
       h('p', { class: 'form-hint', style: 'margin-top:10px' },
         '「加入」以選過「這是誰的手機」為準 —— 名字被列出來但還沒點過自己名字的人，會顯示還沒加入。'),
     ),
-    actions: [{ label: '知道了', value: true }],
+    actions: [
+      // 「還沒加入——把邀請連結傳給他」不能是一句沒有按鈕的話
+      ...(anyPending ? [{ label: '🔗 分享邀請連結', value: 'share', primary: true }] : []),
+      { label: '知道了', value: true },
+    ],
   });
+  if (v === 'share') doShare(tripId);
 }
 // 有人新加入 → 一次性橫幅（本機記住看過哪些 claim；claim 會同步，所以旅伴的手機也會看到）
 function joinBanner(tripId, members) {
@@ -972,6 +980,9 @@ export async function settings(tripId) {
       countryName(t.country) || '未設定')),
 
     h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '旅伴與電話'),
+    // 分享＝邀請旅伴加入，放在旅伴名單正上方（v1.59.1 從行程頁移來）
+    h('button', { class: 'btn btn-primary btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
+    h('p', { class: 'form-hint', style: 'margin:4px 2px 10px' }, '旅伴點連結就能加入，照片會自動同步。'),
     memberEditor(tripId, t.groupId),
 
     h('label', { class: 'switch-row' },

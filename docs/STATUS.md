@@ -21,7 +21,8 @@
 - **回顧**：回憶影片（Ken Burns＋轉場＋路線圖 camera-move＋片尾配樂標示）、分享網址相簿（R2 公開頁、CSP script-src 'none'）、行程海報（3/5/7 天分頁）、最終回顧、成就徽章、「大家的表現」。穩定。
 - **行程規劃**：搜尋加入（Nominatim＋策展庫＋維基補候選、行程中心 viewbox 偏好）、時刻鏈／排順序（FOSSGIS OSRM /table＋NN+2-opt、跨區段不給開車數字）、匯入行程表文字（round-trip）。穩定。
 - **同步**：Cloudflare（內建預設）／LAN／單機；**欄位級合併**（v1.56，見下）；**短邀請連結**（v1.58：~154 字，摘要由伺服器 GET /invite 現算、行程名仍在連結 n=，舊 j= 連結繼續相容）；加入第一分鐘骨架＋進度。穩定。
-- **找附近**（v1.59）：行程頁入口，停車場／廁所／便利商店／加油站／藥局五分類，中心＝目前位置或任一景點；欄位含總車位、無障礙格、收費、平面/地下/立體、廁所無障礙＋尿布台、超商 24 小時；導航一律用座標（無名設施多、分店多——「地名優先」的合理例外）。剛上，實機回饋待收。
+- 分享按鈕在「旅程設定 → 旅伴與電話」上方（v1.59.1 從行程頁移來；旅伴清單有人未加入時也有「分享邀請連結」動作）。
+- **找附近**（v1.59）：行程頁入口，停車場／廁所／便利商店／加油站四分類（藥局在 SOS 頁不重複；v1.59.1 只顯示距離不顯方位），中心＝目前位置或任一景點；欄位含總車位、無障礙格、收費、平面/地下/立體、廁所無障礙＋尿布台、超商 24 小時；導航一律用座標（無名設施多、分店多——「地名優先」的合理例外）。剛上，實機回饋待收。
 - **AI（選配）**：每行程自帶金鑰（tripSecrets store，只存本機、永不同步/匯出）、直連 api.anthropic.com；Google TTS 旁白**已擱置**。
 - **配樂**：21 首（CC BY×6 KM＋CC0/PD×15 含古典），R2 供裝、選了才下載、tq-music-v1 快取跨版本；串流播放（MediaElementSource）；EBU R128 -16 LUFS 統一響度。穩定。
 
@@ -42,6 +43,7 @@
 2. **AI 金鑰只存本機**（tripSecrets 獨立 store，不進 exportGroup/exportRecords/同步）：金鑰洩漏面最小化；瀏覽器直連供應商，Worker 不經手。
 3. **音樂放 R2 不放 repo**（v1.55）：曲庫再大不肥 repo/預快取；Worker 唯讀端點＋獨立 tq-music-v1 快取（升版不清）；repo 只留 playful.mp3 當離線保底；R2 取不到→退回合成音樂並明講。授權兩輪三代理查證（3:0），CC BY 維持 6 首不擴大，古典逐首查「錄音本身」授權（Clair de Lune 因錄音是 CC BY 3.0 被剔除換 WTC）。
 4. **免金鑰資料源**：Nominatim（1.1s 節流＋30 天快取＋viewbox 偏好＋站點降權＋維基別名補候選）、FOSSGIS OSRM（1rps、一天一矩陣、canonical 快取）、Overpass（SOS 附近設施）、Open-Meteo、zh.wikipedia。取捨：無評分/營業時間/人氣——誠實標示，付費升級路＝使用者自帶 Google Places 金鑰（已擱置）。
+5.6 **SW 換版一致性（v1.59.1）**：SHELL 檔案改「本版快取釘死的 cache-first」——先前的 stale-while-revalidate 會把網路新版寫回正在跑的版本快取，造成舊 app.js 配新 trip.js（畫面有新入口、路由表沒有那條路→被踢回首頁，v1.59 實機踩到）。換版只走 install addAll(cache:'reload')＋SKIP_WAITING 整組換；另加保險絲：notFound 時 /trip/<id>/* 退回該行程頁。nearbytest 有路由完整性稽核（view import ⊆ SW SHELL、navigate 目標 ⊆ 路由表）。
 5. **原生 PWA、無框架無打包**；IndexedDB＋版本化 SW；h() 全 textNode＋URL 白名單（無 XSS 面）；CSP script-src 'self'。
 6. **iOS 教訓**：原生 time input 空值畫成當下時間＋寬度不可控 → 全 App 改時/分下拉；主畫面 App 與 Safari 儲存分離 → 邀請流程 iPhone 先裝後加入。
 7. 外部請求全部有逾時（AbortSignal.timeout 守門），失敗走各自降級（v1.55.1 健檢）。

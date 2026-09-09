@@ -133,8 +133,8 @@ export const LIFE = {
   toilets:     { label: '廁所',     emoji: '🚻', radius: 1200, sel: '[amenity=toilets]' },
   convenience: { label: '便利商店', emoji: '🏪', radius: 1500, sel: '[shop=convenience]' },
   fuel:        { label: '加油站',   emoji: '⛽', radius: 4000, sel: '[amenity=fuel]' },
-  pharmacy:    { label: '藥局',     emoji: '💊', radius: 2000, sel: '[amenity=pharmacy]' },
 };
+// （藥局不在這裡：SOS 頁已經有「附近藥局」，不重複）
 
 const PTYPE = { surface: '平面', underground: '地下', 'multi-storey': '立體', rooftop: '頂樓', street_side: '路邊', lane: '路邊' };
 
@@ -176,14 +176,6 @@ function lifeParse(el, kind) {
   return it;
 }
 
-// 8 方位（「往東北 350 公尺」——開車時比左右可靠、比方位角度好懂）
-export function bearingText(from, to) {
-  const dLng = (to.lng - from.lng) * Math.cos(((from.lat + to.lat) / 2) * Math.PI / 180);
-  const dLat = to.lat - from.lat;
-  const deg = (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
-  return ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round(deg / 45) % 8];
-}
-
 // 回傳 { at, stale, results:[{id,kind,name,lat,lng,dist,dir,…欄位}], failed? }
 export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
   const meta = LIFE[kind];
@@ -212,6 +204,6 @@ export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
 
 function lifeRank(items, lat, lng) {
   return (items || [])
-    .map((it) => ({ ...it, dist: Math.round(haversine({ lat, lng }, { lat: it.lat, lng: it.lng })), dir: bearingText({ lat, lng }, { lat: it.lat, lng: it.lng }) }))
+    .map((it) => ({ ...it, dist: Math.round(haversine({ lat, lng }, { lat: it.lat, lng: it.lng })) }))
     .sort((a, b) => a.dist - b.dist);
 }

@@ -1,5 +1,6 @@
 // 找附近（npm run nearbytest，v1.59）—— mock Overpass + 假定位：
-//   · 行程頁入口 → 五分類大按鈕 → 停車場預設
+//   · 行程頁入口 → 真的到達找附近頁（網址＋畫面）→ 四分類大按鈕 → 停車場預設
+//   · 路由完整性稽核：app.js 每條 view import 都要在 sw.js SHELL；notFound 退回行程頁
 //   · 欄位：總車位／無障礙格／收費／地下・平面／消費者限定；廁所無障礙＋尿布台；超商 24 小時
 //   · 誠實標示：總車位≠即時剩餘；私人停車場被濾掉；無名設施給通用名
 //   · 導航一律用座標（分店多、無名多——「地名優先」的合理例外）
@@ -35,7 +36,6 @@ const FIX = {
     el(22, -0.003, 0.002, { shop: 'convenience', brand: '全家', opening_hours: 'Mo-Su 06:00-23:00' }),
   ],
   'amenity=fuel': [el(31, 0.01, 0.01, { amenity: 'fuel', name: '台灣中油羅東站', opening_hours: '24/7' })],
-  'amenity=pharmacy': [el(41, 0.005, -0.004, { amenity: 'pharmacy', name: '大樹藥局' })],
 };
 let opDown = false;
 const op = createServer((req, res) => {
@@ -88,10 +88,14 @@ try {
   yes(entry && entry.txt.includes('停車場') && entry.h >= 40, `行程頁有「找附近」入口（${entry && Math.round(entry.h)}px）`);
   await page.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('找附近')).click());
   await page.waitForSelector('.nl-cats', { timeout: 10000 });
+  const arrived = await page.evaluate(() => ({ hash: location.hash, cats: !!document.querySelector('.nl-cats') }));
+  yes(/\/trip\/[A-Za-z0-9-]+\/nearby$/.test(arrived.hash) && arrived.cats,
+    `點入口「真的」到達找附近頁（${arrived.hash.replace(/[A-Za-z0-9-]{20,}/, '…')}）`);
 
   // ---------- 分類按鈕 ----------
   const cats = await page.$$eval('.nl-cat', (els) => els.map((e) => ({ t: e.textContent, h: e.getBoundingClientRect().height, emoji: e.querySelector('.nl-cat-emoji').getBoundingClientRect().height })));
-  yes(cats.length === 5 && ['停車場', '廁所', '便利商店', '加油站', '藥局'].every((x) => cats.some((c) => c.t.includes(x))), '五個分類都在');
+  yes(cats.length === 4 && ['停車場', '廁所', '便利商店', '加油站'].every((x) => cats.some((c) => c.t.includes(x))), '四個分類都在');
+  yes(!cats.some((c) => c.t.includes('藥局')), '藥局不在（SOS 頁已有，不重複）');
   yes(cats.every((c) => c.h >= 52 && c.emoji >= 22), `分類是大按鈕（高 ${Math.round(cats[0].h)}px、大圖示）`);
 
   // ---------- 停車場（預設分類） ----------
@@ -119,7 +123,7 @@ try {
   yes(unnamed && unnamed.name.includes('停車場') && unnamed.chips.includes('平面'), '無名停車場給通用名＋免費＋平面');
   yes(parking.cards.some((c) => c.chips.includes('消費者限定')), 'access=customers 標「消費者限定」');
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
-  yes(/往[東南西北]{1,2} /.test(first.dist), `有方向與距離：「${first.dist}」`);
+  yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
   yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);
 
   // ---------- 廁所 ----------
@@ -141,12 +145,12 @@ try {
   yes(cv.some((c) => c.name.includes('7-Eleven') && c.chips.includes('🕐 24 小時')), '超商：品牌名＋24 小時標示');
   yes(cv.some((c) => c.name.includes('全家') && c.chips.some((x) => x.includes('06:00-23:00'))), '非 24 小時的顯示營業時間');
 
-  // ---------- 加油站與藥局 ----------
-  for (const [label, expect] of [['加油站', '台灣中油'], ['藥局', '大樹藥局']]) {
-    await page.evaluate((l) => [...document.querySelectorAll('.nl-cat')].find((x) => x.textContent.includes(l)).click(), label);
-    await page.waitForFunction((l) => document.querySelector('.nl-count')?.textContent.includes(l), { timeout: 8000 }, label);
+  // ---------- 加油站 ----------
+  {
+    await page.evaluate(() => [...document.querySelectorAll('.nl-cat')].find((x) => x.textContent.includes('加油站')).click());
+    await page.waitForFunction(() => document.querySelector('.nl-count')?.textContent.includes('加油站'), { timeout: 8000 });
     const names = await page.$$eval('.nl-card .nl-name', (els) => els.map((e) => e.textContent).join(','));
-    yes(names.includes(expect), `${label}：${names}`);
+    yes(names.includes('台灣中油'), `加油站：${names}`);
   }
 
   // ---------- 換中心（用景點當中心） ----------
@@ -165,6 +169,51 @@ try {
   await page.waitForFunction(() => document.querySelector('.nl-list')?.textContent.includes('再試一次'), { timeout: 15000 });
   const failTxt = await page.evaluate(() => document.querySelector('.nl-list').textContent);
   yes(failTxt.includes('查不到') && !/503|Error/.test(failTxt), `查詢失敗講人話＋再試一次：「${failTxt.trim().slice(0, 22)}…」`);
+
+  // ---------- notFound 退路：/trip/<id>/亂路 → 回該行程頁（不是首頁） ----------
+  await page.evaluate((t) => { location.hash = '#/trip/' + t + '/nosuchpage'; }, tid);
+  await page.waitForFunction((t) => location.hash === '#/trip/' + t, { timeout: 8000 }, tid);
+  ok('對不上的 /trip/<id>/* 路由退回行程頁，不會被踢回主畫面（SW 換版空窗的保險絲）');
+
+  // ---------- 分享按鈕搬到旅程設定 ----------
+  await page.waitForFunction(() => [...document.querySelectorAll('button')].some((x) => x.textContent.includes('找附近')), { timeout: 10000 });
+  const tripBtns = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent).join('|'));
+  yes(!tripBtns.includes('把任務分享給旅伴'), '行程頁不再有「把任務分享給旅伴」');
+  await page.evaluate((t) => { location.hash = '#/trip/' + t + '/settings'; }, tid);
+  await page.waitForFunction(() => document.body.textContent.includes('旅伴與電話'), { timeout: 10000 });
+  const st0 = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('.section-label')].map((x) => x.textContent);
+    const btn = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('把任務分享給旅伴'));
+    const crewIdx = labels.indexOf('旅伴與電話');
+    return { has: !!btn, h: btn && btn.getBoundingClientRect().height, crewIdx,
+      btnBelowLabel: btn && [...document.querySelectorAll('.section-label')][crewIdx].getBoundingClientRect().top < btn.getBoundingClientRect().top };
+  });
+  yes(st0.has && st0.h >= 40 && st0.btnBelowLabel, `旅程設定頁有分享按鈕、緊貼「旅伴與電話」區（${Math.round(st0.h)}px，零旅伴時）`);
+  // 多旅伴時也正常
+  await page.evaluate(async (t) => {
+    const s = await import('./js/store.js'); const { uuid } = await import('./js/ids.js');
+    const trip = s.get(t);
+    await s.put({ id: uuid(), type: 'member', groupId: trip.groupId, displayName: '媽媽' });
+    await s.put({ id: uuid(), type: 'member', groupId: trip.groupId, displayName: '爸爸' });
+  }, tid);
+  await page.evaluate((t) => { location.hash = '#/trip/' + t + '/settings#r' + Date.now(); }, tid);
+  await page.evaluate((t) => { location.hash = '#/trip/' + t + '/settings'; }, tid);
+  await page.waitForFunction(() => document.body.textContent.includes('媽媽'), { timeout: 10000 });
+  const st1 = await page.evaluate(() => [...document.querySelectorAll('button')].filter((x) => x.textContent.includes('把任務分享給旅伴')).length);
+  yes(st1 === 1, '多旅伴時分享按鈕仍只有一顆、排版正常');
+
+  // ---------- 路由完整性稽核（防「畫面有入口、路由沒註冊」再犯） ----------
+  {
+    const { readFileSync } = await import('node:fs');
+    const appSrc = readFileSync(ROOT + 'js/app.js', 'utf8');
+    const swSrc = readFileSync(ROOT + 'sw.js', 'utf8');
+    const viewImports = [...new Set([...appSrc.matchAll(/views\/([a-z-]+\.js)/g)].map((m) => m[1]))];
+    const missing = viewImports.filter((f) => !swSrc.includes(`./js/views/${f}`));
+    yes(missing.length === 0, `app.js 引用的 ${viewImports.length} 個 view 都在 SW 預快取清單`, missing.join(','));
+    const navTargets = [...new Set([...readFileSync(ROOT + 'js/views/trip.js', 'utf8').matchAll(/navigate\(`\/trip\/\$\{tripId\}\/([a-z]+)/g)].map((m) => m[1]))];
+    const noRoute = navTargets.filter((seg) => !appSrc.includes(`route('/trip/:id/${seg}'`));
+    yes(noRoute.length === 0, `行程頁 navigate 的 ${navTargets.length} 個目標都有註冊路由`, noRoute.join(','));
+  }
 
   console.log('\n找附近測試結束');
 } catch (e) {

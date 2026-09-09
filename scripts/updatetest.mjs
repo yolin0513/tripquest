@@ -163,8 +163,16 @@ try {
   page2.on('pageerror', (e) => console.log('  [p2 pageerror]', e.message));
   await page2.goto(BASE, { waitUntil: 'networkidle0' });
   await page2.waitForSelector('.hero');
-  await sleep(4000);                      // 給它自己更新的時間
-  const auto = await page2.evaluate(() => ({ build: window.__BUILD, bar: !!document.getElementById('updateBar') }));
+  // 自動更新會 reload 一次，時點不固定（v1.59.1 SHELL 改 cache-first 後略有位移）——
+  // 固定睡 4 秒再讀會撞上 reload（Execution context destroyed）。改成輪詢＋容忍 reload。
+  let auto = null;
+  for (let i = 0; i < 20; i++) {
+    await sleep(600);
+    try {
+      auto = await page2.evaluate(() => ({ build: window.__BUILD, bar: !!document.getElementById('updateBar') }));
+      if (auto.build === 'C') break;
+    } catch { /* reload 進行中，下一輪再讀 */ }
+  }
   if (auto.build === 'C' && !auto.bar) ok('剛打開、還沒動作時：自動換好，完全沒打擾');
   else fail('沒有自動更新：' + JSON.stringify(auto));
 

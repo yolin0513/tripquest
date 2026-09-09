@@ -1,8 +1,8 @@
-// 找附近 —— 停車場 / 廁所 / 便利商店 / 加油站 / 藥局（v1.59）。
+// 找附近 —— 停車場 / 廁所 / 便利商店 / 加油站（v1.59；藥局在 SOS 頁，不重複）。
 //
 // 為什麼是獨立頁、不塞進 SOS：SOS 是「走失、急救」的緊急畫面，人在最慌的
 // 時候打開它，不該先滾過停車場跟超商；把生活設施混進去會稀釋它的緊急性。
-// 藥局兩邊都有——SOS 是醫療語境、這裡是生活語境，資料同一套不衝突。
+
 // 機制（Overpass 免金鑰、雙鏡像、12 秒逾時、離線回快取）跟 SOS 完全共用。
 //
 // 誠實原則：OSM 的車位數（capacity）是地圖上登記的「總車位」，不是即時剩餘。
@@ -125,7 +125,7 @@ export default async function nearbyView(tripId) {
     return h('div', { class: 'nl-card' },
       h('div', { class: 'nl-card-main' },
         h('div', { class: 'nl-name' }, `${meta.emoji} ${it.name || defName(it.kind)}`),
-        h('div', { class: 'nl-dist' }, `往${it.dir} ${fmtDist(it.dist)}`),
+        h('div', { class: 'nl-dist' }, fmtDist(it.dist)),
         chips.length ? h('div', { class: 'nl-chips' }, ...chips.map((c) => h('span', { class: 'nl-chip' }, c))) : null,
       ),
       h('a', { class: 'btn btn-primary nl-go', href: navUrl(it.lat, it.lng), target: '_blank', rel: 'noopener' }, '🧭 導航'),
@@ -133,7 +133,7 @@ export default async function nearbyView(tripId) {
   }
 
   function defName(k) {
-    return { parking: '停車場', toilets: '公共廁所', convenience: '便利商店', fuel: '加油站', pharmacy: '藥局' }[k] || '設施';
+    return { parking: '停車場', toilets: '公共廁所', convenience: '便利商店', fuel: '加油站' }[k] || '設施';
   }
   function fmtAge(at) {
     const m = Math.round((Date.now() - at) / 60000);

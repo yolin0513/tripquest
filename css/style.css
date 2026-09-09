@@ -1877,7 +1877,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* ---------- 找附近（v1.59） ---------- */
 .nl-center { margin-bottom: 2px; }
 .nl-centerline { margin: 2px 2px 8px; }
-.nl-cats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+.nl-cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
 .nl-cat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px 8px;
   border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); }
 .nl-cat.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--card)); }

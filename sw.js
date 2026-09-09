@@ -3,7 +3,7 @@
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  */
-const VERSION = 'tripquest-v1.59.0';
+const VERSION = 'tripquest-v1.59.1';
 const SHELL = `${VERSION}-shell`;
 // 內建配樂：獨立快取、跨版本保留（檔名即版本，內容不會變）—— 15MB 不進 SHELL，
 // 不預快取、點了才下載；升版不重抓。
@@ -107,6 +107,9 @@ const SHELL_ASSETS = [
   './icons/icon-512.png',
 ];
 
+// SHELL 清單的路徑集合（fetch handler 用：這些檔案只從本版快取拿，不半路換檔）
+const SHELL_SET = new Set(SHELL_ASSETS.map((u) => new URL(u, self.location.href).pathname));
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
     // cache:'reload' 一定要加。GitHub Pages 對每個檔案都送 Cache-Control: max-age=600，
@@ -162,7 +165,17 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 同源靜態資源：stale-while-revalidate
+  // SHELL 檔案：只從「這個版本的快取」拿（cache-first、不背景覆寫）。
+  // v1.59.1 前是 stale-while-revalidate——會把網路上的新版檔案寫回正在跑的版本快取，
+  // 造成「舊 app.js 還在跑、動態載入卻拿到新 trip.js」：畫面有新按鈕、路由表沒那條路，
+  // 一點就被 notFound 踢回首頁（找附近實機踩到的就是這個）。install 時的
+  // addAll(cache:'reload') ＋ SKIP_WAITING 流程本來就是為了整組換版，這裡不再半路混檔。
+  if (SHELL_SET.has(url.pathname)) {
+    e.respondWith(caches.match(request).then((hit) => hit || fetch(request)));
+    return;
+  }
+
+  // 不在 SHELL 清單的同源檔案（極少數）：照舊 stale-while-revalidate
   e.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request).then((res) => {
