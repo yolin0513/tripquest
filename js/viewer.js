@@ -51,20 +51,35 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
     document.body.append(root);
     document.body.classList.add('pv-open');
 
-    // ---------- 圖片：縮圖先、全圖背景換 ----------
+    // ---------- 圖片：滑動不重建（元素快取重用）＋ 縮圖滿版 ＋ 全圖 decode 完才換 ----------
+    // 實機錄影抽幀抓到的兩個閃爍源（b026 單幀亮度 32、b027 縮圖以原始小尺寸置中）：
+    //   ① 每次滑完把三格砍掉重建 → 中間格在 blob URL 非同步載入前是空的 → 黑一幀。
+    //      改成以照片 id 快取 slide 元素：滑過去的那格本來就載好、就在畫面上，直接
+    //      變成新的中間格，DOM 只是重新排位，不會有空窗。
+    //   ② CSS 只限最大尺寸，240px 縮圖不會被放大 → 先小圖後大圖，肉眼就是跳一下。
+    //      .pv-img 改滿版 object-fit: contain（縮圖放大到與全圖同版面），全圖用
+    //      decode() 解完才換 src —— 換上那一刻只有清晰度變化，沒有尺寸/亮度斷點。
+    const slideCache = new Map();           // sub.id → slide 元素（含載入狀態）
     const slideFor = (sub) => {
+      if (!sub) return h('div', { class: 'pv-slide' });
+      if (slideCache.has(sub.id)) return slideCache.get(sub.id);
       const img = h('img', { class: 'pv-img', alt: '', draggable: false });
       const slide = h('div', { class: 'pv-slide' }, img);
-      if (!sub) return slide;
+      slideCache.set(sub.id, slide);
       (async () => {
         const thumb = await blobURL(sub.thumbHash).catch(() => '');
-        if (thumb) img.src = thumb;
+        if (thumb) {
+          img.src = thumb;
+          try { await img.decode(); } catch { /* 解不了就讓瀏覽器自己排 */ }
+        }
         if (sub.photoHash && sub.photoHash !== sub.thumbHash) {
           const full = await blobURL(sub.photoHash).catch(() => '');
-          if (!full || slide.dataset.gone) return;
+          if (!full) return;
           const pre = new Image();
-          pre.onload = () => { if (!slide.dataset.gone) { img.src = full; img.dataset.full = '1'; } };
           pre.src = full;
+          try { await pre.decode(); } catch { await new Promise((r) => { pre.onload = r; pre.onerror = r; }); }
+          img.src = full;                   // 已解碼：換上只有清晰度變化
+          img.dataset.full = '1';
         } else if (!thumb && sub.photoHash) {
           const full = await blobURL(sub.photoHash).catch(() => '');
           if (full) img.src = full;
@@ -74,10 +89,12 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
     };
     let slides = [];
     function buildSlides() {
-      for (const s of slides) s.dataset.gone = '1';
-      track.replaceChildren();
+      // 快取只留目前位置附近 ±3 張（縮圖/全圖的 blob URL 另有全域快取，這裡只管 DOM）
+      const keep = new Set();
+      for (let k = i - 3; k <= i + 3; k++) if (subs[k]) keep.add(subs[k].id);
+      for (const id of [...slideCache.keys()]) if (!keep.has(id)) slideCache.delete(id);
       slides = [subs[i - 1], subs[i], subs[i + 1]].map(slideFor);
-      track.append(...slides);
+      track.replaceChildren(...slides);     // 中間格是剛剛就在畫面上的那個元素 → 不會空一幀
       track.style.transition = 'none';
       track.style.transform = 'translateX(calc(-100% / 3))';   // 軌道寬 300%：中間那格 = -1/3
       resetZoom();

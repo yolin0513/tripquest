@@ -128,12 +128,42 @@ try {
   yes(v.closeH >= 48 && v.reactH >= 44 && v.reacts === 4, `✕ ${v.closeH}px、按讚鈕 ${v.reactH}px、四種讚`);
   yes(v.full, '縮圖先秀、全圖到了無縫換上（本機兩份都在 → 已是全圖）');
   yes(v.cap.includes('第1天景點') && v.cap.includes('任務1'), `說明列：${v.cap}`);
+  // 轉場逐幀驗證（v1.57.1 修閃爍；照 v1.49 flashback=0 的做法）：連滑 8 次，
+  // 每一個 rAF 幀檢查 (a) 畫面中央永遠有一張已解碼的圖蓋住（沒有空/黑幀）
+  // (b) 圖的版面寬度不變（縮圖→全圖不跳尺寸）。修正前：重建那一幀中央沒有圖。
+  const frameScan = await page.evaluate(async () => {
+    const pv = document.querySelector('.pv');
+    const stage = pv.querySelector('.pv-stage');
+    const r = stage.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let frames = 0, blank = 0, widths = new Set();
+    let run = true;
+    const tick = () => {
+      if (!run) return;
+      frames++;
+      const els = document.elementsFromPoint(cx, cy);
+      const img = els.find((e) => e.tagName === 'IMG' && e.classList.contains('pv-img'));
+      if (!img || !img.currentSrc || !img.naturalWidth) blank++;
+      else widths.add(Math.round(img.getBoundingClientRect().width));
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    for (let k = 0; k < 8; k++) { pv.__tq.go(1); await new Promise((res) => setTimeout(res, 380)); }
+    run = false;
+    return { frames, blank, widths: [...widths] };
+  });
+  yes(frameScan.blank === 0, `連滑 8 張、逐幀掃 ${frameScan.frames} 幀：中央空/黑幀 = ${frameScan.blank}（修正前重建瞬間會空一幀）`);
+  yes(frameScan.widths.length === 1, `圖片版面寬度全程一致（${frameScan.widths.join('、')}px —— 縮圖不再以原始小尺寸置中）`);
+  // 掃完回到原本的第 5+8 張沒錯位
+  const c1b = await page.evaluate(() => document.querySelector('.pv-counter').textContent);
+  yes(c1b === '13 / 210', `連滑後計數正確（${c1b}）`);
+
   // 右鍵／左鍵切換
   await page.keyboard.press('ArrowRight'); await sleep(450);
   await page.keyboard.press('ArrowRight'); await sleep(450);
   await page.keyboard.press('ArrowLeft'); await sleep(450);
   const c2 = await page.evaluate(() => document.querySelector('.pv-counter').textContent);
-  yes(c2 === '6 / 210', `→ → ← 之後在「${c2}」`);
+  yes(c2 === '14 / 210', `→ → ← 之後在「${c2}」（逐幀掃描後從 13 出發）`);
   // 雙擊放大
   const stageBox = await page.evaluate(() => { const r = document.querySelector('.pv-stage').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   await page.mouse.click(stageBox.x, stageBox.y); await sleep(80); await page.mouse.click(stageBox.x, stageBox.y); await sleep(200);
@@ -151,7 +181,7 @@ try {
     const pv = document.querySelector('.pv');
     const on = pv.querySelector('.pv-react.on')?.textContent || '';
     const subs = s.submissionsOfTrip(tid).sort((a, b) => (a.takenAt || a.createdAt) - (b.takenAt || b.createdAt));
-    return { on, reacts: s.reactionsOf(subs[5].id).length };
+    return { on, reacts: s.reactionsOf(subs[pv.__tq.index].id).length };
   }, ids.tid);
   yes(liked.on.includes('❤️') && liked.on.includes('1') && liked.reacts === 1, `檢視器按 ❤️ → 同一筆 reaction 記錄（${liked.on.trim()}）`);
   // 留言
@@ -162,8 +192,9 @@ try {
   await sleep(600);
   const cm = await page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
+    const pv = document.querySelector('.pv');
     const subs = s.submissionsOfTrip(tid).sort((a, b) => (a.takenAt || a.createdAt) - (b.takenAt || b.createdAt));
-    return { list: document.querySelector('.pv-clist').textContent, n: s.commentsOf(subs[5].id).length, btn: document.querySelector('.pv-cbtn').textContent };
+    return { list: document.querySelector('.pv-clist').textContent, n: s.commentsOf(subs[pv.__tq.index].id).length, btn: document.querySelector('.pv-cbtn').textContent };
   }, ids.tid);
   yes(cm.n === 1 && cm.list.includes('這張拍得真好') && cm.btn.includes('1'), `檢視器留言 → 同一套 comment 記錄（${cm.btn.trim()}）`);
   await page.evaluate(() => document.querySelector('.pv-sheet .pv-btn').click());
