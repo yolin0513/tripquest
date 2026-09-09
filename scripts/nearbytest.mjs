@@ -26,10 +26,17 @@ const FIX = {
     el(3, -0.004, 0.003, { amenity: 'parking', access: 'private', name: '住戶專用' }),                  // 要被濾掉
     el(4, 0.006, 0.004, { amenity: 'parking', access: 'customers', parking: 'surface', name: '超商附設停車場' }),
     el(5, -0.008, -0.006, { amenity: 'parking', parking: 'multi-storey', capacity: '250' }),
+    // ---- 石牌實測案例（v1.59.2）----
+    el(6, 0.0008, 0.0006, { amenity: 'parking_entrance', name: '石牌國小地下停車場', parking: 'underground' }),  // 只標入口的地下停車場
+    el(7, 0.0009, 0.0007, { amenity: 'parking_entrance', name: '石牌國小地下停車場', parking: 'underground' }),  // 第二個入口（要去重）
+    el(8, 0.0004, -0.0004, { amenity: 'parking_entrance' }),                                            // 無名入口（大樓車道）→ 不列
+    el(9, -0.002, 0.001, { amenity: 'parking', access: 'permit', parking: 'surface' }),                 // 要許可證 → 不列
+    el(10, 0.005, 0.005, { amenity: 'parking', 'addr:street': '明德路', parking: 'surface', fee: 'yes' }),
+    el(11, 0.004, -0.003, { amenity: 'parking', parking: 'lane' }),                                     // 無名路邊格
   ],
   'amenity=toilets': [
-    el(11, 0.001, -0.001, { amenity: 'toilets', wheelchair: 'yes', changing_table: 'yes', fee: 'no' }),
-    el(12, 0.004, 0.002, { amenity: 'toilets' }),
+    el(21001, 0.001, -0.001, { amenity: 'toilets', wheelchair: 'yes', changing_table: 'yes', fee: 'no' }),
+    el(21002, 0.004, 0.002, { amenity: 'toilets', operator: '北投區公所' }),                             // 沒 name 但有管理單位
   ],
   'shop=convenience': [
     el(21, 0.002, 0.001, { shop: 'convenience', name: '7-Eleven 羅東門市', opening_hours: '24/7' }),
@@ -113,15 +120,24 @@ try {
   }));
   yes(parking.note.includes('總車位') && parking.note.includes('不是現在剩幾格'), '誠實標示：總車位 ≠ 即時剩餘');
   yes(parking.note.includes('免金鑰') || parking.note.includes('先不提供'), '誠實標示：即時車位沒有免金鑰來源、先不提供');
-  yes(parking.count.includes('4 個'), `私人停車場被濾掉（5 筆進 4 筆出）：「${parking.count.trim()}」`);
+  yes(parking.count.includes('7 個'), `private/permit/無名入口被濾掉、同名入口去重（11 筆進 7 筆出）：「${parking.count.trim()}」`);
   yes(!parking.cards.some((c) => c.name.includes('住戶專用')), 'access=private 不出現在清單');
+  yes(!parking.cards.some((c) => c.chips.includes('停車場入口') && !c.name), '無名入口（大樓車道口）不出現');
+  const names = parking.cards.map((c) => c.name).join('|');
+  yes(parking.cards.filter((c) => c.name.includes('石牌國小地下停車場')).length === 1,
+    '只標「入口」的地下停車場查得到，且兩個入口去重成一筆（石牌案例）');
   const first = parking.cards[0];
-  yes(first.name.includes('羅東夜市地下停車場'), `距離排序：最近的在最上面（${first.name}）`);
-  yes(first.chips.includes('總車位 120') && first.chips.includes('♿ 無障礙 3 格') && first.chips.includes('收費') && first.chips.includes('地下'),
-    `欄位齊：${first.chips.join(' / ')}`);
+  yes(first.name.includes('石牌國小地下停車場') && first.chips.includes('停車場入口') && first.chips.includes('地下'),
+    `距離排序：最近的入口在最上面（${first.name}｜${first.chips.join('/')}）`);
+  const luodong = parking.cards.find((c) => c.name.includes('羅東夜市地下停車場'));
+  yes(luodong && luodong.chips.includes('總車位 120') && luodong.chips.includes('♿ 無障礙 3 格') && luodong.chips.includes('收費') && luodong.chips.includes('地下'),
+    `欄位齊：${luodong.chips.join(' / ')}`);
+  yes(parking.cards.some((c) => c.name.includes('明德路 · 平面停車場')), `無名但有街道 → 「明德路 · 平面停車場」（${names.slice(0, 60)}…）`);
+  yes(parking.cards.some((c) => c.name.endsWith('路邊停車格')), '無名路邊格 → 「路邊停車格」不是一律「停車場」');
   const unnamed = parking.cards.find((c) => c.chips.includes('免費'));
-  yes(unnamed && unnamed.name.includes('停車場') && unnamed.chips.includes('平面'), '無名停車場給通用名＋免費＋平面');
-  yes(parking.cards.some((c) => c.chips.includes('消費者限定')), 'access=customers 標「消費者限定」');
+  yes(unnamed && unnamed.name.endsWith('平面停車場') && !unnamed.name.includes('明德路'), '無名平面場 → 「平面停車場」');
+  yes(parking.cards.filter((c) => c.name.endsWith('平面停車場')).length === 2, '產生的通用名不參與去重（兩塊不同的平面場都在）');
+  yes(parking.cards.some((c) => c.chips.includes('限顧客')), 'access=customers 標「限顧客」');
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
   yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);
@@ -134,6 +150,7 @@ try {
   yes(wc.length === 2 && wc[0].chips.includes('♿ 無障礙') && wc[0].chips.includes('🚼 尿布台') && wc[0].chips.includes('免費'),
     `廁所：無障礙＋尿布台＋免費（${wc[0].chips.join(' / ')}）`);
   yes(wc.some((c) => c.name.includes('公共廁所')), '無名廁所給通用名「公共廁所」');
+  yes(wc.some((c) => c.name.includes('北投區公所')), '沒名字但有管理單位的廁所 → 顯示管理單位');
   const noteHidden = await page.evaluate(() => document.querySelector('.nl-note').hidden);
   yes(noteHidden, '車位數的說明只在停車場分類出現');
 

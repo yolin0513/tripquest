@@ -107,11 +107,12 @@ export default async function nearbyView(tripId) {
   function card(it, meta) {
     const chips = [];
     if (it.kind === 'parking') {
+      if (it.entrance) chips.push('停車場入口');        // 導航點＝入口，開車最好用
       if (it.cap) chips.push(`總車位 ${it.cap}`);
       if (it.capDis) chips.push(`♿ 無障礙 ${it.capDis} 格`);
       if (it.ptype) chips.push(it.ptype);
       if (it.fee) chips.push(it.fee);
-      if (it.customers) chips.push('消費者限定');
+      if (it.customers) chips.push('限顧客');
     } else if (it.kind === 'toilets') {
       if (it.wheelchair) chips.push('♿ 無障礙');
       if (it.changing) chips.push('🚼 尿布台');

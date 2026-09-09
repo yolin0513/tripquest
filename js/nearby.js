@@ -129,7 +129,10 @@ export { KIND };
 // 誠實原則：capacity 是地圖登記的「總車位」靜態資料，不是即時剩餘——介面要講明。
 
 export const LIFE = {
-  parking:     { label: '停車場',   emoji: '🅿️', radius: 1500, sel: '[amenity=parking]' },
+  // 停車場要連 parking_entrance 一起查：市區的地下/大型停車場在 OSM 常常只標
+  // 「入口」節點、場體本身沒有 amenity=parking（實例：石牌國小地下停車場）。
+  // 對開車的人來說，導航到「入口」本來就是最想要的點。
+  parking:     { label: '停車場',   emoji: '🅿️', radius: 1500, sel: '[amenity=parking]', sel2: '[amenity=parking_entrance]' },
   toilets:     { label: '廁所',     emoji: '🚻', radius: 1200, sel: '[amenity=toilets]' },
   convenience: { label: '便利商店', emoji: '🏪', radius: 1500, sel: '[shop=convenience]' },
   fuel:        { label: '加油站',   emoji: '⛽', radius: 4000, sel: '[amenity=fuel]' },
@@ -154,37 +157,80 @@ function lifeWrite(kind, lat, lng, data) {
   } catch { /* noop */ }
 }
 
+// 停車場的名稱後援鏈：name → brand → operator →「街道 · 類型」→ 類型。
+// 「一整排都叫停車場」等於沒講——至少讓長輩分得出「平面/地下/路邊、在哪條路」。
+function parkName(t) {
+  const base = t.name || t.brand || t.operator || '';
+  if (base) return base;
+  const lane = t.parking === 'lane' || t.parking === 'street_side';
+  const ty = lane ? '路邊停車格' : (PTYPE[t.parking] ? PTYPE[t.parking] + '停車場' : '停車場');
+  const street = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join('');
+  const ref = t.ref ? `（${t.ref}）` : '';
+  return (street ? `${street} · ` : '') + ty + ref;
+}
+
 function lifeParse(el, kind) {
   const t = el.tags || {};
   const p = el.center || el;
   if (p.lat == null) return null;
   const it = { id: el.type[0] + el.id, kind, lat: p.lat, lng: p.lon, name: t.name || t.brand || '', hours: t.opening_hours || '' };
   if (kind === 'parking') {
-    if (t.access === 'private' || t.access === 'no') return null;   // 住戶/員工專用，導航過去也不能停
+    // 一般人停不進去的不列：private/no（住戶）、permit（要許可證）、employees（員工）。
+    // 石牌實測 90 公尺處就有一塊無名的 access=permit 私人地，混在清單裡只會誤導。
+    if (['private', 'no', 'permit', 'employees'].includes(t.access)) return null;
+    it.entrance = t.amenity === 'parking_entrance';
+    if (it.entrance && !t.name) return null;           // 無名入口多半是大樓車道口，資訊量零
     it.cap = parseInt(t.capacity, 10) || 0;
     it.capDis = parseInt(t['capacity:disabled'], 10) || 0;
     it.fee = t.fee === 'yes' ? '收費' : t.fee === 'no' ? '免費' : '';
     it.ptype = PTYPE[t.parking] || '';
-    it.customers = t.access === 'customers';           // 消費者限定（店家附設）
+    it.customers = t.access === 'customers';           // 限顧客（店家附設）
+    it.named = !!(t.name || t.brand || t.operator);    // 真實名稱才參與同名去重
+    it.name = it.entrance ? (t.name || '') : parkName(t);
   } else if (kind === 'toilets') {
+    it.name = t.name || t.operator || '';              // 有的公廁掛的是管理單位名，也比空白好
     it.wheelchair = t.wheelchair === 'yes';
     it.changing = t.changing_table === 'yes';
     it.fee = t.fee === 'yes' ? '收費' : t.fee === 'no' ? '免費' : '';
   } else {
+    it.name = t.name || t.brand || t.operator || '';   // 超商優先品牌
     it.h24 = t.opening_hours === '24/7';
   }
   return it;
+}
+
+// 停車場同名去重（依距離排序後呼叫，留最近的一筆）：
+// 大停車場常同時有「面」＋一到多個「入口」節點（石牌國小就有兩個入口），
+// 全列會像三個不同的停車場。無名的不去重——它們本來就是不同塊空地。
+function dedupeParking(items) {
+  const seen = new Set();
+  return items.filter((it) => {
+    // 只對「真實名稱」去重——無名場地的名字是我們產生的（例如兩塊不同的「平面停車場」），
+    // 拿它去重會把不同的空地誤砍
+    if (!it.named || !it.name) return true;
+    if (seen.has(it.name)) return false;
+    seen.add(it.name);
+    return true;
+  });
 }
 
 // 回傳 { at, stale, results:[{id,kind,name,lat,lng,dist,dir,…欄位}], failed? }
 export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
   const meta = LIFE[kind];
   if (!meta) return { at: 0, stale: true, results: [], failed: true };
+  const post = (items) => {
+    const ranked = lifeRank(items, lat, lng);
+    return kind === 'parking' ? dedupeParking(ranked) : ranked;
+  };
   const cached = lifeRead(kind, lat, lng);
   if (cached && !fresh && Date.now() - cached.at < 86400000) {
-    return { at: cached.at, stale: false, results: lifeRank(cached.data, lat, lng) };
+    return { at: cached.at, stale: false, results: post(cached.data) };
   }
-  const q = `[out:json][timeout:25];nwr${meta.sel}(around:${meta.radius},${lat},${lng});out center tags 120;`;
+  const around = `(around:${meta.radius},${lat},${lng})`;
+  const sels = [meta.sel, meta.sel2].filter(Boolean).map((x) => `nwr${x}${around};`).join('');
+  // out 的上限是「任意取前 N 筆」不是最近的 N 筆——太小會把近的截掉（清水寺 1.2km 內
+  // 停車場就有 206 筆）。300 足以涵蓋實測過最密的區域，之後仍照距離排序、只畫前 15。
+  const q = `[out:json][timeout:25];(${sels});out center tags 300;`;
   const body = 'data=' + encodeURIComponent(q);
   const eps = (typeof window !== 'undefined' && window.__TQ_OVERPASS_ENDPOINT) ? [window.__TQ_OVERPASS_ENDPOINT] : ENDPOINTS;
   for (const ep of eps) {
@@ -195,10 +241,10 @@ export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
       const items = [];
       for (const el of d.elements || []) { const it = lifeParse(el, kind); if (it) items.push(it); }
       lifeWrite(kind, lat, lng, items);
-      return { at: Date.now(), stale: false, results: lifeRank(items, lat, lng) };
+      return { at: Date.now(), stale: false, results: post(items) };
     } catch { /* 換下一個鏡像 */ }
   }
-  if (cached) return { at: cached.at, stale: true, results: lifeRank(cached.data, lat, lng) };
+  if (cached) return { at: cached.at, stale: true, results: post(cached.data) };
   return { at: 0, stale: true, results: [], failed: true };
 }
 
