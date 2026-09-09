@@ -12,7 +12,7 @@ import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
 import { addPhotoButtons } from '../addphoto.js';
-import { activeMemberId, ensureMember, creatorNeedsClaim } from '../claim.js';
+import { activeMemberId, ensureMember } from '../claim.js';
 import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
@@ -109,11 +109,18 @@ export default async function trip(tripId, { fresh = false } = {}) {
     members.length ? crewButton(tripId, t, members) : null,
 
     // 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
+    // 還沒說「這是誰的手機」→ 旅伴那邊會看到你「還沒加入」，而且你開了位置分享也
+    // 傳不出去（v1.63/v1.64 實機踩過：建立者從來沒走過這一步）。原本是一顆軟性按鈕，
+    // 實機回報「被忽略了」；改成講清楚後果的提示卡。**不用彈窗**——彈窗會蓋住別的
+    // 對話框，900 毫秒後突然跳出來對長輩也不友善。
     (store.getRaw(t.groupId)?.syncSecret && !activeMemberId(tripId) && members.length > 1)
-      ? h('button', {
-          class: 'btn btn-soft btn-block', style: 'border-color:var(--primary)',
-          onclick: async () => { await ensureMember(tripId, { force: true }); trip(tripId); },
-        }, '👋 告訴大家你是誰（拍照前先選一次）')
+      ? h('div', { class: 'claim-nudge' },
+          h('div', { class: 'claim-nudge-t' }, '👋 旅伴還看不到你'),
+          h('p', { class: 'claim-nudge-p' }, '先告訴大家「這是誰的手機」，你拍的照片才會算在你名下，旅伴也才看得到你已經加入。'),
+          h('button', {
+            class: 'btn btn-primary btn-block',
+            onclick: async () => { const got = await ensureMember(tripId, { force: true }); if (got) toast('好了，旅伴現在看得到你了'); trip(tripId); },
+          }, '選擇我是誰'))
       : null,
 
     posBanner(tripId),
@@ -223,15 +230,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
   // 剛打開行程頁就是最想看到最新狀態的時候 —— 立刻拉一次，不等下一輪排程
   import('../outbox.js').then((o) => o.refreshNow()).catch(() => {});
 
-  // 舊行程的補救：建立者這台還沒有身分 → 主動問一次（不問的話旅伴會一直看到
-  // 「他還沒加入」，而且他開了位置分享也傳不出去）
-  if (creatorNeedsClaim(tripId)) {
-    setTimeout(async () => {
-      if (!location.hash.includes(`/trip/${tripId}`)) return;
-      const got = await ensureMember(tripId, { force: true }).catch(() => null);
-      if (got) { toast('好了，旅伴現在看得到你了'); trip(tripId); }
-    }, 900);
-  }
+
 
   // 背景補示意圖。抓好一張就把那一張換上去，不整頁重畫 —— 大行程要抓一分鐘，
   // 整頁重畫會讓使用者看到一半的畫面突然跳掉。

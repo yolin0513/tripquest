@@ -182,7 +182,19 @@ export async function isPersisted() {
   return false;
 }
 
+// 清除所有資料。IndexedDB 之外，localStorage 也有一堆本機痕跡要清（v1.64 健檢）：
+// 最後定位、住家座標、反查過的地址、找附近的查詢中心、位置分享開關、同步設定…
+export function wipeLocalKeys() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('tripquest.')) localStorage.removeItem(k);
+    }
+  } catch { /* noop */ }
+}
+
 export async function wipeAll() {
+  wipeLocalKeys();
   const db = await openDB();
   await Promise.all(['records', 'blobs', 'outbox', 'meta', 'tripSecrets'].map((name) =>
     wrap(db.transaction(name, 'readwrite').objectStore(name).clear())

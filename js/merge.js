@@ -41,6 +41,12 @@ export const TRACKED = {
     baseCurrency: ['baseCurrency'],
     country: ['country'],
     album: ['albumId', 'albumUrl', 'albumAt'],
+    // 使用者自己切的開關要各自成組（v1.64 健檢）。原本不在 TRACKED 裡 → 跟著整筆 LWW
+    // 的勝方走：旅伴離線改了行程名再同步回來，建立者開的 AI 會被靜默關掉、
+    // 關掉的示意圖抓取也會自己打開。
+    allowGeo: ['allowGeo'],
+    allowWiki: ['allowWiki'],
+    aiEnabled: ['aiEnabled'],
   },
   quest: {
     text: ['title', 'hint'],

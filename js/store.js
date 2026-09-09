@@ -6,7 +6,7 @@
 
 import * as db from './db.js';
 import { uuid, deviceId } from './ids.js';
-import { mergeRecord, groupsOf, seedF, groupChanged, APPEND_ONLY } from './merge.js';
+import { mergeRecord, groupsOf, seedF, groupChanged, stable, APPEND_ONLY } from './merge.js';
 
 const state = {
   ready: false,
@@ -515,7 +515,8 @@ export async function importRecords(incoming, { merge = true } = {}) {
     // 欄位級合併（merge.js；追蹤型別逐組 LWW，其餘整筆 LWW）
     const { rec, changed } = mergeRecord(cur, inc);
     if (changed) state.byId.set(inc.id, rec);
-    if (JSON.stringify(rec) !== JSON.stringify(inc)) { const gid = groupIdOfRecord(rec); if (gid) heal.add(gid); }
+    // stable()：鍵序不同不算不同，不然每次 pull 都白推一次整包（v1.64 健檢）
+    if (stable(rec) !== stable(inc)) { const gid = groupIdOfRecord(rec); if (gid) heal.add(gid); }
   }
   await db.putRecords([...state.byId.values()]);
   emit();

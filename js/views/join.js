@@ -1,5 +1,5 @@
 import { setTop, render } from '../app.js';
-import { h, toast, spinnerBox, modal } from '../ui.js';
+import { h, toast, spinnerBox, modal, confirmDialog } from '../ui.js';
 import { navigate } from '../router.js';
 import { importShareCode, peekShareCode, peekInvite, joinInvite, parseShortInvite, parseInviteText, fetchInviteSummary } from '../share.js';
 import { ensureMember } from '../claim.js';
@@ -72,7 +72,13 @@ export default async function join(query) {
     progress.replaceChildren(h('div', { class: 'spinner', style: 'margin:0 auto 8px' }), line, sub);
     try {
       const tripId = (syncCode || short)
-        ? await joinInvite(syncCode || short, { onProgress: (m) => { line.textContent = m; } })
+        ? await joinInvite(syncCode || short, {
+            onProgress: (m) => { line.textContent = m; },
+            // 連結指定了非內建的同步伺服器 → 一定要使用者看過主機名再點頭
+            confirmHost: async (host) => confirmDialog(
+              `這個邀請要把你的資料同步到「${host}」（不是 TripQuest 的預設伺服器）。`
+              + '只有在這是你家人自己架的伺服器時才繼續。', { danger: true, okLabel: '我認得，繼續' }),
+          })
         : await importShareCode(copyCode);
       line.textContent = '好了，帶你進行程…';
       if ((syncCode || short) && tripId) await ensureMember(tripId, { force: true });   // 「這是誰的手機？」

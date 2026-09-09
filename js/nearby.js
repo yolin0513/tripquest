@@ -37,6 +37,8 @@ function writeCache(lat, lng, data) {
 }
 
 function buildQuery(lat, lng, radius) {
+  // 伺服器逾時（10 秒）要小於客戶端的 12 秒：反過來的話我們放棄了、對方還在跑，
+  // 接著又對第二個鏡像送同一個重查詢，等於一次操作佔掉兩個鏡像各 25 秒（v1.64 健檢）
   // 醫院 / 急診用大一點的半徑（真正緊急時，遠一點的大醫院比隔壁小診所有用）
   const hospRadius = Math.max(radius * 3, 8000);
   const parts = [
@@ -52,7 +54,7 @@ function buildQuery(lat, lng, radius) {
   // 80 筆會被小診所塞滿、真正的大醫院整個不在回應裡（實測石牌：振興、北榮都沒進來，
   // 只擠進 1 筆醫院，清單前幾名變成診所與被標成 clinic 的國術館 —— 使用者回報的正是這個）。
   // 現在只查 amenity=hospital，筆數本來就少，上限再放寬當保險。
-  return `[out:json][timeout:25];(${parts});out center tags 300;`;
+  return `[out:json][timeout:10];(${parts});out center tags 300;`;
 }
 
 function classify(tags) {
@@ -271,7 +273,7 @@ export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
   const sels = [meta.sel, meta.sel2].filter(Boolean).map((x) => `nwr${x}${around};`).join('');
   // out 的上限是「任意取前 N 筆」不是最近的 N 筆——太小會把近的截掉（清水寺 1.2km 內
   // 停車場就有 206 筆）。300 足以涵蓋實測過最密的區域，之後仍照距離排序、只畫前 15。
-  const q = `[out:json][timeout:25];(${sels});out center tags 300;`;
+  const q = `[out:json][timeout:10];(${sels});out center tags 300;`;
   const body = 'data=' + encodeURIComponent(q);
   const eps = (typeof window !== 'undefined' && window.__TQ_OVERPASS_ENDPOINT) ? [window.__TQ_OVERPASS_ENDPOINT] : ENDPOINTS;
   for (const ep of eps) {

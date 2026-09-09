@@ -1911,3 +1911,9 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .pc-row { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
 .pc-k { flex: none; width: 5.6em; font-weight: 700; font-size: 14.5px; }
 .pc-v { flex: 1; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+
+/* ---------- 「旅伴還看不到你」提示卡（v1.64） ---------- */
+.claim-nudge { margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--card)); border: 1.5px solid var(--primary); }
+.claim-nudge-t { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.claim-nudge-p { font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0 0 10px; }

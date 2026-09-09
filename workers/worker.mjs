@@ -23,9 +23,18 @@
 // 這個 Worker 只做同步（/health /push /pull /blob）。
 // AI 不經 Worker —— 每個行程由建立者在 App 內輸入自己的金鑰，瀏覽器直連供應商。
 
-import { mergeRecord, sanitizeF, APPEND_ONLY } from '../js/merge.js';
+import { mergeRecord, sanitizeF, APPEND_ONLY, TRACKED } from '../js/merge.js';
+// 需要讀 json 才能逐欄合併的型別——從 merge.js 生成，不要手抄一份（會漂移；
+// 而且所有本機測試都跑 LAN server，只有正式 Worker 會用到這份清單，漂了測不出來）
+const TRACKED_SQL = Object.keys(TRACKED).map((t) => `'${t}'`).join(',');
 import { inviteSummary } from '../js/invite.js';
 const PULL_LIMIT = 500;
+
+// 上傳的「照片」只准是圖片（v1.64 健檢）。原本原樣沿用上傳者指定的 content-type：
+// 持祕鑰的成員可以放一個 text/html 的「照片」，再發布公開相簿 —— 那個網址就會在
+// workers.dev 網域上以 HTML 執行，繞過相簿頁的 script-src 'none'。
+const IMG_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/avif']);
+const safeImgType = (t) => (IMG_TYPES.has(String(t || '').toLowerCase().split(';')[0].trim()) ? String(t) : 'image/jpeg');
 
 // 位置的保留期限（v1.60）。客戶端會自己過期，但「最後一台裝置再也沒開 App」時
 // 那筆座標會永遠留在 D1 —— 所以伺服器端也要有一道。
@@ -36,8 +45,11 @@ const POS_TTL_MS = 48 * 3600 * 1000;
 async function sweepPositions(env) {
   const cutoff = Date.now() - POS_TTL_MS;
   const rs = await env.DB.prepare(
+    // 只挑「還帶著座標」的：改寫後的乾淨墓碑 updated_at 會變成當下，48 小時後又落回
+    // 這個條件，累積多了會把真正該清的擠出 LIMIT（v1.64 健檢）。
     `SELECT group_id, id, json FROM records
-      WHERE type = 'memberPos' AND updated_at < ? LIMIT 200`
+      WHERE type = 'memberPos' AND updated_at < ? AND json LIKE '%"lat":%'
+      ORDER BY updated_at LIMIT 200`
   ).bind(cutoff).all();
   const rows = rs.results || [];
   let cleaned = 0;
@@ -156,7 +168,7 @@ async function handlePush(request, env, groupId, secret) {
       const chunk = ids.slice(i, i + ID_CHUNK);
       const rs = await env.DB.prepare(
         `SELECT id, seq, updated_at, device_id, type,
-                CASE WHEN type IN ('spot','trip','quest') THEN json ELSE NULL END AS json
+                CASE WHEN type IN (${TRACKED_SQL}) THEN json ELSE NULL END AS json
            FROM records WHERE group_id = ? AND id IN (${chunk.map(() => '?').join(',')})`
       ).bind(groupId, ...chunk).all();
       for (const row of rs.results || []) existing.set(row.id, row);
@@ -391,7 +403,8 @@ async function handleBlob(request, env, url, groupId, secret, hash) {
     const obj = await env.PHOTOS.get(key);
     if (!obj) return json({ error: 'not found' }, 404);
     const h = new Headers();
-    h.set('content-type', obj.httpMetadata?.contentType || 'image/jpeg');
+    h.set('content-type', safeImgType(obj.httpMetadata && obj.httpMetadata.contentType));
+    h.set('x-content-type-options', 'nosniff');
     h.set('cache-control', 'public, max-age=31536000, immutable');
     return cors(new Response(obj.body, { headers: h }));
   }
@@ -402,7 +415,7 @@ async function handleBlob(request, env, url, groupId, secret, hash) {
     const buf = await request.arrayBuffer();
     if (buf.byteLength > max) return json({ error: 'too large' }, 413);
     await env.PHOTOS.put(key, buf, {
-      httpMetadata: { contentType: request.headers.get('x-content-type') || 'image/jpeg' },
+      httpMetadata: { contentType: safeImgType(request.headers.get('x-content-type')) },
     });
     return json({ ok: true, bytes: buf.byteLength });
   }
@@ -440,7 +453,7 @@ async function handlePublicAlbum(env, albumId, hash) {
     if (!obj) return new Response('not found', { status: 404 });
     return new Response(obj.body, {
       headers: {
-        'content-type': obj.httpMetadata?.contentType || 'image/jpeg',
+        'content-type': safeImgType(obj.httpMetadata && obj.httpMetadata.contentType),
         'cache-control': 'public, max-age=31536000, immutable',
         'x-content-type-options': 'nosniff',
       },

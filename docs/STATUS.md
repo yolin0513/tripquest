@@ -1,6 +1,6 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-09-09，commit `892b857`，線上版本 **v1.57.3**。
+> 最後更新：2026-09-09，線上版本 **v1.64.0**（每次上版請一併更新這一行）。
 > 給下一個工作階段快速接手用；架構細節見 `ARCHITECTURE_DECISION.md`，第三方平台實測見 `PLATFORM_NOTES.md`，配樂授權見根目錄 `MUSIC_LICENSES.md`。
 
 ## 部署
@@ -58,6 +58,26 @@
 8.5 **找附近（v1.59）**：放獨立頁不進 SOS——SOS 是走失/急救的緊急畫面，生活設施會稀釋緊急性（藥局兩邊都有，語境不同）。與 SOS 共用 Overpass 機制（免金鑰雙鏡像、12 秒逾時、離線回快取），分開快取（tripquest.nearlife，1 天）；濾掉 access=private 停車場。**誠實標示**：capacity＝總車位非即時剩餘（實測填寫率：羅東夜市 1/67、清水寺 25/206——有就顯示、不當賣點）；即時剩餘車位查證結論＝台北市舊免金鑰 JSON（tcgbusfs）已 404、主管道 TDX 要註冊金鑰、台中等縣市有零散自建端點但格式不一、日本無可靠免費來源 → 不接，介面講明，未來列 TDX 自帶金鑰選配。
 8. **短邀請連結（v1.58，三代理 3:0 採 P1）**：連結 `#/join?g=<groupId b64url 22>&k=<祕鑰>&t=<tripId 前8>&n=<行程名 b64url>[&u=<自架網址>]`，728→~154 字。摘要改由 `GET /invite` 用群組記錄現算（js/invite.js，Worker 與 LAN server 共用；只收 Bearer、回應 no-store）——伺服器本來就存明文記錄，這不多給它任何東西；反而 v4 連結可被任何撿到連結的人離線解碼出成員名，新格式要過祕鑰驗證，是隱私改善。**祕鑰維持在 # fragment**（不進伺服器網址記錄）；新群組祕鑰改 base64url 22 字（頭尾避開 -/_），既有 hex 祕鑰不輪替、兩伺服器 regex 同版放寬。摘要拿不到（push 競態 404／離線）**不擋加入**；403 講「連結不完整請重傳」。分享訊息文字帶行程名＋日期＋邀請人（0 秒訊號搬進聊天室文字）。否決項：P2 祕鑰雜湊查找（省 25 字買三個新失效面）、workers.dev 入口（40 字比 Pages 前綴 38 字還長）、第三方短網址（祕鑰會進別人伺服器）；自訂網域要花錢，列給使用者決定未採。
 
+## 第三輪全面健檢（v1.64.0，v1.55.1 之後）
+
+四路稽核（程式面／外部服務／安全隱私／資料一致性＋測試品質）。**已修**：
+- **LAN server 靜態檔黑名單可用大小寫繞過**（`/SERVER/data/state.json` ＝所有群組明文祕鑰＋全部記錄含座標；自架開 tunnel 等於公開在網路上）→ 改白名單。**這輪最嚴重的一個。**
+- **照片上傳沒有逾時** → 一個停住的 PUT 會讓 drain 的 `Promise.all` 永不 resolve，**從那一刻起連 pull 都停了**（v1.63 剛做的即時感全失效）→ 依檔案大小給 30–180 秒逾時。
+- **`refreshNow()` 帶 force** → 每次開行程頁/照片牆/SOS 頁都把整個群組（幾百筆、數百 KB）POST 上去；這是 v1.63 帶進來的退化 → 拿掉 force（pull 本來就無條件執行）。
+- **4xx 無限重試且使用者永遠看不到**（祕鑰不符、檔案太大每 5 分鐘重打一次，畫面只顯示「正在上傳」）→ 標記 dead 不再排程，並排除在待送計數外。
+- **`TRACKED.trip` 漏了 allowGeo／allowWiki／aiEnabled** → 旅伴離線改行程名再同步回來，建立者開的 AI 會被靜默關掉 → 補進欄位組。
+- **Worker 的 TRACKED 白名單是手抄的**（`type IN ('spot','trip','quest')`）——所有本機測試都跑 LAN server，只有正式 Worker 用這份清單，漂了測不出來 → 改成從 `TRACKED` 生成。
+- **建立者補問對 v1.60 以前的行程完全不生效**（`createdByDevice` 那時還不存在，而使用者現在用的正是這種）→ 退而看「這台裝置寫過這趟的資料」。
+- **位置墓碑 fire-and-forget**（註解寫「下一次 drain 會補送」，但 drain 只在有待送項時才推）→ 改成失敗就排進 outbox；`stopSharing` 等推送完成；時間戳改單調（手機校時往回跳會讓墓碑輸給座標）。
+- **`expireMine()` 是死碼**——「24 小時自我清除」只有「不顯示」是真的 → 接上 `updateNow`。
+- **cron 會被自己產生的墓碑塞滿**（墓碑改寫後 `updated_at` 變成當下，48 小時後又落回條件）→ 只挑還有座標的、依時間排序。
+- **公開相簿的照片路徑可放 text/html**（繞過 `script-src 'none'`）→ 上傳與回傳都夾成圖片型別＋nosniff。
+- **邀請連結的 `u=` 可換掉同步伺服器**（一條假連結就能把之後所有群組的資料與祕鑰導去攻擊者）→ 只收 https，非內建網址要使用者看過主機名才繼續。
+- **「清除所有資料」只清 IndexedDB**（最後定位、住家座標、反查地址、位置分享開關都留著）→ 一併清 `tripquest.*`。
+- **Overpass 伺服器逾時 25 秒 > 客戶端 12 秒**（我們放棄了對方還在跑，又送第二個鏡像）→ 對齊成 10 秒。
+- **維基查詢失敗被寫成 30 天負面快取**（剛好那一秒慢，之後一個月都查不到）→ 失敗不寫快取。
+- **測試會把群組寫進正式 D1**（發現 16 個測試群組）→ 見下方環境注意事項。
+
 ## 已知限制與未解事項
 
 - 免費地圖資料：餐廳覆蓋 OK 但**無評分、營業時間僅一~兩成、日本店名無中文**；「值得去嗎」答不了。
@@ -93,5 +113,5 @@
 - Cloudflare（wrangler 已登入）：D1 `tripquest`（**651KB，只剩 2 個真實群組**：`a3cf5587` 宜蘭家族旅行〔189 照片，家人在用，絕不動〕、`13f038d9` 宜蘭遊〔早期真實試用〕）；R2 `tripquest-photos`（照片 `<groupId>/<hash>`＋音樂 `music/v1/`，~182MB）。全部遠低於免費額度。
 - 備份：`D:\Claude\App\backups\`——`tripquest-20260909-0008.bundle`（filter-repo 前完整歷史）、`d1-tripquest-20260909-0011.sql`（清理前整庫）、清理計畫 json 數份。
 - 測試 fixture `scripts/fixtures/yilan.txt` 已去識別化（民宿→山風民宿hillstay、溫泉會館→雲居溫泉會館），全歷史一致。
-- 截圖：`screenshots/features/` ＋ 鏡像 `C:\Users\阿倫\AppData\Roaming\Claude\local-agent-mode-sessions\96633e0f-...\outputs\tripquest\`（扁平、版本化檔名 v15xx-*）。
+- 截圖：`screenshots/features/` ＋ 鏡像 `%APPDATA%\Claude\local-agent-mode-sessions\<session>\...\outputs\tripquest\\outputs\tripquest\`（扁平、版本化檔名 v15xx-*）。
 - 慣例：架構/資料結構/部署/付費/授權級決策先開 **3 個 Fable 5.1 代理**獨立評估投票；Windows 下 python heredoc 帶中文會 cp950 走樣——**含中文的 patch 腳本一律寫進 scratchpad 檔案再執行**。

@@ -59,7 +59,7 @@ export async function stopSharing(tripId) {
   for (const id of ids) {
     const cur = store.getRaw(id);
     if (!cur || cur.deleted) continue;
-    await putPos({ id, type: 'memberPos', tripId, memberId: cur.memberId || me || null, deleted: true });
+    await putPos({ id, type: 'memberPos', tripId, memberId: cur.memberId || me || null, deleted: true }, { wait: true });
   }
 }
 
@@ -76,12 +76,21 @@ export function inTripWindow(trip, now = Date.now()) {
 }
 
 // ---------- 寫入（單筆推送，不觸發整包 push）----------
-async function putPos(rec) {
-  const next = { ...rec, updatedAt: Date.now(), deviceId: deviceId() };
-  if (!next.createdAt) next.createdAt = store.getRaw(rec.id)?.createdAt || Date.now();
+async function putPos(rec, { wait = false } = {}) {
+  const prev = store.getRaw(rec.id);
+  // 單調時間戳：手機校時往回跳的話，「停止分享」的墓碑會輸給前一筆座標，
+  // 座標就留在伺服器上等 48 小時 cron（v1.64 健檢）
+  const next = { ...rec, updatedAt: Math.max(Date.now(), (prev?.updatedAt || 0) + 1), deviceId: deviceId() };
+  if (!next.createdAt) next.createdAt = prev?.createdAt || Date.now();
   await db.putRecord(next);
   store.mergeLocal([next]);
-  pushOne(next).catch(() => { /* 下一次 drain 會補送整包 */ });
+  // 推不出去要有後路：以前註解寫「下一次 drain 會補送整包」，但 drain 只在
+  // 有待送項時才推 —— 墓碑就這樣留在本機、座標留在伺服器上（v1.64 健檢）。
+  const job = pushOne(next).catch(async () => {
+    try { const o = await import('./outbox.js'); const t = store.get(next.tripId); if (t) await o.enqueuePush(t.groupId); }
+    catch { /* noop */ }
+  });
+  if (wait) await job;
   return next;
 }
 
@@ -99,6 +108,9 @@ async function pushOne(rec) {
 let lastAt = 0;
 export async function updateNow(tripId, { force = false, high = false, sos = false } = {}) {
   const trip = store.get(tripId);
+  // 行程結束或超過 24 小時 → 把自己那筆改成無座標墓碑（v1.64 健檢：expireMine
+  // 以前寫了卻沒有任何呼叫者，所以「自動清除」只有「不顯示」這一半是真的）
+  await expireMine(tripId).catch(() => {});
   if (!trip || !sharing(tripId) || !inTripWindow(trip)) return null;
   const me = activeMemberId(tripId);
   if (!me) return null;                                     // 還沒說「這是誰的手機」

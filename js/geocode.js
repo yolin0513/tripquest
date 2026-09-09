@@ -178,7 +178,9 @@ export async function wikiLookup(q, region = '') {
       v = { title: (d && d.title) || title, lat: c ? +(+c.lat).toFixed(5) : null, lng: c ? +(+c.lon).toFixed(5) : null,
         desc: (d && d.description) || '' };
     }
-  } catch { v = null; }
+  // 網路失敗不要寫 30 天負面快取：使用者剛好在維基慢的那一秒查「新千歲」，
+  // 之後整整一個月都只看得到大阪的公車站（v1.64 健檢）
+  } catch { return null; }
   await db.metaSet(key, { ts: Date.now(), v });
   return v;
 }

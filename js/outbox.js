@@ -23,6 +23,21 @@ const listeners = new Set();
 export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit() { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } }
 
+// 這個錯誤再試也沒用嗎？（4xx，但 408 逾時與 429 限流要重試）
+function permanent(e) {
+  const m = String(e && e.message || e).match(/\b(4\d\d)\b/);
+  if (!m) return false;
+  const code = +m[1];
+  return code >= 400 && code < 500 && code !== 408 && code !== 429;
+}
+
+// 有多少東西是「再也送不出去」的？行程頁的進度列要照實講，不能一直顯示「正在上傳」
+export async function deadCount(groupId) {
+  const all = await db.outboxAll();
+  const mine = all.filter((e) => (e.groupId === groupId || e.id === 'push:' + groupId) && e.dead);
+  return { n: mine.length, why: mine[0]?.lastError || '' };
+}
+
 function backoff(tries) {
   const b = Math.min(BASE_BACKOFF * 2 ** tries, MAX_BACKOFF);
   return Date.now() + b + Math.random() * b * 0.3;
@@ -97,7 +112,7 @@ export async function forgetGroup(groupId) {
 // 這個群組還有沒有東西沒送出去？有的話不能讓使用者移除——那些照片只有這台有。
 export async function pendingOf(groupId) {
   const all = await db.outboxAll();
-  const mine = all.filter((e) => e.groupId === groupId || e.id === 'push:' + groupId);
+  const mine = all.filter((e) => (e.groupId === groupId || e.id === 'push:' + groupId) && !e.dead);
   return { total: mine.length, blobs: mine.filter((e) => e.op === 'blob').length };
 }
 
@@ -162,7 +177,11 @@ async function drainOnce({ onProgress, force = false } = {}) {
           }
         } catch (e) {
           const t = (pushEntry?.tries || 0) + 1;
-          await db.outboxPut({ id: 'push:' + group.id, op: 'push', groupId: group.id, tries: t, nextAt: backoff(t - 1), lastError: String(e.message || e) });
+          // 4xx（除了 408/429）是「再試一百次也一樣」的錯：祕鑰不符、東西太大、格式不對。
+          // 以前一律退避重排 → 每 5 分鐘重打一次、而且使用者永遠只看到「正在上傳」（v1.64 健檢）。
+          const dead = permanent(e);
+          await db.outboxPut({ id: 'push:' + group.id, op: 'push', groupId: group.id, tries: t,
+            nextAt: dead ? Number.MAX_SAFE_INTEGER : backoff(t - 1), dead, lastError: String(e.message || e) });
           totals.failed++;
         }
       }
@@ -181,7 +200,8 @@ async function drainOnce({ onProgress, force = false } = {}) {
             totals.uploaded++;
           } catch (err) {
             const t = (e.tries || 0) + 1;
-            await db.outboxPut({ ...e, tries: t, nextAt: backoff(t - 1), lastError: String(err.message || err) });
+            const dead = permanent(err);
+            await db.outboxPut({ ...e, tries: t, nextAt: dead ? Number.MAX_SAFE_INTEGER : backoff(t - 1), dead, lastError: String(err.message || err) });
             totals.failed++;
           }
         }));
@@ -209,7 +229,7 @@ async function drainOnce({ onProgress, force = false } = {}) {
     return totals;
   } finally {
     draining = false;
-    const rest = await db.outboxAll();
+    const rest = (await db.outboxAll()).filter((e) => !e.dead);
     if (rest.length) {
       const wait = Math.max(2000, Math.min(...rest.map((e) => (e.nextAt || 0) - Date.now()), MAX_BACKOFF));
       clearTimeout(timer);
@@ -245,4 +265,6 @@ export function startAutoDrain() {
 
 // 開啟某一頁時「立刻拉一次」。人剛打開行程頁／SOS 頁就是最想看到最新狀態的時候，
 // 不該讓他等下一次排程。多個頁面同時呼叫會被 drain 自己合併成一次。
-export function refreshNow() { return drain({ force: true }).catch(() => {}); }
+// **不要帶 force**：pull 本來就無條件執行，force 的唯一作用是「就算沒有待送項也把
+// 整個群組推上去」——189 張照片的群組是幾百筆、數百 KB，每次開頁推一次太貴（v1.64 健檢）。
+export function refreshNow() { return drain().catch(() => {}); }

@@ -84,8 +84,12 @@ export function adapterForGroup(groupId, secret) {
       } catch { return false; }
     },
     async putBlob(hash, blob) {
+      // 依大小給逾時（15MB 的照片在慢網路上要久一點）。沒有逾時的話，一個停住的上傳會讓
+      // drain 的 Promise.all 永遠不 resolve —— 從那一刻起連 pull 都停了，旅伴的新照片、
+      // 位置、加入通知全部收不到，直到使用者自己重開 App（v1.64 健檢找到）。
       const r = await fetch(b + '/blob/' + hash + q, {
         method: 'PUT', headers: { ...H, 'x-content-type': blob.type || 'image/jpeg' }, body: blob,
+        signal: timeout(Math.min(180000, 30000 + Math.round((blob.size || 0) / 1e6) * 10000)),
       });
       if (!r.ok) throw new Error('putBlob ' + r.status);
     },

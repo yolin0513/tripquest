@@ -48,9 +48,13 @@ export async function claimAsCreator(tripId) {
 export function creatorNeedsClaim(tripId) {
   const trip = store.get(tripId);
   if (!trip || activeMemberId(tripId)) return false;
-  if (trip.createdByDevice && trip.createdByDevice !== myDeviceId()) return false;
-  if (!trip.createdByDevice) return false;                 // 不是建立者的裝置就不要亂問
-  return store.membersOf(trip.groupId).length > 0;
+  if (trip.createdByDevice) return trip.createdByDevice === myDeviceId() && store.membersOf(trip.groupId).length > 0;
+  // v1.60 以前建立的行程沒有 createdByDevice —— 而使用者現在正在用的就是這種。
+  // 退而求其次看「這台裝置寫過這趟的資料」：trip 或任何一個景點的 deviceId 是自己，
+  // 就當作是建立者的裝置（v1.64 健檢；猜錯的代價只是多問一次「這是誰的手機」）。
+  const mine = trip.deviceId === myDeviceId()
+    || store.spotsOf(tripId).some((s) => s.deviceId === myDeviceId());
+  return mine && store.membersOf(trip.groupId).length > 0;
 }
 
 export async function claim(tripId, memberId) {

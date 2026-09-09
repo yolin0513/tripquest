@@ -224,14 +224,26 @@ export async function peekInvite(code) {
     dates: Array.isArray(p.dates) ? p.dates : [], who: Array.isArray(p.who) ? p.who : [], preview: Array.isArray(p.preview) ? p.preview : [] };
 }
 
-export async function joinInvite(code, { onProgress = null } = {}) {
+export async function joinInvite(code, { onProgress = null, confirmHost = null } = {}) {
   const prog = (m) => { try { onProgress && onProgress(m); } catch { /* noop */ } };
   // v1.58：也接受已解析的短連結物件（parseShortInvite 的結果）；字串則是舊版 gzip 碼
   const p = typeof code === 'string' ? JSON.parse(await gunzip(code)) : code;
   if (p.kind !== 'sync') throw new Error('邀請格式不符');
   // 設定同步後端（若本機還沒設）
+  // 連結可以指定同步伺服器（自架/Tunnel 用），但這也是一條攻擊路徑：一條
+  // `&u=https://攻擊者` 的假邀請能把這台手機的同步伺服器換掉，之後**所有**群組的
+  // 記錄、照片與祕鑰都會推去那裡。所以只收 https，而且不是內建網址時要問過使用者
+  //（v1.64 健檢）。呼叫端沒給 confirmHost 就一律拒絕非內建網址。
   if (p.url && getConfig().mode === 'local') {
-    setConfig({ mode: p.url.includes('workers.dev') ? 'cloud' : 'lan', url: p.url });
+    const u = String(p.url);
+    if (!/^https:\/\//i.test(u)) throw new Error('這個邀請連結指定的伺服器不是安全連線（https），為了安全沒有加入。');
+    if (u !== DEFAULT_CLOUD_URL) {
+      let host = '';
+      try { host = new URL(u).host; } catch { host = u; }
+      const okHost = confirmHost ? await confirmHost(host) : false;
+      if (!okHost) throw new Error('沒有使用這個邀請連結指定的伺服器。');
+    }
+    setConfig({ mode: u.includes('workers.dev') ? 'cloud' : 'lan', url: u });
   } else if (!p.url && p.short && getConfig().mode === 'local') {
     // 短連結不帶 u= 代表用內建雲端；這台還在單機（剛裝好）就先指回內建，加入才有地方拉
     setConfig({ mode: 'cloud', url: DEFAULT_CLOUD_URL });

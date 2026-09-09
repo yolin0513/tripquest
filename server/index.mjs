@@ -254,7 +254,14 @@ const server = createServer(async (req, res) => {
 
     // ---- 靜態站（可用 node server/index.mjs 一次開 App + 同步）----
     if (req.method === 'GET') {
-      if (/^\/(server|node_modules|scripts|workers|\.git)\b/.test(path)) return send(res, 403, { error: 'forbidden' });
+      // 靜態檔改白名單（v1.64 健檢，高嚴重度）。原本的黑名單 regex 區分大小寫，但
+      // Windows/macOS 的檔案系統不分 —— /SERVER/data/state.json 直接繞過去，而那個檔案裡
+      // 有**所有群組的明文祕鑰**與全部記錄（含位置座標）。自架又開 tunnel 就等於公開在網路上。
+      const want = path.replace(/^\//, '').toLowerCase();
+      const ALLOW_DIR = ['css/', 'js/', 'data/', 'icons/', 'media/', 'fonts/'];
+      const ALLOW_FILE = ['', 'index.html', 'manifest.webmanifest', 'sw.js', 'favicon.ico'];
+      const allowed = ALLOW_FILE.includes(want) || ALLOW_DIR.some((d) => want.startsWith(d));
+      if (!allowed || want.includes('..')) return send(res, 403, { error: 'forbidden' });
       let rel = normalize(path).replace(/^(\.\.[/\\])+/, '');
       if (rel === '/' || rel === '\\') rel = '/index.html';
       const fp = join(ROOT, rel);
