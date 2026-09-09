@@ -194,10 +194,14 @@ try {
 
   // 日期自動延長到第 2 天之後？（原本 10/01–10/02，加到第 2 天不用延；驗不變壞即可）
   // ④ 快取：同關鍵字再搜一次 → 0 新請求
+  // v1.56.2 起搜尋會帶行程中心（viewbox 偏好）：剛加了第一個有座標的景點，行程中心從「無」
+  // 變「有」，重查一次是刻意的（結果會不一樣）；之後同關鍵字再搜就要吃快取
+  await page.click('.fs-bar button');
+  await sleep(800);
   const before2 = hits.length;
   await page.click('.fs-bar button');
   await sleep(800);
-  yes(hits.length === before2, '同關鍵字第二次搜尋 0 個 API 請求（快取）');
+  yes(hits.length === before2, '同關鍵字（同行程中心）第二次搜尋 0 個 API 請求（快取）');
 
   // 策展庫優先：搜「羅東夜市」應出現 📖 資料庫來源
   await page.evaluate(() => { const i = document.querySelector('.fs-bar input'); i.value = '羅東夜市'; });

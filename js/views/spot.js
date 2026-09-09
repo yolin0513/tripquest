@@ -48,7 +48,7 @@ export default async function spot(tripId, spotId) {
   const drawPos = () => {
     const cur = store.getRaw(spotId);
     posLine.textContent = cur.lat != null
-      ? `已有位置（${{ photo: '來自照片', osm: '地名查詢', manual: '手動設定' }[cur.geoSrc] || '景點資料庫'}）`
+      ? `已有位置（${{ photo: '來自照片', osm: '地名查詢', wiki: '維基百科', manual: '手動設定' }[cur.geoSrc] || '景點資料庫'}）`
       : '還沒有位置 —— 路線圖上看不到這個點';
   };
   const posBtns = h('div', { class: 'row2', style: 'margin-bottom:4px' },

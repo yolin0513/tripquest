@@ -147,7 +147,7 @@ export default async function findspot(tripId, query = {}) {
         .slice(0, 3)
         .map((p) => ({ name: p.name, fullName: [p.cityName, p.district].filter(Boolean).join(' '),
           lat: p.lat, lng: p.lng, tag: '📖 景點資料庫', curated: p }));
-      const osm = await geocodeSearch(q, { region: t.region || '' });
+      const osm = await geocodeSearch(q, { region: t.region || '', near: centroid() });   // 有行程座標就偏好附近
       if (osm === null && !curated.length) {
         results.replaceChildren(h('div', { class: 'empty' },
           h('p', {}, '沒有網路，搜尋需要連線'),
@@ -159,7 +159,7 @@ export default async function findspot(tripId, query = {}) {
       const list = [...curated];
       for (const o of (osm || [])) {
         const dup = list.some((x) => x.name === o.name && haversine(x, o) < 300);
-        if (!dup) list.push({ ...o, tag: geoTypeLabel(o.cls, o.type) });
+        if (!dup) list.push({ ...o, tag: o.wiki ? '📚 維基百科' : geoTypeLabel(o.cls, o.type) });
       }
       if (!list.length) {
         results.replaceChildren(h('div', { class: 'empty' },
@@ -216,7 +216,7 @@ export default async function findspot(tripId, query = {}) {
       sp.day = d; sp.order = order;
       sp.startMin = startMin; sp.stayMin = stayMin;
       if ((sp.lat == null || sp.lng == null) && cand.lat != null) {
-        sp.lat = cand.lat; sp.lng = cand.lng; sp.geoSrc = cand.curated ? 'db' : 'osm';
+        sp.lat = cand.lat; sp.lng = cand.lng; sp.geoSrc = cand.curated ? 'db' : (cand.wiki ? 'wiki' : 'osm');
       }
       await store.put(sp);
     }

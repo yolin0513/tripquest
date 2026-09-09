@@ -98,14 +98,40 @@ export function geoTypeLabel(cls, type) {
   return TYPE_ZH[type] || TYPE_ZH[cls] || '';
 }
 
-export async function geocodeSearch(q, { limit = 5, region = '' } = {}) {
-  const query = [cleanName(q) || String(q).trim(), region].filter(Boolean).join(' ');
-  if (!query.trim()) return [];
-  const key = 'geo:s2:' + limit + ':' + query;
-  const cached = await db.metaGet(key);
-  if (cached && Date.now() - cached.ts < 30 * 86400000) return cached.list || [];
-  const list = await throttled(async () => {
-    const u = `${BASE}?format=jsonv2&limit=${limit}&accept-language=zh-TW&addressdetails=1&q=${encodeURIComponent(query)}`;
+// 搜尋（規劃頁「搜尋景點加入」用）。v1.56.2 針對實測的準確度問題：
+//   · 「新千歲」只跑出三個大阪的公車站「新千歳」 —— Nominatim 對這類短查詢照名稱相似度排，
+//     沒有地區偏好。現在：(1) 有行程座標就帶 viewbox（偏好、不限制）；(2) 交通站點類
+//     （bus_stop/stop_position/platform…）在使用者沒說要找車站時降權；(3) 同名且 3km 內去重；
+//     (4) 結果太弱（空、或全是被降權的站點）→ 問 zh.wikipedia 這個詞的正式條目名與座標
+//     （「新千歲」→「新千歲機場」），用條目名再查一次 Nominatim，並把維基座標本身也列為候選。
+//   · 每首候選都帶「離行程約 X 公里」（findspot 已顯示）、國家／行政區、類別，讓人自己選對。
+const STOPPY = new Set(['bus_stop', 'stop_position', 'platform', 'stop', 'tram_stop', 'halt', 'bus_station']);
+const WIKI_BASE = (typeof window !== 'undefined' && window.__TQ_WIKI_ENDPOINT) || 'https://zh.wikipedia.org';
+const TEST_GEO = typeof window !== 'undefined' && !!window.__TQ_GEO_ENDPOINT && !window.__TQ_WIKI_ENDPOINT;
+
+function wantsStop(q) { return /站|公車|巴士|bus|stop|電車|駅/i.test(q); }
+
+function rankHits(hits, q, near) {
+  const seen = [];
+  const out = [];
+  for (const hit of hits) {
+    if (seen.some((x) => x.name === hit.name && haversine(x, hit) < 3000)) continue;   // 同名 3km 內視為同一個
+    seen.push(hit);
+    let score = 0;
+    if (STOPPY.has(hit.type) && !wantsStop(q)) score -= 2;
+    if (['aeroway', 'railway', 'tourism', 'amenity', 'leisure', 'historic', 'natural', 'shop'].includes(hit.cls)) score += 1;
+    if (hit.type === 'aerodrome' || hit.type === 'station') score += 1;
+    if (near) { const d = haversine(near, hit); score += d < 30000 ? 2 : d < 200000 ? 1 : 0; }
+    out.push({ ...hit, _score: score });
+  }
+  out.sort((x, y) => y._score - x._score);
+  return out;
+}
+
+async function nominatimRaw(query, { limit, near }) {
+  return throttled(async () => {
+    let u = `${BASE}?format=jsonv2&limit=${limit}&accept-language=zh-TW&addressdetails=1&dedupe=1&q=${encodeURIComponent(query)}`;
+    if (near) u += `&viewbox=${(near.lng - 1.5).toFixed(3)},${(near.lat + 1.5).toFixed(3)},${(near.lng + 1.5).toFixed(3)},${(near.lat - 1.5).toFixed(3)}`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 10000);
     try {
@@ -128,7 +154,63 @@ export async function geocodeSearch(q, { limit = 5, region = '' } = {}) {
     } catch { return undefined; }
     finally { clearTimeout(timer); }
   });
-  if (list === undefined) return null;               // 網路失敗（跟「查無結果」分開，UI 要講不同的話）
+}
+
+// zh.wikipedia：查詢詞 → 正式條目名 + 座標（免金鑰、CORS 開放）。查不到就回 null。
+export async function wikiLookup(q, region = '') {
+  if (TEST_GEO) return null;                        // 測試的假 Nominatim 環境不打真維基
+  const key = 'geo:wiki:' + q;
+  const cached = await db.metaGet(key);
+  if (cached && Date.now() - cached.ts < 30 * 86400000) return cached.v;
+  let v = null;
+  try {
+    const to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+    const su = `${WIKI_BASE}/w/api.php?action=opensearch&format=json&origin=*&namespace=0&limit=3&variant=zh-tw&search=${encodeURIComponent(q)}`;
+    const r = await fetch(su, { signal: to(8000) });
+    const arr = r.ok ? await r.json() : null;
+    const titles = Array.isArray(arr) && Array.isArray(arr[1]) ? arr[1] : [];
+    // 有地區提示時，優先選含該地區字樣的條目；否則取第一個
+    const title = (region && titles.find((t) => t.includes(region))) || titles[0] || null;
+    if (title) {
+      const r2 = await fetch(`${WIKI_BASE}/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: { accept: 'application/json' }, signal: to(8000) });
+      const d = r2.ok ? await r2.json() : null;
+      const c = d && d.coordinates;
+      v = { title: (d && d.title) || title, lat: c ? +(+c.lat).toFixed(5) : null, lng: c ? +(+c.lon).toFixed(5) : null,
+        desc: (d && d.description) || '' };
+    }
+  } catch { v = null; }
+  await db.metaSet(key, { ts: Date.now(), v });
+  return v;
+}
+
+export async function geocodeSearch(q, { limit = 5, region = '', near = null } = {}) {
+  const query = [cleanName(q) || String(q).trim(), region].filter(Boolean).join(' ');
+  if (!query.trim()) return [];
+  const nearKey = near ? `${near.lat.toFixed(0)},${near.lng.toFixed(0)}` : '';   // 行程中心粗到 1 度，中心稍微漂移不重查
+  const key = 'geo:s3:' + limit + ':' + query + ':' + nearKey;
+  const cached = await db.metaGet(key);
+  if (cached && Date.now() - cached.ts < 30 * 86400000) return cached.list || [];
+  const raw = await nominatimRaw(query, { limit, near });
+  if (raw === undefined) return null;               // 網路失敗（跟「查無結果」分開，UI 要講不同的話）
+  let list = rankHits(raw, q, near);
+  // 結果太弱（空、或全是被降權的站點）→ 問維基百科這個詞到底是什麼
+  const weak = !list.length || list.every((x) => x._score < 0);
+  if (weak) {
+    const w = await wikiLookup(String(q).trim(), region);
+    if (w && w.title) {
+      const extra = [];
+      if (w.title !== String(q).trim()) {
+        const raw2 = await nominatimRaw([w.title, region].filter(Boolean).join(' '), { limit, near });
+        if (Array.isArray(raw2)) extra.push(...rankHits(raw2, w.title, near));
+      }
+      if (w.lat != null) extra.push({ name: w.title, fullName: w.desc || '維基百科', lat: w.lat, lng: w.lng, cls: 'wiki', type: 'wiki', wiki: true, _score: 0.5 });
+      // 維基帶來的候選放前面（它們才是使用者要的東西），原本的弱結果留在後面
+      const merged = [...extra, ...list];
+      const seen = [];
+      list = merged.filter((x) => { if (seen.some((y) => y.name === x.name && haversine(y, x) < 3000)) return false; seen.push(x); return true; });
+    }
+  }
+  list = list.map(({ _score, ...x }) => x).slice(0, limit + 2);
   await db.metaSet(key, { ts: Date.now(), list });
   return list;
 }
