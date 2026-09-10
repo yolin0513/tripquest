@@ -74,6 +74,10 @@ const placesSrv = createServer((req, res) => {
     let j = {}; try { j = JSON.parse(body); } catch { /* noop */ }
     placeReqs.push({ body: j, key: req.headers['x-goog-api-key'], mask: req.headers['x-goog-fieldmask'] });
     if (placeMode === 'forbidden') { res.writeHead(403, cors); return res.end('{}'); }
+    if (placeMode === 'slow') {          // 慢回應：用來驗「等待中途換分類」的記帳
+      setTimeout(() => { try { res.writeHead(200, { ...cors, 'content-type': 'application/json' }); res.end(JSON.stringify({ places: [] })); } catch { /* noop */ } }, 900);
+      return;
+    }
     res.writeHead(200, { ...cors, 'content-type': 'application/json' });
     res.end(JSON.stringify({ places: [
       { id: 'p1', displayName: { text: '嗜嗜房羅東站' }, location: { latitude: C.lat + 0.001, longitude: C.lng + 0.001 },
@@ -250,6 +254,19 @@ try {
   }));
   yes(!backOsm.hasGoogleChip && backOsm.count.includes('停車場'),
     `切回去就是原本的地圖資料（「${backOsm.count.trim()}」）`);
+
+  // 送出去的請求已經算在 Google 頭上了 —— 使用者在等待中途換分類不會讓那次呼叫變成
+  // 沒發生。記在「作廢檢查」後面等於漏記，而這個計數器是花費保險絲。
+  placeMode = 'slow';
+  const beforeCount = await page.evaluate(async (t) => (await (await import('./js/aikeys.js')).usageOf(t)).mapsUsed, tid);
+  await page.evaluate(() => document.querySelector('.nl-google').click());
+  await new Promise((r) => setTimeout(r, 150));
+  await page.evaluate(() => [...document.querySelectorAll('.nl-cat')].find((b) => b.textContent.includes('廁所')).click());
+  await new Promise((r) => setTimeout(r, 1600));
+  const afterCount = await page.evaluate(async (t) => (await (await import('./js/aikeys.js')).usageOf(t)).mapsUsed, tid);
+  placeMode = 'ok';
+  yes(afterCount === beforeCount + 1,
+    `等待中途換分類，那次 Google 呼叫照樣計入用量（${beforeCount} → ${afterCount}）—— 漏記等於把花費保險絲弄鬆`);
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
   yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);

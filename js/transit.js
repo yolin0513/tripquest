@@ -59,6 +59,21 @@ export function tzOffsetFor(lat, lng, country) {
 
 const pad = (n) => String(n).padStart(2, '0');
 
+// 從 RFC3339 字串尾巴讀回時區偏移。**要連分鐘一起讀**：原本寫成
+// `parseInt(iso.slice(-6, -3))`，碰到印度（+05:30）、尼泊爾（+05:45）這種半小時／
+// 三刻鐘的時區會把 +05:30 讀成 5，顯示的發車時刻整批差 30 分鐘。
+// 這個路徑不是理論的 —— tzOffsetFor 認不出地點時會退回**本機時區**，人在印度出差
+// 時規劃日本行程就會走到。
+function offsetOf(iso) {
+  const m = String(iso || '').match(/([+-])(\d{2}):(\d{2})$/);
+  if (!m) return 0;
+  return (m[1] === '-' ? -1 : 1) * (Number(m[2]) + Number(m[3]) / 60);
+}
+
+// 逾時：Google 掛住的話，畫面上那顆按鈕會永遠停在「查詢中…」。
+// 跟 Overpass 同一套寫法（舊瀏覽器沒有 AbortSignal.timeout 就不設，行為同以前）。
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 // date：'2026-10-01'；min：當地牆上時鐘分鐘數（可 ≥1440＝隔天）→ RFC3339
 export function rfc3339(date, min, offsetHours) {
   const [y, mo, d] = String(date || '').split('-').map(Number);
@@ -124,7 +139,7 @@ function parseRoute(j, offsetHours) {
 // 一段：a → b，departAt = RFC3339。key 是使用者自帶的 Google 金鑰。
 export async function transitLeg(a, b, departAt, key, { signal } = {}) {
   const ep = (typeof window !== 'undefined' && window.__TQ_ROUTES_ENDPOINT) || ENDPOINT;
-  const offsetHours = departAt ? (parseInt(departAt.slice(-6, -3), 10) || 0) : 0;
+  const offsetHours = offsetOf(departAt);
   const ck = cacheKey(a, b, departAt, 'transit');
   const cached = await db.metaGet(ck).catch(() => null);
   if (cached && Date.now() - cached.ts < 86400000) return { ...cached.v, cached: true };
@@ -132,7 +147,7 @@ export async function transitLeg(a, b, departAt, key, { signal } = {}) {
   let res;
   try {
     res = await fetch(ep, {
-      method: 'POST', signal,
+      method: 'POST', signal: signal || _to(15000),
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
       body: JSON.stringify({
         origin: { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
@@ -144,7 +159,7 @@ export async function transitLeg(a, b, departAt, key, { signal } = {}) {
         units: 'METRIC',
       }),
     });
-  } catch { return { ok: false, reason: 'network' }; }
+  } catch (e) { return { ok: false, reason: (e && e.name === 'TimeoutError') ? 'timeout' : 'network' }; }
   if (res.status === 400) return { ok: false, reason: 'badtime' };     // 多半是出發時間在過去
   if (res.status === 403) return { ok: false, reason: 'key' };
   if (res.status === 429) return { ok: false, reason: 'quota' };
@@ -175,6 +190,7 @@ export async function testMapsKey(key) {
   if (r.reason === 'key') return { ok: false, message: '金鑰被拒 —— 請確認已啟用 Routes API，且參照網址限制允許這個網站' };
   if (r.reason === 'quota') return { ok: false, message: 'Google 說太頻繁了，等一下再試' };
   if (r.reason === 'network') return { ok: false, message: '連不上 Google（可能沒有網路）' };
+  if (r.reason === 'timeout') return { ok: false, message: 'Google 太久沒回應（15 秒），等一下再試' };
   if (r.reason === 'badtime') return { ok: false, message: '金鑰或請求被拒（400）—— 請確認已啟用 Routes API' };
   return { ok: true, message: '金鑰可以用（這段測試路線剛好查不到班次，不影響）' };
 }

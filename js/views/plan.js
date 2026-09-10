@@ -491,7 +491,11 @@ export default async function plan(tripId) {
     const inDay0 = store.spotsOf(tripId).filter((x) => (x.day || 1) === d)
       .sort((a, b) => (a.order || 0) - (b.order || 0));
     const stamps = new Map(inDay0.map((sp) => [sp.id, sp.updatedAt || 0]));
-    const undo = new Map();                       // spotId → 套用前的欄位
+    // 已經處理掉的項目要**累積**，不是每次只留最新的一條 —— 代理明確要求「已解決的
+    // 原地變成 ✓，不無聲消失」，長輩才找得到剛剛在看的那一條。
+    // 每一條各自帶自己的復原快照：一顆「復原」只還原它自己那一次的修改，
+    // 不會把前面幾條一起倒回去（按鈕就長在那一列上，語意必須一致）。
+    const solved = [];                            // [{ title, undo: Map(spotId → 套用前的欄位) }]
     const box = h('div', {});
 
     const rerun = async () => {
@@ -502,24 +506,28 @@ export default async function plan(tripId) {
       return { inDay, list: dayIssues(inDay, chain, timeConflicts(inDay)), assumedStart };
     };
 
-    const paint = async (solved = []) => {
+    const restamp = () => { for (const sp of store.spotsOf(tripId)) stamps.set(sp.id, sp.updatedAt || 0); };
+
+    const paint = async () => {
       const { inDay, list, assumedStart } = await rerun();
       const kids = [];
       if (assumedStart) {
         kids.push(h('p', { class: 'sm muted' },
           `這一天沒有人填「幾點到」，下面的時刻是從 ${fmtMin(dayStartOf(store.get(tripId), d))} 出發推算的。`));
       }
-      for (const done of solved) {
+      solved.forEach((done, si) => {
         kids.push(h('div', { class: 'chk-item done' },
           h('div', { class: 'chk-t' }, '✓ ' + done.title),
-          h('div', { class: 'chk-a' }, done.undoable ? '已改好' : '已解決'),
-          done.undoable ? h('button', { class: 'btn btn-ghost sm-btn', onclick: async () => {
-            for (const [id, prev] of undo) await store.patch(id, prev);
-            undo.clear();
-            await paint([]);
+          h('div', { class: 'chk-a' }, '已改好'),
+          h('button', { class: 'btn btn-ghost sm-btn', onclick: async () => {
+            for (const [id, prev] of done.undo) await store.patch(id, prev);
+            solved.splice(si, 1);
+            restamp();                            // 復原本身也是一次寫入，時間戳要跟上
+            draw();
+            await paint();
             toast('已復原');
-          } }, '復原') : null));
-      }
+          } }, '復原')));
+      });
       const show = list.slice(0, MAX_SHOWN);
       for (const it of show) {
         kids.push(h('div', { class: 'chk-item' + (it.note ? ' note' : '') },
@@ -552,24 +560,26 @@ export default async function plan(tripId) {
       const touched = it.fix.type === 'swap' ? [it.fix.a, it.fix.b] : [it.fix.id];
       if (stale(touched)) {
         toast('旅伴剛剛改過這個景點，已重新檢查');
-        for (const sp of store.spotsOf(tripId)) stamps.set(sp.id, sp.updatedAt || 0);
-        await paint([]);
+        restamp();
+        await paint();
         return;
       }
+      const mine = new Map();                     // 這一次改了哪些欄位（只給這一列的「復原」用）
       if (it.fix.type === 'swap') {
         const a = store.get(it.fix.a), b = store.get(it.fix.b);
-        undo.set(a.id, { order: a.order }); undo.set(b.id, { order: b.order });
+        mine.set(a.id, { order: a.order }); mine.set(b.id, { order: b.order });
         await store.patch(a.id, { order: b.order });
         await store.patch(b.id, { order: a.order });
       } else if (it.fix.type === 'stay') {
         const sp = store.get(it.fix.id);
-        undo.set(sp.id, { stayMin: sp.stayMin ?? null, endTime: sp.endTime || '' });
+        mine.set(sp.id, { stayMin: sp.stayMin ?? null, endTime: sp.endTime || '' });
         // endTime 是舊的字串欄位，跟 stayMin 同一個欄位組；不清掉會讓 spotTimes 讀到舊值
         await store.patch(sp.id, { stayMin: it.fix.stayMin, endTime: '' });
       }
-      for (const sp of store.spotsOf(tripId)) stamps.set(sp.id, sp.updatedAt || 0);
+      solved.push({ title: it.title, undo: mine });
+      restamp();
       draw();
-      await paint([{ title: it.title, undoable: true }]);
+      await paint();
     };
 
     // 「這樣沒關係」：只寫本機旗標。`_` 開頭的欄位不觸發同步（store.patch 的既有規則），
@@ -577,11 +587,12 @@ export default async function plan(tripId) {
     const dismiss = async (it) => {
       const sp = store.get(it.id);
       if (sp) await store.patch(sp.id, { _ok: { ...(sp._ok || {}), [it.kind]: issueSig(it) } });
+      restamp();
       draw();
-      await paint([]);
+      await paint();
     };
 
-    await paint([]);
+    await paint();
     await modal({ title: `第 ${d} 天`, body: box, actions: [{ label: '關閉', value: null, primary: true }] });
     draw();
   }
@@ -669,6 +680,7 @@ export default async function plan(tripId) {
       key: '金鑰被拒 —— 請到旅程設定確認 Routes API 已啟用、參照網址限制允許這個網站',
       quota: 'Google 說太頻繁了，等一下再試',
       network: '連不上 Google（可能沒有網路）',
+      timeout: 'Google 太久沒回應（15 秒），等一下再試',
       badtime: '這個時間查不到（多半是出發時間已經過去）',
       none: '這一段查不到大眾運輸路線（可能沒有班次或距離太近）',
     })[reason] || '查詢失敗（' + reason + '）';

@@ -96,12 +96,23 @@ export function dayIssues(spots, chain, conflicts) {
   }
 
   // 排到隔天：陳述，不加 ⚠、也沒有修正按鈕。夜景 → 夜市 → 凌晨拉麵是正當安排。
+  //
+  // 但這一條**繼承了規則 1 的弱點**（代理 C 點名，v1.70.1 才補上）：離開時刻是
+  // 「到達 + 停留」，而停留常常是我們自己依類別猜的。實測：使用者只填了「夜市 22:00」
+  // 一個時間、後面兩站什麼都沒填，我們照樣宣稱「這一天會排到隔天 02:10」—— 那個
+  // 02:10 完全是三個猜出來的停留堆出來的，使用者從沒說過他要在夜市待 90 分鐘。
+  //
+  // 不刪掉這一條（「你這天比想像中長」是真的有用的訊息），但**要講清楚它是推算**。
+  // 這跟畫面上既有的「（停留未設，先用 1 小時推算）」是同一套誠實原則。
   const last = chain[chain.length - 1];
   if (last && Number.isFinite(last.leave) && last.leave >= 1440) {
+    const guessed = chain.some((c) => c.stayAssumed);
     out.push({
-      kind: 'overnight', i: chain.length - 1, id: last.id, at: last.leave, note: true,
-      title: `這一天會排到${fmtHHMM(last.leave)}`,
-      advice: '如果本來就打算跑夜場，這樣沒問題',
+      kind: 'overnight', i: chain.length - 1, id: last.id, at: last.leave, note: true, soft: guessed,
+      title: (guessed ? '照目前的推算，' : '') + `這一天會排到${fmtHHMM(last.leave)}`,
+      advice: guessed
+        ? '有幾站的停留時間是估的 —— 實際待多久會影響這個時間'
+        : '如果本來就打算跑夜場，這樣沒問題',
       fix: null,
     });
   }

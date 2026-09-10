@@ -145,8 +145,11 @@ export default async function nearbyView(tripId) {
     }
     const my = gen;
     const r = await nearbyParkingGoogle(center.lat, center.lng, mapsKey, { radius: LIFE.parking.radius });
-    if (my !== gen) return;
+    // **先記帳再看結果作不作廢**。請求已經送到 Google 了，使用者在等待中途換了分類
+    // 或換了中心並不會讓那次呼叫變成沒發生 —— 記在作廢檢查後面等於漏記，而這個
+    // 計數器是使用者的花費保險絲，漏記就是把保險絲弄鬆。
     await addMapsCalls(tripId, 1);
+    if (my !== gen) return;
     if (!r.ok) {
       const { toast } = await import('../ui.js');
       toast(placesErr(r.reason));

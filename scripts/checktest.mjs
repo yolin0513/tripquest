@@ -10,6 +10,7 @@
 //   · 每天沒有人填時間時，用「這一天幾點出發」當推算起點，而且畫面要講出來
 
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
@@ -17,6 +18,24 @@ import puppeteer from 'puppeteer';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5631;
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
+
+// 假 OSRM：不架的話會打到真的 routing.openstreetmap.de（實測被回 429）——
+// 既慢、結果不決定性，還占用公共服務的額度。durations = 直線公尺 ÷ 10。
+const OSRM = 5632;
+const osrmSrv = createServer((req, res) => {
+  const m = req.url.match(/\/table\/v1\/[a-z]+\/([^?]+)/);
+  if (!m) { res.writeHead(404); return res.end(); }
+  const pts = decodeURIComponent(m[1]).split(';').map((c) => c.split(',').map(Number));   // [lng,lat]
+  const R = 6371000, rad = (x) => x * Math.PI / 180;
+  const sec = pts.map((a) => pts.map((b) => {
+    const dl = rad(b[1] - a[1]), dg = rad(b[0] - a[0]);
+    const hh = Math.sin(dl / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(dg / 2) ** 2;
+    return Math.round(2 * R * Math.asin(Math.sqrt(hh)) / 10);
+  }));
+  res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+  res.end(JSON.stringify({ code: 'Ok', durations: sec }));
+});
+osrmSrv.listen(OSRM);
 
 let pass = 0;
 const yes = (c, m, extra = '') => { if (c) { pass++; console.log('✓ ' + m); } else { console.log('✗ ' + m + (extra ? ' — ' + extra : '')); process.exitCode = 1; } };
@@ -26,6 +45,7 @@ const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox']
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+  await page.evaluateOnNewDocument((u) => { window.__TQ_OSRM_ENDPOINT = u; }, `http://localhost:${OSRM}`);
   page.on('console', (m) => { if (m.type() === 'error') console.log('   [console] ' + m.text().slice(0, 160)); });
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
@@ -41,7 +61,7 @@ try {
     const run = (spots, m) => {
       const mm = m || osrm(spots.length);
       const chain = r.chainTimes(spots, mm, 'drive');
-      return dayIssues(spots, chain, r.timeConflicts(spots)).map((x) => ({ kind: x.kind, fix: x.fix, title: x.title, advice: x.advice, note: !!x.note }));
+      return dayIssues(spots, chain, r.timeConflicts(spots)).map((x) => ({ kind: x.kind, fix: x.fix, title: x.title, advice: x.advice, note: !!x.note, soft: !!x.soft }));
     };
     const sp = (id, name, o, startMin, stayMin, lat) => ({ id, name, day: 1, order: o, lat: lat ?? 25 + o * 0.05, lng: 121.5, startMin, stayMin });
     return {
@@ -54,6 +74,7 @@ try {
       shortStay: run([sp('a', 'A', 0, 9 * 60, 30), sp('b', 'B', 1, undefined, 30)]),
       many: run(Array.from({ length: 8 }, (_, i) => sp('s' + i, 'S' + i, i, i === 0 ? 9 * 60 : undefined, 30))),
       overnight: run([sp('a', 'A', 0, 22 * 60, 120), sp('b', 'B', 1, undefined, 120)]),
+      overnightGuess: run([sp('a', '夜市', 0, 22 * 60, undefined), sp('b', 'B', 1, undefined, undefined)]),
       clean: run([sp('a', 'A', 0, 9 * 60, 60), sp('b', 'B', 1, 11 * 60, 60)]),
     };
   });
@@ -75,6 +96,14 @@ try {
     '**不報**「到達時已打烊」（專案沒有景點的營業時間資料）');
   const on = rules.overnight.find((x) => x.kind === 'overnight');
   yes(on && on.note && !on.fix, `排到隔天 → 陳述不是警告、也不給修正按鈕：「${on ? on.title : ''}」`);
+  // 這一條繼承規則 1 的弱點：離開時刻＝到達＋停留，而停留常常是我們自己猜的。
+  // 使用者只填了「夜市 22:00」一個時間時，那個「隔天 02:10」完全是猜出來的。
+  yes(on && !on.soft && !/推算/.test(on.title),
+    '停留都是使用者自己填的 → 直接陳述，不加修飾');
+  const og = rules.overnightGuess.find((x) => x.kind === 'overnight');
+  yes(og && og.soft && og.title.startsWith('照目前的推算'),
+    `停留是我們猜的 → 講明白這是推算：「${og ? og.title : ''}」`);
+  yes(og && /估的/.test(og.advice), `並且說出來哪裡是估的：「${og ? og.advice : ''}」`);
   yes(!rules.clean.length, '正常的一天：一條都不報');
 
   // ---------- UI：預覽、套用、重新偵測、復原 ----------
@@ -189,18 +218,92 @@ try {
   const back = await page.evaluate(() => document.querySelectorAll('.chk-item:not(.done)').length);
   yes(back === 1, '之後又改了時間 → 同一類問題重新出現（「這樣沒關係」不是永久消音）');
 
+  // ---------- 連續套用兩條：已解決的都要留在畫面上，而且各自復原 ----------
+  console.log('\n— 連續套用兩條 —');
+  await page.evaluate(() => document.querySelector('.modal-actions .btn')?.click());
+  await sleep(400);
+  const two = await page.evaluate(async (o) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    // 第 3 天造兩個彼此獨立的問題：兩組「前一站停到超過下一站的訂位時間」
+    const mk = async (name, order, startMin, stayMin) => {
+      const id = uuid();
+      await s.put({ id, type: 'spot', tripId: o.tid, name, emoji: '📍', day: 3, order,
+        lat: 24.6 + order * 0.0005, lng: 121.7, startMin, stayMin });
+      return id;
+    };
+    const a = await mk('早餐店', 0, 8 * 60, 120);      // 08:00 停到 10:00
+    const b = await mk('博物館', 1, 9 * 60, 120);      // 卻訂 09:00 → 重疊
+    const c = await mk('午餐', 2, 13 * 60, 120);       // 13:00 停到 15:00
+    const d2 = await mk('下午的點', 3, 14 * 60, 60);   // 卻訂 14:00 → 重疊
+    return { a, b, c, d2 };
+  }, ids);
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/plan`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.plan-list');
+  await page.waitForFunction(() => document.querySelector('.pd-check[data-day="3"]'), { timeout: 20000 });
+  await page.evaluate(() => document.querySelector('.pd-check[data-day="3"]').click());
+  await page.waitForSelector('.chk-item', { timeout: 15000 });
+  const before2 = await page.evaluate(() => document.querySelectorAll('.chk-item:not(.done)').length);
+  yes(before2 === 2, `第 3 天偵測到 2 條各自獨立的問題（實際 ${before2}）`);
+
+  await page.evaluate(() => [...document.querySelectorAll('.chk-item:not(.done) .btn')].find((b) => b.textContent.includes('這樣改')).click());
+  await page.waitForFunction(() => document.querySelector('.chk-item.done'), { timeout: 15000 });
+  await sleep(400);
+  await page.evaluate(() => [...document.querySelectorAll('.chk-item:not(.done) .btn')].find((b) => b.textContent.includes('這樣改')).click());
+  await page.waitForFunction(() => document.querySelectorAll('.chk-item.done').length >= 2, { timeout: 15000 }).catch(() => {});
+  await sleep(400);
+  const after2 = await page.evaluate(async (o) => {
+    const s = await import('./js/store.js');
+    return {
+      done: document.querySelectorAll('.chk-item.done').length,
+      undoBtns: [...document.querySelectorAll('.chk-item.done')].map((n) => !!n.querySelector('.btn')),
+      aStay: s.get(o.a).stayMin, cStay: s.get(o.c).stayMin,
+    };
+  }, two);
+  yes(after2.done === 2,
+    `連續套用兩條之後，兩條都還留在畫面上（實際 ${after2.done} 條）—— 修前第一條會被第二條蓋掉、無聲消失`);
+  yes(after2.undoBtns.length === 2 && after2.undoBtns.every(Boolean), '兩條各自有自己的「復原」');
+  yes(after2.aStay === 60 && after2.cStay === 60, `兩條都真的改到了（${after2.aStay} 分 / ${after2.cStay} 分）`);
+
+  // 復原第二條，第一條不能跟著被倒回去
+  await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.chk-item.done')];
+    rows[rows.length - 1].querySelector('.btn').click();
+  });
+  // 等條件而不是等固定秒數：重新偵測要跑 dayMatrix，時間不固定
+  await page.waitForFunction(() => document.querySelectorAll('.chk-item.done').length === 1, { timeout: 20000 }).catch(() => {});
+  await sleep(300);
+  const partial = await page.evaluate(async (o) => {
+    const s = await import('./js/store.js');
+    return { aStay: s.get(o.a).stayMin, cStay: s.get(o.c).stayMin, done: document.querySelectorAll('.chk-item.done').length };
+  }, two);
+  yes(partial.cStay === 120 && partial.aStay === 60,
+    `一顆「復原」只還原它自己那一列（午餐回到 ${partial.cStay} 分、早餐店維持 ${partial.aStay} 分）—— 按鈕長在那一列上，語意必須一致`);
+  yes(partial.done === 1, '復原後那一列從已解決清單移除，剩下另一條');
+  await page.evaluate(() => document.querySelector('.modal-actions .btn')?.click());
+  await sleep(400);
+
   // ---------- 過期防護 ----------
   console.log('\n— 旅伴同時在改 —');
+  // 先把第 1 天的預覽打開（stamps 在這一刻拍快照），旅伴的修改才是「預覽開著時進來的」。
+  // 順序不能顛倒：先改再開的話快照裡已經是新值，這一條就驗不到東西。
+  await page.evaluate(() => document.querySelector('.pd-check[data-day="1"]')?.click());
+  await page.waitForSelector('.chk-item', { timeout: 15000 });
   const guard = await page.evaluate(async (o) => {
     const s = await import('./js/store.js');
     // 模擬旅伴的修改在預覽開著的時候同步進來
     await s.patch(o.lunch, { stayMin: 150 });
     const before = s.get(o.lunch).stayMin;
-    [...document.querySelectorAll('.chk-item .btn')].find((b) => b.textContent.includes('這樣改'))?.click();
-    await new Promise((r) => setTimeout(r, 900));
-    return { before, after: s.get(o.lunch).stayMin, toast: document.getElementById('toast')?.textContent || '' };
+    const btn = [...document.querySelectorAll('.chk-item .btn')].find((b) => b.textContent.includes('這樣改'));
+    if (btn) btn.click();
+    await new Promise((r) => setTimeout(r, 1200));
+    return { clicked: !!btn, before, after: s.get(o.lunch).stayMin,
+      toast: document.getElementById('toast')?.textContent || '' };
   }, ids);
-  yes(guard.after === guard.before,
+  // 這一條要防「按鈕根本不存在 → 什麼都沒發生 → 斷言空轉通過」
+  yes(guard.clicked, '（前置）預覽裡真的有一顆「這樣改」可以按');
+  yes(guard.clicked && guard.after === guard.before,
     `旅伴剛改過 → **不套用**，他的值還在（${guard.before} 分，沒有被預覽時算的舊值蓋掉）`);
   yes(guard.toast.includes('旅伴'), `而且講出來：「${guard.toast}」`);
 
@@ -243,6 +346,6 @@ try {
   fail('例外：' + (e && e.stack || e));
 } finally {
   await browser.close();
-  web.kill();
+  web.kill(); osrmSrv.close();
 }
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

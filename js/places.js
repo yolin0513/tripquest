@@ -13,6 +13,9 @@
 
 const ENDPOINT = 'https://places.googleapis.com/v1/places:searchNearby';
 
+// 逾時：不設的話 Google 掛住就會讓按鈕永遠停在「查詢中…」（跟 Overpass 同一套寫法）
+const _to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 const FIELDS = [
   'places.id',
   'places.displayName',
@@ -28,7 +31,7 @@ export async function nearbyParkingGoogle(lat, lng, key, { radius = 1500, signal
   let res;
   try {
     res = await fetch(ep, {
-      method: 'POST', signal,
+      method: 'POST', signal: signal || _to(12000),
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
       body: JSON.stringify({
         includedTypes: ['parking'],
@@ -38,7 +41,7 @@ export async function nearbyParkingGoogle(lat, lng, key, { radius = 1500, signal
         locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius } },
       }),
     });
-  } catch { return { ok: false, reason: 'network' }; }
+  } catch (e) { return { ok: false, reason: (e && e.name === 'TimeoutError') ? 'timeout' : 'network' }; }
   if (res.status === 403) return { ok: false, reason: 'key' };
   if (res.status === 429) return { ok: false, reason: 'quota' };
   if (res.status === 400) return { ok: false, reason: 'bad' };
@@ -69,6 +72,7 @@ export function placesErr(reason) {
     key: '金鑰被拒 —— 請到旅程設定確認已啟用 Places API (New)、參照網址限制允許這個網站',
     quota: 'Google 說太頻繁了，等一下再試',
     network: '連不上 Google（可能沒有網路）',
+    timeout: 'Google 太久沒回應（12 秒），等一下再試',
     bad: '請求被拒 —— 請確認已啟用 Places API (New)',
   })[reason] || 'Google 查詢失敗（' + reason + '）';
 }

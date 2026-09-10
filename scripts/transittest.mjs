@@ -23,7 +23,8 @@ const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, std
 
 // ---- mock Routes API ----
 let reqs = [];
-let mode = 'ok';                       // ok | forbidden | none
+let mode = 'ok';                       // ok | forbidden | none | hang
+const hung = new Set();
 const routesSrv = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
@@ -36,6 +37,7 @@ const routesSrv = createServer((req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
     let j = {}; try { j = JSON.parse(body); } catch { /* noop */ }
     reqs.push({ body: j, key: req.headers['x-goog-api-key'], mask: req.headers['x-goog-fieldmask'] });
+    if (mode === 'hang') { hung.add(res); return; }          // 永遠不回應 → 驗客戶端的逾時
     if (mode === 'forbidden') { res.writeHead(403, cors); return res.end('{}'); }
     if (mode === 'none') {
       res.writeHead(200, { ...cors, 'content-type': 'application/json' });
@@ -149,6 +151,35 @@ try {
   yes(tz.isoJp === '2026-10-01T09:00:00+09:00', `日本出發時間寫成「${tz.isoJp}」（差一小時班次就是錯的）`);
   yes(tz.isoNextDay === '2026-10-02T01:00:00+08:00', `跨午夜的出發時間換成隔天：「${tz.isoNextDay}」`);
 
+  // 半小時時區：tzOffsetFor 認不出地點時會退回**本機時區**，人在印度出差時規劃
+  // 日本行程就會走到這條路。原本用 parseInt(iso.slice(-6,-3)) 讀偏移，+05:30 會被
+  // 讀成 5，整批發車時刻差 30 分鐘。
+  reqs = [];
+  const half = await page.evaluate(async () => {
+    const t = await import('./js/transit.js');
+    const at = t.rfc3339('2026-10-01', 9 * 60, 5.5);
+    const r = await t.transitLeg({ lat: 25.0, lng: 121.5 }, { lat: 25.05, lng: 121.55 }, at, 'AIzaHALFHALFHALFHALFHALFHALFHALFHALF');
+    return { at, depart: r.ok ? r.lines[0].depart : '', ok: r.ok };
+  });
+  yes(half.at === '2026-10-01T09:00:00+05:30', `半小時時區寫得出來：「${half.at}」`);
+  yes(half.depart === '09:06',
+    `半小時時區也讀得回來：發車顯示 ${half.depart}（修前會讀成 +05 → 顯示 08:36，整批差 30 分）`);
+
+  // 逾時：Google 掛住時不能讓畫面永遠停在「查詢中…」
+  mode = 'hang';
+  const hangT0 = Date.now();
+  const hangRes = await page.evaluate(async () => {
+    const t = await import('./js/transit.js');
+    const at = t.rfc3339('2099-10-01', 9 * 60, 8);
+    return t.transitLeg({ lat: 25.0, lng: 121.5 }, { lat: 25.05, lng: 121.55 }, at, 'AIzaHANGHANGHANGHANGHANGHANGHANGHANG');
+  });
+  const secs = Math.round((Date.now() - hangT0) / 1000);
+  mode = 'ok';
+  yes(!hangRes.ok && hangRes.reason === 'timeout' && secs >= 13 && secs <= 22,
+    `Google 沒回應 → ${secs} 秒後自己放棄並回 timeout（不是永遠卡著）`);
+  const msg = await page.evaluate(async () => (await import('./js/transit.js')).VEHICLE_EMOJI && null);
+  void msg;
+
   // ---------- 有金鑰 ----------
   console.log('\n— 有金鑰 —');
   await page.evaluate(async (tid) => {
@@ -252,6 +283,7 @@ try {
   fail('例外：' + (e && e.stack || e));
 } finally {
   await browser.close();
-  web.kill(); routesSrv.close();
+  for (const r of hung) { try { r.destroy(); } catch { /* noop */ } }
+  web.kill(); routesSrv.closeAllConnections?.(); routesSrv.close();
 }
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));
