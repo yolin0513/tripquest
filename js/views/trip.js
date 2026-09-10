@@ -17,7 +17,7 @@ import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
-import { aiConfigCard, mapsConfigCard, keyNotice } from './ai-config.js';
+import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 
@@ -1238,13 +1238,6 @@ function memberEditor(tripId, groupId) {
 // v1.72.0 的問題不是機制壞了（實測會重產），是每一種擋下來的情況都靜默：
 // 這台不是建立者、這台沒有金鑰、超過花費上限、API 掛掉 —— 使用者只看到「文字沒變」，
 // 而且我自己在查的時候也一樣看不出卡在哪。
-const AI_WHY = {
-  notCreator: { t: '這趟的文案由建立者那台手機產生', a: '請他開一次這趟行程就會更新' },
-  noKey: { t: '這台手機沒有 Claude 金鑰', a: '在有貼金鑰的那台開啟這趟行程，或在上面貼一把' },
-  cap: { t: '已達這趟的花費上限', a: '到上面的「AI 加值」調高上限' },
-  failed: { t: '上次產生失敗', a: '按「重新產生」再試一次' },
-  pending: { t: '還沒更新到最新版的寫法', a: '按「重新產生」，或開一次行程頁' },
-};
 
 function aiTextRow(tripId) {
   const box = h('div', {});

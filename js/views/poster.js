@@ -110,6 +110,8 @@ export default async function poster(tripId) {
   // 有開 AI → 背景把海報文案產一產，好了重畫預覽
   if (t.aiEnabled) {
     warmPosterAi(tripId).then((changed) => {
+    // 文案產不出來（額度用完、沒金鑰…）時在這一頁講出來 —— 海報上印的是舊文案。
+    import('./ai-config.js').then(({ showAiStaleNote }) => showAiStaleNote(tripId)).catch(() => {});
       if (changed && location.hash.includes(`/trip/${tripId}/poster`)) refresh();
     }).catch(() => {});
   }

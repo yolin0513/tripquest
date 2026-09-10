@@ -333,6 +333,10 @@ export default async function album(tripId) {
           && location.hash.includes(`/trip/${tripId}/album`)) {
           resetPlayer();
         }
+        // 產不出來（額度用完、沒金鑰、不是建立者…）時，**在這一頁講出來**。
+        // 字卡上的是舊文案，使用者是在這裡看到的，不該讓他對著舊句子猜原因。
+        const { showAiStaleNote } = await import('./ai-config.js');
+        if (location.hash.includes(`/trip/${tripId}/album`)) await showAiStaleNote(tripId);
       } catch { /* 靜默 */ }
     })();
   }

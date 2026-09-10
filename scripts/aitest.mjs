@@ -281,6 +281,80 @@ try {
   if (memHit.state !== 'stale' || memHit.why !== 'pending') ok(`回憶入口頁也會觸發更新（狀態 ${memHit.state}${memHit.why ? '/' + memHit.why : ''}）—— 使用者是從那裡進去看影片的`); else bad(`回憶入口頁也會觸發更新（狀態 ${memHit.state}${memHit.why ? '/' + memHit.why : ''}）—— 使用者是從那裡進去看影片的`);
 
 
+
+  // ---------- v1.72.2：花費上限用完 ----------
+  // 使用者猜「可能是額度用完了」。實測：aiOn 直接擋掉 → 零次 API → 靜默沿用舊文案，
+  // 而使用者是在相簿／海報頁看到那些舊字的，那兩頁以前什麼都沒說。
+  console.log('\n— 花費上限用完 —');
+  const capTid = await P.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const { myDeviceId } = await import('./js/identity.js');
+    const db = await import('./js/db.js');
+    const k = await import('./js/aikeys.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '宜蘭', region: '宜蘭',
+      startDate: '2026-10-01', endDate: '2026-10-01', aiEnabled: true, createdByDevice: myDeviceId() });
+    await s.put({ id: uuid(), type: 'spot', tripId: tid, name: '礁溪溫泉公園', emoji: '📍',
+      day: 1, order: 0, lat: 24.8, lng: 121.7 });
+    await k.setTripKey(tid, { key: 'sk-ant-FAKEFAKEFAKEFAKEFAKEFAKEFAKE', capUsd: 2 });
+    const e = await db.tripSecretGet(tid); e.usedMicroUsd = 2 * 1e6; await db.tripSecretSet(e);
+    await s.put({ id: uuid(), type: 'aiText', tripId: tid, groupId: gid, key: 'tripText', sig: 'OLDSIG',
+      payload: { subtitle: '舊', dayLines: { 1: '舊' }, videoIntro: '舊', videoOutro: '舊',
+        narration: { 1: '舊的字卡' } } });
+    return tid;
+  });
+
+  const capSt = await P.evaluate(async (tid) => {
+    const ac = await import('./js/aicontent.js');
+    const k = await import('./js/aikeys.js');
+    const st = await ac.aiTextStatus(tid);
+    const can = await ac.canRegenerate(tid);
+    const u = await k.usageOf(tid);
+    return { why: st.why, canWhy: can.why, over: u.overCap,
+      kept: ac.aiPayload(tid, 'tripText').narration['1'] };
+  }, capTid);
+  const c1 = `額度用完：狀態說得出是額度問題（${capSt.why}），舊文案原封不動保留（「${capSt.kept}」）`;
+  if (capSt.why === 'cap' && capSt.canWhy === 'cap' && capSt.over && capSt.kept === '舊的字卡') ok(c1); else bad(c1);
+
+  // 畫面上要講出來（以前完全沒有）
+  const noteTxt = await P.evaluate(async (tid) => {
+    document.body.innerHTML = '<div class="page"></div>';
+    const { showAiStaleNote } = await import('./js/views/ai-config.js');
+    await showAiStaleNote(tid);
+    const n = document.querySelector('.ai-stale');
+    return n ? n.textContent.trim() : '';
+  }, capTid);
+  const c2 = `使用者看得到原因與出口：「${noteTxt}」`;
+  if (/額度用完/.test(noteTxt) && /調整上限/.test(noteTxt)) ok(c2); else bad(c2);
+
+  // 調高上限之後就能重產（這是要轉告使用者的動作，得真的可行）
+  const afterRaise = await P.evaluate(async (tid) => {
+    const k = await import('./js/aikeys.js');
+    await k.setTripKey(tid, { capUsd: 10 });          // 使用者按「調整上限」做的事
+    const ac = await import('./js/aicontent.js');
+    const can = await ac.canRegenerate(tid);
+    const st = await ac.aiTextStatus(tid);
+    return { canOk: can.ok, why: st.why };
+  }, capTid);
+  const c3 = `調高上限後就能重產了（canRegenerate=${afterRaise.canOk}，狀態改成 ${afterRaise.why}）`;
+  if (afterRaise.canOk && afterRaise.why !== 'cap') ok(c3); else bad(c3);
+
+  // 文案是最新的時候不要亂跳提示
+  const freshNote = await P.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: 'x', aiEnabled: false });
+    document.body.innerHTML = '<div class="page"></div>';
+    const { showAiStaleNote } = await import('./js/views/ai-config.js');
+    await showAiStaleNote(tid);
+    return !!document.querySelector('.ai-stale');
+  });
+  const c4 = '沒開 AI 的行程不會出現這條提示（不打擾）';
+  if (!freshNote) ok(c4); else bad(c4);
   console.log('\nAI 文案測試結束');
 } catch (e) {
   bad('例外：' + (e && e.stack || e));

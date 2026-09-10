@@ -15,6 +15,52 @@ import { h, toast, modal, confirmDialog } from '../ui.js';
 import { myDeviceId } from '../identity.js';
 import { getTripKey, setTripKey, clearTripKey, usageOf, looksLikeAnthropicKey, looksLikeGoogleKey, maskKey, MAPS_CAP_DEFAULT } from '../aikeys.js';
 import { aiTestKey } from '../ai.js';
+import { navigate } from '../router.js';
+
+// 文案沒更新時的原因對照表。trip.js 的狀態列與 aiStaleNote() 共用同一份 ——
+// 兩邊講的話不一樣的話，使用者會更困惑。
+export const AI_WHY = {
+  notCreator: { t: '這趟的文案由建立者那台手機產生', a: '請他開一次這趟行程就會更新',
+    short: '文案由建立者那台產生', act: '去設定' },
+  noKey: { t: '這台手機沒有 Claude 金鑰', a: '在有貼金鑰的那台開啟這趟行程，或在上面貼一把',
+    short: '這台手機沒有 AI 金鑰', act: '去設定' },
+  cap: { t: '已達這趟的花費上限', a: '到上面的「AI 加值」調高上限',
+    short: '這趟的 AI 額度用完了', act: '調整上限' },
+  failed: { t: '上次產生失敗', a: '按「重新產生」再試一次',
+    short: '上次產生失敗', act: '去處理' },
+  pending: { t: '還沒更新到最新版的寫法', a: '按「重新產生」，或開一次行程頁',
+    short: '文案還沒更新', act: '去設定' },
+};
+
+// 給「會顯示 AI 文案」的頁面用的一行提示（相簿／影片、海報）。
+//
+// 為什麼要放在這些頁面而不是只放設定頁：使用者是在**這裡**看到舊文字的。
+// 額度用完時 aiOn 直接擋掉、零次 API、靜默沿用舊文案 —— 畫面上什麼都沒說，
+// 使用者只能對著舊句子猜為什麼沒更新（實測確認：相簿頁與海報頁都沒有任何字樣）。
+// 文案是最新的話回 null，什麼都不畫。
+//
+// showAiStaleNote() 是給呼叫端用的版本：自己找 .page 插進去。
+// album 與 poster 都沒有現成的頁面節點變數可以 prepend（poster 的 `page` 是頁碼）。
+export async function showAiStaleNote(tripId) {
+  const root = document.querySelector('.page');
+  if (!root) return false;
+  root.querySelector('.ai-stale')?.remove();
+  const note = await aiStaleNote(tripId);
+  if (note) root.prepend(note);
+  return !!note;
+}
+
+export async function aiStaleNote(tripId) {
+  const trip = store.get(tripId);
+  if (!trip || !trip.aiEnabled) return null;
+  const { aiTextStatus } = await import('../aicontent.js');
+  const st = await aiTextStatus(tripId);
+  if (st.state !== 'stale') return null;
+  const w = AI_WHY[st.why] || AI_WHY.pending;
+  return h('p', { class: 'ai-stale' },
+    `ℹ️ ${w.short}，文案沿用上一版。`,
+    h('button', { class: 'btn btn-ghost sm-btn', onclick: () => navigate(`/trip/${tripId}/settings`) }, w.act));
+}
 
 export function isTripCreator(trip) {
   if (!trip) return false;

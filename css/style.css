@@ -1890,6 +1890,12 @@ textarea.field { resize: vertical; line-height: 1.6; }
 }
 .opt-list li { padding-left: 2px; }
 /* 金鑰卡的「調整上限／清除」並排，特大字級放不下就換行 */
+/* 「文案沿用上一版」的一行說明（相簿／海報頁）。刻意低調：這不是錯誤，
+   是「為什麼沒更新」的解釋，長輩看到紅色警告只會緊張。 */
+.ai-stale { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; line-height: 1.5;
+  color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.ai-stale .btn { flex: 0 0 auto; white-space: nowrap; }
 .key-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .key-acts .btn { flex: 0 0 auto; white-space: nowrap; }
 /* 區塊標題底下的小標（AI 加值／地圖加值），比 .section-label 輕一級 */
