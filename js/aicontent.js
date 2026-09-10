@@ -40,6 +40,31 @@ async function writePayload(tripId, key, payload, sig) {
   });
 }
 
+// 提示詞版本。**改了提示詞就要 +1** —— 它會進 sig，所以已經產好、已經同步出去的
+// 舊文案會在建立者下次打開行程時自動重新產生一份。不進 sig 的話，改了提示詞對
+// 既有行程完全沒有效果（sig 只看行程內容，內容沒變就永遠吃舊快取）。
+//
+// v2：使用者實機回報影片字卡出現「溫泉公園漫步，品嚐在地雞湯，了解水產養殖，
+//     溫暖的宜蘭說不再見」——最後那句漏了介詞（要嘛「向溫暖的宜蘭說再見」、
+//     要嘛「不跟溫暖的宜蘭說再見」），整句是新聞標題式的壓縮。
+const PROMPT_V = 2;
+
+// 五支提示詞共用的中文語感規則。
+//
+// 為什麼要寫這麼死：原本只寫「親切自然」，太抽象了。真正會出事的是**壓縮**——
+// 我們給的字數很緊（字卡旁白只有 12～22 字），模型為了塞進去就開始砍介詞、砍動詞，
+// 砍出來的就是「溫暖的宜蘭說不再見」這種讀不通的句子。所以規則要直接點名這件事，
+// 而且要給對照的例子；抽象的形容詞（「自然」「口語」）模型接不住。
+const ZH_STYLE =
+  '中文要求（很重要）：\n'
+  + '· 寫通順的繁體中文，像台灣人平常講話。\n'
+  + '· 句子要完整，介詞、動詞、助詞都不能為了省字被砍掉。'
+  + '例如要寫「向宜蘭說聲再見」，不可以寫成「溫暖的宜蘭說不再見」。\n'
+  + '· 不要新聞標題式的壓縮句，不要翻譯腔，不要文謅謅的四字排比。\n'
+  + '· 不要把好幾件事用逗號、頓號硬串成一長串流水帳。\n'
+  + '· 字數是參考不是規定：**寧可少寫一點，也不要為了湊字數把句子壓壞**。\n'
+  + '· 不用英文、不用流行語、不誇飾。\n';
+
 function sigOf(obj) {
   const s = JSON.stringify(obj);
   let h = 5381;
@@ -110,21 +135,26 @@ function tripDigest(tripId) {
 export async function ensureTripText(tripId) {
   const d = tripDigest(tripId);
   if (!d.days.length) return null;
-  const sig = sigOf({ t: d.title, days: d.days.map((x) => [x.day, x.region, x.spots]) });
+  const sig = sigOf({ v: PROMPT_V, t: d.title, days: d.days.map((x) => [x.day, x.region, x.spots]) });
   return ensure(tripId, 'tripText', sig, async () => {
     const dayList = d.days.map((x) => `第${x.day}天（${x.region || '—'}，${x.theme}）：${x.spots.join('、')}`).join('\n');
     const obj = await aiJSON(tripId, {
       feature: 'narrate', maxTokens: 700,
-      system: '你在幫一份給長輩看的家庭旅遊「行程表海報」與「回憶影片」寫文案。全部繁體中文、親切自然、不誇飾、不用英文與流行語。嚴格回一個 JSON 物件，不要多餘文字。',
+      system: '你在幫一份給長輩看的家庭旅遊「行程表海報」與「回憶影片」寫文案。\n'
+        + ZH_STYLE
+        + '嚴格回一個 JSON 物件，不要多餘文字。',
       prompt:
         `旅程名稱：${d.title}\n${dayList}\n\n` +
+        '每天的一句話：**挑那天最有感覺的一件事來寫就好，不要把景點一個一個列出來。**\n'
+        + '（反例：「溫泉公園漫步，品嚐在地雞湯，了解水產養殖」——這是清單不是句子。\n'
+        + '　正例：「泡完湯再喝碗熱雞湯，這天過得很慢。」）\n\n' +
         '請產生：\n' +
         '{\n' +
-        '  "subtitle": "海報副標，一句 12～20 字，點出這趟的味道",\n' +
-        '  "dayLines": { "1": "海報上第1天的一句話 10～18 字", ... 每天一句 },\n' +
-        '  "videoIntro": "影片片頭旁白，一句 12～20 字",\n' +
-        '  "videoOutro": "影片片尾旁白，一句 12～20 字",\n' +
-        '  "narration": { "1": "影片第1天字卡旁白 12～22 字", ... 每天一句 }\n' +
+        '  "subtitle": "海報副標，一句話，約 12～20 字，點出這趟的味道",\n' +
+        '  "dayLines": { "1": "海報上第1天的一句話，約 10～18 字", ... 每天一句 },\n' +
+        '  "videoIntro": "影片片頭的一句話，約 12～20 字",\n' +
+        '  "videoOutro": "影片片尾的一句話，約 12～20 字",\n' +
+        '  "narration": { "1": "影片第1天字卡的一句話，約 12～22 字", ... 每天一句 }\n' +
         '}',
     });
     if (!obj || typeof obj !== 'object') return null;
@@ -152,14 +182,17 @@ export async function ensureSpotBlurbs(tripId) {
   const spots = store.spotsOf(tripId);
   const targets = spots.filter((s) => !s.blurbManual);
   if (!targets.length) return null;
-  const sig = sigOf(targets.map((s) => [s.id, s.name, s.region]));
+  const sig = sigOf([PROMPT_V, targets.map((s) => [s.id, s.name, s.region])]);
 
   const payload = await ensure(tripId, 'spotBlurbs', sig, async () => {
     const d = tripDigest(tripId);
     const list = targets.map((s, i) => `${i + 1}. ${s.name}${s.region ? '（' + s.region + '）' : ''}`).join('\n');
     const arr = await aiJSON(tripId, {
       feature: 'recommend', maxTokens: 900,
-      system: '你是台灣在地旅遊小幫手，正在幫一份給長輩看的行程表寫每個地點的一句介紹。每句 25～40 字、繁體中文、親切、講最有代表性的東西或必拍必吃，不要英文、不要誇飾、不要流行語。同一趟裡句型不要重複。嚴格回一個 JSON 字串陣列，長度與清單相同，順序對應。',
+      system: '你是台灣在地旅遊小幫手，正在幫一份給長輩看的行程表寫每個地點的一句介紹。'
+        + '每句約 25～40 字，講最有代表性的東西或必拍必吃。同一趟裡句型不要重複。\n'
+        + ZH_STYLE
+        + '嚴格回一個 JSON 字串陣列，長度與清單相同，順序對應。',
       prompt: `旅程：${d.title}\n地點清單：\n${list}\n\n只回 JSON 陣列，例如 ["…","…"]`,
     });
     if (!Array.isArray(arr)) return null;
@@ -197,14 +230,17 @@ export async function ensureSpotQuests(tripId) {
     if (qs.length) editable.push({ spot: s, quests: qs });
   }
   if (!editable.length) return null;
-  const sig = sigOf(editable.map((e) => [e.spot.id, e.spot.name, e.quests.length]));
+  const sig = sigOf([PROMPT_V, editable.map((e) => [e.spot.id, e.spot.name, e.quests.length])]);
 
   const payload = await ensure(tripId, 'spotQuests', sig, async () => {
     const blocks = editable.map((e, i) =>
       `${i + 1}. ${e.spot.name}：需要 ${e.quests.length} 個拍照任務`).join('\n');
     const obj = await aiJSON(tripId, {
       feature: 'recommend', maxTokens: 1100,
-      system: '你在幫一個家庭旅遊拍照 App 出「拍照任務」。每個任務有標題（6～12 字，像闖關）與提示（一句話，說要拍成怎樣算完成，給長輩看）。繁體中文、具體、不誇飾。嚴格回 JSON 物件：{"1":[{"title":"…","hint":"…"}],"2":[...]}，數字對應清單編號，每個地點的任務數與清單一致。',
+      system: '你在幫一個家庭旅遊拍照 App 出「拍照任務」。每個任務有標題（約 6～12 字，像闖關）'
+        + '與提示（一句完整的話，說要拍成怎樣算完成，給長輩看）。要具體。\n'
+        + ZH_STYLE
+        + '嚴格回 JSON 物件：{"1":[{"title":"…","hint":"…"}],"2":[...]}，數字對應清單編號，每個地點的任務數與清單一致。',
       prompt: `地點與需要的任務數：\n${blocks}`,
     });
     if (!obj || typeof obj !== 'object') return null;
@@ -253,13 +289,15 @@ export async function ensurePhotoCaptions(tripId) {
     targets.push({ hash: s.photoHash, quest: q?.title || '', spot: spot?.name || '', who: member?.displayName || '', day: spot?.day || 1 });
   }
   if (targets.length < 2) return null;
-  const sig = sigOf(targets.map((t) => t.hash).sort());
+  const sig = sigOf([PROMPT_V, targets.map((t) => t.hash).sort()]);
 
   return ensure(tripId, 'photoCaptions', sig, async () => {
     const list = targets.map((t, i) => `${i + 1}. 第${t.day}天 ${t.spot}｜任務：${t.quest}${t.who ? '｜拍攝：' + t.who : ''}`).join('\n');
     const arr = await aiJSON(tripId, {
       feature: 'narrate', maxTokens: 900,
-      system: '你在幫家庭旅遊相簿的每張照片寫一句短字幕，8～16 字、繁體中文、溫暖具體、像在說回憶，不要英文。嚴格回 JSON 字串陣列，長度與清單相同、順序對應。',
+      system: '你在幫家庭旅遊相簿的每張照片寫一句短字幕，約 8～16 字，溫暖具體、像在說回憶。\n'
+        + ZH_STYLE
+        + '嚴格回 JSON 字串陣列，長度與清單相同、順序對應。',
       prompt: `照片清單：\n${list}\n\n只回 JSON 陣列`,
     });
     if (!Array.isArray(arr)) return null;
@@ -277,6 +315,7 @@ export async function ensurePhotoCaptions(tripId) {
 export async function ensureRecapText(tripId, facts) {
   if (!facts) return null;
   const sig = sigOf({
+    v: PROMPT_V,
     t: facts.title, ph: facts.photoCount, sp: facts.spotCount, km: facts.distanceKm,
     done: facts.doneCount, foods: (facts.foods || []).length, people: facts.people,
     hi: facts.weather?.hi, lo: facts.weather?.lo,
@@ -284,7 +323,9 @@ export async function ensureRecapText(tripId, facts) {
   return ensure(tripId, 'recapText', sig, async () => {
     const obj = await aiJSON(tripId, {
       feature: 'narrate', maxTokens: 500,
-      system: '你在幫一份家庭旅遊「成果回顧」寫文案，給長輩看。繁體中文、溫暖、具體帶到數字、不誇飾、不用英文。嚴格回 JSON 物件，不要多餘文字。',
+      system: '你在幫一份家庭旅遊「成果回顧」寫文案，給長輩看。溫暖、具體帶到數字。\n'
+        + ZH_STYLE
+        + '嚴格回一個 JSON 物件，不要多餘文字。',
       prompt:
         `旅程：${facts.title}\n` +
         `${facts.dayCount} 天、${facts.people} 人、去了 ${facts.spotCount} 個地方、拍 ${facts.photoCount} 張、` +
@@ -294,16 +335,37 @@ export async function ensureRecapText(tripId, facts) {
         (facts.longestSpot ? `待最久：${facts.longestSpot.name}。\n` : '') +
         ((facts.foods || []).length ? `吃到：${facts.foods.map((f) => f.title).slice(0, 6).join('、')}。\n` : '') +
         '\n請產生：\n{\n' +
-        '  "opening": "開場一句 15～28 字，總結這趟",\n' +
-        '  "weather": "把天氣講成一句自然的話（沒有天氣資料就回空字串）",\n' +
-        '  "topSpot": "把最多回憶的地方講成一句（沒有就空字串）",\n' +
-        '  "closing": "結尾一句 12～20 字，留念的話"\n}',
+        '  "opening": "開場一句話，約 15～28 字，總結這趟",\n' +
+        '  "weather": "把天氣講成一句完整的話（沒有天氣資料就回空字串）",\n' +
+        '  "topSpot": "把最多回憶的地方講成一句完整的話（沒有就空字串）",\n' +
+        '  "closing": "結尾一句話，約 12～20 字，留念的話"\n}',
     });
     if (!obj || typeof obj !== 'object') return null;
     const s = (v) => String(v || '').trim().slice(0, 80);
     const out = { opening: s(obj.opening), weather: s(obj.weather), topSpot: s(obj.topSpot), closing: s(obj.closing) };
     return (out.opening || out.closing) ? out : null;
   });
+}
+
+// 把這趟已經產好的 AI 文案全部丟掉，下次進行程頁就會重新產一份。
+// 給「文案讀起來怪怪的」時用 —— AI 的輸出沒辦法事先保證，總要有一條重來的路。
+// 注意：aiText 是同步記錄，刪掉會同步給整個群組（旅伴那邊也會換成新的一份），
+// 這是對的：大家看的本來就該是同一份文案。
+export const AI_TEXT_KEYS = ['tripText', 'spotBlurbs', 'spotQuests', 'photoCaptions', 'recapText'];
+
+export async function clearTripText(tripId) {
+  let n = 0;
+  for (const key of AI_TEXT_KEYS) {
+    const rec = aiTextRec(tripId, key);
+    if (rec) { await store.remove(rec.id); n++; }
+  }
+  // 景點介紹會寫回 spot.blurb —— 把 AI 版換回內建版，不然畫面上還是舊句子
+  for (const s of store.spotsOf(tripId)) {
+    const fresh = store.getRaw(s.id);
+    if (!fresh || !fresh.aiBlurb || fresh.blurbManual) continue;
+    await store.patch(s.id, { blurb: fresh.blurbBuiltin || '', aiBlurb: false });
+  }
+  return n;
 }
 
 // 行程頁載入時在背景把該產的都產一產（安靜、有快取就秒回）。

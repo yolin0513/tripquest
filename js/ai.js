@@ -8,7 +8,17 @@
 import * as store from './store.js';
 import { getTripKey, getDeviceKey, addUsage, usageOf, scrubSecrets, containsSecret, DEVICE_KEY_ID } from './aikeys.js';
 
-const MODEL = 'claude-haiku-4-5';
+// v1.72 從 Haiku 換成 Sonnet 5。
+//
+// 起因是使用者在影片字卡上看到「…溫暖的宜蘭說不再見」這種讀不通的中文。改提示詞是
+// 一半，另一半是模型：這幾支的字數限制很緊（字卡只有 12～22 字），小模型在壓縮壓力
+// 下最先犧牲的就是介詞、助詞這些「不影響意思但影響通順」的字。
+//
+// 成本實算（五支呼叫、一年 4–6 趟）：Haiku $0.12／年 → Sonnet $0.35／年，**差 $0.23**。
+// 單趟 $0.07，只用掉預設 $2 上限的 3.5%。這些句子是家人真的會讀到的東西
+//（影片字卡、海報、回顧），為了省一年兩毛錢讓句子讀不通不划算。
+// 要換回去只要把這一行改回 'claude-haiku-4-5'，RATE 會自己跟著對。
+const MODEL = 'claude-sonnet-5';
 // 看圖讀行程表要判斷版面（哪一欄是時間、跨頁的表格），Haiku 會漏行，所以這一條路走 Sonnet。
 const VISION_MODEL = 'claude-sonnet-5';
 // 微美金 / token。一定要跟 model 對起來，不然花費統計會騙人。

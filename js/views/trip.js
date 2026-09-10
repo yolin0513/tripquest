@@ -1170,6 +1170,10 @@ export async function settings(tripId) {
       geoToggle),
 
     settingRow('重新產生任務', h('button', { class: 'btn btn-soft', onclick: () => regenerate(tripId) }, '補齊')),
+    // AI 的輸出沒辦法事先保證，總要有一條重來的路（v1.72）。
+    // 只在有開 AI 的行程出現 —— 沒開的人看到這顆按鈕只會困惑。
+    t.aiEnabled ? settingRow('文案讀起來怪怪的',
+      h('button', { class: 'btn btn-soft', onclick: () => redoAiText(tripId) }, '重新產生')) : null,
 
     h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '進階：自帶金鑰（可選）'),
     h('div', { class: 'sub-label' }, 'AI 加值'),
@@ -1228,6 +1232,22 @@ function memberEditor(tripId, groupId) {
   };
   draw();
   return wrap;
+}
+
+// 把這趟的 AI 文案全部丟掉，下次進行程頁會重新產一份。
+// AI 的輸出沒辦法事先保證，總要有一條重來的路（v1.72）。
+async function redoAiText(tripId) {
+  if (!await confirmDialog(
+    '會把這趟的影片字卡、海報文案、景點介紹、照片字幕全部重新產一遍。\n\n'
+    + '你自己改過的不會動。旅伴那邊也會換成新的一份（大家看的本來就該是同一份）。',
+    { okLabel: '重新產生' })) return;
+  const { clearTripText, warmTripContent } = await import('../aicontent.js');
+  const n = await clearTripText(tripId);
+  if (!n) { toast('這趟還沒有 AI 文案'); return; }
+  toast('正在重新產生…');
+  await warmTripContent(tripId);
+  toast('文案已重新產生');
+  navigate(`/trip/${tripId}`, { replace: true });
 }
 
 async function regenerate(tripId) {

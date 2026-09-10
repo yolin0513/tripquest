@@ -71,16 +71,16 @@ export function composeBlurb(spot, theme, ctx) {
     feature: pick(b.features, ctx, 'f:' + theme) || '這裡的樣子',
     district: spot.district || '',
   };
-  // 需要 {must} 但沒有必吃項 → 換一個不需要的句型
-  let tries = 0, out = '';
-  do {
-    const p = txt(pick(b.blurb, ctx, 'b:' + theme));
-    if (!p) break;
-    if (p.includes('{must}') && !must) { tries++; continue; }
-    out = fill(p, vars);
-    break;
-  } while (tries < 4);
-  return out || fill(txt((b.blurb || [])[0]) || '{name}是這趟的一站。', vars);
+  // 需要 {must} 但沒有必吃項的句型，**從源頭就不要挑**（pick 本來就吃 allow 條件）。
+  //
+  // 原本是「挑到了再重抽，最多四次」，兩個問題：
+  //  · 四次都抽到需要 {must} 的（食物主題 12 句裡有 4 句是）雖然機率低，但會落到退路；
+  //  · 退路寫的是 `blurb[0]`，而食物主題的第一句正好就是「來{name}就是要吃{must}，
+  //    記得留點胃口。」—— 一旦走到，{must} 被替換成空字串，就變成
+  //    「來羅東夜市就是要吃，記得留點胃口。」（v1.72 的中文體檢把 928 句全部展開才抓到）
+  const okTpl = (v) => !!must || !txt(v).includes('{must}');
+  const p = txt(pick(b.blurb, ctx, 'b:' + theme, okTpl));
+  return p ? fill(p, vars) : fill('{name}是這趟的一站。', vars);
 }
 
 // 主題化任務（取代舊的 byTag/byType 模板）
