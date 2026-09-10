@@ -758,8 +758,11 @@ body.pv-open { overflow: hidden; }
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
 .modal-body p { margin: 0; }
-.modal-actions { display: flex; gap: 12px; flex: none; }
-.modal-actions .btn { flex: 1; }
+/* flex:1（＝1 1 0%）會把按鈕壓成等寬，特大字級下「測試並儲存」「套用這個順序」
+   就在按鈕裡折成兩行。改成 basis:auto ＋ 允許整列換行：放得下就並排，放不下就
+   整顆換到下一行變成滿版 —— 對長輩反而更好按。 */
+.modal-actions { display: flex; gap: 12px; flex: none; flex-wrap: wrap; }
+.modal-actions .btn { flex: 1 1 auto; }
 .member-pick { display: flex; flex-direction: column; gap: 10px; }
 .member-pick .btn { margin: 0; }
 
@@ -1299,8 +1302,14 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .exp-item-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
 
 .exp-form .form-field { margin-bottom: 16px; }
-.numpad-row { display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; }
-.numpad-row .btn { min-width: 84px; font-size: 1.1rem; }
+.numpad-row { display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+/* 輸入框吃剩下的空間。.field 本身是 width:100%，在 flex 列裡要用 flex-basis 蓋掉，
+   否則它會先要 100% 再壓縮旁邊的按鈕。180px 的 basis 讓「窄到放不下」時整個換行，
+   而不是把按鈕壓扁。 */
+.numpad-row .field { flex: 1 1 140px; width: auto; min-width: 0; }
+/* nowrap 是重點：沒有它，「📋 貼上」會在 84px 裡折成三行、把整列撐到 98px
+   （特大字級 120px），輸入框跟著 stretch，看起來就是歪的。 */
+.numpad-row .btn { flex: 0 0 auto; min-width: 84px; font-size: 1.1rem; white-space: nowrap; }
 .numpad-display {
   flex: 1; background: var(--bg); border: 2px solid var(--line); border-radius: 14px;
   display: flex; align-items: center; justify-content: flex-end; padding: 0 18px;
@@ -1873,7 +1882,18 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }
 .pd-opt { min-height: 40px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
 .plan-divider { display: flex; align-items: center; gap: 10px; }
-.opt-list { margin: 0; padding-left: 22px; line-height: 1.9; }
+.opt-list {
+  margin: 0; line-height: 1.9;
+  /* 用 em 不用 px：標記寬度是跟著字級走的。固定 22px 在特大字級下只夠放一位數，
+     兩位數的「18.」會被 .modal-body 的 overflow 裁掉，畫面上看起來像「8.」或「0.」。 */
+  padding-left: 2.8em;
+}
+.opt-list li { padding-left: 2px; }
+/* 金鑰卡的「調整上限／清除」並排，特大字級放不下就換行 */
+.key-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.key-acts .btn { flex: 0 0 auto; white-space: nowrap; }
+/* 區塊標題底下的小標（AI 加值／地圖加值），比 .section-label 輕一級 */
+.sub-label { font-weight: 700; margin: 14px 2px 6px; color: var(--muted); }
 .plan-src-note { margin-top: 10px; }
 
 /* 名稱沒填時的視覺提示（只捲動＋toast 在手機上常被忽略） */

@@ -487,6 +487,56 @@ try {
   yes(dupRow && dupRow.conflict && !/比預定晚/.test(dupRow.eta),
     `有矛盾提示的那一列不再重複報「比預定晚」（eta＝「${dupRow ? dupRow.eta : '(沒有)'}」）`);
 
+  // 建議順序清單的編號要完整（v1.71 使用者實機回報：編號被裁掉，10 以上變成「0.」）
+  // 成因：.opt-list 的 padding-left 固定 22px，但標記寬度是跟著字級走的 ——
+  // 標記畫在 padding 區，超出去的部分被 .modal-body 的 overflow 裁掉。
+  console.log('\n— 建議順序的編號 —');
+  const numIds = await page.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '編號測試', region: '宜蘭',
+      startDate: '2026-10-01', endDate: '2026-10-01', allowWiki: false });
+    const N = 18;
+    for (let i = 0; i < N; i++) {
+      const zig = (i % 2 === 0 ? i : N - i) * 0.004;      // 之字形，保證會建議重排
+      await s.put({ id: uuid(), type: 'spot', tripId: tid, name: '第' + (i + 1) + '個景點', emoji: '📍',
+        day: 1, order: i, lat: 24.67 + zig, lng: 121.76 + (i % 3) * 0.003 });
+    }
+    return tid;
+  });
+  for (const [w, fs] of [[390, 'm'], [360, 'xl']]) {
+    await page.setViewport({ width: w, height: 844, deviceScaleFactor: 2 });
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/#/trip/${numIds}/plan`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.plan-list');
+    await page.evaluate((v) => { document.documentElement.dataset.fs = v; }, fs);
+    await page.waitForFunction(() => !!document.querySelector('.pd-opt'), { timeout: 25000 });
+    await page.evaluate(() => document.querySelector('.pd-opt').click());
+    await page.waitForSelector('.opt-list', { timeout: 25000 });
+    await sleep(400);
+    const num = await page.evaluate(() => {
+      const list = document.querySelector('.opt-list');
+      const cs = getComputedStyle(list);
+      const body = document.querySelector('.modal-body');
+      return {
+        n: list.querySelectorAll('li').length,
+        pad: parseFloat(cs.paddingLeft),
+        font: parseFloat(cs.fontSize),
+        // 標記畫在 ol 的左 padding 裡；padding 夠寬，標記就不會被裁到框外
+        insideBody: list.getBoundingClientRect().left >= body.getBoundingClientRect().left - 0.5,
+      };
+    });
+    // 兩位數的「18.」實測約需 1.9 個字寬
+    yes(num.n === 18 && num.pad >= num.font * 1.9 && num.insideBody,
+      `${w}px／${fs}：18 個景點的編號放得下（padding ${Math.round(num.pad)}px ≥ 需要的 ${Math.round(num.font * 1.9)}px）`);
+    await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('先不要')).click());
+    await sleep(300);
+  }
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+  await page.evaluate(() => { document.documentElement.dataset.fs = 'm'; });
+
   // 建立行程頁有「幫我規劃」入口
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/new`, { waitUntil: 'networkidle0' });

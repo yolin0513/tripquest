@@ -1,7 +1,7 @@
 // AI 加值層（可選、每個行程各自帶金鑰、瀏覽器直連供應商）。
 //
 // 金鑰只在建立者這台手機（見 aikeys.js）。呼叫直接打 api.anthropic.com /
-// texttospeech.googleapis.com，經 TLS，不經任何中間伺服器。
+// api.anthropic.com，經 TLS，不經任何中間伺服器。
 // 金鑰只放在 HTTP header，永遠不進 prompt；輸出與錯誤訊息都會洗掉金鑰樣式字串。
 // 任何失敗 → 回 null，呼叫端自動用免金鑰的做法。
 
@@ -17,7 +17,6 @@ const RATES = {
   'claude-sonnet-5': { in: 3, out: 15 },        // $3 / $15 每百萬
 };
 const RATE = RATES[MODEL];
-const TTS_MICRO_PER_CHAR = 4;            // Google Standard 語音 ~$4 / 百萬字元
 
 // 這個行程現在能不能用某個 AI 功能
 export async function aiOn(tripId, feature = 'recommend') {
@@ -26,7 +25,6 @@ export async function aiOn(tripId, feature = 'recommend') {
   const k = await getTripKey(tripId);
   if (!k || !k.key) return false;
   if ((k.usedMicroUsd || 0) >= (k.capUsd ?? 2) * 1e6) return false;
-  if (feature === 'tts') return !!k.ttsKey;
   return true;
 }
 
@@ -103,45 +101,6 @@ export async function aiTestKey(key) {
   return { ok: true, message: '金鑰可用 ✓' };
 }
 
-// ---------- Google Text-to-Speech（語音，選用） ----------
-export async function aiTTS(tripId, text, voice) {
-  const t = String(text || '').slice(0, 2000);
-  if (!t.trim() || !(await aiOn(tripId, 'tts'))) return null;
-  const k = await getTripKey(tripId);
-  const v = /^[a-z]{2,3}-[A-Z]{2}-[A-Za-z0-9-]+$/.test(voice || '') ? voice : 'cmn-TW-Standard-A';
-  try {
-    const r = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': k.ttsKey },
-      body: JSON.stringify({
-        input: { text: t },
-        voice: { languageCode: v.split('-').slice(0, 2).join('-'), name: v },
-        audioConfig: { audioEncoding: 'MP3' },
-      }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data.audioContent) return null;
-    await addUsage(tripId, t.length * TTS_MICRO_PER_CHAR);
-    const bin = atob(data.audioContent);
-    const buf = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    return new Blob([buf], { type: 'audio/mpeg' });
-  } catch { return null; }
-}
-
-export async function aiTestTtsKey(ttsKey) {
-  if (!ttsKey) return { ok: false, message: '請先貼上金鑰' };
-  try {
-    const r = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': ttsKey },
-      body: JSON.stringify({ input: { text: '測試' }, voice: { languageCode: 'cmn-TW', name: 'cmn-TW-Standard-A' }, audioConfig: { audioEncoding: 'MP3' } }),
-    });
-    if (r.ok) return { ok: true, message: '語音金鑰可用 ✓' };
-    const d = await r.json().catch(() => ({}));
-    return { ok: false, message: /API key not valid|API_KEY_INVALID/i.test(JSON.stringify(d)) ? '金鑰不正確' : ('測試失敗：HTTP ' + r.status) };
-  } catch { return { ok: false, message: '連不上' }; }
-}
 
 // ---------- 看圖／看 PDF 讀行程表（匯入用） ----------
 //

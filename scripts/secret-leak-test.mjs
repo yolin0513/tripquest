@@ -36,7 +36,7 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
   for (const q of quests) await store.put(q);
 
   // 存入假金鑰
-  await aikeys.setTripKey(tid, { key: fakeA, ttsKey: fakeG, capUsd: 5 });
+  await aikeys.setTripKey(tid, { key: fakeA, mapsKey: fakeG, capUsd: 5 });
   await aikeys.addUsage(tid, 12345);
 
   // 這台手機的預設金鑰（匯入行程表用的那支）—— 它跟每趟的金鑰放在同一個 store，
@@ -60,7 +60,7 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
 
   // sanity：確定真的存進去了
   const back = await aikeys.getTripKey(tid);
-  const stored = back && back.key === fakeA && back.ttsKey === fakeG;
+  const stored = back && back.key === fakeA && back.mapsKey === fakeG;
 
   // 各匯出路徑
   const hits = {};

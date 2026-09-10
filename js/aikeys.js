@@ -40,13 +40,18 @@ export async function adoptDeviceKey(tripId) {
   if (!d || !d.key) return false;
   const cur = await db.tripSecretGet(tripId);
   if (cur && cur.key) return false;                 // 已經有自己的金鑰就不覆蓋
-  await setTripKey(tripId, { key: d.key, ttsKey: d.ttsKey || '', mapsKey: d.mapsKey || '',
+  await setTripKey(tripId, { key: d.key, mapsKey: d.mapsKey || '',
     capUsd: d.capUsd ?? 2, mapsCap: d.mapsCap ?? MAPS_CAP_DEFAULT });
   return true;
 }
 
 export async function getTripKey(tripId) {
-  return (await db.tripSecretGet(tripId)) || null;
+  const e = await db.tripSecretGet(tripId);
+  if (!e) return null;
+  // v1.71 移除了語音（TTS）功能。舊記錄可能還留著那把 ttsKey —— 讀到就順手清掉，
+  // 不要讓一把再也用不到的金鑰繼續躺在手機裡。
+  if (e.ttsKey) { delete e.ttsKey; await db.tripSecretSet(e); }
+  return e;
 }
 export async function hasTripKey(tripId) {
   const e = await db.tripSecretGet(tripId);
@@ -59,7 +64,7 @@ export async function hasTripKey(tripId) {
 // 就可能燒掉整個月的額度」—— 這是保險絲不是預算。
 export const MAPS_CAP_DEFAULT = 300;
 
-// patch: { key?, ttsKey?, mapsKey?, capUsd?, mapsCap? }
+// patch: { key?, mapsKey?, capUsd?, mapsCap? }
 export async function setTripKey(tripId, patch) {
   const cur = (await db.tripSecretGet(tripId)) || { tripId, usedMicroUsd: 0 };
   await db.tripSecretSet({
@@ -67,7 +72,6 @@ export async function setTripKey(tripId, patch) {
     tripId,
     provider: 'anthropic',
     key: patch.key !== undefined ? patch.key : (cur.key || ''),
-    ttsKey: patch.ttsKey !== undefined ? patch.ttsKey : (cur.ttsKey || ''),
     mapsKey: patch.mapsKey !== undefined ? patch.mapsKey : (cur.mapsKey || ''),
     capUsd: patch.capUsd !== undefined ? patch.capUsd : (cur.capUsd ?? 2),
     mapsCap: patch.mapsCap !== undefined ? patch.mapsCap : (cur.mapsCap ?? MAPS_CAP_DEFAULT),
@@ -119,7 +123,6 @@ export async function usageOf(tripId) {
     capUsd,
     overCap: (e.usedMicroUsd || 0) >= capUsd * 1e6,
     hasKey: !!e.key,
-    hasTts: !!e.ttsKey,
     hasMaps: !!e.mapsKey,
     mapsUsed: e.mapsCalls && e.mapsCalls.ym === ym() ? e.mapsCalls.n : 0,
     mapsCap: e.mapsCap ?? MAPS_CAP_DEFAULT,

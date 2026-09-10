@@ -17,7 +17,7 @@ import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
-import { aiConfigCard, mapsConfigCard } from './ai-config.js';
+import { aiConfigCard, mapsConfigCard, keyNotice } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 
@@ -1171,11 +1171,12 @@ export async function settings(tripId) {
 
     settingRow('重新產生任務', h('button', { class: 'btn btn-soft', onclick: () => regenerate(tripId) }, '補齊')),
 
-    h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, 'AI 加值（進階、可選）'),
+    h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '進階：自帶金鑰（可選）'),
+    h('div', { class: 'sub-label' }, 'AI 加值'),
     aiConfigCard(tripId, () => settings(tripId)),
-
-    h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '地圖加值（大眾運輸，進階、可選）'),
+    h('div', { class: 'sub-label' }, '地圖加值'),
     mapsConfigCard(tripId),
+    keyNotice(),
 
     h('div', { class: 'danger-zone' },
       h('button', { class: 'btn btn-soft btn-block', onclick: async () => {

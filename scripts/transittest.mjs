@@ -281,6 +281,76 @@ try {
   yes(pastMsg.includes('過'), `日期已過 → 講人話：「${pastMsg}」`);
   yes(reqs.length === 0, '日期已過就不打 Google（省下無意義的請求）');
 
+  // ---------- v1.71：設定頁文案與貼上對話框 ----------
+  console.log('\n— 旅程設定的金鑰區 —');
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.page');
+  await page.waitForFunction(() => document.body.textContent.includes('自帶金鑰'), { timeout: 20000 });
+  const cfg = await page.evaluate(() => {
+    const txt = document.body.textContent;
+    const count = (re) => (txt.match(re) || []).length;
+    return {
+      notice: count(/金鑰只存在這支手機/g),
+      tts: count(/語音|旁白配音|TTS/g),
+      googleKeys: count(/貼上 Google 金鑰|Google 金鑰/g),
+      hasAi: txt.includes('AI 加值'),
+      hasMaps: txt.includes('地圖加值'),
+      len: (document.querySelectorAll('.card.about')[0]?.textContent || '').length,
+    };
+  });
+  yes(cfg.notice === 1, `「金鑰只存在這支手機」整頁只講一次（實際 ${cfg.notice} 次）`);
+  yes(cfg.tts === 0, `設定頁完全沒有語音／TTS 的字樣（實際 ${cfg.tts} 處）`);
+  yes(cfg.hasAi && cfg.hasMaps, 'AI 加值與地圖加值兩張卡都在，收在同一個「自帶金鑰」區塊底下');
+
+  // 貼上對話框：按鈕不折行、跟輸入框對齊；360px 特大字級也要成立
+  for (const [w, fs] of [[390, 'm'], [360, 'xl']]) {
+    await page.setViewport({ width: w, height: 844, deviceScaleFactor: 2 });
+    await page.evaluate((v) => { document.documentElement.dataset.fs = v; }, fs);
+    await sleep(300);
+    // 這時候金鑰已經存在，卡片上的按鈕是「更換」不是「貼上」—— 找「Google 金鑰」那一列的按鈕
+    await page.evaluate(() => {
+      const row = [...document.querySelectorAll('.setting-row')].find((r) => r.textContent.includes('Google 金鑰'));
+      (row ? row.querySelector('button')
+        : [...document.querySelectorAll('button')].find((b) => b.textContent.includes('貼上 Google 金鑰'))).click();
+    });
+    await page.waitForSelector('.numpad-row', { timeout: 15000 });
+    await sleep(300);
+    const row = await page.evaluate(() => {
+      // 「折了幾行」要量**文字本身**，不能拿 offsetHeight 去比行高 ——
+      // 按鈕有固定 px 的 padding，字級小的時候 padding 佔比大，會把單行誤判成兩行。
+      // Range 的 client rects 一行一塊，數不同的 top 才是真的行數。
+      const lines = (el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size || 1;
+      };
+      const r = document.querySelector('.numpad-row');
+      const f = r.querySelector('.field'), b = r.querySelector('.btn');
+      const fr = f.getBoundingClientRect(), br = b.getBoundingClientRect();
+      const acts = [...document.querySelectorAll('.modal-actions .btn')].map((x) =>
+        ({ t: x.textContent.trim(), lines: lines(x) }));
+      return {
+        nowrap: getComputedStyle(b).whiteSpace,
+        sameTop: Math.abs(fr.top - br.top) <= 1,
+        sameH: Math.abs(fr.height - br.height) <= 2,
+        btnLines: lines(b),
+        acts,
+        overflow: document.querySelector('.modal-card').scrollWidth - document.querySelector('.modal-card').clientWidth,
+      };
+    });
+    yes(row.nowrap === 'nowrap' && row.btnLines === 1,
+      `${w}px／${fs}：「📋 貼上」不折行（實測 ${row.btnLines} 行）`);
+    yes(row.sameTop && row.sameH, `${w}px／${fs}：輸入框與按鈕同一行、等高（不歪斜）`);
+    yes(row.acts.every((a) => a.lines === 1),
+      `${w}px／${fs}：對話框的動作按鈕文字也不折行（${row.acts.map((a) => a.t + ' ' + a.lines + ' 行').join('、')}）`);
+    yes(row.overflow <= 1, `${w}px／${fs}：對話框沒有橫向溢出（${row.overflow}px）`);
+    await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('取消'))?.click());
+    await sleep(300);
+  }
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+  await page.evaluate(() => { document.documentElement.dataset.fs = 'm'; });
+
   console.log('\n大眾運輸測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

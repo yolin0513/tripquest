@@ -233,14 +233,32 @@ try {
   }, ids.tid);
   await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/settings`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.page');
-  await page.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.textContent === '地圖金鑰（Google）'), { timeout: 20000 }).catch(() => {});
+  await page.waitForFunction(() => document.body.textContent.includes('自帶金鑰'), { timeout: 20000 });
   await page.evaluate(() => {
-    const n = [...document.querySelectorAll('.section-label')].find((x) => x.textContent.includes('地圖加值'));
+    const n = [...document.querySelectorAll('.section-label')].find((x) => x.textContent.includes('自帶金鑰'));
     if (n) n.scrollIntoView({ block: 'start' });
   });
   await sleep(600);
-  await shot(page, 'v1680-地圖加值-自帶金鑰與用量',
-    '跟 AI 金鑰分開、也獨立於 AI 開關；用量算次數不算錢，預設 300 次／月是保險絲不是預算');
+  await shot(page, 'v1710-自帶金鑰-一把Google-提示只講一次',
+    '語音金鑰已移除，Google 只剩一把；「金鑰只存這支手機」整頁只出現一次（原本三處）');
+
+  // 貼上金鑰對話框（使用者回報的 IMG_5296 跟版）：360px 特大字級
+  await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 2 });
+  await page.evaluate(() => { document.documentElement.dataset.fs = 'xl'; });
+  await sleep(300);
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('.setting-row')].find((r) => r.textContent.includes('Google 金鑰'));
+    (row ? row.querySelector('button')
+      : [...document.querySelectorAll('button')].find((b) => b.textContent.includes('貼上 Google 金鑰'))).click();
+  });
+  await page.waitForSelector('.numpad-row', { timeout: 15000 });
+  await sleep(500);
+  await shot(page, 'v1710-貼上金鑰-360px特大字級不跑版',
+    '「📋 貼上」不再直排、與輸入框等高；「測試並儲存」也不再折行');
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('取消'))?.click());
+  await sleep(300);
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+  await page.evaluate(() => { document.documentElement.dataset.fs = 'm'; });
 
   await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/plan`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.plan-list');
@@ -252,6 +270,39 @@ try {
   await sleep(400);
   await shot(page, 'v1680-大眾運輸-實際班次而不是開車估算',
     '路線名／上下車站／發車時刻／轉乘／走路都列出來；開車估算降級成灰色附註');
+
+  // 建議順序的編號（使用者回報的 IMG_5294 跟版）：18 個景點、360px 特大字級
+  await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const N = 18;
+    for (let i = 0; i < N; i++) {
+      const zig = (i % 2 === 0 ? i : N - i) * 0.004;
+      await s.put({ id: uuid(), type: 'spot', tripId: tid, name: '第' + (i + 1) + '個景點', emoji: '📍',
+        day: 8, order: i, lat: 24.67 + zig, lng: 121.76 + (i % 3) * 0.003 });
+    }
+  }, ids.tid);
+  await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 2 });
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/plan`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.plan-list');
+  await page.evaluate(() => { document.documentElement.dataset.fs = 'xl'; });
+  await page.waitForFunction(() => {
+    const d = [...document.querySelectorAll('.plan-divider')].find((x) => x.dataset.day === '8');
+    return !!(d && d.querySelector('.pd-opt'));
+  }, { timeout: 30000 });
+  await page.evaluate(() => {
+    const d = [...document.querySelectorAll('.plan-divider')].find((x) => x.dataset.day === '8');
+    d.querySelector('.pd-opt').click();
+  });
+  await page.waitForSelector('.opt-list', { timeout: 30000 });
+  await sleep(600);
+  await shot(page, 'v1710-建議順序-編號完整不被裁',
+    '原本 padding-left 寫死 22px，兩位數的標記被 modal 的 overflow 裁掉 → 10 以上顯示成「0.」；改成 2.8em 跟著字級走');
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('先不要'))?.click());
+  await sleep(300);
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+  await page.evaluate(() => { document.documentElement.dataset.fs = 'm'; });
 
   // ================= v1.70 =================
   console.log('— v1.70 —');
