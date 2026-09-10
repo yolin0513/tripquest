@@ -13,6 +13,31 @@
 | 配樂 | Worker `GET /music/<id>.mp3` → R2 `music/v1/`（唯讀、白名單檔名、無列舉） |
 | LAN 自架模式 | `server/index.mjs`（synctest 預設走這個；與 Worker 共用 `js/merge.js`） |
 
+## 工作慣例（常設規則，給每一個接手的工作階段）
+
+**1. 重大決策要三個代理獨立投票。** 架構選型、資料結構、部署方式、需付費或需註冊帳號的
+服務 → 開 **3 個 Fable 5.1（`claude-fable-5-1`）代理**、同一份 prompt、各自獨立、多數決；
+分歧時採保守方案；決議寫進回報與這份文件。
+
+**2. Fable 額度用盡就自動改用 Opus 5，不要停下來問。**（使用者 2026-09-10 明訂）
+
+- 代理因額度用盡（429／quota）失敗 → **自動改用 `claude-opus-5` 重跑同一批代理**，
+  不需要再問使用者。
+- **整批重跑，不要只補跑失敗的那幾個** —— 投票要在同一個模型上才可比。
+- 事後在回報中註明「因 Fable 額度用盡改用 Opus 5」，讓使用者知道這一輪的背書是誰做的。
+- **只有連 Opus 5 也不可用時**才回報並暫停。
+
+理由：額度用盡是暫時性的環境狀況，不是需要使用者決策的事；真正需要他決策的是投票結果。
+為了這種事停下來等回覆，等於把一個環境問題變成一個人的問題。
+
+*已套用*：v1.66 那輪與 v1.73 這輪的全面健檢，Fable 額度都用盡（實測 429），
+七個代理全部改用 Opus 5 執行。
+
+**3. 每版的流程**：bump `sw.js` VERSION → `npm test` → commit/push → curl 確認線上
+VERSION → `npm run sweep` → 截圖放 `screenshots/features/` ＋鏡像資料夾。
+**動到 `js/merge.js` 或 `workers/` 時：Worker 先部署、客戶端後推**（v1.73.2 實測，
+反過來會造成永久分歧）。
+
 ## 主要功能與現況
 
 - **任務**（行程頁）：景點×拍照任務、主題化文案（六情緒＋交通樞紐，時段感知：早上不出「夜裡點燈」）、「現在這一站」、改時間提示換不合時段的任務。穩定。
@@ -30,7 +55,9 @@
 
 ## 測試
 
-- `npm test` 一次跑 **36 支**（validate-places → … → albumtest → jointest，全綠才算過）。較大的：plannertest 62、jointest 22、albumtest 27、mergetest 27、musictest 30、routetest 43、v147shots 45。
+- `npm test` 一次跑 **43 支**（validate-places → … → zhtest → layouttest → workertest，全綠才算過）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 13。
+- **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
+- **`workertest`**：用 wrangler 把**真的** `workers/worker.mjs` 跑起來配本機 D1 —— 限流與 D1 分批在此之前從上線到 v1.73.1 一行都沒被測試執行過（v1.73.2）。
 - **手動跑**（不在 npm test，因為打真網路／真伺服器）：
   - `npm run sweep` — 對**線上正式站**巡檢 67 項（含 R2 配樂 21 首 HEAD）。每次上版後必跑。
   - `npm run livetest` — 線上端到端（會在正式 D1 建「線上驗證團」，跑完記得清）。
