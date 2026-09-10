@@ -192,5 +192,10 @@ export async function testMapsKey(key) {
   if (r.reason === 'network') return { ok: false, message: '連不上 Google（可能沒有網路）' };
   if (r.reason === 'timeout') return { ok: false, message: 'Google 太久沒回應（15 秒），等一下再試' };
   if (r.reason === 'badtime') return { ok: false, message: '金鑰或請求被拒（400）—— 請確認已啟用 Routes API' };
-  return { ok: true, message: '金鑰可以用（這段測試路線剛好查不到班次，不影響）' };
+  // v1.73.1：這裡以前是 catch-all 的 `ok: true`，把 http500 / http502 / parse /
+  // http401 / http404 全部一起吞掉。「剛好查不到班次」只對應 parseRoute 的 'none'
+  // 這**一個** reason。貼了一把沒開 Routes API 的金鑰（或碰上 Google 故障、
+  // 公司 proxy 回登入頁），App 會說「可以用了」、存下去，之後每次按都失敗。
+  if (r.reason === 'none') return { ok: true, message: '金鑰可以用（這段測試路線剛好查不到班次，不影響）' };
+  return { ok: false, message: `Google 沒有正常回應（${r.reason || '未知'}）—— 先不要存，等一下再測一次` };
 }

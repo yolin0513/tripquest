@@ -138,6 +138,19 @@ export async function tripSecretSet(entry) {
   // entry: { tripId, provider, key, capUsd, usedMicroUsd, at }
   return wrap((await tx('tripSecrets', 'readwrite')).put(entry));
 }
+// 「讀 → 改 → 寫」必須在**同一個** readwrite 交易裡做完。
+// 拆成 tripSecretGet() + tripSecretSet() 的話，中間那個 await 讓兩個並發呼叫
+// 各自讀到同一個舊值、後寫的蓋掉先寫的（實測兩路並發漏一半、五路漏 80%）。
+// IndexedDB 對同一個 store 的 readwrite 交易是序列化的，所以這樣連跨分頁都安全。
+// fn 必須是**同步**的 —— 中間 await 會讓交易自動提交，就白做了。
+export async function tripSecretUpdate(tripId, fn) {
+  const st = await tx('tripSecrets', 'readwrite');
+  const cur = await wrap(st.get(tripId));
+  if (!cur) return null;
+  const next = fn(cur) || cur;
+  await wrap(st.put(next));
+  return next;
+}
 export async function tripSecretDelete(tripId) {
   return wrap((await tx('tripSecrets', 'readwrite')).delete(tripId));
 }

@@ -39,6 +39,12 @@ const routesSrv = createServer((req, res) => {
     reqs.push({ body: j, key: req.headers['x-goog-api-key'], mask: req.headers['x-goog-fieldmask'] });
     if (mode === 'hang') { hung.add(res); return; }          // 永遠不回應 → 驗客戶端的逾時
     if (mode === 'forbidden') { res.writeHead(403, cors); return res.end('{}'); }
+    // v1.73.1：Google 故障，或公司 proxy／機場 Wi-Fi 攔截後回一頁登入畫面
+    if (mode === 'boom') { res.writeHead(500, cors); return res.end('{}'); }
+    if (mode === 'html') {
+      res.writeHead(200, { ...cors, 'content-type': 'text/html' });
+      return res.end('<html><body>Sign in to continue</body></html>');
+    }
     if (mode === 'none') {
       res.writeHead(200, { ...cors, 'content-type': 'application/json' });
       return res.end(JSON.stringify({ routes: [] }));
@@ -260,6 +266,21 @@ try {
   });
   yes(none.ok && none.message.includes('查不到班次'),
     `金鑰可用但那段沒班次 → 不要說成金鑰壞掉：「${none.message}」`);
+
+  // v1.73.1：上面那一條以前是 catch-all —— 「剛好查不到班次」只對應 parseRoute 的
+  // 'none' 這一個 reason，但程式碼把 http500 / parse / http401 / http404 也一起
+  // 說成「金鑰可以用」。使用者貼了一把沒開 Routes API 的金鑰、或碰上 Google 故障，
+  // App 說「可以用了」、存下去，之後每次按「🚆 大眾運輸」都失敗。
+  for (const [m, what] of [['boom', 'Google 回 500'], ['html', 'Google 回 HTML 不是 JSON（被 proxy 攔截）']]) {
+    mode = m;
+    await page.evaluate(async () => { await (await import('./js/db.js')).metaClearPrefix?.('transit:'); });
+    const r = await page.evaluate(async () => {
+      const t = await import('./js/transit.js');
+      return t.testMapsKey('AIzaOKOKOKOKOKOKOKOKOKOKOKOKOKOKOKOKOKOK');
+    });
+    yes(!r.ok && /不要存|沒有正常回應/.test(r.message),
+      `${what} → 不能說「金鑰可以用」：「${r.message}」`, JSON.stringify(r));
+  }
 
   mode = 'ok';
   // 過去的日期 → 講人話

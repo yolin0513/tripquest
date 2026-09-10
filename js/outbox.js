@@ -45,6 +45,11 @@ function chunkSig(recs) {
 
 async function pushChunks(adapter, store, groupId, entry, p) {
   const recs = store.exportGroup(groupId).slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // 快照拿到了 —— **從這一刻起**的編輯才算「推送途中的編輯」。
+  // 在此之前設的 dirty 指的是已經在這份快照裡的東西，留著會讓推送成功後
+  // 又保留一個項目、白白再推一次整包（audittest 的「開頁只拉不推」會紅）。
+  const e0 = await db.outboxGet('push:' + groupId);
+  if (e0 && e0.dirty) await db.outboxPut({ ...e0, dirty: false });
   const sig = chunkSig(recs);
   let start = (entry && entry.pushSig === sig && entry.pushed > 0) ? entry.pushed : 0;
   if (start >= recs.length) start = 0;
@@ -59,8 +64,11 @@ async function pushChunks(adapter, store, groupId, entry, p) {
         new Promise((_, rej) => setTimeout(() => rej(new Error('push timeout')), CHUNK_TIMEOUT)),
       ]);
     } catch (e) {
-      // 記下送到哪裡，下次從這裡接著送（不要刪 outbox 項目）
-      await db.outboxPut({ ...(entry || { id: 'push:' + groupId, op: 'push', groupId }),
+      // 記下送到哪裡，下次從這裡接著送（不要刪 outbox 項目）。
+      // 這裡要**重讀**目前的項目，不能用進來時那份 `entry` —— 推送期間
+      // enqueuePush 可能已經在上面設了 dirty，整筆覆蓋會把它抹掉（v1.73.1）。
+      const now2 = (await db.outboxGet('push:' + groupId)) || entry || { id: 'push:' + groupId, op: 'push', groupId };
+      await db.outboxPut({ ...now2,
         pushed: i, pushSig: sig, tries: (entry?.tries || 0) + 1, nextAt: backoff(entry?.tries || 0),
         lastError: String(e.message || e) });
       throw e;
@@ -83,7 +91,18 @@ function permanent(e) {
 export async function deadCount(groupId) {
   const all = await db.outboxAll();
   const mine = all.filter((e) => (e.groupId === groupId || e.id === 'push:' + groupId) && e.dead);
-  return { n: mine.length, why: mine[0]?.lastError || '' };
+  return { n: mine.length, blobs: mine.filter((e) => e.op === 'blob').length, why: deadWhy(mine[0]) };
+}
+
+// 錯誤訊息是給我們看的（'blob 413'），不是給長輩看的。翻成他能處理的話。
+export function deadWhy(e) {
+  const raw = String((e && e.lastError) || '');
+  const code = +(raw.match(/\b(4\d\d)\b/) || [])[1];
+  if (code === 413) return '照片檔案太大，伺服器不收';
+  if (code === 403 || code === 401) return '這台手機的同步權限被拒（祕鑰可能換過了）';
+  if (code === 404) return '伺服器上找不到這個群組（可能已被移除）';
+  if (code === 400 || code === 422) return '資料格式伺服器看不懂';
+  return raw ? '伺服器拒絕了（' + raw.slice(0, 40) + '）' : '傳不上去';
 }
 
 function backoff(tries) {
@@ -99,7 +118,22 @@ async function enabled() {
 export async function enqueuePush(groupId) {
   if (!groupId || !(await enabled())) return;
   const id = 'push:' + groupId;
-  if (await db.outboxGet(id)) return;
+  const cur = await db.outboxGet(id);
+  if (cur) {
+    // v1.73.1：以前這裡直接 return。但 pushChunks 是在**開始時**把記錄快照下來的，
+    // 慢網路上一輪推送可以跑好幾分鐘 —— 這段期間的編輯排不進 outbox（因為項目還在），
+    // 推送成功後那個項目又被刪掉 → **那些編輯永遠不會被同步出去**。
+    // 改成標記 dirty，推完再依這個旗標決定要刪還是要留。
+    //
+    // 順帶把 dead 的項目救活：permanent() 的意思是「這一個請求再送也一樣」，
+    // 不是「這個群組沒救了」。內容既然變了，就值得再試一次。以前 dead 的
+    // push 項目會永遠卡在這裡 return，讓那個群組**再也不會同步**。
+    await db.outboxPut(cur.dead
+      ? { ...cur, dirty: true, dead: false, tries: 0, nextAt: 0, pushed: 0, pushSig: '' }
+      : { ...cur, dirty: true });
+    emit(); soon();
+    return;
+  }
   await db.outboxPut({ id, op: 'push', groupId, tries: 0, nextAt: 0 });
   emit(); soon();
 }
@@ -124,9 +158,12 @@ export async function onSubmission(sub) {
   await enqueuePush(group.id);
 }
 
+// v1.73.1：dead 不能算進「待送」—— 那個數字永遠不會歸零，使用者會一直等一件
+// 不會發生的事。dead 另外報，由呼叫端用不同的話講（那需要的是不同的動作）。
 export async function pendingCount() {
-  const all = await db.outboxAll();
-  return { total: all.length, blobs: all.filter((e) => e.op === 'blob').length };
+  const live = (await db.outboxAll()).filter((e) => !e.dead);
+  const dead = (await db.outboxAll()).filter((e) => e.dead);
+  return { total: live.length, blobs: live.filter((e) => e.op === 'blob').length, dead: dead.length };
 }
 
 // 行程頁的同步進度列用：待上傳的照片數 ＋ 這趟還缺的縮圖數（別人的照片還沒抓到）
@@ -136,7 +173,12 @@ export async function syncStatus(tripId) {
   const have = new Set(await db.allBlobKeys());
   const subs = store.submissionsOfTrip(tripId);
   const missing = subs.filter((s) => s.thumbHash && !have.has(s.thumbHash)).length;
-  return { uploads: all.filter((e) => e.op === 'blob').length, missing, draining };
+  const dead = all.filter((e) => e.dead);
+  return {
+    uploads: all.filter((e) => e.op === 'blob' && !e.dead).length,
+    dead: dead.length, deadBlobs: dead.filter((e) => e.op === 'blob').length, deadWhy: deadWhy(dead[0]),
+    missing, draining,
+  };
 }
 
 function soon() { clearTimeout(timer); timer = setTimeout(() => drain().catch(() => {}), 800); }
@@ -160,8 +202,15 @@ export async function forgetGroup(groupId) {
 // 這個群組還有沒有東西沒送出去？有的話不能讓使用者移除——那些照片只有這台有。
 export async function pendingOf(groupId) {
   const all = await db.outboxAll();
-  const mine = all.filter((e) => (e.groupId === groupId || e.id === 'push:' + groupId) && !e.dead);
-  return { total: mine.length, blobs: mine.filter((e) => e.op === 'blob').length };
+  const mine = all.filter((e) => e.groupId === groupId || e.id === 'push:' + groupId);
+  const live = mine.filter((e) => !e.dead), dead = mine.filter((e) => e.dead);
+  // v1.73.1：dead 也要回報。以前只回 live，所以「還有照片沒傳完」的守衛對
+  // 永久失敗的照片**直接放行** —— 那些照片只存在這台手機，移除＝永久消失。
+  // 但它需要的是完全不同的一句話：叫使用者「等上傳跑完」是一個他永遠做不到的指示。
+  return {
+    total: live.length, blobs: live.filter((e) => e.op === 'blob').length,
+    dead: dead.length, deadBlobs: dead.filter((e) => e.op === 'blob').length, deadWhy: deadWhy(dead[0]),
+  };
 }
 
 export function drain(opts = {}) {
@@ -217,7 +266,14 @@ async function drainOnce({ onProgress, force = false } = {}) {
         try {
           if (store.isForgotten(group.id)) throw new Error('forgotten');
           const merged = await pushChunks(adapter, store, group.id, pushEntry, p);
-          await db.outboxDelete('push:' + group.id);
+          // 推送期間有人改了東西 → 那些編輯不在剛剛送出去的快照裡。
+          // 刪掉項目就等於把它們丟了，所以改成留一個乾淨的項目，下一輪重推（v1.73.1）。
+          const after = await db.outboxGet('push:' + group.id);
+          if (after && after.dirty) {
+            await db.outboxPut({ id: 'push:' + group.id, op: 'push', groupId: group.id, tries: 0, nextAt: 0 });
+          } else {
+            await db.outboxDelete('push:' + group.id);
+          }
           totals.pushed++;
           // 伺服器合併後跟送出的不同（別台改了其他欄位）→ 立刻套用，不用等下一輪 pull
           if (merged.length) await store.importRecords(merged, { merge: true });

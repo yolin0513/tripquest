@@ -167,13 +167,21 @@ export async function wikiLookup(q, region = '') {
     const to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
     const su = `${WIKI_BASE}/w/api.php?action=opensearch&format=json&origin=*&namespace=0&limit=3&variant=zh-tw&search=${encodeURIComponent(q)}`;
     const r = await fetch(su, { signal: to(8000) });
-    const arr = r.ok ? await r.json() : null;
+    // v1.73.1：**逾時**會 throw、被下面的 catch 攔住不寫快取（v1.64 修對的那一半），
+    // 但 **HTTP 錯誤碼不會 throw** —— 429/503 會安靜地走到 titles=[] → v=null →
+    // 寫進 30 天負面快取。而批次補資料會對每個景點各發一次 opensearch，
+    // 被 429 的機率遠高於逾時。所以這裡要跟下面 Nominatim 一樣明確擋掉。
+    if (!r.ok) throw new Error('wiki ' + r.status);
+    const arr = await r.json();
     const titles = Array.isArray(arr) && Array.isArray(arr[1]) ? arr[1] : [];
     // 有地區提示時，優先選含該地區字樣的條目；否則取第一個
     const title = (region && titles.find((t) => t.includes(region))) || titles[0] || null;
     if (title) {
       const r2 = await fetch(`${WIKI_BASE}/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: { accept: 'application/json' }, signal: to(8000) });
-      const d = r2.ok ? await r2.json() : null;
+      // opensearch 成功但 summary 被限流時，以前會把「這個條目沒有座標」
+      // 釘死 30 天 —— 而 wikiLookup 的用途正是「Nominatim 找不到時補座標候選」。
+      if (!r2.ok) throw new Error('wiki summary ' + r2.status);
+      const d = await r2.json();
       const c = d && d.coordinates;
       v = { title: (d && d.title) || title, lat: c ? +(+c.lat).toFixed(5) : null, lng: c ? +(+c.lon).toFixed(5) : null,
         desc: (d && d.description) || '' };

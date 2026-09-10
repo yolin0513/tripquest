@@ -133,6 +133,11 @@ export default async function settings() {
       syncEnabled() && pending.total
         ? h('p', { class: 'tag tag-todo', style: 'display:inline-block' }, `📤 還有 ${pending.blobs} 張照片正在上傳`)
         : null,
+      // v1.73.1：「再也送不出去」的項目以前被算進 pending.total，
+      // 那個數字永遠不會歸零；現在分開講，因為它需要的是不同的動作。
+      syncEnabled() && pending.dead
+        ? h('p', { class: 'tag tag-er', style: 'display:inline-block' }, `⚠️ 有 ${pending.dead} 項傳不出去（在行程頁上方有說明）`)
+        : null,
       h('div', { class: 'stack', style: 'margin-top:10px' },
         syncEnabled() ? h('button', { class: 'btn btn-primary btn-block', onclick: async () => {
           toast('同步中…');

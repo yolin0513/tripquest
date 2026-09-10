@@ -1149,7 +1149,11 @@ export function albumHTML(meta, slides, { offline = false } = {}) {
   let lastDay = 0;
   const body = slides.map((s) => {
     let head = '';
-    if (s.day !== lastDay) { lastDay = s.day; head = `<h2 class="day">第 ${s.day} 天</h2>`; }
+    // s.day 是旅伴那台寫的、同步過來的值。這一行是整份 HTML 裡
+    // 唯一沒有走 esc() 的插值 —— 它“應該”是數字，但這裡不能靠“應該”。
+    // 用 Number() 而不是 esc()：非數字直接變 NaN，連長得像 HTML 的東西都進不來。
+    const dayN = Number(s.day);
+    if (s.day !== lastDay) { lastDay = s.day; head = `<h2 class="day">第 ${Number.isFinite(dayN) ? dayN : '?'} 天</h2>`; }
     const d = new Date(s.takenAt);
     const sub = [s.spotName, s.memberName, isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()}`].filter(Boolean).join(' · ');
     const title = s.caption || s.questTitle || s.spotName || '';
@@ -1159,6 +1163,11 @@ export function albumHTML(meta, slides, { offline = false } = {}) {
 
   return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${offline ? `<!-- 只有**匯出的離線檔**需要這一行：它是使用者直接用瀏覽器開的
+     本機檔，沒有任何伺服器標頭，這是它唯一的防線。離線檔的圖全部是 data: URI。
+     分享網址那條路**不能**加 —— Worker 本來就有一份經過測試的 CSP 標頭，
+     再疊一層 meta 只會一起取交集，把走網址的照片擋掉（exporttest 抳到的）。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'">` : ''}
 <title>${esc(meta.title)} — TripQuest</title>
 <style>
  *{box-sizing:border-box;margin:0}

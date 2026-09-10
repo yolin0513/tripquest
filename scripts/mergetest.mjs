@@ -82,19 +82,45 @@ console.log('— merge.js 純函式 —');
   // sanitizeF 白名單
   const bad = sanitizeF({ type: 'spot', _f: { name: 1, evil: 2, pos: 'x' } });
   yes(J(Object.keys(bad._f)) === J(['name']), 'sanitizeF：只留白名單組、非數字丟掉');
-  // 隨機收斂：100 組隨機三方合併，任何順序結果一致
-  let conv = true;
-  for (let i = 0; i < 100; i++) {
+  // 隨機收斂：三方合併，任何順序結果一致。
+  //
+  // 母體分三種，缺一不可（v1.73.1）：
+  //   齊全 —— 同版裝置之間，理想情況
+  //   全無 —— v1.56 之前的舊記錄（seedF 還沒跑過）
+  //   部分 —— **混版才會出現**：舊版客戶端合併時是用它自己那一版的 TRACKED
+  //           重建 _f 的，不認識的欄位組整個消失，留下一份「部分 _f」的記錄
+  //
+  // 以前只生「齊全」。而「混版在這個專案是常態不是例外」是寫在決策文件裡的前提，
+  // 卻是唯一沒有進 fuzz 母體的那一種 —— 這一區的 bug 全部抓不到。
+  const GROUPS = ['name', 'slot', 'time', 'pinned', 'pos'];
+  const shapes = { full: 0, none: 0, partial: 0 };
+  let conv = true, convWhy = '';
+  for (let i = 0; i < 600 && conv; i++) {
     const r = () => Math.floor(Math.random() * 5);
+    const mkF = () => {
+      // 形狀要**逐台**隨機，不能整輪一樣 —— 混版的意思正是三台形狀不同
+      const d3 = Math.floor(Math.random() * 3);
+      const kind = d3 === 0 ? 'full' : d3 === 1 ? 'none' : 'partial';
+      shapes[kind]++;
+      if (kind === 'none') return undefined;
+      const keep = kind === 'full' ? GROUPS : GROUPS.filter(() => Math.random() > 0.4);
+      const f = {};
+      for (const g of keep) f[g] = 1000 + r() * 100;
+      return f;
+    };
     const mk = (d) => ({ id: 'x', type: 'spot', name: 'n' + r(), day: r(), order: r(), pinned: !!(r() % 2), stayMin: r() * 10,
-      updatedAt: 1000 + r() * 100, deviceId: d, _f: { name: 1000 + r() * 100, slot: 1000 + r() * 100, time: 1000 + r() * 100, pinned: 1000 + r() * 100, pos: 1000 + r() * 100 } });
+      updatedAt: 1000 + r() * 100, deviceId: d, _f: mkF() });
     const a = mk('a'), b = mk('b'), c = mk('c');
     const x = mergeRecord(mergeRecord(a, b).rec, c).rec;
     const y = mergeRecord(mergeRecord(c, a).rec, b).rec;
     const z = mergeRecord(b, mergeRecord(c, a).rec).rec;
-    if (J(x) !== J(y) || J(y) !== J(z)) { conv = false; break; }
+    if (J(x) !== J(y) || J(y) !== J(z)) { conv = false; convWhy = J({ a, b, c, x, y, z }).slice(0, 400); }
   }
-  yes(conv, '隨機 100 組三方合併：任何順序都收斂到同一結果');
+  yes(conv, `隨機 600 組三方合併都收斂（_f 齊全 ${shapes.full}／全無 ${shapes.none}／部分 ${shapes.partial}）`, convWhy);
+  // 母體不能是空的：上面三種形狀每一種都要真的生出來過，
+  // 不然這條斷言會在「產生器壞掉」時空轉通過（這一套裡最常見的假綠燈）。
+  yes(shapes.full > 100 && shapes.none > 100 && shapes.partial > 100,
+    `三種 _f 形狀都有進到母體（不是空轉通過）`, J(shapes));
 }
 
 // ================= 兩台裝置 =================

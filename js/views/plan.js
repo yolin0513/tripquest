@@ -663,7 +663,10 @@ export default async function plan(tripId) {
         break;
       }
       const r = await transitLeg(a, b, at, key);
-      if (!r.cached) calls++;
+      // v1.73.1：以前是整個迴圈跑完才 addMapsCalls(tripId, calls)，中途關掉分頁
+      // 就完全不入帳。nearby.js 已經改成「先記帳再看結果作不作廢」（v1.70.1），
+      // 這裡沒有跟上。保險絲寧可算得緊一點，不能漏。
+      if (!r.cached) { calls++; await addMapsCalls(tripId, 1).catch(() => {}); }
       if (r.ok) {
         entry.legs.set(b.id, { ...r, departMin });
         // 下一段從「這一段到站 + 這一站的停留」開始
@@ -671,12 +674,14 @@ export default async function plan(tripId) {
         clock = departMin + Math.round(r.sec / 60) + stay;
       } else {
         if (!firstErr) firstErr = transitErr(r.reason);
-        if (r.reason === 'key' || r.reason === 'quota' || r.reason === 'network') break;
+        // v1.73.1：`timeout` 以前不在中止清單裡，而 transitLeg 的逾時是 15 秒。
+        // 19 個景點的一天＝18 段，Google 停住不回應時 18 × 15 秒 = 4 分 30 秒，
+        // 按鈕停在「查詢中… n/18」而且沒有取消鍵 —— 那正是長輩出國在用的網路狀態。
+        if (r.reason === 'key' || r.reason === 'quota' || r.reason === 'network' || r.reason === 'timeout') break;
         clock = null;                                  // 這一段沒查到，後面的推算就不準了
       }
       done++;
     }
-    if (calls) await addMapsCalls(tripId, calls);
     setLabel('🚆 大眾運輸');
     if (!entry.legs.size) { toast(firstErr || '這一天查不到大眾運輸班次'); TRANSIT.delete(tKey(tripId, d)); }
     else if (firstErr) toast(`查到 ${entry.legs.size} 段；其餘：${firstErr}`);

@@ -97,21 +97,22 @@ export async function mapsBudget(tripId) {
 }
 
 export async function addMapsCalls(tripId, n = 1) {
-  const e = await db.tripSecretGet(tripId);
-  if (!e) return;
-  const cur = e.mapsCalls && e.mapsCalls.ym === ym() ? e.mapsCalls.n : 0;
-  e.mapsCalls = { ym: ym(), n: cur + Math.max(0, n) };
-  await db.tripSecretSet(e);
+  // v1.73.1：一個交易裡讀完改完寫完，不然並發呼叫會互相蓋掉（見 db.tripSecretUpdate）
+  await db.tripSecretUpdate(tripId, (e) => {
+    const cur = e.mapsCalls && e.mapsCalls.ym === ym() ? e.mapsCalls.n : 0;
+    e.mapsCalls = { ym: ym(), n: cur + Math.max(0, n) };
+  });
 }
 
 export async function clearTripKey(tripId) { await db.tripSecretDelete(tripId); }
 export async function wipeAllTripKeys() { await db.tripSecretClearAll(); }
 
 export async function addUsage(tripId, microUsd) {
-  const e = await db.tripSecretGet(tripId);
-  if (!e) return;
-  e.usedMicroUsd = (e.usedMicroUsd || 0) + Math.max(0, Math.round(microUsd || 0));
-  await db.tripSecretSet(e);
+  // v1.73.1：同上。相簿頁與海報頁各有一個 Promise.all 兩路並發，
+  // 以前其中一次的花費完全不入帳 —— 保險絲會比實際鬆。
+  await db.tripSecretUpdate(tripId, (e) => {
+    e.usedMicroUsd = (e.usedMicroUsd || 0) + Math.max(0, Math.round(microUsd || 0));
+  });
 }
 
 export async function usageOf(tripId) {

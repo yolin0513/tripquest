@@ -246,6 +246,38 @@ try {
     await pg2.close();
   }
 
+
+  // ---------- 離線相簿檔：CSP 之下照片還是要看得到（v1.73.1）----------
+  //
+  // 匯出的 .html 是使用者直接用瀏覽器開的本機檔，沒有任何伺服器標頭，
+  // 檔案裡那行 <meta http-equiv="Content-Security-Policy"> 是它唯一的防線。
+  // 但 CSP 寫太緊就會把自己的照片擋掉，而那是使用者唯一要它做的事。
+  // 這裡把真的匯出檔載進瀏覽器，數 naturalWidth > 0 的圖有幾張。
+  console.log('\n— 離線相簿檔 —');
+  const offHtml = await page.evaluate(async (tid) => {
+    const { buildAlbumPage } = await import('./js/memory.js');
+    const r = await buildAlbumPage(tid);
+    return { html: await r.blob.text(), count: r.count, missing: r.missing };
+  }, base.tid);
+  yes(offHtml.count > 0, `離線相簿檔產得出來（${offHtml.count} 張、缺 ${offHtml.missing} 張）`);
+  yes(/http-equiv="Content-Security-Policy"/.test(offHtml.html),
+    '離線檔自己帶 CSP（本機開啟沒有伺服器標頭，這是唯一的防線）');
+  yes(!/<script/i.test(offHtml.html), '離線檔裡沒有腳本');
+
+  const offPage = await browser.newPage();
+  const offErrs = [];
+  offPage.on('console', (m) => { if (m.type() === 'error') offErrs.push(m.text().slice(0, 120)); });
+  await offPage.setContent(offHtml.html, { waitUntil: 'load' });
+  await sleep(600);
+  const shown = await offPage.evaluate(() => {
+    const imgs = [...document.images];
+    return { total: imgs.length, ok: imgs.filter((i) => i.naturalWidth > 0).length };
+  });
+  await offPage.close();
+  yes(shown.total > 0 && shown.ok === shown.total,
+    `離線檔的照片在自己的 CSP 之下全部顯示得出來（${shown.ok}/${shown.total}）`,
+    offErrs.join(' ｜ '));
+
   console.log('\n匯出測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

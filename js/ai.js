@@ -24,7 +24,9 @@ const VISION_MODEL = 'claude-sonnet-5';
 // 微美金 / token。一定要跟 model 對起來，不然花費統計會騙人。
 const RATES = {
   'claude-haiku-4-5': { in: 1, out: 5 },        // $1 / $5 每百萬
-  'claude-sonnet-5': { in: 3, out: 15 },        // $3 / $15 每百萬
+  // $3/$15 是原本排定 2026-09-01 生效的漲價，後來取消了，標準價維持 $2/$10。
+  // 寫錯的後果是花費統計一律**高估 50%** —— 保險絲比使用者以為的更早跳。
+  'claude-sonnet-5': { in: 2, out: 10 },        // $2 / $10 每百萬（2026-09 查證）
 };
 const RATE = RATES[MODEL];
 

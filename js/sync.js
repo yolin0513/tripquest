@@ -99,7 +99,11 @@ export function adapterForGroup(groupId, secret) {
     },
     // 公開相簿：發布 / 收回。發布後任何人拿到網址都看得到，所以只由使用者主動觸發。
     async putAlbum(albumId, { html, hashes, title }) {
+      // v1.73.1：這兩支以前沒有 signal。putAlbum 送的是整份相簿 HTML
+      // （照片越多越大），正是最容易在慢網路上停住的請求 ——
+      // 停住就是「發布分享相簿」永遠轉圈、沒有出口。
       const r = await fetch(b + '/album/' + albumId + q, {
+        signal: timeout(60000),
         method: 'PUT', headers: { ...H, 'content-type': 'application/json' },
         body: JSON.stringify({ html, hashes, title }),
       });
@@ -107,7 +111,7 @@ export function adapterForGroup(groupId, secret) {
       return r.json();
     },
     async deleteAlbum(albumId) {
-      const r = await fetch(b + '/album/' + albumId + q, { method: 'DELETE', headers: H });
+      const r = await fetch(b + '/album/' + albumId + q, { method: 'DELETE', headers: H, signal: timeout(20000) });
       if (!r.ok) throw new Error('deleteAlbum ' + r.status);
       return r.json();
     },

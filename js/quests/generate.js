@@ -316,19 +316,3 @@ function typeEmoji(type) {
 }
 
 
-// ---------- 可選：Wikipedia 補圖（enrich.js 也會用）----------
-export async function enrichSpotFromWiki(spot) {
-  const title = spot.wikiRef?.title || spot.name;
-  const lang = spot.wikiRef?.lang || 'zh';
-  try {
-    const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
-    if (!res.ok) return null;
-    const d = await res.json();
-    return {
-      thumb: d.thumbnail?.source || null, extract: d.extract || '',
-      lat: d.coordinates?.lat ?? null, lng: d.coordinates?.lon ?? null,
-      wikiUrl: d.content_urls?.desktop?.page || null,
-    };
-  } catch { return null; }
-}

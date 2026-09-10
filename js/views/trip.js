@@ -764,6 +764,17 @@ function syncBanner(tripId, t) {
       // 缺縮圖但沒有在同步 → 主動拉一次（剛加入、或上次被切到背景中斷）；連續三次沒進展就不再催
       if (st.missing > 0 && !st.draining && idle < 3) { idle++; o.drain().catch(() => {}); }
     } catch { n = 0; }
+    // 有東西是「再也送不出去」的 → 不能繼續顯示「正在上傳」（那會永遠轉下去）。
+    // 這是使用者唯一會看到這件事的地方，所以要說原因，也要說他該做什麼（v1.73.1）。
+    if (st && st.dead && !n) {
+      clearInterval(timer);
+      el.hidden = false; shown = true;
+      el.classList.add('done'); el.querySelector('.spinner')?.remove();
+      line.textContent = st.deadBlobs
+        ? `⚠️ 有 ${st.deadBlobs} 張照片傳不出去（${st.deadWhy}）—— 這幾張只存在這支手機，移除旅程前請先「匯出完整備份」`
+        : `⚠️ 這趟的資料傳不出去（${st.deadWhy}）—— 旅伴看不到你這邊的更新`;
+      return;
+    }
     if (n > 0) { el.hidden = false; shown = true; line.textContent = st && st.uploads && !st.missing ? `正在上傳照片… 還有 ${st.uploads} 張` : `正在接收照片… 還有 ${n} 張`; }
     else if (shown) {
       clearInterval(timer);
@@ -961,6 +972,22 @@ async function removeTrip(tripId, t) {
 
   // 還沒送出去的照片只有這台有 —— 移除等於全家一起失去，先擋下來
   const pending = await outbox.pendingOf(t.groupId);
+  // 永久失敗的上傳以前完全不擋（pendingOf 排除了 dead）—— 那些照片只存在這台手機，
+  // 移除就是硬刪、永久消失。但叫他「等上傳跑完」是一個他永遠做不到的指示，
+  // 所以這一支要講真話、給一條真的走得通的路（v1.73.1）。
+  if (pending.dead) {
+    const go = await modal({
+      title: '有照片一直傳不出去',
+      body: h('div', {},
+        h('p', {}, pending.deadBlobs
+          ? `有 ${pending.deadBlobs} 張照片送不到旅伴那邊（${pending.deadWhy}），再等也不會成功。`
+          : `這趟的資料送不到旅伴那邊（${pending.deadWhy}），再等也不會成功。`),
+        h('p', {}, '這幾張只存在這台手機。現在移除的話就沒有了，而且救不回來。'),
+        h('p', { class: 'form-hint' }, '建議先按行程頁下面的「⬇️ 匯出完整備份（含照片）」，把照片留在手機或雲端硬碟，再回來移除。')),
+      actions: [{ label: '先去匯出', value: false }, { label: '我知道，還是移除', value: true, danger: true }],
+    });
+    if (!go) return;
+  }
   if (pending.total) {
     await modal({
       title: '先等照片上傳完',

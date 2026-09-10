@@ -3,6 +3,7 @@
 // AI 文案：啟用→自動用、未啟用→內建、失敗→靜默退回、快取、同步、標記、用量。
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { readFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 
 const PORT = 5333, BASE = `http://localhost:${PORT}`;
@@ -148,8 +149,18 @@ try {
     if (r.aiQuests >= 4 && r.curatedUntouched) ok('啟用：內建模板任務換成 AI 出題、策展與必吃題不動');
     else bad('quest 錯誤：aiQuests=' + r.aiQuests + ' curatedUntouched=' + r.curatedUntouched);
 
-    if (r.usage.usedUsd > 0 && r.usage.usedUsd < 0.05) ok(`用量有計：$${r.usage.usedUsd.toFixed(4)}`);
-    else bad('用量錯誤：' + JSON.stringify(r.usage));
+    // v1.73.1：以前是 `> 0 && < 0.05` —— 實測把費率表改成 Haiku 的價（差 3 倍）
+    // 這條斷言照樣全綠。現在算死：mock 回 400 in / 200 out，呼叫 3 次。
+    // 換模型漏改費率表、或費率表本身寫錯，這裡會紅。
+    const RT = { 'claude-haiku-4-5': { in: 1, out: 5 }, 'claude-sonnet-5': { in: 2, out: 10 } };
+    const modelSrc = await readFile(new URL('../js/ai.js', import.meta.url), 'utf8');
+    const usedModel = (modelSrc.match(/const MODEL = '([^']+)'/) || [])[1];
+    const rate = RT[usedModel];
+    const want = rate ? 3 * (400 * rate.in + 200 * rate.out) / 1e6 : null;
+    if (!rate) bad(`js/ai.js 的 MODEL（${usedModel}）不在測試的費率對照表裡 —— 換模型要一併更新兩邊`);
+    else if (Math.abs(r.usage.usedUsd - want) < 1e-9)
+      ok(`用量算到分錢：$${r.usage.usedUsd.toFixed(4)}（${usedModel} 的 $${rate.in}/$${rate.out}，3 次 × 400in/200out）`);
+    else bad(`用量不對：算出 $${r.usage.usedUsd.toFixed(6)}，按 ${usedModel} 的牌價應為 $${want.toFixed(6)}`);
 
     // 同步 payload 不能有金鑰、但要有 aiText
     exported = await p.evaluate(async (gid) => {
@@ -355,6 +366,41 @@ try {
   });
   const c4 = '沒開 AI 的行程不會出現這條提示（不打擾）';
   if (!freshNote) ok(c4); else bad(c4);
+
+  // ---------- v1.73.1：並發記帳不能漏算 ----------
+  //
+  // addUsage 以前是「讀 → await → 改 → 寫」，兩個並發呼叫各自讀到同一個舊值、
+  // 後寫的蓋掉先寫的。而 album.js 與 poster/index.js 兩處都是 Promise.all 同時
+  // 跑兩支 ensure*，所以相簿頁與海報頁各有一個兩路並發，其中一次完全不入帳。
+  // 保險絲會比實際鬆 —— 這是「上限」這個功能唯一的意義。
+  console.log('\n— 並發記帳 —');
+  const conc = await P.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const k = await import('./js/aikeys.js');
+    const run = async (n) => {
+      const tid = uuid();
+      await s.put({ id: tid, type: 'trip', title: 'x' });
+      await k.setTripKey(tid, { key: 'sk-ant-FAKEFAKEFAKEFAKEFAKEFAKEFAKE', capUsd: 99 });
+      await Promise.all(Array.from({ length: n }, () => k.addUsage(tid, 1000)));
+      return Math.round((await k.usageOf(tid)).usedUsd * 1e6);
+    };
+    const mapsRun = async (n) => {
+      const tid = uuid();
+      await s.put({ id: tid, type: 'trip', title: 'x' });
+      await k.setTripKey(tid, { mapsKey: 'AIza-FAKE', mapsCap: 9999 });
+      await Promise.all(Array.from({ length: n }, () => k.addMapsCalls(tid, 1)));
+      return (await k.mapsBudget(tid)).used;
+    };
+    return { two: await run(2), five: await run(5), maps: await mapsRun(5) };
+  });
+  const c5 = `兩路並發（相簿頁／海報頁的 Promise.all）：${conc.two} µUSD，應為 2000 —— 以前漏一半`;
+  if (conc.two === 2000) ok(c5); else bad(c5);
+  const c6 = `五路並發：${conc.five} µUSD，應為 5000 —— 以前漏 80%`;
+  if (conc.five === 5000) ok(c6); else bad(c6);
+  const c7 = `地圖次數同樣不漏（addMapsCalls 是同一個形狀）：${conc.maps}/5`;
+  if (conc.maps === 5) ok(c7); else bad(c7);
+
   console.log('\nAI 文案測試結束');
 } catch (e) {
   bad('例外：' + (e && e.stack || e));

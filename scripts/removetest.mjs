@@ -221,6 +221,82 @@ try {
   });
   yes(bAfterDel === 3, `A 刪掉一個景點仍然同步得過去（B 剩 ${bAfterDel} 個景點）—— 沒有把日常刪除一起擋掉`);
 
+
+  // ---------- v1.73.1：「再也送不出去」的東西不能靜默 ----------
+  //
+  // v1.64 那條「4xx 無限重試且使用者永遠看不到」只落地了前半（標 dead、不再排程）。
+  // 後半（讓使用者看到）寫好了 deadCount() 卻零個呼叫端，而且三個計數器對 dead
+  // 的處理互相矛盾：進度列含 dead（永遠顯示「正在上傳」），移除守衛不含 dead
+  // （直接放行 → 只存在這台的照片被硬刪）。兩邊都錯，方向還相反。
+  console.log('\n— 永久失敗的上傳（v1.73.1）—');
+  const D = await device('dead');   // device() 回的就是 page
+  const dg = await D.evaluate(async () => {
+    const s2 = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const db = await import('./js/db.js');
+    const gid = uuid(), tid = uuid(), me = uuid();
+    await s2.put({ id: gid, type: 'group', name: 'g', syncSecret: 'sekret-dead-1234567890' });
+    await s2.put({ id: tid, type: 'trip', groupId: gid, title: '宜蘭' });
+    await s2.put({ id: me, type: 'member', tripId: tid, groupId: gid, displayName: '阿嬤' });
+    const q = uuid();
+    await s2.put({ id: q, type: 'quest', tripId: tid, order: 0, title: 't' });
+    await s2.put({ id: uuid(), type: 'submission', tripId: tid, questId: q, memberId: me,
+      photoHash: 'deadhash', thumbHash: 'deadhash', createdAt: Date.now() });
+    // 一張 413 一直傳不上去的照片：直接把 outbox 項目設成 dead（跟真的失敗完後一樣）
+    await db.outboxPut({ id: `blob:${gid}:deadhash`, op: 'blob', groupId: gid, hash: 'deadhash',
+      tries: 3, nextAt: Number.MAX_SAFE_INTEGER, dead: true, lastError: 'blob 413' });
+    return { gid, tid };
+  });
+
+  const dst = await D.evaluate(async (g) => {
+    const o = await import('./js/outbox.js');
+    const [st, pend, cnt] = [await o.syncStatus(g.tid), await o.pendingOf(g.gid), await o.pendingCount()];
+    // total 會有 1 個正常的 push 項目（種資料時 store.put 排的），那是對的。
+    // 這裡要驗的是「dead 的那張照片有沒有從『待上傳』裡拿掉、有沒有另外報出來」。
+    return { uploads: st.uploads, stDead: st.dead, why: st.deadWhy,
+      pendDead: pend.dead, pendBlobs: pend.blobs, cntBlobs: cnt.blobs, cntDead: cnt.dead };
+  }, dg);
+  yes(dst.uploads === 0 && dst.stDead === 1,
+    `進度列不再謊稱「正在上傳」（uploads=${dst.uploads}，另外報 dead=${dst.stDead}）`,
+    JSON.stringify(dst));
+  yes(/太大/.test(dst.why),
+    `原因翻成使用者看得懂的話：「${dst.why}」（不是「blob 413」）`, dst.why);
+  yes(dst.pendDead === 1 && dst.pendBlobs === 0,
+    `移除守衛看得到永久失敗的照片（dead=${dst.pendDead}，不再算進「等上傳」的 ${dst.pendBlobs}）—— 以前 pendingOf 排除 dead 直接放行`,
+    JSON.stringify(dst));
+  yes(dst.cntBlobs === 0 && dst.cntDead === 1,
+    `設定頁的「還有 N 張照片正在上傳」會歸零、另外標永久失敗（blobs=${dst.cntBlobs} / dead=${dst.cntDead}）`,
+    JSON.stringify(dst));
+
+  // 死掉的 push 項目以前會讓那個群組**再也不會同步**（enqueuePush 撞到就 return）
+  const revive = await D.evaluate(async (g) => {
+    const db = await import('./js/db.js');
+    const o = await import('./js/outbox.js');
+    await db.outboxPut({ id: 'push:' + g.gid, op: 'push', groupId: g.gid, tries: 5,
+      nextAt: Number.MAX_SAFE_INTEGER, dead: true, lastError: 'push 400' });
+    const s2 = await import('./js/store.js');
+    await s2.patch(g.tid, { title: '宜蘭三日' });     // 使用者又改了一次
+    await new Promise((r) => setTimeout(r, 300));
+    const e = await db.outboxGet('push:' + g.gid);
+    return { dead: !!(e && e.dead), nextAt: e && e.nextAt, exists: !!e };
+  }, dg);
+  yes(revive.exists && !revive.dead && revive.nextAt === 0,
+    '使用者再編輯一次，死掉的 push 項目會復活（內容變了就值得再試）—— 以前它會永遠卡住這個群組',
+    JSON.stringify(revive));
+
+  // 推送途中的編輯：以前 enqueuePush 撞到在途項目就 return，推完又把項目刪掉 → 編輯消失
+  const dirty = await D.evaluate(async (g) => {
+    const db = await import('./js/db.js');
+    const o = await import('./js/outbox.js');
+    await db.outboxPut({ id: 'push:' + g.gid, op: 'push', groupId: g.gid, tries: 0, nextAt: 0, pushed: 40 });
+    await o.enqueuePush(g.gid);                       // 推送進行中又有人改東西
+    const e = await db.outboxGet('push:' + g.gid);
+    return { dirty: !!(e && e.dirty) };
+  }, dg);
+  yes(dirty.dirty,
+    '推送途中的編輯會標記 dirty（推完不刪項目、下一輪重推）—— 以前那些編輯永遠不會同步出去',
+    JSON.stringify(dirty));
+
   console.log('\n移除旅程測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
