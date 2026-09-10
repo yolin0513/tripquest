@@ -98,9 +98,14 @@ export async function nearbyFacilities(lat, lng, { radius = 3000, fresh = false 
   }
 
   const body = 'data=' + encodeURIComponent(buildQuery(lat, lng, radius));
-  for (const ep of ENDPOINTS) {
+  // v1.73.2：兩個鏡像序列跑、各 12 秒 ＝ 全掛時要等 24 秒才給任何回應（實測 24021ms）。
+  // 這支是走失／急救的畫面在用的。第二個鏡像給比較短的預算（第一個已經花了 12 秒，
+  // 這時候還在等的人要的是「快點告訴我不行」，不是「再多試一下」）。
+  // 不改成兩個併發：那會讓兩個志工營運的鏡像每次都各收一份請求，不禮貌。
+  for (let mi = 0; mi < ENDPOINTS.length; mi++) {
+    const ep = ENDPOINTS[mi];
     try {
-      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: _to(12000) });
+      const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: _to(mi === 0 ? 12000 : 6000) });
       if (!res.ok) continue;
       const d = await res.json();
       const items = [];

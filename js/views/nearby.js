@@ -152,7 +152,12 @@ export default async function nearbyView(tripId) {
     if (my !== gen) return;
     if (!r.ok) {
       const { toast } = await import('../ui.js');
-      toast(placesErr(r.reason));
+      // v1.73.2：placesErr 的文案（「請到旅程設定確認已啟用 Places API (New)、
+        // 參照網址限制允許這個網站」）是寫給「正在辦金鑰的那個人」看的，而那個人
+        // 在設定頁。「找附近 → 停車場」是長輩自己會按的頁面，API 名詞丟給他沒有意義。
+        toast(r.reason === 'key' || r.reason === 'billing'
+          ? 'Google 查詢暫時不能用（旅程設定那邊要調一下），先用免費的資料'
+          : placesErr(r.reason));
       if (btn) { btn.disabled = false; btn.textContent = '🔍 用 Google 再查一次'; }
       return;
     }

@@ -71,6 +71,7 @@ export async function patch(id, changes) {
   const cur = state.byId.get(id);
   if (!cur) throw new Error('找不到記錄 ' + id);
   const next = { ...cur, ...changes };
+  const onlyFlags = Object.keys(changes).every((k) => k.startsWith('_'));
   const groups = groupsOf(cur.type);
   if (groups) {
     // 沒有 _f 的舊記錄：先以「patch 前」的 updatedAt 播種全部欄位組（不允許部分 _f）
@@ -82,12 +83,17 @@ export async function patch(id, changes) {
     }
     next._f = f;
   }
-  stamp(next, cur);
+  // v1.73.2：純內部旗標（_ok / _enriched / _enrichV / _noHero）不推高 updatedAt。
+  // 以前會推高，而且不 bump 任何 _f 組 —— 於是這台變成整筆 LWW 的 base，
+  // 它的**非追蹤欄位**（blurb / emoji / heroPool）就壓過旅伴較新的版本。
+  // 按一下行程檢查的「這樣沒關係」，不該讓別人剛抓好的示意圖倒退。
+  if (!onlyFlags) stamp(next, cur);
   state.byId.set(id, next);
   await db.putRecord(next);
   emit();
-  // 內部旗標（_enriched / _wikiTried 等）不值得觸發同步
-  if (!Object.keys(changes).every((k) => k.startsWith('_'))) await queueSync('push', next);
+  // 內部旗標（_enriched / _enrichV 等）不值得觸發同步
+  //（順帶更正一個過期的註解：_wikiTried 全 repo 沒有任何寫入點，早就不存在了）
+  if (!onlyFlags) await queueSync('push', next);
   return next;
 }
 

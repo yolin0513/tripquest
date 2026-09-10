@@ -87,7 +87,12 @@ export function dayIssues(spots, chain, conflicts) {
     out.push({
       kind: 'late', i, id: c.id, prevId: spots[i - 1].id, at: c.arrive, amount: c.late,
       title: `${spots[i].name || '這一站'} 訂 ${fmtHHMM(c.arrive)}，但從 ${spots[i - 1].name || '上一站'} 過去`
-        + `最快 ${fmtHHMM(prev.leave + Math.round(c.travel / 60))} 才會到`,
+        // v1.73.2：以前是 `prev.leave + travel`。但 prev.leave 可能是 null
+        // （上一站沒有推得出來的離開時刻，例如它自己也沒有時間、停留也猜不出來），
+        // null + 10 = 10 → fmtHHMM(10) = 「00:10」，畫面上就是「最快 00:10 才會到」。
+        // 而正確的值根本不需要 prev.leave：chainTimes 裡 late = 原本的 arrive - want、
+        // 然後 arrive 被改寫成 want，所以「原本最快幾點到」就是 arrive + late。
+        + `最快 ${fmtHHMM(c.arrive + c.late)} 才會到`,
       advice: canCut
         ? `把 ${spots[i - 1].name || '上一站'} 的停留縮短 ${fmtDurMin(c.late)}`
         : `要自己看一下 —— 縮短前一站也來不及`,

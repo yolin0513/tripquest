@@ -205,7 +205,14 @@ export function chainTimes(spots, matrix, mode = 'drive') {
     if (far) soft = true;
     // 跨區之後不能沿用前一站的離開時間，那等於瞬間移動（①）。
     // 但如果這一站自己有填「幾點到」，鏈就從那裡重新接上，是可信的。
-    cur = leave != null ? leave : (far ? null : cur);
+    //
+    // v1.73.2：`far ? null : cur` 還不夠 —— **任何**算不出離開時刻的站都會斷鏈，
+    // 不只跨區。最常見的是「還沒找到座標」的景點：travel 是 null → arrive 是 null，
+    // 但 cur 還留著更前面那一站的離開時間，於是再下一站的抵達時刻是從**兩站以前**
+    // 算的，中間那些站等於零停留、零車程。而它們的 arrive 是 null，`soft` 那一行
+    // 也不會觸發，所以那個遲到會被當成**硬**遲到報出來 —— 一個建立在虛構鏈上的警告。
+    // leave 是 null 就等於「我不知道幾點離開這裡」，下游本來就不該從別處接。
+    cur = leave;
   }
   return out;
 }

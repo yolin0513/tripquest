@@ -154,6 +154,11 @@ export function mapsConfigCard(tripId) {
         ? '開了會多兩個功能：行程頁的「🚆 大眾運輸」查實際班次，找附近的停車場可以用 Google 再查一次。'
         : '這趟由建立者提供。'));
     if (!creator) { card.replaceChildren(...kids); return; }
+    // v1.73.2：以前完全沒有講這件事。「分享位置給家人」有一整頁同意畫面，
+    // 送給 Google 反而不提 —— 對象一致性上說不過去。
+    kids.push(h('p', { class: 'sub-label', style: 'margin:-4px 0 0' },
+      'ℹ️ 開了之後，你查的地點與景點座標會送到 Google（用你自己的金鑰）。'
+      + '不開就完全不會送，現有功能都照舊。'));
 
     const k = await getTripKey(tripId);
     const u = await usageOf(tripId);

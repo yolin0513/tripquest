@@ -335,20 +335,29 @@ export default async function plan(tripId) {
   // 「先用 X 推算」的 X：90 → 「1 小時 30 分」。fmtDur 吃的是秒。
   const fmtStay = (min) => (Number.isFinite(min) ? fmtDur(min * 60) : '1 小時');
 
+  // v1.73.2：世代守衛。開頭的「先全部移除」擋不住並發 —— 兩次呼叫都先清空、
+  // 各自 await，然後都 append，畫面上就多出重複的列。每個 await 之後檢查一次，
+  // 被後來的呼叫取代就直接放棄（後來那次會畫出完整的結果）。
+  let annotateGen = 0;
   async function annotateTravel() {
+    const gen = ++annotateGen;
     // 類別停留時間要讀 data/themes.json。這一頁原本沒載主題資料，
     // 不載的話 stayForSpot 會靜默退回 60，整個對照表等於沒作用。
     await loadThemes().catch(() => {});
+    if (gen !== annotateGen) return;
     const t2 = store.get(tripId) || t;
     list.querySelectorAll('.plan-conflict').forEach((x) => x.remove());
     const spots = store.spotsOf(tripId);
     const days = totalDays();
     let anyEst = false, anyOsrm = false;
+    const noCoordDays = [];
     for (let d = 1; d <= days; d++) {
       const inDay = spots.filter((x) => (x.day || 1) === d).sort((a, b) => (a.order || 0) - (b.order || 0));
       if (!inDay.length) continue;
       const m = await dayMatrix(inDay);
+      if (gen !== annotateGen) return;
       if (m.src === 'est') anyEst = true; else anyOsrm = true;
+      if (!m.full && inDay.length >= 2) noCoordDays.push(d);   // v1.73.2：斷鏈的原因
       const { chain, assumedStart } = chainForDay(inDay, m, t2, d);
       const conflicts = timeConflicts(inDay);
       // 連鎖項目收斂回根因 —— 這一條 dayIssues 裡已經做了（covered），但行程頁
@@ -467,6 +476,14 @@ export default async function plan(tripId) {
       list.append(h('p', { class: 'form-hint plan-src-note' },
         `移動時間是${anyEst && !anyOsrm ? '用直線距離' : '依開放路網（OSRM）'}粗略估計的，`
         + '不含大眾運輸、等車與塞車時間，僅供排順序參考。'));
+    }
+    // v1.73.2：沒有座標的景點會讓時刻推算從那裡斷掉（那是正確的 —— 不知道在哪裡就
+    // 算不出車程）。但以前畫面上完全不講，使用者只看到「後面幾站沒有時間」而不知道
+    // 為什麼、也不知道怎麼辦。dayMatrix 一直都算了 `full`，只是沒有人用。
+    if (noCoordDays.length) {
+      list.append(h('p', { class: 'form-hint plan-src-note' },
+        `第 ${noCoordDays.join('、')} 天有景點還沒有位置，時刻推算會從那裡斷掉 —— `
+        + '按上面的「📍 自動找出景點位置」補齊就會接回來。'));
     }
   }
 

@@ -10,7 +10,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { rm } from 'node:fs/promises';
+import { rm, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { mergeRecord, seedF, groupChanged, sanitizeF, TRACKED } from '../js/merge.js';
 
@@ -80,8 +80,11 @@ console.log('— merge.js 純函式 —');
   // groupChanged：表單送同值不算改
   yes(groupChanged({ name: 'a' }, { name: 'a' }, ['name']) === false && groupChanged({ name: 'a' }, { name: 'b' }, ['name']) === true, 'groupChanged：值沒變不算改');
   // sanitizeF 白名單
-  const bad = sanitizeF({ type: 'spot', _f: { name: 1, evil: 2, pos: 'x' } });
-  yes(J(Object.keys(bad._f)) === J(['name']), 'sanitizeF：只留白名單組、非數字丟掉');
+  // v1.73.2：未知鍵改成**刻意放行**（伺服器要當透明管道，
+  // 不然它自己就是那個把新欄位組的時間戳砍掉的人）。這是行為變更不是回歸。
+  const bad = sanitizeF({ type: 'spot', _f: { name: 1, futureGroup: 2, pos: 'x' } });
+  yes(J(Object.keys(bad._f).sort()) === J(['futureGroup', 'name']),
+    'sanitizeF：已知組與未來組都留、非數字丟掉', J(bad._f));
   // 隨機收斂：三方合併，任何順序結果一致。
   //
   // 母體分三種，缺一不可（v1.73.1）：
@@ -121,6 +124,97 @@ console.log('— merge.js 純函式 —');
   // 不然這條斷言會在「產生器壞掉」時空轉通過（這一套裡最常見的假綠燈）。
   yes(shapes.full > 100 && shapes.none > 100 && shapes.partial > 100,
     `三種 _f 形狀都有進到母體（不是空轉通過）`, J(shapes));
+}
+
+// ================= 混版（v1.73.2）=================
+//
+// 使用者回報：媽媽（舊手機）只是改了行程名，爸爸設好的「每天幾點出發」就跳回舊的，
+// 而且來回不會停。根因是舊版客戶端的 mergeRecord 用**它自己那一版的 TRACKED**
+// 重建 _f，不認識的欄位組整個消失；新版再讀時 effTs 找不到就退路到 updatedAt，
+// 於是舊值取得一個全新的時間戳。
+//
+// 這裡不 mock 合併邏輯：讀真的 js/merge.js，只把 TRACKED 裡的 dayStarts 那一行
+// 用字串手術刪掉，做出一份「v1.68 客戶端」。伺服器端照抄 workers/worker.mjs
+// 的 plan()（sanitizeF → mergeRecord → 只有 changed 才寫）。
+{
+  console.log('\n— 混版（舊版客戶端不認識新欄位組）—');
+  const SRC = await readFile(new URL('../js/merge.js', import.meta.url), 'utf8');
+  const oldSrc = SRC.replace(/dayStarts:\s*\[[^\]]*\],?\s*/g, '');
+  yes(oldSrc !== SRC, '做得出「舊版 TRACKED」副本（找得到 dayStarts 那一行）');
+  const tmp = new URL('./_mixver_old.mjs', import.meta.url);
+  await writeFile(tmp, oldSrc, 'utf8');
+  const Old = await import(tmp.href);
+  await rm(tmp, { force: true });
+
+  const stampG = (r, g, t) => ({ ...r, updatedAt: t, _f: { ...(r._f || {}), [g]: t } });
+  const clone = (r) => JSON.parse(JSON.stringify(r));
+  // 伺服器：照抄 worker.mjs plan() 的合併語意
+  const mkServer = () => {
+    let row = null;
+    return {
+      push(rec0) {
+        const rec = sanitizeF(clone(rec0));
+        if (!row) { row = rec; return; }
+        const { rec: merged, changed } = mergeRecord(row, rec);
+        if (changed) row = merged;
+      },
+      pull() { return row && clone(row); },
+      get startMin() { return row && row.dayStarts && row.dayStarts[1]; },
+    };
+  };
+
+  // 情境一：A 設 07:00 之後，B 只改行程名（完全沒碰出發時刻）
+  const S = mkServer();
+  let a = stampG(stampG({ id: 't1', type: 'trip', title: '宜蘭', dayStarts: { 1: 540 } }, 'dayStarts', 1000), 'title', 1000);
+  S.push(a);
+  let b = Old.mergeRecord(null, S.pull()).rec;
+  a = stampG({ ...a, dayStarts: { 1: 420 } }, 'dayStarts', 1500);   // A：改成 07:00
+  S.push(a);
+  b = Old.mergeRecord(stampG({ ...b, title: '宜蘭三日' }, 'title', 2000), b).rec;   // B：只改名字
+  S.push(b);
+  yes(S.startMin === 420,
+    '舊版裝置改行程名，不會把新版設好的「每天幾點出發」蓋回去',
+    `伺服器上是 ${S.startMin}（應為 420）`);
+
+  // 情境二：舊版真的沒有這個欄位時，也不能讓它把值弄不見
+  const S2 = mkServer();
+  let a2 = stampG(stampG({ id: 't2', type: 'trip', title: 'x', dayStarts: { 1: 480 } }, 'dayStarts', 3000), 'title', 3000);
+  S2.push(a2);
+  const b2 = Old.mergeRecord(null, S2.pull()).rec;
+  S2.push(stampG({ ...b2, title: 'y' }, 'title', 3500));
+  yes(S2.startMin === 480, '舊版裝置推回來也不會讓新欄位的值消失', `伺服器上是 ${S2.startMin}`);
+
+  // 情境三：升級當下 —— B 換成新版，本機那份 stale 值不能拿新戳去蓋人
+  //（這是 seedF 那一半在守的；只做 effTs 那一半的話這條會紅）
+  const S3 = mkServer();
+  let a3 = stampG(stampG({ id: 't3', type: 'trip', title: 'x', dayStarts: { 1: 540 } }, 'dayStarts', 1000), 'title', 1000);
+  S3.push(a3);
+  let b3 = Old.mergeRecord(null, S3.pull()).rec;               // B 在舊版時期合併過 → _f.dayStarts 消失
+  a3 = stampG({ ...a3, dayStarts: { 1: 420 } }, 'dayStarts', 5000);
+  S3.push(a3);
+  // B 升級成新版，然後改了行程名（走 store.patch 的語意：seedF + 只 bump 改到的組）
+  const f3 = seedF(b3, b3.updatedAt);
+  const b3n = { ...b3, title: 'z', updatedAt: 6000, _f: { ...f3, title: 6000 } };
+  S3.push(b3n);
+  yes(S3.startMin === 420,
+    '舊裝置升級後改別的東西，不會幫本機那份 stale 值蓋新章去覆蓋別台',
+    `伺服器上是 ${S3.startMin}（應為 420）`);
+
+  // 情境四：sanitizeF 要放行未知鍵（否則伺服器自己就是製造「缺一組」的來源），
+  // 但要有閘門
+  const un = sanitizeF({ type: 'trip', _f: { title: 1000, futureGroup: 2000, evil: 'x', BAD_KEY: 3000, __proto__: 4000 } });
+  yes(Number.isFinite(un._f.futureGroup) && un._f.title === 1000,
+    'sanitizeF：放行未來版本的欄位組（不然伺服器就是那個把鍵砍掉的人）', J(un._f));
+  yes(un._f.evil === undefined && un._f.BAD_KEY === undefined,
+    'sanitizeF：非數字與不合規鍵名照樣擋掉', J(un._f));
+  const many = {};
+  for (let i = 0; i < 40; i++) many['fut' + i] = 1000 + i;
+  const cap = sanitizeF({ type: 'trip', _f: { title: 1000, ...many } });
+  yes(Object.keys(cap._f).length <= 9,
+    `sanitizeF：未知鍵有數量上限（40 個只留 ${Object.keys(cap._f).length - 1} 個未知鍵）`, J(Object.keys(cap._f).length));
+  const frozen = sanitizeF({ type: 'trip', _f: { title: 9e15 } });
+  yes(frozen._f.title === undefined,
+    'sanitizeF：擋掉遠在未來的時間戳（否則任何人都能把一個欄位組永久凍結）', J(frozen._f));
 }
 
 // ================= 兩台裝置 =================

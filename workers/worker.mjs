@@ -86,10 +86,21 @@ const safeImgType = (t) => (IMG_TYPES.has(String(t || '').toLowerCase().split(';
 // 不會知道，本機副本反而留著。改寫成「無座標墓碑」並佔新 seq，才會傳播出去。
 const POS_TTL_MS = 48 * 3600 * 1000;
 
-// 順手清掉過期的限流計數列（不清的話 rl 表會一直長）
+// 順手清掉過期的限流計數列（不清的話 rl 表會一直長）。
+//
+// v1.73.2 修單位：`win` 是**視窗編號** = floor(now / (period*1000))，而每一種 kind
+// 的 period 不同（60 秒 vs 10 秒），所以不同 kind 的 win 根本不在同一個尺度上，
+// 一個門檻值不可能同時對。以前寫成 floor((now - 1天) / 1000) ≈ 1.8e12 —— 那個值
+// 比任何 win 都大，等於每天把整張表刪光。今天是 fail-open（視窗最長 60 秒，跑 cron
+// 的時候本來就全過期了）所以行為上無害，但註解說的不是它在做的事，日後有人把
+// cron 改密一點就會誤刪活著的計數器。
 async function sweepRateLimits(env) {
-  const oldWin = Math.floor((Date.now() - 86400000) / 1000);
-  try { await env.DB.prepare('DELETE FROM rl WHERE win < ?').bind(oldWin).run(); } catch { /* noop */ }
+  for (const [kind, cfg] of Object.entries(LIMITS)) {
+    const oldWin = Math.floor((Date.now() - 86400000) / (cfg.period * 1000));
+    try {
+      await env.DB.prepare('DELETE FROM rl WHERE k LIKE ?1 AND win < ?2').bind(kind + ':%', oldWin).run();
+    } catch { /* noop */ }
+  }
 }
 
 async function sweepPositions(env) {
@@ -178,15 +189,27 @@ export default {
     try {
       // 限流：key 依群組祕鑰（見 rlKey 的說明）。讀取（pull/HEAD）不限，
       // 只擋會寫入或會花錢的：上傳照片、推記錄、建新群組。
-      const rk = await rlKey(secret);
-      // 建新群組用 IP 當 key —— 這時候祕鑰是請求方自己指定的，拿它當 key 等於沒擋
-      if (request.method === 'POST' || request.method === 'PUT') {
-        const exists = await env.DB.prepare('SELECT 1 FROM groups WHERE id = ?').bind(groupId).first();
-        if (!exists) {
-          const rl = await limited(env, 'newgroup', request.headers.get('cf-connecting-ip') || 'anon');
+      // v1.73.2：限流的 key 以前一律是「請求方自己指定的祕鑰」的雜湊，而這是在
+      // **驗證之前**。祕鑰對不上時，攻擊者每換一把就拿到一個全新的計數器 ——
+      // 擋不到掃描，而且**每一次未驗證的請求都是一筆 D1 寫入**。Workers 免費方案
+      // 每天 10 萬請求，剛好等於 D1 每日的寫入上限；2026-09 起 D1 超額不再只是
+      // 告警而是直接讓查詢回錯誤，所以一次掃描就可能讓這家人當天同步不了。
+      //
+      // 修法：先讀一次群組列（POST/PUT 本來就要讀），祕鑰對得上才用祕鑰當 key
+      // （維持「每個家庭各自一份額度」的原意），對不上就退回 IP。
+      const ip = request.headers.get('cf-connecting-ip') || 'anon';
+      const writes = request.method === 'POST' || request.method === 'PUT';
+      let row = null;
+      if (writes) {
+        row = await env.DB.prepare('SELECT secret FROM groups WHERE id = ?').bind(groupId).first();
+        // 建新群組用 IP 當 key —— 這時候祕鑰是請求方自己指定的，拿它當 key 等於沒擋
+        if (!row) {
+          const rl = await limited(env, 'newgroup', ip);
           if (rl) return rl;
         }
       }
+      const known = !!(row && timingSafeEqual(row.secret, secret));
+      const rk = known ? await rlKey(secret) : 'ip:' + ip;
       if (path === '/push' && request.method === 'POST') {
         const rl = await limited(env, 'push', rk);
         if (rl) return rl;
@@ -226,11 +249,19 @@ async function authGroup(env, groupId, secret, { createIfMissing = false } = {})
 }
 
 // ---------- /push ----------
+// 一批最多 80 筆（js/outbox.js 的 CHUNK），一筆記錄實測 1–2 KB，
+// 照片是走 /blob/ 不走這裡。2 MB 是十倍餘裕。
+const MAX_PUSH_BYTES = 2_000_000;
+
 async function handlePush(request, env, groupId, secret) {
-  const body = await request.json().catch(() => ({}));
-  const records = Array.isArray(body.records) ? body.records : [];
+  // v1.73.2：先擋大小、再驗身分、最後才解析。以前是「無上限解析 → 才驗身分」，
+  // 等於任何拿得到網址的人都能讓我們花 CPU 解析任意大的 JSON。
+  const len = Number(request.headers.get('content-length') || 0);
+  if (len > MAX_PUSH_BYTES) return json({ error: 'too large' }, 413);
   const { error } = await authGroup(env, groupId, secret, { createIfMissing: true });
   if (error) return error;
+  const body = await request.json().catch(() => ({}));
+  const records = Array.isArray(body.records) ? body.records : [];
 
   // 撈出這批 id 目前的狀態。D1 一條敘述最多約 100 個綁定參數（含 groupId 這個），
   // 超過的話這條查詢會讓整個 Worker 直接被平台中止（不是普通的 JS 例外，try/catch

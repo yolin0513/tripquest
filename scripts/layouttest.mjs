@@ -343,9 +343,17 @@ try {
   console.log(`\n— 掃描結果：${combos} 種頁面組合 + ${modalN} 個對話框 —`);
   const byKind = {};
   for (const p of problems) byKind[p.kind] = (byKind[p.kind] || 0) + 1;
+  // 報告檔**永遠**寫。以前只在有問題時寫，全綠時磁碟上留著的是上一次的舊報告 ——
+  // 看到那個檔案的人會以為問題還在。
+  const head = `TripQuest 版面掃描 ${new Date().toISOString().slice(0, 16).replace('T', ' ')}\n`
+    + `${combos} 種頁面組合（${ROUTES.length} 頁 × ${FONTS.length} 字級 × ${WIDTHS.length} 寬度）+ ${modalN} 個對話框\n`
+    + `發現 ${problems.length} 個問題\n${'-'.repeat(60)}\n`;
+  const lines2 = problems.map((p) => `[${p.kind}] ${p.where}\n    ${p.detail}\n    出現在：${p.combos.join('、')}`);
+  try {
+    fs.writeFileSync(path.join(ROOT, 'screenshots', '_layout-report.txt'),
+      head + (lines2.join('\n\n') || '（零問題）\n'), 'utf8');
+  } catch { /* noop */ }
   if (problems.length) {
-    const lines2 = problems.map((p) => `[${p.kind}] ${p.where}\n    ${p.detail}\n    出現在：${p.combos.join('、')}`);
-    try { fs.writeFileSync(path.join(ROOT, 'screenshots', '_layout-report.txt'), lines2.join('\n\n'), 'utf8'); } catch { /* noop */ }
     for (const p of problems) {
       console.log(`  ✗ [${p.kind}] ${p.where}`);
       console.log(`      ${p.detail}`);

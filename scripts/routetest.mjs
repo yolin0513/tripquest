@@ -168,6 +168,7 @@ try {
     await loadThemes();
     const osrm = (n) => ({ src: 'osrm', sec: Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : 1800))) });
     const pick = (c) => ({ a: c.arrive, l: c.late, soft: c.lateSoft, stay: c.stayUsed, asm: c.stayAssumed, far: !!c.longHaul });
+    const pc = await import('./js/plancheck.js');
 
     // ① 跨區之後不能沿用前一站的離開時間（實測修前第三站憑空算出 10:05 到）
     const teleport = r.chainTimes([
@@ -175,6 +176,24 @@ try {
       { id: 'b', lat: 26.21, lng: 127.68, stayMin: 60 },
       { id: 'c', lat: 26.22, lng: 127.69, stayMin: 60 },
     ], null, 'drive').map(pick);
+
+    // ①-b 沒有座標的景點也會斷鏈 —— cur 要跟著斷（v1.73.2）
+    // 修前：D 的抵達時刻是從 A 的離開時間算的，B/C 被當成零停留零車程，
+    // 而且 lateSoft=false（B/C 的 arrive 是 null，soft 那一行沒觸發）→
+    // dayIssues 會把它當成**硬**遲到報出來。dayMatrix 會把缺座標的點濾掉再算矩陣，
+    // 所以 src 仍是 'osrm'，這條路在正式環境到得了。
+    const nocoord = r.chainTimes([
+      { id: 'a', name: 'A', lat: 24.60, lng: 121.70, startMin: 540, stayMin: 60 },
+      { id: 'b', name: 'B' },                                   // 還沒找到位置
+      { id: 'c', name: 'C', lat: 24.70, lng: 121.80 },
+      { id: 'd', name: 'D', lat: 25.60, lng: 121.90, startMin: 600 },
+    ], osrm(4), 'drive');
+    const nocoordIssues = pc.dayIssues([
+      { id: 'a', name: 'A', lat: 24.60, lng: 121.70, startMin: 540, stayMin: 60 },
+      { id: 'b', name: 'B' },
+      { id: 'c', name: 'C', lat: 24.70, lng: 121.80 },
+      { id: 'd', name: 'D', lat: 25.60, lng: 121.90, startMin: 600 },
+    ], nocoord, []);
 
     // ② 跨午夜的遲到（實測修前 late=1413 →「比預定晚 23 小時 33 分」）
     const midnight = r.chainTimes([
@@ -220,7 +239,7 @@ try {
       sunrise: r.timeConflicts([t('a', '夜景', 1320, 60), t('b', '日出', 300, 60)]),
       evening: r.timeConflicts([t('a', 'A', 1200, 30), t('b', 'B', 1140, 30)]),
     };
-    return { teleport, midnight, legacy, stays, gate: {
+    return { nocoord: nocoord.map(pick), nocoordIssues, teleport, midnight, legacy, stays, gate: {
       small: { l: gate.small.late, soft: gate.small.lateSoft },
       big: { l: gate.big.late, soft: gate.big.lateSoft },
       guessed: { l: gate.guessed.late, soft: gate.guessed.lateSoft },
@@ -228,6 +247,14 @@ try {
     }, cf };
   });
 
+  // v1.73.2：缺座標的景點也要斷鏈
+  yes(fix.nocoord[1].a === null && fix.nocoord[2].a === null && fix.nocoord[3].l === 0,
+    `沒有座標的景點會斷鏈，下游不會從兩站以前接上`
+    + `（D 自己填了 10:00 所以 arrive=${fix.nocoord[3].a} 是對的；`
+    + `修前它會從 A 的離開時間算出 late=60，現在 late=${fix.nocoord[3].l}）`);
+  yes(!fix.nocoordIssues.some((x) => x.kind === 'late'),
+    `不會拿虛構的鏈報「硬」遲到（修前會出現「最快 01:00 才會到」這種句子）`,
+    JSON.stringify(fix.nocoordIssues.filter((x) => x.kind === 'late')));
   yes(fix.teleport[1].far && fix.teleport[1].a === null && fix.teleport[2].a === null,
     `跨區之後不會瞬間移動（修前第三站憑空算出 10:05 到；現在 arrive=${fix.teleport[2].a}）`);
   yes(fix.midnight[1].l === 0 && fix.midnight[1].a === 1500,
