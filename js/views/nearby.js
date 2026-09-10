@@ -15,6 +15,9 @@ import * as store from '../store.js';
 import { h, mount } from '../ui.js';
 import { currentPosition, navUrl, fmtDist } from '../geo.js';
 import { nearbyLife, LIFE } from '../nearby.js';
+import { nearbyParkingGoogle, placesErr } from '../places.js';
+import { getMapsKey, mapsBudget, addMapsCalls } from '../aikeys.js';
+import { haversine } from '../geo.js';
 
 export default async function nearbyView(tripId) {
   setTop({ title: '找附近' });
@@ -24,6 +27,11 @@ export default async function nearbyView(tripId) {
   let center = null;                                   // { lat, lng, label }
   let kind = 'parking';
   let gen = 0;                                          // 換分類/換中心時作廢舊查詢
+  // Google 的結果只活在這一次的畫面上 —— Places 的內容不准長期儲存（除了 place_id），
+  // 所以不寫快取、換分類或換中心就丟掉。這也是為什麼 OSM 仍然是預設：離線時要有東西看。
+  let gResults = null;
+  let mapsKey = '';
+  getMapsKey(tripId).then((k) => { mapsKey = k || ''; if (k) refresh(); }).catch(() => {});
 
   // ---- 中心：目前位置優先，拿不到就用「現在這一站」，也可手動選景點 ----
   const centerSel = h('select', { class: 'field nl-center', onchange: () => pickCenter(centerSel.value) },
@@ -36,7 +44,7 @@ export default async function nearbyView(tripId) {
   const catBar = h('div', { class: 'nl-cats' });
   const drawCats = () => {
     mount(catBar, ...Object.entries(LIFE).map(([k, m]) =>
-      h('button', { class: 'nl-cat' + (k === kind ? ' on' : ''), onclick: () => { kind = k; drawCats(); refresh(); } },
+      h('button', { class: 'nl-cat' + (k === kind ? ' on' : ''), onclick: () => { kind = k; gResults = null; drawCats(); refresh(); } },
         h('span', { class: 'nl-cat-emoji' }, m.emoji),
         h('span', { class: 'nl-cat-label' }, m.label))));
   };
@@ -53,6 +61,7 @@ export default async function nearbyView(tripId) {
       const pos = await currentPosition({ maxAgeMs: 120000 });
       if (pos) {
         center = { lat: pos.lat, lng: pos.lng, label: '目前位置' };
+        gResults = null;
         centerLine.textContent = pos.stale ? '用的是稍早的定位（拿不到新的）' : '以你的目前位置為中心';
       } else if (spots.length) {
         // 沒開定位：退回「現在這一站」（沒有就第一個有座標的景點），並把選單同步過去
@@ -71,6 +80,7 @@ export default async function nearbyView(tripId) {
       if (!s) return;
       center = { lat: s.lat, lng: s.lng, label: s.name };
       centerLine.textContent = `以「${s.name}」為中心`;
+      gResults = null;
     }
     refresh();
   }
@@ -93,15 +103,65 @@ export default async function nearbyView(tripId) {
         h('button', { class: 'btn btn-soft', onclick: () => refresh({ fresh: true }) }, '再試一次')));
       return;
     }
-    const rows = results.slice(0, 15).map((it) => card(it, meta));
+    // Google 的結果（按了「再查一次」才會有）取代清單，但 OSM 那份還在，可以切回去
+    const useG = kind === 'parking' && gResults && gResults.length;
+    const shown = useG ? gResults : results;
+    const rows = shown.slice(0, 15).map((it) => card(it, meta));
     mount(listBox,
       h('p', { class: 'sm muted nl-count' },
-        `${meta.radius >= 1000 ? (meta.radius / 1000) + ' 公里' : meta.radius + ' 公尺'}內找到 ${results.length} 個${meta.label}`
-        + (results.length > 15 ? '，先列最近 15 個' : '')
-        + (stale ? `（離線，這是 ${fmtAge(at)}的結果）` : '')),
+        useG
+          ? `Google 找到 ${shown.length} 個停車場（依距離）`
+          : `${meta.radius >= 1000 ? (meta.radius / 1000) + ' 公里' : meta.radius + ' 公尺'}內找到 ${results.length} 個${meta.label}`
+            + (results.length > 15 ? '，先列最近 15 個' : '')
+            + (stale ? `（離線，這是 ${fmtAge(at)}的結果）` : '')),
       ...(rows.length ? rows : [h('div', { class: 'empty' }, h('p', {}, `這附近查不到${meta.label}——地圖資料可能還沒收錄。`))]),
+      // Places 的條款不准把內容存下來，所以這份結果離線就沒有了 —— 要講明白，
+      // 不然使用者會以為 App 壞掉
+      useG ? h('p', { class: 'sm muted nl-gnote' },
+        '這份是 Google 的資料，依規定不會存在手機裡 —— 離線時看不到，會回到地圖資料那一份。')
+        : null,
+      useG ? h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:6px',
+        onclick: () => { gResults = null; refresh(); } }, '↩︎ 回到地圖資料（可離線）') : null,
+      (!useG && kind === 'parking' && mapsKey) ? h('button', {
+        class: 'btn btn-soft btn-block nl-google', style: 'margin-top:6px', onclick: googleAgain,
+      }, '🔍 用 Google 再查一次') : null,
       h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:6px', onclick: () => refresh({ fresh: true }) }, '🔄 重新整理'),
     );
+  }
+
+  // 「用 Google 再查一次」。OSM 的停車場資料在市區常常只有一塊地、什麼都沒填
+  // （v1.66 已經把那種排到後面），資料還是不夠時可以按這顆拿第二意見。
+  // Google 的強項是 businessStatus（歇業的直接不列）與營業場所的名稱。
+  async function googleAgain() {
+    if (!center) return;
+    const btn = listBox.querySelector('.nl-google');
+    if (btn) { btn.disabled = true; btn.textContent = '查詢中…'; }
+    const budget = await mapsBudget(tripId);
+    if (!budget.ok) {
+      const { toast } = await import('../ui.js');
+      toast(budget.noKey ? '還沒設定地圖金鑰' : `這個月的查詢次數用完了（${budget.used}/${budget.cap}）`);
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 用 Google 再查一次'; }
+      return;
+    }
+    const my = gen;
+    const r = await nearbyParkingGoogle(center.lat, center.lng, mapsKey, { radius: LIFE.parking.radius });
+    if (my !== gen) return;
+    await addMapsCalls(tripId, 1);
+    if (!r.ok) {
+      const { toast } = await import('../ui.js');
+      toast(placesErr(r.reason));
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 用 Google 再查一次'; }
+      return;
+    }
+    gResults = r.results
+      .map((x) => ({ ...x, dist: Math.round(haversine({ lat: center.lat, lng: center.lng }, { lat: x.lat, lng: x.lng })) }))
+      .sort((a, b) => a.dist - b.dist);
+    if (!gResults.length) {
+      const { toast } = await import('../ui.js');
+      toast('Google 這附近也沒有停車場資料');
+      gResults = null;
+    }
+    refresh();
   }
 
   function card(it, meta) {
@@ -124,6 +184,9 @@ export default async function nearbyView(tripId) {
       if (it.h24) chips.push('🕐 24 小時');
     }
     if (!it.h24 && it.hours && it.hours.length <= 30) chips.push(`🕒 ${it.hours}`);
+    // 標示出處是 Places 條款的要求，也讓使用者知道這一份跟平常那一份不一樣
+    if (it.src === 'google') chips.push('Google');
+    if (it.addr) chips.push(it.addr.slice(0, 24));
     // 這類設施多半沒有店名——導航一律用座標（家附近同品牌分店太多，用店名會被
     // 地圖帶去別間；這是「地名優先」規則的合理例外）
     return h('div', { class: 'nl-card' },

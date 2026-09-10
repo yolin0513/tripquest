@@ -116,7 +116,7 @@ async function pasteKey(tripId, provider, refresh) {
       h('div', { class: 'numpad-row' }, field, pasteBtn),
       status,
       h('p', { class: 'form-hint' }, isMaps
-        ? '在 Google Cloud 啟用「Routes API」後建立金鑰，並加「HTTP 參照網址」限制到這個網站。'
+        ? '在 Google Cloud 啟用「Routes API」與「Places API (New)」後建立金鑰，並加「HTTP 參照網址」限制到這個網站。'
           + '如果你的語音金鑰同一個專案、也啟用了 Routes API，貼同一把就可以。'
         : (isG
           ? '在 Google Cloud 建立 API 金鑰，建議加「HTTP 參照網址」限制到你的網站。'
@@ -159,7 +159,8 @@ export function mapsConfigCard(tripId) {
   const draw = async () => {
     const kids = [];
     kids.push(h('p', { class: 'sm muted' },
-      '開啟後，「調整行程」每一天會多一顆「🚆 大眾運輸」，可以查實際班次、轉乘次數與步行時間。'
+      '開啟後：「調整行程」每一天多一顆「🚆 大眾運輸」（實際班次、轉乘、步行時間）；'
+      + '「找附近 → 停車場」多一顆「🔍 用 Google 再查一次」。'
       + (creator ? '' : '這趟由建立者提供。')));
     if (!creator) { card.replaceChildren(...kids); return; }
 

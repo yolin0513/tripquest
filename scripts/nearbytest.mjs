@@ -61,6 +61,32 @@ const FIX = {
   ],
   'amenity=fuel': [el(31, 0.01, 0.01, { amenity: 'fuel', name: '台灣中油羅東站', opening_hours: '24/7' })],
 };
+// ---- mock Google Places（v1.70 雙軌）----
+let placeReqs = [];
+let placeMode = 'ok';
+const PLACES = 8809;
+const placesSrv = createServer((req, res) => {
+  let body = '';
+  req.on('data', (c) => { body += c; });
+  req.on('end', () => {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' };
+    if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
+    let j = {}; try { j = JSON.parse(body); } catch { /* noop */ }
+    placeReqs.push({ body: j, key: req.headers['x-goog-api-key'], mask: req.headers['x-goog-fieldmask'] });
+    if (placeMode === 'forbidden') { res.writeHead(403, cors); return res.end('{}'); }
+    res.writeHead(200, { ...cors, 'content-type': 'application/json' });
+    res.end(JSON.stringify({ places: [
+      { id: 'p1', displayName: { text: '嗜嗜房羅東站' }, location: { latitude: C.lat + 0.001, longitude: C.lng + 0.001 },
+        businessStatus: 'OPERATIONAL', shortFormattedAddress: '宜蘭縣羅東鎮公正路 1 號' },
+      { id: 'p2', displayName: { text: '已歇業的停車場' }, location: { latitude: C.lat + 0.002, longitude: C.lng },
+        businessStatus: 'CLOSED_PERMANENTLY', shortFormattedAddress: '' },
+      { id: 'p3', displayName: { text: '羅東夜市停車場' }, location: { latitude: C.lat + 0.004, longitude: C.lng },
+        businessStatus: 'OPERATIONAL', shortFormattedAddress: '宜蘭縣羅東鎮民權路' },
+    ] }));
+  });
+});
+placesSrv.listen(PLACES);
+
 let opDown = false;
 const op = createServer((req, res) => {
   let body = '';
@@ -88,7 +114,10 @@ try {
   const page = await ctx.newPage();
   await page.setViewport({ width: 390, height: 844 });
   await page.setGeolocation({ latitude: C.lat, longitude: C.lng });
-  await page.evaluateOnNewDocument((u) => { window.__TQ_OVERPASS_ENDPOINT = u; }, `http://localhost:${OP}/`);
+  await page.evaluateOnNewDocument((o) => {
+    window.__TQ_OVERPASS_ENDPOINT = o.op;
+    window.__TQ_PLACES_ENDPOINT = o.places;
+  }, { op: `http://localhost:${OP}/`, places: `http://localhost:${PLACES}/places` });
   page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
@@ -171,6 +200,56 @@ try {
     '名字寫明員工專用、但沒有 access 標記的（石牌實測三個）→ 不列');
   yes(parking.cards.filter((c) => c.name.replace(/^\S+\s*/, '') === '地下停車場').length === 2,
     '同名但相距 1 公里 → 兩個不同的停車場都要列（舊的全域同名去重會砍掉一個）');
+
+  // ---- v1.70 停車場雙軌（Google 選配）----
+  yes(!(await page.evaluate(() => !!document.querySelector('.nl-google'))),
+    '沒有地圖金鑰 → 不出現「用 Google 再查一次」（免費路徑完全不變）');
+  yes(placeReqs.length === 0, `沒有金鑰 → 零個 Places 請求（實際 ${placeReqs.length}）`);
+
+  await page.evaluate(async (t) => {
+    const k = await import('./js/aikeys.js');
+    await k.setTripKey(t, { mapsKey: 'AIzaPLACESPLACESPLACESPLACESPLACESPLA' });
+  }, tid);
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${tid}/nearby`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.nl-card', { timeout: 10000 });
+  await page.waitForFunction(() => !!document.querySelector('.nl-google'), { timeout: 10000 });
+  yes(placeReqs.length === 0, '有金鑰但沒按 → 還是不打 Google（OSM 仍然是預設）');
+
+  await page.evaluate(() => document.querySelector('.nl-google').click());
+  await page.waitForFunction(() => (document.querySelector('.nl-count') || {}).textContent?.includes('Google'), { timeout: 15000 });
+  const g = await page.evaluate(() => ({
+    count: document.querySelector('.nl-count')?.textContent || '',
+    names: [...document.querySelectorAll('.nl-name')].map((n) => n.textContent.trim()),
+    chips: [...document.querySelectorAll('.nl-card')].map((c) => [...c.querySelectorAll('.nl-chip')].map((x) => x.textContent)),
+    note: document.querySelector('.nl-gnote')?.textContent || '',
+    back: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('回到地圖資料')),
+  }));
+  yes(placeReqs.length === 1 && placeReqs[0].body.includedTypes[0] === 'parking',
+    `按下去才打 Google，而且只要 parking 類型（實際 ${placeReqs.length} 次）`);
+  yes(!/rating|userRatingCount/i.test(placeReqs[0].mask || ''),
+    'FieldMask 沒有要評分與評論數 —— 那兩個欄位會把整個請求升到 Enterprise 級計費');
+  yes(placeReqs[0].key === 'AIzaPLACESPLACESPLACESPLACESPLACESPLA', '金鑰放在 X-Goog-Api-Key 標頭');
+  yes(g.names.some((n) => n.includes('嗜嗜房羅東站')), `列出 Google 的停車場（${g.names.slice(0, 2).join('、')}）`);
+  yes(!g.names.some((n) => n.includes('已歇業')),
+    'businessStatus 不是 OPERATIONAL 的不列 —— 這是 Google 比 OSM 強的地方');
+  yes(g.chips.some((c) => c.includes('Google')), '每一張卡標明出處是 Google（條款要求）');
+  yes(g.note.includes('不會存在手機裡') && g.note.includes('離線'),
+    `講明 Places 的資料不存快取、離線看不到：「${g.note.slice(0, 40)}…」`);
+  yes(g.back, '有「↖︎ 回到地圖資料（可離線）」可以切回去');
+
+  const usedG = await page.evaluate(async (t) => (await (await import('./js/aikeys.js')).usageOf(t)).mapsUsed, tid);
+  yes(usedG === 1, `Google 查詢計入用量（${usedG} 次）`);
+
+  // 切回地圖資料
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('回到地圖資料')).click());
+  await page.waitForFunction(() => !(document.querySelector('.nl-count') || {}).textContent?.includes('Google'), { timeout: 10000 });
+  const backOsm = await page.evaluate(() => ({
+    count: document.querySelector('.nl-count')?.textContent || '',
+    hasGoogleChip: [...document.querySelectorAll('.nl-chip')].some((x) => x.textContent === 'Google'),
+  }));
+  yes(!backOsm.hasGoogleChip && backOsm.count.includes('停車場'),
+    `切回去就是原本的地圖資料（「${backOsm.count.trim()}」）`);
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
   yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);
@@ -277,6 +356,6 @@ try {
   fail('例外：' + (e && e.stack || e));
 } finally {
   await browser.close();
-  web.kill(); op.close();
+  web.kill(); op.close(); placesSrv.close();
 }
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));
