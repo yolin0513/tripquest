@@ -11,6 +11,11 @@ compatibility_date = "2024-11-01"
 [triggers]
 crons = ["0 3 * * *"]
 
+# 限流（v1.65）寫在 worker.mjs 裡、用 D1 計數。
+# 這裡刻意**不用** Cloudflare 的 Rate Limiting 綁定：實測在這個帳號/方案上它完全不計數
+#（連續 40 次以上呼叫、額度設 5／10 秒，每次都回 success:true），官方文件也自承它
+# 「不是精確的計數系統」。而 WAF 的 rate limiting 規則對 workers.dev 不適用（要有 zone）。
+
 [[d1_databases]]
 binding = "DB"
 database_name = "tripquest"

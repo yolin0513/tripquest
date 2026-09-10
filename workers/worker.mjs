@@ -30,6 +30,50 @@ const TRACKED_SQL = Object.keys(TRACKED).map((t) => `'${t}'`).join(',');
 import { inviteSummary } from '../js/invite.js';
 const PULL_LIMIT = 500;
 
+// ---------- 限流（v1.65）----------
+// key 用「群組祕鑰的雜湊」而不是 IP：一家人出遊時同一個 Wi-Fi、同一個 IP，
+// 用 IP 會把全家算成一個人；用群組則是「每個家庭各自一份額度」。
+// 雜湊而不是原文：不要把祕鑰送進 Cloudflare 的限流基礎設施。
+async function rlKey(secret) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rl:' + secret));
+  return [...new Uint8Array(buf).slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 超過額度就回 429 並講清楚 —— 不要靜默失敗，客戶端才知道是「太頻繁」不是「壞掉了」。
+//
+// 用 D1 自己數，不用 Cloudflare 的 Rate Limiting 綁定：實測那個綁定在這個帳號/方案上
+// **完全不計數**（連續 40 次以上呼叫、額度設 5／10 秒，每次都回 success:true）。
+// 官方文件也自承它「不是精確的計數系統、只適合當寬鬆的過濾器」。
+// 固定視窗就夠了（我們要擋的是失控迴圈與掃描器，不是精算），一次請求一筆 D1 寫入，
+// 家庭規模一天幾百筆，離免費額度（每日 10 萬次寫入）很遠。
+const LIMITS = {
+  blob:  { limit: 200, period: 60 },   // 189 張照片＝378 個檔案的爆量約 2 分鐘傳完
+  push:  { limit: 30,  period: 60 },   // 正常是 20 秒一次
+  resolve: { limit: 5, period: 10 },   // 每次會對 Google 發最多 5 個請求
+  newgroup: { limit: 3, period: 60 },  // 一家人一年建幾趟旅程
+};
+
+async function limited(env, kind, who) {
+  const cfg = LIMITS[kind];
+  if (!cfg || !env.DB) return null;
+  const win = Math.floor(Date.now() / (cfg.period * 1000));
+  let n = 0;
+  try {
+    const row = await env.DB.prepare(
+      `INSERT INTO rl (k, n, win) VALUES (?1, 1, ?2)
+       ON CONFLICT(k) DO UPDATE SET
+         n = CASE WHEN rl.win <> ?2 THEN 1 ELSE rl.n + 1 END,
+         win = ?2
+       RETURNING n`
+    ).bind(kind + ':' + who, win).first();
+    n = Number(row && row.n) || 0;
+  } catch { return null; }             // 計數本身壞掉不能擋住正常使用
+  if (n <= cfg.limit) return null;
+  const res = json({ error: 'rate limited', message: '同步太頻繁，請等一下再試。' }, 429);
+  res.headers.set('retry-after', String(cfg.period));
+  return res;
+}
+
 // 上傳的「照片」只准是圖片（v1.64 健檢）。原本原樣沿用上傳者指定的 content-type：
 // 持祕鑰的成員可以放一個 text/html 的「照片」，再發布公開相簿 —— 那個網址就會在
 // workers.dev 網域上以 HTML 執行，繞過相簿頁的 script-src 'none'。
@@ -41,6 +85,12 @@ const safeImgType = (t) => (IMG_TYPES.has(String(t || '').toLowerCase().split(';
 // 刻意**不是 DELETE**：客戶端的同步游標是 seq，直接刪列的話已經拉過的手機永遠
 // 不會知道，本機副本反而留著。改寫成「無座標墓碑」並佔新 seq，才會傳播出去。
 const POS_TTL_MS = 48 * 3600 * 1000;
+
+// 順手清掉過期的限流計數列（不清的話 rl 表會一直長）
+async function sweepRateLimits(env) {
+  const oldWin = Math.floor((Date.now() - 86400000) / 1000);
+  try { await env.DB.prepare('DELETE FROM rl WHERE win < ?').bind(oldWin).run(); } catch { /* noop */ }
+}
 
 async function sweepPositions(env) {
   const cutoff = Date.now() - POS_TTL_MS;
@@ -74,6 +124,7 @@ export default {
   // 每天清一次過期位置（wrangler.toml 的 triggers）
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sweepPositions(env).catch((e) => console.error('sweepPositions', e)));
+    ctx.waitUntil(sweepRateLimits(env));
   },
 
   async fetch(request, env) {
@@ -110,6 +161,12 @@ export default {
     // 地圖短網址解析（v1.61）。Google 的 maps.app.goo.gl 短網址本身不含座標，
     // 要跟隨轉址才拿得到；瀏覽器端直接 fetch 會被 CORS 擋，所以借道這裡。
     if (path === '/resolve' && (request.method === 'GET' || request.method === 'HEAD')) {
+      // 這個端點沒有祕鑰可用（單機模式的使用者也要能貼連結），只好用來源 IP。
+      // 它每次會對 Google 發最多 5 個請求，被濫用會讓我們的出口 IP 被 Google 擋掉，
+      // 那樣「貼地圖短網址」對所有人都會失效。
+      const ipKey = request.headers.get('cf-connecting-ip') || 'anon';
+      const rl = await limited(env, 'resolve', ipKey);
+      if (rl) return rl;
       return handleResolve(request, url);
     }
 
@@ -119,6 +176,26 @@ export default {
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(groupId)) return json({ error: 'bad group id' }, 400);
 
     try {
+      // 限流：key 依群組祕鑰（見 rlKey 的說明）。讀取（pull/HEAD）不限，
+      // 只擋會寫入或會花錢的：上傳照片、推記錄、建新群組。
+      const rk = await rlKey(secret);
+      // 建新群組用 IP 當 key —— 這時候祕鑰是請求方自己指定的，拿它當 key 等於沒擋
+      if (request.method === 'POST' || request.method === 'PUT') {
+        const exists = await env.DB.prepare('SELECT 1 FROM groups WHERE id = ?').bind(groupId).first();
+        if (!exists) {
+          const rl = await limited(env, 'newgroup', request.headers.get('cf-connecting-ip') || 'anon');
+          if (rl) return rl;
+        }
+      }
+      if (path === '/push' && request.method === 'POST') {
+        const rl = await limited(env, 'push', rk);
+        if (rl) return rl;
+      }
+      if (path.startsWith('/blob/') && request.method === 'PUT') {
+        const rl = await limited(env, 'blob', rk);
+        if (rl) return rl;
+      }
+
       const blobMatch = path.match(/^\/blob\/([a-f0-9]{16,64})$/);
       if (blobMatch) return handleBlob(request, env, url, groupId, secret, blobMatch[1]);
       if (path === '/push' && request.method === 'POST') return handlePush(request, env, groupId, secret);
