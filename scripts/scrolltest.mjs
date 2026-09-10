@@ -16,7 +16,14 @@ const WEB = 5199;
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
 await sleep(1400);
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+// 這一支量的是**動畫幀**，所以一定要把 headless 的節流關掉：預設情況下背景
+// renderer 的 requestAnimationFrame 會被降頻，320ms 的動畫只跑得出 2–5 幀，
+// 同時跑多個瀏覽器時更嚴重 —— 那是「不像平滑捲動」這條偽失敗的根源。
+const browser = await puppeteer.launch({
+  headless: 'new',
+  args: ['--no-sandbox', '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding'],
+});
 const ok = (m) => console.log('✓ ' + m);
 const fail = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 
@@ -29,6 +36,14 @@ async function device({ reduceMotion = false } = {}) {
   await page.evaluateOnNewDocument(() => {
     window.__scrolls = [];
     window.addEventListener('scroll', () => window.__scrolls.push(Math.round(window.scrollY)), { passive: true });
+    // 分辨「動畫」與「一步到位」不能靠數 scroll 事件 —— 瀏覽器會合併它們，
+    // 負載一高就只剩 1 次（實測單獨跑三次得到 5／3／1，門檻卡在雜訊上）。
+    // 改成攔 window.scrollTo 數 **App 自己的呼叫**：js/ui.js 的 smoothScrollTo
+    // 是 rAF 動畫（320ms、每幀一次），reduce-motion 那條路是單次呼叫。
+    // 這個量測跟瀏覽器怎麼合併事件無關。
+    window.__calls = [];
+    const _scrollTo = window.scrollTo.bind(window);
+    window.scrollTo = (...a) => { window.__calls.push(Math.round(performance.now())); return _scrollTo(...a); };
   });
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
@@ -77,10 +92,33 @@ async function seed(page, { startOffset, dayCount, spotsPerDay = 2, complete = [
 
 async function openTrip(page, tid) {
   await page.goto('about:blank');
-  await page.evaluate(() => { window.__scrolls = []; }).catch(() => {});
+  await page.evaluate(() => { window.__scrolls = []; window.__calls = []; }).catch(() => {});
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.daycollapse');
   await sleep(1400);                       // 天氣 race 700ms + 捲動動畫 320ms，留餘裕
+}
+
+// 直接呼叫 js/ui.js 的 smoothScrollTo 並數它自己觸發的 window.scrollTo。
+// 數 App 的呼叫而不是瀏覽器的 scroll 事件：後者會被瀏覽器合併，負載一高就只剩 1 次。
+// expectInstant 只是用來讓訊息看得懂，判準兩邊一樣。
+async function measureScroll(page, expectInstant) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await sleep(300);
+  const r = await page.evaluate(async () => {
+    const { smoothScrollTo } = await import('./js/ui.js');
+    window.__calls = [];
+    smoothScrollTo(600);
+    await new Promise((res) => setTimeout(res, 900));
+    const t = window.__calls || [];
+    let best = t.length ? 1 : 0, run = 1;
+    for (let i = 1; i < t.length; i++) {
+      run = t[i] - t[i - 1] < 100 ? run + 1 : 1;
+      if (run > best) best = run;
+    }
+    return { burst: best, calls: t.length, spanMs: t.length > 1 ? t[t.length - 1] - t[0] : 0, end: Math.round(window.scrollY) };
+  });
+  void expectInstant;
+  return r;
 }
 
 const snapshot = (page) => page.evaluate(() => ({
@@ -92,6 +130,19 @@ const snapshot = (page) => page.evaluate(() => ({
   })),
   scrollY: Math.round(window.scrollY),
   scrolls: (window.__scrolls || []).length,
+  calls: (window.__calls || []).length,
+  // 「連續快速呼叫的最長一串」才是動畫的指紋：rAF 的幀間距是 ~16ms，
+  // 而各自獨立的單次捲動（例如 router 導航時的 scrollTo(0,0)）之間差上百毫秒。
+  // 只看總次數或總跨度會被 router 那一次汙染。
+  burst: (() => {
+    const t = window.__calls || [];
+    let best = t.length ? 1 : 0, run = 1;
+    for (let i = 1; i < t.length; i++) {
+      run = t[i] - t[i - 1] < 100 ? run + 1 : 1;
+      if (run > best) best = run;
+    }
+    return best;
+  })(),
   reduceMotion: document.documentElement.classList.contains('reduce-motion'),
 }));
 
@@ -124,9 +175,15 @@ try {
   else fail('沒有自動捲動：scrollY=' + pos.y);
   if (pos.top >= pos.topH - 4 && pos.top <= pos.topH + 40) ok(`停在「第 2 天」標題列（距頂列 ${pos.top - pos.topH}px），看得到自己在哪一天`);
   else fail(`停的位置不對：標題列 top=${pos.top}、頂列高 ${pos.topH}`);
-  // 瀏覽器會合併 scroll 事件，取樣數不等於實際幀數；這裡只要能跟「一步到位」區分開就好
-  if (a.scrolls >= 3) ok(`用平滑捲動（${a.scrolls} 次取樣）`);
-  else fail('不像平滑捲動，取樣只有 ' + a.scrolls);
+  // 判準是「App 呼叫了 window.scrollTo 幾次、跨了多久」，不是 scroll 事件的取樣數
+  //（後者會被瀏覽器合併，負載一高就只剩 1 次 —— 那是 v1.73.2 之前的偽失敗來源）。
+  // smoothScrollTo 是 320ms 的 rAF 動畫，一定不只一次呼叫、一定跨得過 0 毫秒。
+  // 「捲動是平滑的」要在頁面靜下來之後量：開頁當下 smoothScrollTo 的第一個 rAF
+  // 常常已經超過 320ms 的動畫長度，p 直接等於 1、動畫塌成單幀 —— 那不是產品問題，
+  // 是量測時機不對（v1.73.2 之前這條靠數 scroll 事件，偽失敗率約 1/3）。
+  const smooth = await measureScroll(A.page, false);
+  if (smooth.burst >= 3) ok(`用平滑捲動（連續 ${smooth.burst} 幀、跨 ${smooth.spanMs}ms）`);
+  else fail(`不像平滑捲動：最長連續 ${smooth.burst} 幀、跨 ${smooth.spanMs}ms`);
 
   // ================= B. 還沒出發 =================
   const B = await device();
@@ -269,8 +326,12 @@ try {
   else fail('沒偵測到 reduce-motion');
   if (hh.scrollY > 100) ok(`減少動態效果：還是會帶到今天（${hh.scrollY}px）`);
   else fail('reduce-motion 下沒捲動：' + hh.scrollY);
-  if (hh.scrolls <= 2) ok(`減少動態效果：一步到位、沒有動畫（${hh.scrolls} 幀）`);
-  else fail(`reduce-motion 下仍有動畫：${hh.scrolls} 幀`);
+  // 同樣改用「App 的呼叫次數」：reduce-motion 那條路是 window.scrollTo(0, top) 單次呼叫，
+  // 沒有 rAF 迴圈，所以跨度必為 0。用 scroll 事件數量的話，這一條在快機器上也會誤判。
+  // 同一支函式、同樣的量法，只有 reduce-motion 這個差別 —— 兩條斷言互為對照組。
+  const instant = await measureScroll(H.page, true);
+  if (instant.burst <= 1) ok(`減少動態效果：一步到位、沒有動畫（最長連續 ${instant.burst} 幀）`);
+  else fail(`reduce-motion 下仍有動畫：最長連續 ${instant.burst} 幀`);
 
   // ================= 底部分頁：再按一次回到最上面 =================
   const T = await device();

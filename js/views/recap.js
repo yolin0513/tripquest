@@ -175,6 +175,8 @@ function chipLines(x, chips, maxW, size) {
 }
 
 // r / ai → { canvas, boxes }。boxes: 每一塊的名稱與外框，給測試驗不重疊、不出界。
+// v1.73.3：外框補上 x0/x1。以前只有 y0/y1，所以「徽章超出右邊被切掉」這種**橫向**
+// 問題結構上就驗不到 —— 而那正是使用者當初回報的三個跑版之一。
 export function renderRecapCard(r, ai, p) {
   const W = 1080, PAD = 90, maxW = W - PAD * 2;
   // 先用一張暫時畫布量字，因為總高度要等排完版才知道
@@ -183,14 +185,26 @@ export function renderRecapCard(r, ai, p) {
   const ops = [];                 // 先記下要畫什麼，量完總高才真的畫
   let y = 100;
 
-  const block = (name, hgt, draw) => { boxes.push({ name, y0: y, y1: y + hgt }); ops.push({ y, draw }); y += hgt; };
+  // xs：這一塊實際畫到的左右邊界。不給的話用版面邊界（PAD 內縮）當保守值。
+  const block = (name, hgt, draw, xs) => {
+    boxes.push({ name, y0: y, y1: y + hgt, x0: xs ? xs.x0 : PAD, x1: xs ? xs.x1 : W - PAD });
+    ops.push({ y, draw }); y += hgt;
+  };
+  // 置中排版的一組行 → 左右邊界（最寬那一行決定）
+  const centred = (widths) => {
+    const w = Math.max(0, ...widths);
+    return { x0: Math.round(W / 2 - w / 2), x1: Math.round(W / 2 + w / 2) };
+  };
   const text = (name, str, size, { weight = 400, color = 'ink', min = 24, maxLines = 99, italic = false, gapAfter = 0 } = {}) => {
     const f = cardWrap(mc, str, maxW, size, { weight, min, maxLines });
+    // 量真正畫出來的寬度（cardWrap 只保證不超過 maxW，但實際多寬要自己量）
+    mc.font = `${italic ? 'italic ' : ''}${weight} ${f.size}px ${CARD_FONT}`;
+    const xs = centred(f.lines.map((ln) => mc.measureText(ln).width));
     block(name, f.lines.length * f.lh, (x, top) => {
       x.font = `${italic ? 'italic ' : ''}${weight} ${f.size}px ${CARD_FONT}`;
       x.fillStyle = p[color]; x.textAlign = 'center'; x.textBaseline = 'top';
       f.lines.forEach((ln, i) => x.fillText(ln, W / 2, top + i * f.lh));
-    });
+    }, xs);
     y += gapAfter;
   };
   const gap = (n) => { y += n; };
@@ -249,7 +263,7 @@ export function renderRecapCard(r, ai, p) {
         let cx = W / 2 - ln.w / 2;
         for (const c of ln.items) { x.fillText(c, cx, top + i * LH); cx += x.measureText(c).width + cg; }
       });
-    });
+    }, centred(lines.map((ln) => ln.w)));
     gap(40);
   }
 

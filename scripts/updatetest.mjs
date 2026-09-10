@@ -215,10 +215,23 @@ try {
   else fail('閒著的分頁沒換：' + tabBBuild);
 
   await sleep(3000);
-  const tabAAfter = await tabA.evaluate(() => ({
-    build: window.__BUILD, bar: !!document.getElementById('updateBar'),
-  })).catch(() => ({ build: 'E', bar: false }));
-  if (tabAAfter.build === 'E' || tabAAfter.bar) {
+  // v1.73.3：以前是 `.catch(() => ({ build: 'E', bar: false }))` —— 而下面的通過條件
+  // 就是 `build === 'E'`，等於「evaluate 一丟例外就算通過」。分頁重載中丟
+  //「Execution context was destroyed」是家常便飯，所以這條斷言以前**不可能失敗**。
+  // 不能反過來把例外當失敗（例外正是因為在重載，而重載就是成功的樣子），
+  // 所以改成重試讀取：等它重載完再讀一次，拿真實狀態來判。
+  const readTab = async (tab) => {
+    for (let i = 0; i < 12; i++) {
+      const r = await tab.evaluate(() => ({
+        build: window.__BUILD, bar: !!document.getElementById('updateBar'),
+      })).catch(() => null);
+      if (r && r.build !== undefined) return r;
+      await sleep(500);
+    }
+    return { build: '(讀不到)', bar: false, stuck: true };
+  };
+  const tabAAfter = await readTab(tabA);
+  if (!tabAAfter.stuck && (tabAAfter.build === 'E' || tabAAfter.bar)) {
     ok('別的分頁換好之後，這一頁' + (tabAAfter.build === 'E' ? '也跟著換好了' : '出現了更新提示') + '（不會卡在舊版又按不動）');
   } else fail('這一頁卡住了：' + JSON.stringify(tabAAfter));
 
@@ -226,8 +239,11 @@ try {
     await tabA.evaluate(() => document.querySelector('#updateBar .update-go').click());
     // 這條路沒有 waiting 的 SW（別的分頁已經啟用了）→ 直接重載，快到來不及顯示文字，
     // 那是最好的結果。進行中回饋在下面「叫不動的 SW」那段驗（那裡才真的有等待時間）。
-    const busy = await tabA.evaluate(() => document.getElementById('updateBar')?.textContent || '(已重載)').catch(() => '(已重載)');
-    if (/更新中|請稍候|已重載/.test(busy) || busy === '') ok('按下去不是沒反應（' + (busy || '立刻重載') + '）');
+    // 同上：退路字串 '(已重載)' 以前直接命中下面的 /已重載/，也是「例外＝通過」。
+    // 改成把例外標出來，再由「頁面真的換成新版了嗎」那條斷言去證明它確實重載了。
+    const busy = await tabA.evaluate(() => document.getElementById('updateBar')?.textContent || '(沒有提示列)')
+      .catch(() => '(evaluate 例外：分頁正在重載)');
+    if (/更新中|請稍候|沒有提示列|正在重載/.test(busy) || busy === '') ok('按下去不是沒反應（' + (busy || '立刻重載') + '）');
     else fail('按下去沒有進行中的回饋：' + busy);
     await tabA.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 }).catch(() => {});
     await tabA.waitForSelector('.hero');

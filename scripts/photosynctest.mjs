@@ -44,6 +44,24 @@ const dev = async (name) => {
   return pg;
 };
 const drain = (pg) => pg.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
+// 單一次 drain 的計數會被背景自動 drain 分掉 —— 機器忙的時候實測 3/3 會變成 2/2 或 1/1，
+// 而那是「剛好這一輪跑到幾個」，不是我們要驗的「這些 blob 最後各自的下場」。
+// 所以 drain 到佇列裡沒有還能送的東西為止，把計數累加起來。
+async function drainAll(pg, rounds = 6) {
+  const total = { pulled: 0, pushed: 0, uploaded: 0, downloaded: 0, failed: 0 };
+  for (let i = 0; i < rounds; i++) {
+    const r = await drain(pg);
+    for (const k of Object.keys(total)) total[k] += (r && r[k]) || 0;
+    const left = await pg.evaluate(async () => {
+      const db = await import('./js/db.js');
+      const all = await db.outboxAll();
+      // 已經標成「再也送不出去」的不算 —— 它不會再被排程，等它等不到
+      return all.filter((e) => e.op === 'blob' && !e.dead && (e.nextAt || 0) <= Date.now()).length;
+    });
+    if (!left) break;
+  }
+  return total;
+}
 const wallState = (pg) => pg.evaluate(() => [...document.querySelectorAll('.feed-item')].map((it) => {
   const img = it.querySelector('.fi-photo');
   const st = it.querySelector('.ph-state');
@@ -107,7 +125,7 @@ try {
     }
     r.continue().catch(() => {});
   });
-  const t1 = await drain(mom);
+  const t1 = await drainAll(mom);
   yes(t1.uploaded === 3 && t1.failed === 3, `媽媽：縮圖 3 張上傳成功、全圖 3 張失敗（${JSON.stringify(t1)}）`);
 
   const dad = await dev('爸爸');

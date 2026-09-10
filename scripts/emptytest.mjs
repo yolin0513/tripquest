@@ -109,17 +109,52 @@ try {
   yes(homeBtn && (await hash()).startsWith('#/new'), `首頁沒有旅程時的「${homeBtn}」→ 新增旅程頁`);
 
   // ---------- 原始碼守衛：標了目的地的按鈕不准用 back() ----------
+  //
+  // v1.73.3：這個檢查器以前只認得**一種**寫法（單引號標籤、緊接在 onclick 後面），
+  // 而它掃的 11 個檔案裡總共只有 1 個 `back(`、正則命中 0 次 —— 也就是說它從上線到
+  // 現在沒有檢查過任何東西，卻每次都印一個 ✓。餵 6 種真實可能的寫法給它只抓得到 2 種。
+  //
+  // 兩件事一起修：(1) 認得雙引號、樣板字串、方法簡寫、標籤前有子節點；
+  // (2) 加**對照組** —— 把已知該被抓到的寫法餵進同一個檢查器，斷言它真的抓得到。
+  // 沒有對照組的話，「檢查器壞掉」與「程式碼是乾淨的」在畫面上長得一模一樣。
   console.log('\n— 原始碼守衛 —');
-  const bad = [];
-  for (const f of ['people.js', 'plan.js', 'trip.js', 'expenses.js', 'home.js', 'memories.js', 'album.js', 'weather.js', 'badges.js', 'recap.js', 'poster.js']) {
-    const src = await readFile(ROOT + 'js/views/' + f, 'utf8');
-    // onclick: () => back(...) 後面接的按鈕文字若包含「回…頁/清單/旅程/首頁」就是不一致
-    for (const m of src.matchAll(/onclick:\s*\(\)\s*=>\s*back\([^)]*\)[^}]*\}\s*,\s*'([^']*)'/g)) {
-      const txt = m[1];
-      if (/回[^」]*(旅程|任務|清單|首頁|頁)/.test(txt)) bad.push(`${f}: 「${txt}」`);
+  const VIEWS = ['people.js', 'plan.js', 'trip.js', 'expenses.js', 'home.js', 'memories.js',
+    'album.js', 'weather.js', 'badges.js', 'recap.js', 'poster.js'];
+  // 找出每一處 back(…) 呼叫，取它後面那一段，裡面**每一個**字串都檢查。
+  // 不要用「back 之後第一個引號字串」—— 標籤前面可能還有子節點
+  //（`h('span', {}, '⟵'), '回旅程頁'`），那樣只會抓到 'span' 就停了。
+  const BACK = /\bback\s*\(/g;
+  const STR = /['"\x60]([^'"\x60\n]*)['"\x60]/g;
+  const DEST = /回[^」]*(旅程|任務|清單|首頁|頁)/;
+  const scan = (src, tag) => {
+    const hits = [];
+    for (const m of src.matchAll(BACK)) {
+      // 註解裡的 back( 不算（people.js 那個唯一的 back( 就在註解裡）
+      const lineStart = src.lastIndexOf('\n', m.index) + 1;
+      if (/^\s*(\/\/|\*)/.test(src.slice(lineStart, m.index))) continue;
+      const tail = src.slice(m.index, m.index + 240);
+      for (const t of tail.matchAll(STR)) if (DEST.test(t[1])) hits.push(`${tag}: 「${t[1]}」`);
     }
-  }
-  yes(bad.length === 0, '沒有「文字說了目的地、實作卻用 back()」的按鈕', bad.join('；'));
+    return hits;
+  };
+
+  // 對照組：這六種寫法都該被抓到。抓不到就是檢查器壞了，不是程式碼乾淨。
+  const CONTROL = [
+    `h('button', { onclick: () => back() }, '回旅程')`,
+    `h('button', { onclick: () => back() }, "回任務清單")`,
+    'h(\'button\', { onclick: () => back() }, `回首頁`)',
+    `h('button', { class: 'x', onclick: () => back(1) }, h('span', {}, '⟵'), '回旅程頁')`,
+    `h('button', { onclick() { back(); } }, '回清單')`,
+    `h('button', { onclick: () => back() }, '回上一頁')`,
+  ];
+  const missed = CONTROL.filter((c, i) => !scan(c, 'c' + i).length);
+  yes(missed.length === 0,
+    `檢查器本身有效：${CONTROL.length} 種已知該被抓到的寫法全部抓得到`,
+    '抓不到：' + missed.join(' ｜ '));
+
+  const bad = [];
+  for (const f of VIEWS) bad.push(...scan(await readFile(ROOT + 'js/views/' + f, 'utf8'), f));
+  yes(bad.length === 0, `沒有「文字說了目的地、實作卻用 back()」的按鈕（掃了 ${VIEWS.length} 個 view）`, bad.join('；'));
 
   console.log('\n空狀態導覽測試結束');
 } catch (e) {

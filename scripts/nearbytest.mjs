@@ -361,11 +361,38 @@ try {
     const appSrc = readFileSync(ROOT + 'js/app.js', 'utf8');
     const swSrc = readFileSync(ROOT + 'sw.js', 'utf8');
     const viewImports = [...new Set([...appSrc.matchAll(/views\/([a-z-]+\.js)/g)].map((m) => m[1]))];
+    // v1.73.3：母體不能是空的。以前只驗「篩完剩 0」—— 正則一對不上（例如有人把
+    // view 清單改成動態組字串）就會變成「0 個都在清單裡」然後印 ✓。
+    // 這一類「應該是 0」的斷言旁邊一定要有一條「母體 > N」。
+    yes(viewImports.length >= 15, `app.js 掃得到 ${viewImports.length} 個 view（母體非空，不是正則對不上）`);
     const missing = viewImports.filter((f) => !swSrc.includes(`./js/views/${f}`));
     yes(missing.length === 0, `app.js 引用的 ${viewImports.length} 個 view 都在 SW 預快取清單`, missing.join(','));
-    const navTargets = [...new Set([...readFileSync(ROOT + 'js/views/trip.js', 'utf8').matchAll(/navigate\(`\/trip\/\$\{tripId\}\/([a-z]+)/g)].map((m) => m[1]))];
-    const noRoute = navTargets.filter((seg) => !appSrc.includes(`route('/trip/:id/${seg}'`));
-    yes(noRoute.length === 0, `行程頁 navigate 的 ${navTargets.length} 個目標都有註冊路由`, noRoute.join(','));
+
+    // 路由完整性：以前只掃 trip.js 的 5 處、而且只認樣板字串那一種寫法。
+    // 實測把路由改壞、再把呼叫端重構成字串串接，這條就空轉通過了
+    //（那正是 v1.59 實機踩到的「按了天氣被踢回首頁」）。
+    // 現在掃全部 views，樣板字串與字串串接兩種寫法都認。
+    const { readdirSync } = await import('node:fs');
+    const viewFiles = readdirSync(ROOT + 'js/views').filter((f) => f.endsWith('.js'));
+    const navTargets = new Set();
+    let navCount = 0;
+    for (const f of viewFiles) {
+      const src = readFileSync(ROOT + 'js/views/' + f, 'utf8');
+      navCount += [...src.matchAll(/\bnavigate\s*\(/g)].length;
+      // navigate(`/trip/${x}/seg`) 與 navigate('/trip/' + x + '/seg')
+      for (const m of src.matchAll(/navigate\s*\(`\/trip\/\$\{[^}]+\}\/([a-z-]+)/g)) navTargets.add(m[1]);
+      for (const m of src.matchAll(/navigate\s*\(\s*'\/trip\/'[^)]*?'\/([a-z-]+)'/g)) navTargets.add(m[1]);
+    }
+    const segs = [...navTargets];
+    yes(navCount >= 20 && segs.length >= 8,
+      `全部 ${viewFiles.length} 個 view 掃到 ${navCount} 處 navigate、${segs.length} 種 /trip/:id/… 目標（母體非空）`,
+      `navCount=${navCount} segs=${segs.join(',')}`);
+    // 路由可能是單段（'/trip/:id/plan'）也可能是兩段
+    //（'/trip/:id/spot/:spotId'）—— 只比對「段名後面緊接引號」會把後者誤判成沒註冊。
+    const hasRoute = (seg) => appSrc.includes(`route('/trip/:id/${seg}'`)
+      || appSrc.includes(`route('/trip/:id/${seg}/`);
+    const noRoute = segs.filter((seg) => !hasRoute(seg));
+    yes(noRoute.length === 0, `${segs.length} 個 /trip/:id/… 目標都有註冊路由`, noRoute.join(','));
   }
 
   console.log('\n找附近測試結束');

@@ -89,9 +89,15 @@ try {
       if (res.boxes[i].y0 < res.boxes[i - 1].y1 - 1) { overlap = `${res.boxes[i - 1].name} 與 ${res.boxes[i].name}`; break; }
     }
     yes(!overlap, `區塊由上往下、互不重疊（${res.boxes.length} 塊）`, overlap);
-    // ② 不出界
+    // ② 不出界（上下）
     const outOf = res.boxes.find((b) => b.y0 < 0 || b.y1 > res.H);
     yes(!outOf, `所有區塊都在畫布內（H=${res.H}px）`, outOf && `${outOf.name} y1=${outOf.y1} > ${res.H}`);
+    // ②-b 不出界（**左右**）——v1.73.3 才補上。以前 block() 只記 y 座標，
+    // 而使用者當初回報的三個跑版之一正是「13 個徽章超出右邊被切掉」，是橫向的。
+    // 實測：把 chipLines 的 maxW 改成 999999 讓徽章畫出畫布，舊版測試 13 項照樣全綠。
+    const outX = res.boxes.find((b) => b.x0 < 0 || b.x1 > res.W);
+    yes(!outX, `所有區塊都沒有左右出界（W=${res.W}px）`,
+      outX && `${outX.name} x0=${outX.x0} x1=${outX.x1} vs W=${res.W}`);
     // ③ 底部留白
     const last = res.boxes[res.boxes.length - 1];
     yes(res.H - last.y1 >= 60, `底部留白足夠（${res.H - last.y1}px）`);
@@ -101,7 +107,10 @@ try {
       yes(by('opening').y1 <= by('nums-row0').y0, `開場文字（到 ${by('opening').y1}px）不會壓到大數字（從 ${by('nums-row0').y0}px 起）`);
     }
     if (sc.r.tripBadges.length) {
-      yes(!!by('badges'), `徽章 ${sc.r.tripBadges.length} 個全數排進卡片（佔 ${by('badges').y1 - by('badges').y0}px，放不下會換行不會被切）`);
+      const bb = by('badges');
+      yes(!!bb && bb.x0 >= 0 && bb.x1 <= res.W,
+        `徽章 ${sc.r.tripBadges.length} 個全數排進卡片（佔 ${bb.y1 - bb.y0}px、左右 ${bb.x0}–${bb.x1} vs 畫布 0–${res.W}）`,
+        bb && `x0=${bb.x0} x1=${bb.x1}`);
     }
 
     const file = fileURLToPath(new URL(`${name}.png`, OUT));
