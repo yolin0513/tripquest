@@ -1,7 +1,7 @@
 {
   "_meta": {
-    "note": "景點類別 → 主題樣式。可擴充：新增主題就加一個 themes.<key>；調整判定就改 map。theme.js 讀這支，海報與行程頁依 theme 換色、換裝飾、換時間軸；文案語氣見 data/phrases.json 對應的 key。",
-    "version": 1
+    "note": "景點類別 → 主題樣式。可擴充：新增主題就加一個 themes.<key>；調整判定就改 map。theme.js 讀這支，海報與行程頁依 theme 換色、換裝飾、換時間軸；文案語氣見 data/phrases.json 對應的 key。 stayMin＝沒填停留時間時的推算預設值（v1.67，三代理 3:0 決議用類別對照表而非 AI 推估：AI 金鑰只存在建立者那一台，走 AI 會讓同一個景點在爸爸手機和媽媽手機上顯示不同數字）；map.stayByName 是名稱層級覆寫，順序在主題表之前。",
+    "version": 2
   },
   "map": {
     "byName": [
@@ -80,7 +80,37 @@
       "themepark": "family",
       "transit": "transit"
     },
-    "default": "journey"
+    "default": "journey",
+    "stayByName": [
+      [
+        "機場|机场|空港|飛行場|airport|航廈|航站",
+        120
+      ],
+      [
+        "樂園|遊樂園|主題樂園|環球影城|disney|universal|六福村|劍湖山|麗寶",
+        240
+      ],
+      [
+        "動物園|水族館|海生館|海洋公園",
+        150
+      ],
+      [
+        "美術館|博物館|科學館|科教館|故宮",
+        120
+      ],
+      [
+        "車站|车站|火車站|高鐵站|捷運站|地鐵站|轉運站|客運站|駅$|station$",
+        20
+      ],
+      [
+        "服務區|服务区|休息站|休息區",
+        30
+      ],
+      [
+        "便利商店|加油站|廁所",
+        15
+      ]
+    ]
   },
   "themes": {
     "journey": {
@@ -113,7 +143,8 @@
         "cloud",
         "house"
       ],
-      "timeline": "dot"
+      "timeline": "dot",
+      "stayMin": 60
     },
     "nature": {
       "label": "山林自然",
@@ -146,7 +177,8 @@
         "pine",
         "mountain"
       ],
-      "timeline": "dotLeaf"
+      "timeline": "dotLeaf",
+      "stayMin": 90
     },
     "coast": {
       "label": "海濱",
@@ -179,7 +211,8 @@
         "sun",
         "gull"
       ],
-      "timeline": "wave"
+      "timeline": "wave",
+      "stayMin": 60
     },
     "urban": {
       "label": "都市",
@@ -211,7 +244,8 @@
         "spark",
         "star"
       ],
-      "timeline": "solid"
+      "timeline": "solid",
+      "stayMin": 60
     },
     "heritage": {
       "label": "古蹟人文",
@@ -243,7 +277,8 @@
         "seigaiha",
         "cloudBar"
       ],
-      "timeline": "double"
+      "timeline": "double",
+      "stayMin": 60
     },
     "food": {
       "label": "美食",
@@ -275,7 +310,8 @@
         "steam",
         "chopsticks"
       ],
-      "timeline": "dash"
+      "timeline": "dash",
+      "stayMin": 60
     },
     "onsen": {
       "label": "溫泉",
@@ -307,7 +343,8 @@
         "leaf",
         "cloudBar"
       ],
-      "timeline": "wave"
+      "timeline": "wave",
+      "stayMin": 90
     },
     "nightmarket": {
       "label": "夜市",
@@ -339,7 +376,8 @@
         "star",
         "spark"
       ],
-      "timeline": "lanternString"
+      "timeline": "lanternString",
+      "stayMin": 90
     },
     "shopping": {
       "label": "購物",
@@ -371,7 +409,8 @@
         "tag",
         "spark"
       ],
-      "timeline": "solid"
+      "timeline": "solid",
+      "stayMin": 90
     },
     "family": {
       "label": "親子同遊",
@@ -403,7 +442,8 @@
         "star",
         "sun"
       ],
-      "timeline": "dot"
+      "timeline": "dot",
+      "stayMin": 180
     },
     "transit": {
       "label": "交通樞紐",
@@ -435,7 +475,8 @@
         "spark",
         "building"
       ],
-      "timeline": "dash"
+      "timeline": "dash",
+      "stayMin": 20
     }
   }
 }

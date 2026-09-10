@@ -7,7 +7,8 @@
 
 import { setTop, render } from '../app.js';
 import { spotTimes } from '../spottime.js';
-import { travelMatrix, chainTimes, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
+import { travelMatrix, chainTimes, timeConflicts, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
+import { loadThemes } from '../theme.js';
 import * as store from '../store.js';
 import { h, mount, toast, promptDialog, confirmDialog, modal } from '../ui.js';
 import { navigate } from '../router.js';
@@ -287,7 +288,14 @@ export default async function plan(tripId) {
     return { sec, src: sub ? sub.src : 'est', full: pts.length === n && n >= 2 };
   }
 
+  // 「先用 X 推算」的 X：90 → 「1 小時 30 分」。fmtDur 吃的是秒。
+  const fmtStay = (min) => (Number.isFinite(min) ? fmtDur(min * 60) : '1 小時');
+
   async function annotateTravel() {
+    // 類別停留時間要讀 data/themes.json。這一頁原本沒載主題資料，
+    // 不載的話 stayForSpot 會靜默退回 60，整個對照表等於沒作用。
+    await loadThemes().catch(() => {});
+    list.querySelectorAll('.plan-conflict').forEach((x) => x.remove());
     const mode = dayMode();
     const spots = store.spotsOf(tripId);
     const days = totalDays();
@@ -318,12 +326,32 @@ export default async function plan(tripId) {
         if (c.arrive != null && !c.fixed) {
           bits.push(c.leave != null ? `約 ${fmtRange(c.arrive, c.leave)}` : `約 ${fmtMin(c.arrive)} 到`);
         }
-        if (c.late > 0) bits.push(`⚠ 比預定晚 ${c.late >= 60 ? fmtDur(c.late * 60) : c.late + ' 分'}`);
-        if (c.stayAssumed) bits.push('（停留未設，先用 1 小時推算）');
+        // 遲到分軟硬（v1.67，三代理一致要求）：這個數字只要上游用過任何估算就不該當警告。
+        // 車程可能是直線 ×1.4 猜的、上一站的停留可能是我們自己猜的 60 分 ——
+        // 拿這種數字對長輩說「你趕不上」，錯一次他以後就不看了。
+        if (c.late > 0) {
+          const dur = c.late >= 60 ? fmtDur(c.late * 60) : c.late + ' 分';
+          bits.push(c.lateSoft ? `可能有點趕（推算晚 ${dur}，含估算）` : `⚠ 比預定晚 ${dur}`);
+        }
+        if (c.stayAssumed) bits.push(`（停留未設，先用 ${fmtStay(c.stayUsed)}推算）`);
         eta.textContent = bits.join('　');
         eta.hidden = !bits.length;
-        eta.classList.toggle('warn', c.late > 0);
+        eta.classList.toggle('warn', c.late > 0 && !c.lateSoft);
       });
+
+      // 使用者自己填的時間互相矛盾 —— 這一條完全不看車程與假設停留，所以永遠報得起。
+      // 貼在「比較晚的那一站」上，位置就在使用者心裡那張行程表的正確位置。
+      for (const cf of timeConflicts(inDay)) {
+        const row = list.querySelector(`.plan-row[data-id="${cf.id}"]`);
+        const eta = row && row.querySelector('.plan-eta');
+        if (!eta) continue;
+        const who = cf.prevName ? `「${cf.prevName}」` : '前一站';
+        const el = h('div', { class: 'plan-conflict', 'data-for': cf.id },
+          cf.kind === 'order'
+            ? `⚠️ 這一站訂 ${fmtMin(cf.at)}，比排在前面的${who} ${fmtMin(cf.prevAt)} 還早 —— 順序可能排反了`
+            : `⚠️ ${who} ${fmtMin(cf.prevAt)} 停到 ${fmtMin(cf.prevEnd)}，但這一站訂 ${fmtMin(cf.at)}`);
+        eta.after(el);
+      }
     }
     const note = list.querySelector('.plan-src-note');
     note?.remove();

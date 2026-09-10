@@ -1840,6 +1840,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-travel-note.far { color: #ffb14e; padding-right: 8px; line-height: 1.45; }
 .plan-eta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
 .plan-eta.warn { color: #ffb14e; font-weight: 700; }
+/* 使用者自己填的時間打架（v1.67）。比 .plan-eta.warn 更明顯：它是「確定有問題」，
+   不像遲到推算那樣建立在估算上。字級不縮 —— 長輩要看得到。 */
+.plan-conflict { font-size: 0.85rem; line-height: 1.45; color: #ffb14e; font-weight: 700;
+  margin-top: 4px; padding: 6px 8px; border-radius: 8px;
+  background: color-mix(in srgb, #ffb14e 14%, transparent); }
 .plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }
 .pd-opt { min-height: 40px; padding: 4px 12px; margin-left: auto; white-space: nowrap; }
 .plan-divider { display: flex; align-items: center; gap: 10px; }

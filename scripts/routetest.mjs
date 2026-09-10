@@ -160,6 +160,99 @@ try {
   yes(xday.c1.far && xday.c1.a === null && xday.c1.t === null,
     '跨區段：不給開車時間、也不往下推算到達（不會生出 27:12）');
 
+  // ---------- v1.67：時刻鏈的四個修正 ----------
+  console.log('\n— v1.67 時刻鏈 —');
+  const fix = await page.evaluate(async () => {
+    const r = await import('./js/route.js');
+    const { loadThemes } = await import('./js/theme.js');
+    await loadThemes();
+    const osrm = (n) => ({ src: 'osrm', sec: Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : 1800))) });
+    const pick = (c) => ({ a: c.arrive, l: c.late, soft: c.lateSoft, stay: c.stayUsed, asm: c.stayAssumed, far: !!c.longHaul });
+
+    // ① 跨區之後不能沿用前一站的離開時間（實測修前第三站憑空算出 10:05 到）
+    const teleport = r.chainTimes([
+      { id: 'a', lat: 25.03, lng: 121.56, startMin: 540, stayMin: 60 },
+      { id: 'b', lat: 26.21, lng: 127.68, stayMin: 60 },
+      { id: 'c', lat: 26.22, lng: 127.69, stayMin: 60 },
+    ], null, 'drive').map(pick);
+
+    // ② 跨午夜的遲到（實測修前 late=1413 →「比預定晚 23 小時 33 分」）
+    const midnight = r.chainTimes([
+      { id: 'a', lat: 25.0, lng: 121.5, startMin: 23 * 60, stayMin: 90 },
+      { id: 'b', lat: 25.005, lng: 121.505, startMin: 60, stayMin: 60 },
+    ], null, 'drive').map(pick);
+
+    // ③ 只有舊字串時間的記錄（實測修前整條鏈全 null）
+    const legacy = r.chainTimes([
+      { id: 'a', lat: 24.67, lng: 121.76, startTime: '09:00', endTime: '10:00' },
+      { id: 'b', lat: 24.68, lng: 121.77, stayMin: 60 },
+    ], null, 'drive').map(pick);
+
+    // ④ 類別停留（修前一律 60）
+    const stays = r.chainTimes([
+      { id: 'a', lat: 24.67, lng: 121.76, startMin: 540, stayMin: 30 },
+      { id: 'b', name: '羅東夜市', lat: 24.68, lng: 121.77 },
+      { id: 'c', name: '桃園國際機場', lat: 24.69, lng: 121.78 },
+      { id: 'd', name: '六福村主題遊樂園', lat: 24.70, lng: 121.79 },
+      { id: 'e', name: '石牌捷運站', lat: 24.71, lng: 121.80 },
+      { id: 'f', name: '阿嬤家', lat: 24.72, lng: 121.81 },
+    ], null, 'drive').map(pick);
+
+    // ⑤ 遲到閘門
+    const AB = (bStart, aStay) => [
+      { id: 'a', lat: 25.0, lng: 121.5, startMin: 540, ...(aStay ? { stayMin: aStay } : {}) },
+      { id: 'b', lat: 25.05, lng: 121.55, startMin: bStart, stayMin: 60 },
+    ];
+    const gate = {
+      small: r.chainTimes(AB(615, 60), osrm(2), 'drive')[1],       // 晚 15 分 < 20
+      big: r.chainTimes(AB(590, 60), osrm(2), 'drive')[1],         // 晚 40 分
+      guessed: r.chainTimes(AB(590, 0), osrm(2), 'drive')[1],      // 上游停留是猜的
+      offline: r.chainTimes(AB(590, 60), { src: 'est', sec: osrm(2).sec }, 'drive')[1],
+    };
+
+    // ⑥ 矛盾偵測
+    const t = (id, name, startMin, stayMin) => ({ id, name, startMin, stayMin });
+    const cf = {
+      real: r.timeConflicts([t('a', '第1站', 900, 60), t('b', '第2站', 600, 60)]),
+      midnight: r.timeConflicts([t('a', '夜市', 1380, 90), t('b', '宵夜', 60, 60)]),
+      overlap: r.timeConflicts([t('a', '午餐', 780, 120), t('b', '下一站', 840, 60)]),
+      ok: r.timeConflicts([t('a', 'A', 540, 60), t('b', 'B', 660, 60)]),
+      sunrise: r.timeConflicts([t('a', '夜景', 1320, 60), t('b', '日出', 300, 60)]),
+      evening: r.timeConflicts([t('a', 'A', 1200, 30), t('b', 'B', 1140, 30)]),
+    };
+    return { teleport, midnight, legacy, stays, gate: {
+      small: { l: gate.small.late, soft: gate.small.lateSoft },
+      big: { l: gate.big.late, soft: gate.big.lateSoft },
+      guessed: { l: gate.guessed.late, soft: gate.guessed.lateSoft },
+      offline: { l: gate.offline.late, soft: gate.offline.lateSoft },
+    }, cf };
+  });
+
+  yes(fix.teleport[1].far && fix.teleport[1].a === null && fix.teleport[2].a === null,
+    `跨區之後不會瞬間移動（修前第三站憑空算出 10:05 到；現在 arrive=${fix.teleport[2].a}）`);
+  yes(fix.midnight[1].l === 0 && fix.midnight[1].a === 1500,
+    `跨午夜：23:00 夜市停 90 分 → 01:00 宵夜不算遲到（修前 late=1413，畫面會寫「晚 23 小時」；現在 late=${fix.midnight[1].l}、到達＝隔天 01:00）`);
+  yes(fix.legacy[0].a === 540 && fix.legacy[1].a !== null,
+    `只有 startTime 字串的舊記錄接得上時刻鏈（修前整條鏈全 null；現在首站 ${fix.legacy[0].a} 分、下一站 ${fix.legacy[1].a} 分）`);
+
+  yes(fix.stays[1].stay === 90 && fix.stays[1].asm, `夜市沒填停留 → 用 90 分推算（不是一律 60）`);
+  yes(fix.stays[2].stay === 120, `機場 → 120 分（名稱覆寫贏過 transit 類別的 20 分）`);
+  yes(fix.stays[3].stay === 240, `遊樂園 → 240 分`);
+  yes(fix.stays[4].stay === 20, `捷運站 → 20 分（同屬 transit，靠名稱分開）`);
+  yes(fix.stays[5].stay === 60, `判斷不出類別的維持 60 分，不裝懂`);
+
+  yes(fix.gate.small.l === 15 && fix.gate.small.soft, '晚不到 20 分 → 不當警告（OSRM 本來就不含紅燈與找車位）');
+  yes(fix.gate.big.l === 40 && !fix.gate.big.soft, 'OSRM＋停留都有填＋晚 40 分 → 才是硬警告');
+  yes(fix.gate.guessed.soft, '上游的停留是我們猜的 → 遲到數字降級，不當警告');
+  yes(fix.gate.offline.soft, '離線用直線估算 → 遲到數字降級，不當警告');
+
+  yes(fix.cf.real.length === 1 && fix.cf.real[0].kind === 'order', '矛盾偵測：15:00 排在 10:00 前面 → 報');
+  yes(fix.cf.overlap.length === 1 && fix.cf.overlap[0].kind === 'overlap', '矛盾偵測：13:00 停 2 小時卻排 14:00 → 報');
+  yes(fix.cf.evening.length === 1, '矛盾偵測：20:00 → 19:00（傍晚）照樣報');
+  yes(!fix.cf.midnight.length, '矛盾偵測：23:00 夜市 → 01:00 宵夜**不報**（跨午夜是正當安排）');
+  yes(!fix.cf.sunrise.length, '矛盾偵測：22:00 夜景 → 05:00 日出**不報**');
+  yes(!fix.cf.ok.length, '矛盾偵測：正常的一天不報任何東西');
+
   // ---------- UI 層 ----------
   console.log('\n— 調整行程頁 —');
   await page.goto('about:blank');
@@ -356,6 +449,32 @@ try {
   }, xids.tid);
   yes(xtext.includes('07:00 新千歲機場') && !/(2[4-9]|\d{3,}):[0-5]\d/.test(xtext),
     '匯出文字沒有 24 以上的時數');
+
+  // 矛盾提示要真的出現在畫面上（不是只有純函式對）
+  const cfui = await page.evaluate(async (tid) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const mk = async (name, order, startMin, stayMin) => {
+      await s.put({ id: uuid(), type: 'spot', tripId: tid, name, emoji: '📍', day: 9, order,
+        lat: 24.6 + order * 0.01, lng: 121.7, startMin, stayMin });
+    };
+    await mk('先訂位的午餐', 0, 13 * 60, 60);
+    await mk('被拖到後面的景點', 1, 10 * 60, 60);
+    return true;
+  }, xids.tid);
+  void cfui;
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${xids.tid}/plan`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.plan-list');
+  await page.waitForFunction(() => document.querySelectorAll('.plan-conflict').length > 0, { timeout: 20000 }).catch(() => {});
+  const cfText = await page.evaluate(() => [...document.querySelectorAll('.plan-conflict')].map((n) => n.textContent.trim()));
+  yes(cfText.length === 1 && cfText[0].includes('10:00') && cfText[0].includes('13:00') && cfText[0].includes('順序可能排反了'),
+    `畫面上真的看得到矛盾提示：「${cfText[0] || '(沒有)'}」`);
+  const cfSize = await page.evaluate(() => {
+    const n = document.querySelector('.plan-conflict');
+    return n ? parseFloat(getComputedStyle(n).fontSize) : 0;
+  });
+  yes(cfSize >= 13, `矛盾提示字級沒縮小（${cfSize}px）—— 長輩要看得到`);
 
   // 建立行程頁有「幫我規劃」入口
   await page.goto('about:blank');

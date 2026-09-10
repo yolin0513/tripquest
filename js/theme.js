@@ -35,6 +35,27 @@ export function themeForSpot(spot, themes = _themes) {
   return map.default || 'journey';
 }
 
+// 沒填停留時間時，拿來推算的預設分鐘數。
+// 三代理 3:0 決議用類別對照表而不是 AI 推估 —— 決定性的理由不是成本，是**同步一致性**：
+// AI 金鑰只存在建立者那一台（tripSecrets，絕不同步），走 AI 的話同一個景點會在
+// 爸爸手機顯示「建議 2 小時」、媽媽手機顯示別的。那不是「今天 2 小時明天 90 分」
+// 的隨機噪音，是家人之間看到互相矛盾的數字，而且沒有人解釋得出為什麼。
+//
+// 判定順序：名稱覆寫（最準，處理「機場 vs 捷運站」這種同類別差十倍的情況）→ 主題表 → 60。
+// 回傳的值一律當「假設」用，畫面上要標出來（見 plan.js 的「停留未設，先用 X 推算」）。
+export const STAY_FALLBACK = 60;
+export function stayForSpot(spot, themes = _themes) {
+  if (!spot || !themes) return STAY_FALLBACK;
+  const name = spot.name || spot.nameLocal || '';
+  for (const [src, min] of (themes.map && themes.map.stayByName) || []) {
+    const re = rx(src);
+    if (re && re.test(name) && Number.isFinite(min)) return min;
+  }
+  const key = spot.theme || themeForSpot(spot, themes);
+  const v = themes.themes && themes.themes[key] && themes.themes[key].stayMin;
+  return Number.isFinite(v) ? v : STAY_FALLBACK;
+}
+
 // 一天的代表主題：多數決，平手取較「有特色」的（非 journey 優先，再比出現序）
 export function themeForDay(spots, themes = _themes) {
   return majorityTheme(spots, themes);

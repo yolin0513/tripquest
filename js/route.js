@@ -13,6 +13,8 @@
 
 import * as db from './db.js';
 import { haversine } from './geo.js';
+import { spotTimes } from './spottime.js';
+import { stayForSpot } from './theme.js';
 
 let OSRM = (typeof window !== 'undefined' && window.__TQ_OSRM_ENDPOINT) || 'https://routing.openstreetmap.de';
 
@@ -141,13 +143,40 @@ export function longHaul(a, b, travelSec = null) {
 // 規則：
 // · 有填「幾點到」的視為固定 —— 推算若晚於它，標 late（⚠ 可能趕不上）；到達採用固定值。
 // · 沒填的顯示「約 HH:MM」（斜體語意由 UI 決定）。
-// · 停留沒填的用 60 分推下去，並標 assumed。
+// · 停留沒填的依景點類別推（stayForSpot），並標 assumed —— 畫面要說用了幾分鐘。
+//
+// v1.67 修掉三個實測重現的錯誤（三代理各自獨立指出，我逐一餵資料驗過）：
+//  ① **跨區之後會瞬間移動**。原本 `cur = leave != null ? leave : cur`，跨區段的
+//     leave 是 null，於是 cur 停在跨區前那一站的離開時間，下一站從那裡繼續往下加。
+//     實測：台北 09:00 停 60 分 → 飛沖繩（停 60 分）→ 沖繩隔壁站，第三站算出
+//     「10:05 到」—— 飛行時間與沖繩那一站的停留**都憑空消失**。
+//  ② **跨午夜會報出荒謬的遲到**。使用者填的「幾點到」是牆上時鐘（minOfInput 上限
+//     1439），推算到達卻可能已經跨日。實測 23:00 夜市 → 01:00 宵夜，late=1413，
+//     畫面會寫「⚠ 比預定晚 23 小時 33 分」。現在先把固定時刻平移到離推算值最近
+//     的那一天再比。
+//  ③ **只有舊字串時間的記錄對時刻鏈完全隱形**。spottime.js 開頭寫著「所有要顯示
+//     時間的地方都走這裡」，但這支當初直接讀 s.startMin。實測 startTime:'09:00'
+//     的舊記錄 fixed=false、arrive=null，**整條鏈跟著全空**。現在走 spotTimes()。
+//
+// 另外新增 lateSoft：遲到數字只要上游用過任何估算（估算車程／假設停留／跨區中斷）
+// 或差距太小，就不該當成警告 —— 見下方 LATE_MIN 的說明。
+export const LATE_MIN = 20;
+
+// 固定時刻是 0–1439 的牆上時鐘；推算到達可能 > 1440。平移到離推算值最近的那一天。
+function alignDay(fixedMin, arrive) {
+  if (arrive == null) return fixedMin;
+  return fixedMin + Math.round((arrive - fixedMin) / 1440) * 1440;
+}
+
 export function chainTimes(spots, matrix, mode = 'drive') {
   const out = [];
+  const src = matrix ? matrix.src : 'est';
   let cur = null;                       // 目前時刻（分鐘）
+  let soft = false;                     // 上游是否用過估算（會污染下游所有推算）
   for (let i = 0; i < spots.length; i++) {
     const s = spots[i];
-    const fixed = Number.isFinite(s.startMin);
+    const t = spotTimes(s);             // 舊記錄只有 startTime 字串時也讀得出來（③）
+    const fixed = Number.isFinite(t.startMin);
     let travel = null, far = null;
     if (i > 0) {
       const a = spots[i - 1], b = s;
@@ -158,17 +187,62 @@ export function chainTimes(spots, matrix, mode = 'drive') {
       }
     }
     let arrive = null, late = 0;
-    if (i === 0) arrive = fixed ? s.startMin : null;
+    if (i === 0) arrive = fixed ? t.startMin : null;
     else if (cur != null && travel != null) arrive = cur + Math.round(travel / 60);
     if (fixed) {
-      if (arrive != null && arrive > s.startMin) late = arrive - s.startMin;
-      arrive = s.startMin;
+      const want = alignDay(t.startMin, arrive);          // ②
+      if (arrive != null && arrive > want) late = arrive - want;
+      arrive = want;
     }
-    const stay = Number.isFinite(s.stayMin) ? s.stayMin : (arrive != null ? 60 : null);
+    // 遲到可不可信，看的是「上游」有沒有用過估算 —— 這一站自己的假設停留只會影響下游
+    const lateSoft = late > 0 && (soft || src !== 'osrm' || late < LATE_MIN);
+    const hasStay = Number.isFinite(t.stayMin) && t.stayMin > 0;
+    const stay = hasStay ? t.stayMin : (arrive != null ? stayForSpot(s) : null);
     const leave = arrive != null && stay != null ? arrive + stay : null;
-    out.push({ id: s.id, arrive, leave, fixed, late, travel, longHaul: far,
-      stayAssumed: arrive != null && !Number.isFinite(s.stayMin) });
-    cur = leave != null ? leave : cur;
+    out.push({ id: s.id, arrive, leave, fixed, late, lateSoft, travel, longHaul: far,
+      stayAssumed: arrive != null && !hasStay, stayUsed: stay });
+    if (!hasStay && arrive != null) soft = true;          // 這一站的停留是猜的 → 污染下游
+    if (far) soft = true;
+    // 跨區之後不能沿用前一站的離開時間，那等於瞬間移動（①）。
+    // 但如果這一站自己有填「幾點到」，鏈就從那裡重新接上，是可信的。
+    cur = leave != null ? leave : (far ? null : cur);
+  }
+  return out;
+}
+
+// ---- 使用者自己填的時間互相矛盾 ----
+// 這是唯一**完全不需要估算**的檢查：不看車程、不看假設停留、不受跨區中斷影響，
+// 純粹是使用者親手輸入的兩個數字打架。三個代理各自獨立提出這一條並都排第一。
+//
+// 實務命中率不低：拖拉重排與「排順序」只改 day/order，**完全不碰 startMin**，
+// 所以「把訂了 13:00 的餐廳拖到 15:00 的景點後面」是家常便飯，而目前 App 一聲不吭
+// （chainTimes 只是把 arrive 重設成 startMin，然後若無其事地往下算）。
+// 匯入行程表把時間解析到錯的一列，也會產生這種資料。
+//
+// 唯一的誤報來源是跨午夜：23:00 夜市 → 01:00 宵夜，前後相減是負的，但那是正當安排。
+// 所以「晚上很晚 → 凌晨很早」這一組直接跳過不判。這是刻意選擇**漏報**而不是誤報
+// （19:00 → 02:00 若真的是打錯，我們會沉默）——因為誤報一次就會讓長輩以後都不看。
+const NIGHT = 18 * 60, DAWN = 6 * 60;
+const crossesMidnight = (a, b) => a >= NIGHT && b <= DAWN;
+
+export function timeConflicts(spots) {
+  const out = [];
+  let prev = null;                       // 前一個「有填幾點到」的景點
+  for (let i = 0; i < (spots || []).length; i++) {
+    const t = spotTimes(spots[i]);
+    if (!Number.isFinite(t.startMin)) continue;
+    if (prev && !crossesMidnight(prev.t.startMin, t.startMin)) {
+      const hasStay = Number.isFinite(prev.t.stayMin) && prev.t.stayMin > 0;
+      if (t.startMin < prev.t.startMin) {
+        out.push({ kind: 'order', id: spots[i].id, prevId: spots[prev.i].id,
+          at: t.startMin, prevAt: prev.t.startMin, prevName: spots[prev.i].name || '' });
+      } else if (hasStay && prev.t.startMin + prev.t.stayMin > t.startMin) {
+        out.push({ kind: 'overlap', id: spots[i].id, prevId: spots[prev.i].id,
+          at: t.startMin, prevAt: prev.t.startMin, prevEnd: prev.t.startMin + prev.t.stayMin,
+          prevName: spots[prev.i].name || '' });
+      }
+    }
+    prev = { i, t };
   }
   return out;
 }
