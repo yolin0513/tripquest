@@ -100,10 +100,14 @@ function ensure(tripId, key, sig, generate) {
       if (cached2 && cached2.sig === sig && cached2.payload) return cached2.payload;
       const payload = await generate();
       if (payload && (Array.isArray(payload) ? payload.length : Object.keys(payload).length)) {
+        lastFail.delete(tripId + ':' + key);
         await writePayload(tripId, key, payload, sig);
         return payload;
       }
-    } catch { /* 靜默 */ }
+      lastFail.set(tripId + ':' + key, 'AI 沒有回傳可用的內容');
+    } catch (e) {
+      lastFail.set(tripId + ':' + key, String((e && e.message) || e).slice(0, 80));
+    }
     return cached ? cached.payload : null;
   })().finally(() => inFlight.delete(flightKey));
 
@@ -130,12 +134,23 @@ function tripDigest(tripId) {
   return { title: trip.title || '我們的旅程', region: trip.region || '', days, spots };
 }
 
+// tripText 的 sig 算式。狀態查詢（aiTextStatus）要跟真正產生時用同一份，
+// 不然會出現「說是舊的但按了又不重產」這種鬼打牆。
+function tripTextSig(d) {
+  return sigOf({ v: PROMPT_V, t: d.title, days: d.days.map((x) => [x.day, x.region, x.spots]) });
+}
+
+// 上一次產生失敗的原因（只放記憶體，重開就沒了）。
+// 失敗本來全部被 catch 吃掉 —— 使用者看到的是「文字沒變」而沒有任何說明，
+// 我自己在查這個問題時也一樣看不出卡在哪。至少要留一句話。
+const lastFail = new Map();
+
 // ================= 1. 行程表 + 影片文案（一次呼叫）=================
 // payload: { subtitle, dayLines:{[day]:string}, videoIntro, videoOutro, narration:{[day]:string} }
 export async function ensureTripText(tripId) {
   const d = tripDigest(tripId);
   if (!d.days.length) return null;
-  const sig = sigOf({ v: PROMPT_V, t: d.title, days: d.days.map((x) => [x.day, x.region, x.spots]) });
+  const sig = tripTextSig(d);
   return ensure(tripId, 'tripText', sig, async () => {
     const dayList = d.days.map((x) => `第${x.day}天（${x.region || '—'}，${x.theme}）：${x.spots.join('、')}`).join('\n');
     const obj = await aiJSON(tripId, {
@@ -345,6 +360,42 @@ export async function ensureRecapText(tripId, facts) {
     const out = { opening: s(obj.opening), weather: s(obj.weather), topSpot: s(obj.topSpot), closing: s(obj.closing) };
     return (out.opening || out.closing) ? out : null;
   });
+}
+
+// 這趟的文案是不是最新的？不是的話，**為什麼**。
+//
+// 每一種失敗以前都是靜默的（isCreator 不過、沒有金鑰、超過上限、API 掛掉），
+// 使用者只看得到「文字沒變」。這支把原因講出來，旅程設定才有東西可以顯示。
+// 回傳 state: 'off' | 'fresh' | 'stale'，stale 時帶 why。
+export async function aiTextStatus(tripId) {
+  const trip = store.get(tripId);
+  if (!trip || !trip.aiEnabled) return { state: 'off' };
+  const d = tripDigest(tripId);
+  if (!d.days.length) return { state: 'off' };
+  const rec = aiTextRec(tripId, 'tripText');
+  if (rec && rec.sig === tripTextSig(d) && rec.payload) return { state: 'fresh' };
+
+  const fail = lastFail.get(tripId + ':tripText');
+  if (!isCreator(trip)) return { state: 'stale', why: 'notCreator' };
+  const { getTripKey } = await import('./aikeys.js');
+  const k = await getTripKey(tripId);
+  if (!k || !k.key) return { state: 'stale', why: 'noKey' };
+  if ((k.usedMicroUsd || 0) >= (k.capUsd ?? 2) * 1e6) return { state: 'stale', why: 'cap' };
+  if (fail) return { state: 'stale', why: 'failed', detail: fail };
+  return { state: 'stale', why: 'pending', hasOld: !!rec };
+}
+
+// 能不能在這台裝置上重新產生？不能的話**不要先刪** —— 刪了又產不回來，
+// 影片字卡會直接變空白（v1.72.0 就是這樣，實測確認）。
+export async function canRegenerate(tripId) {
+  const trip = store.get(tripId);
+  if (!trip || !trip.aiEnabled) return { ok: false, why: 'off' };
+  if (!isCreator(trip)) return { ok: false, why: 'notCreator' };
+  const { getTripKey } = await import('./aikeys.js');
+  const k = await getTripKey(tripId);
+  if (!k || !k.key) return { ok: false, why: 'noKey' };
+  if ((k.usedMicroUsd || 0) >= (k.capUsd ?? 2) * 1e6) return { ok: false, why: 'cap' };
+  return { ok: true };
 }
 
 // 把這趟已經產好的 AI 文案全部丟掉，下次進行程頁就會重新產一份。

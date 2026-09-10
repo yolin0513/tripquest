@@ -216,6 +216,70 @@ try {
     ok('失敗：aicontent 不接觸 UI，使用者不會看到技術錯誤');
     await p.close();
   }
+  // ---------- v1.72.1：舊文案怎麼換成新的 ----------
+  // 使用者實測 v1.72.0 回報「更新後字卡還是舊句子」。查出來機制是對的，
+  // 但每一種擋下來的情況都靜默（不是建立者／沒金鑰／超上限／API 掛掉），
+  // 而且沒有金鑰的裝置按「重新產生」會把文案刪光又產不回來。
+  console.log('\n— 舊文案的更新路徑 —');
+  const P = await newPage();
+  await P.goto(BASE + '/', { waitUntil: 'networkidle0' });
+  await P.waitForSelector('.hero');
+  const BADLINE = '溫泉公園漫步，品嚐在地雞湯，了解水產養殖，溫暖的宜蘭說不再見';
+  const mkStale = (withKey) => P.evaluate(async (o) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const { myDeviceId } = await import('./js/identity.js');
+    const k = await import('./js/aikeys.js');
+    const gid = uuid(), tid = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g' });
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '宜蘭', region: '宜蘭',
+      startDate: '2026-10-01', endDate: '2026-10-01', aiEnabled: true, createdByDevice: myDeviceId() });
+    await s.put({ id: uuid(), type: 'spot', tripId: tid, name: '礁溪溫泉公園', emoji: '📍',
+      day: 1, order: 0, lat: 24.8, lng: 121.7 });
+    if (o.withKey) await k.setTripKey(tid, { key: 'sk-ant-FAKEFAKEFAKEFAKEFAKEFAKEFAKE' });
+    // sig 刻意設成對不上的（＝v1.72 之前產的那一筆）
+    await s.put({ id: uuid(), type: 'aiText', tripId: tid, groupId: gid, key: 'tripText', sig: 'OLDSIG',
+      payload: { subtitle: '舊', dayLines: { 1: '舊' }, videoIntro: '舊', videoOutro: '舊',
+        narration: { 1: o.bad } } });
+    if (window.__aiCalls) window.__aiCalls.length = 0;
+    return tid;
+  }, { withKey, bad: BADLINE });
+
+  // 沒有金鑰：狀態要講得出原因，而且**不准刪**
+  const noKeyTid = await mkStale(false);
+  const noKey = await P.evaluate(async (tid) => {
+    const ac = await import('./js/aicontent.js');
+    const st = await ac.aiTextStatus(tid);
+    const can = await ac.canRegenerate(tid);
+    return { state: st.state, why: st.why, canOk: can.ok, canWhy: can.why,
+      stillThere: !!ac.aiPayload(tid, 'tripText') };
+  }, noKeyTid);
+  if (noKey.state === 'stale' && noKey.why === 'noKey') ok(`沒有金鑰的裝置：狀態說得出原因（${noKey.state}/${noKey.why}）—— 以前是完全靜默的`); else bad(`沒有金鑰的裝置：狀態說得出原因（${noKey.state}/${noKey.why}）—— 以前是完全靜默的`);
+  const m2 = '沒有金鑰時 canRegenerate 擋下來，舊文案原封不動（v1.72.0 會刪光又產不回來）';
+  if (!noKey.canOk && noKey.canWhy === 'noKey' && noKey.stillThere) ok(m2); else bad(m2);
+
+  // 有金鑰：狀態是 stale/pending，重產之後變 fresh
+  const okTid = await mkStale(true);
+  const okRes = await P.evaluate(async (tid) => {
+    const ac = await import('./js/aicontent.js');
+    const before = await ac.aiTextStatus(tid);
+    const can = await ac.canRegenerate(tid);
+    return { before: before.state + '/' + before.why, canOk: can.ok };
+  }, okTid);
+  if (okRes.before.startsWith('stale') && okRes.canOk) ok(`有金鑰的裝置：狀態是「${okRes.before}」且可以重產`); else bad(`有金鑰的裝置：狀態是「${okRes.before}」且可以重產`);
+
+  // 回憶入口頁也要觸發（使用者是從那裡進去看影片的）
+  const memTid = await mkStale(true);
+  await P.goto('about:blank');
+  await P.goto(`http://localhost:${PORT}/#/trip/${memTid}/memories`, { waitUntil: 'networkidle0' }).catch(() => {});
+  await sleep(2500);
+  const memHit = await P.evaluate(async (tid) => {
+    const ac = await import('./js/aicontent.js');
+    const st = await ac.aiTextStatus(tid);
+    return { state: st.state, why: st.why };
+  }, memTid);
+  if (memHit.state !== 'stale' || memHit.why !== 'pending') ok(`回憶入口頁也會觸發更新（狀態 ${memHit.state}${memHit.why ? '/' + memHit.why : ''}）—— 使用者是從那裡進去看影片的`); else bad(`回憶入口頁也會觸發更新（狀態 ${memHit.state}${memHit.why ? '/' + memHit.why : ''}）—— 使用者是從那裡進去看影片的`);
+
 
   console.log('\nAI 文案測試結束');
 } catch (e) {

@@ -18,6 +18,13 @@ function tripEnded(t) {
 export default async function memories(tripId) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
+
+  // 使用者是從這一頁進去看影片的 —— 文案的更新也要在這裡就開始跑，
+  // 不然他點進相簿才開始產，字卡上還是舊句子。
+  // 內容沒變就是純快取查詢，不會打 API、不會花錢（v1.72.1）。
+  if (t.aiEnabled) {
+    import('../aicontent.js').then(({ warmTripContent }) => warmTripContent(tripId)).catch(() => {});
+  }
   setTop({ title: '回顧與成就' });
 
   const prog = store.tripProgress(tripId);

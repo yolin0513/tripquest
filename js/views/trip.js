@@ -1172,8 +1172,7 @@ export async function settings(tripId) {
     settingRow('重新產生任務', h('button', { class: 'btn btn-soft', onclick: () => regenerate(tripId) }, '補齊')),
     // AI 的輸出沒辦法事先保證，總要有一條重來的路（v1.72）。
     // 只在有開 AI 的行程出現 —— 沒開的人看到這顆按鈕只會困惑。
-    t.aiEnabled ? settingRow('文案讀起來怪怪的',
-      h('button', { class: 'btn btn-soft', onclick: () => redoAiText(tripId) }, '重新產生')) : null,
+    t.aiEnabled ? aiTextRow(tripId) : null,
 
     h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '進階：自帶金鑰（可選）'),
     h('div', { class: 'sub-label' }, 'AI 加值'),
@@ -1234,20 +1233,65 @@ function memberEditor(tripId, groupId) {
   return wrap;
 }
 
+// 文案狀態列：**把每一種失敗講出來**。
+//
+// v1.72.0 的問題不是機制壞了（實測會重產），是每一種擋下來的情況都靜默：
+// 這台不是建立者、這台沒有金鑰、超過花費上限、API 掛掉 —— 使用者只看到「文字沒變」，
+// 而且我自己在查的時候也一樣看不出卡在哪。
+const AI_WHY = {
+  notCreator: { t: '這趟的文案由建立者那台手機產生', a: '請他開一次這趟行程就會更新' },
+  noKey: { t: '這台手機沒有 Claude 金鑰', a: '在有貼金鑰的那台開啟這趟行程，或在上面貼一把' },
+  cap: { t: '已達這趟的花費上限', a: '到上面的「AI 加值」調高上限' },
+  failed: { t: '上次產生失敗', a: '按「重新產生」再試一次' },
+  pending: { t: '還沒更新到最新版的寫法', a: '按「重新產生」，或開一次行程頁' },
+};
+
+function aiTextRow(tripId) {
+  const box = h('div', {});
+  const draw = async () => {
+    const { aiTextStatus } = await import('../aicontent.js');
+    const st = await aiTextStatus(tripId);
+    if (st.state === 'off') { box.replaceChildren(); return; }
+    const btn = h('button', { class: 'btn btn-soft', onclick: () => redoAiText(tripId, draw) }, '重新產生');
+    if (st.state === 'fresh') {
+      box.replaceChildren(settingRow('影片與海報文案',
+        h('div', { style: 'display:flex;align-items:center;gap:10px' },
+          h('span', { class: 'tag tag-ok' }, '最新'), btn)));
+      return;
+    }
+    const w = AI_WHY[st.why] || AI_WHY.pending;
+    box.replaceChildren(
+      settingRow('影片與海報文案',
+        h('div', { style: 'display:flex;align-items:center;gap:10px' },
+          h('span', { class: 'tag tag-todo' }, '待更新'), btn)),
+      h('p', { class: 'form-hint' }, `${w.t} —— ${w.a}。`
+        + (st.detail ? `（${st.detail}）` : '')),
+    );
+  };
+  draw();
+  return box;
+}
+
 // 把這趟的 AI 文案全部丟掉，下次進行程頁會重新產一份。
-// AI 的輸出沒辦法事先保證，總要有一條重來的路（v1.72）。
-async function redoAiText(tripId) {
+// **先確認這台真的產得出來再刪** —— v1.72.0 沒確認就刪，沒有金鑰的裝置按下去
+// 會把文案刪光又產不回來，影片字卡直接變空白（實測確認）。
+async function redoAiText(tripId, after) {
+  const { canRegenerate, clearTripText, warmTripContent } = await import('../aicontent.js');
+  const can = await canRegenerate(tripId);
+  if (!can.ok) {
+    const w = AI_WHY[can.why] || AI_WHY.pending;
+    await confirmDialog(`這台手機沒辦法重新產生：${w.t}。\n\n${w.a}。`, { okLabel: '知道了', cancelLabel: '關閉' });
+    return;
+  }
   if (!await confirmDialog(
     '會把這趟的影片字卡、海報文案、景點介紹、照片字幕全部重新產一遍。\n\n'
     + '你自己改過的不會動。旅伴那邊也會換成新的一份（大家看的本來就該是同一份）。',
     { okLabel: '重新產生' })) return;
-  const { clearTripText, warmTripContent } = await import('../aicontent.js');
-  const n = await clearTripText(tripId);
-  if (!n) { toast('這趟還沒有 AI 文案'); return; }
   toast('正在重新產生…');
+  await clearTripText(tripId);
   await warmTripContent(tripId);
   toast('文案已重新產生');
-  navigate(`/trip/${tripId}`, { replace: true });
+  if (after) await after();
 }
 
 async function regenerate(tripId) {
