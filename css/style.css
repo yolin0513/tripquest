@@ -1122,13 +1122,18 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-time { font-size: 0.85rem; color: var(--muted); font-weight: 700; }
 /* 兩顆等寬、圖示在前、數量用固定寬度的小徽章 ——
    不然「改任務（3）」跟「景點設定」長度不同，一排看起來歪的 */
-.plan-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+/* v1.73.5：1fr 是 minmax(auto, 1fr)，而 auto 的下限是按鈕的 min-content ——
+   特大字級下兩顆撐大整條，畫到旁邊的 ▲▼ 上。minmax(0,1fr) 拆掉那個下限，
+   標籤就會照 .plan-mini-t 的設定收成「…」。（跟日期選擇的日曆同一個病。） */
+.plan-row-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
 .plan-row-actions .plan-mini {
   display: flex; align-items: center; justify-content: center; gap: 4px;
   width: 100%; min-height: 44px; padding: 4px 6px; font-size: 0.85rem; border-radius: 10px;
 }
 .plan-mini-ic { font-size: 0.95rem; line-height: 1; flex: none; }
-.plan-mini-t { font-weight: 700; white-space: nowrap; }
+/* v1.73.5：nowrap 的標籤在特大字級下比按鈕寬，畫到旁邊的 ▲▼ 上。
+   跟 .qline-sub 同一個病 —— 排不下就用「…」收掉，不要蓋到別人。 */
+.plan-mini-t { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .plan-mini-n {
   min-width: 18px; padding: 0 4px; border-radius: 999px; flex: none;
   background: var(--bg); color: var(--muted);
@@ -1305,15 +1310,17 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .exp-person-bal { font-weight: 800; font-size: 0.95rem; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 .exp-person-bal.pos { color: var(--ok); }
 .exp-person-bal.neg { color: var(--danger); }
+/* v1.73.5：特大字級下金額（不可斷行的數字）把標題欄擠到只剩 31px，
+   標題的字就畫出來撞在金額上。排不下就讓金額掉到下一行。 */
 .exp-item {
   appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
 }
 .exp-item-cat { font-size: 1.5rem; flex: none; }
-.exp-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.exp-item-title { font-weight: 700; }
-.exp-item-amt { font-weight: 800; font-variant-numeric: tabular-nums; }
+.exp-item-main { flex: 1 1 120px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.exp-item-title { font-weight: 700; overflow-wrap: anywhere; }
+.exp-item-amt { font-weight: 800; font-variant-numeric: tabular-nums; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 
 .exp-form .form-field { margin-bottom: 16px; }
 .numpad-row { display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -1508,20 +1515,36 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* ---------- 行程回顧 ---------- */
 .recap-head { text-align: center; padding: 10px 0 18px; }
 .recap-title { font-size: 1.7rem; font-weight: 900; line-height: 1.3; }
-.recap-sub { color: var(--muted); margin-top: 6px; }
+/* v1.73.5：使用者實機回報「2026-09-05 – 2026-09-07 · 3 天 · 4 人」折行後
+   「3」孤立在行尾、「天 · 4 人」跑到第二行。原因是整串是一個字串，日期那一段
+   又是不可斷行的數字串 —— 特大字級下比容器寬，只能在奇怪的地方斷。
+   改成每一段各自 nowrap、整體可換行：日期一行、天數人數一行，數字和量詞永遠不分家。 */
+.recap-sub {
+  color: var(--muted); margin-top: 6px;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+  gap: 2px 10px;
+}
+.recap-sub > span { white-space: nowrap; }
+/* 日期本身在 320px×特大字級仍然可能比整列寬 —— 讓它跟著視窗縮，不要溢出 */
+.recap-sub .recap-dates { font-size: min(1em, 4.4vw); }
 .recap-opening { font-size: 1.05rem; line-height: 1.7; margin: 0 0 16px; text-align: center; }
 .recap-closing { font-size: 1.05rem; line-height: 1.6; margin: 16px 0 0; text-align: center; color: var(--muted); font-style: italic; }
 
 /* AI 生成內容的小標記 —— 明顯但不吵 */
 .ai-mark { color: #d4a017; font-size: 0.85em; vertical-align: 2px; }
 .spot-blurb { line-height: 1.7; margin: 12px 0 4px; color: var(--fg); }
-.recap-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; margin-bottom: 18px; }
+/* v1.73.5：欄寬下限本來是固定的 90px，但數字字級是 1.6rem —— 特大字級下變成 40px，
+   「51/51」要 110px，直接畫出格子撞到隔壁（使用者截圖是「51/51117.3」黏在一起）。
+   下限改成**跟著字級走**（em），特大字級時格子自然變少變寬，一列排不下就換行。 */
+.recap-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.6em, 1fr)); gap: 10px; margin-bottom: 18px; }
 .recap-num {
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 16px;
-  padding: 14px 6px; text-align: center;
+  padding: 14px 6px; text-align: center; min-width: 0;
 }
 .recap-num-ic { font-size: 1.5rem; }
-.recap-num-n { font-size: 1.6rem; font-weight: 900; margin: 2px 0; }
+/* 再加一道：數字本身也受格子寬度封頂，並允許在任何位置斷 ——
+   「117.3」這種還是可能比 5.6em 寬（單位不同、位數不同）。 */
+.recap-num-n { font-size: min(1.6rem, 9vw); font-weight: 900; margin: 2px 0; overflow-wrap: anywhere; }
 .recap-num-l { font-size: 0.78rem; color: var(--muted); }
 .recap-line {
   display: flex; gap: 10px; align-items: flex-start; line-height: 1.6;
@@ -1719,7 +1742,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; overflow-wrap: anywhere;
 }
-.qline-sub { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+/* v1.73.5：使用者實機回報「❤️ 2」的數字被藍色相機按鈕蓋掉一半。
+   原因是這一列 nowrap —— 特大字級下「✓ 已完成　1 張　❤️ 3」要 211px，
+   但它的框只有 58px，文字就畫到右邊的按鈕區底下（實測 107→318）。
+   狀態列本來就短，折成兩行完全可以接受；蓋住數字不行。 */
+.qline-sub { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
 .qline.done .qline-sub { color: var(--ok); }
 .qline-chev { flex: none; color: var(--muted); font-size: 0.8rem; width: 10px; text-align: center; }
 .qline.open .qline-chev { transform: rotate(90deg); }

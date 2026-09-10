@@ -1,6 +1,6 @@
 // 進入點：註冊 SW、初始化 store、掛路由、管理頂列
 
-import { route, setNotFound, startRouter, navigate, currentRoute, back, resetHistory } from './router.js';
+import { route, setNotFound, startRouter, navigate, currentRoute, back, resetHistory, setSlowIndicator } from './router.js';
 import * as store from './store.js';
 import { mount, h, toast, smoothScrollTo } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
@@ -169,6 +169,10 @@ setNotFound(() => {
 // ---- 啟動 ----
 (async function boot() {
   applyPrefs();
+  // 換頁時如果 view 函式 250ms 還沒畫出東西就補轉圈圈（見 router.js）。
+  // **只在畫面真的還是空的時候畫** —— 很多 view 是「先 render() 再繼續 await」
+  // （行程頁 render 完才去算移動時間），不檢查的話轉圈圈會把已經畫好的頁面蓋掉。
+  setSlowIndicator(() => { if (!view.firstChild) renderLoading(); });
   renderLoading();
   await store.init();
   await initIdentity();       // 讓裝置身分與 localStorage / IndexedDB 一致

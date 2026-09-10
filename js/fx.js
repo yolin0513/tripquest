@@ -6,7 +6,12 @@ let _currencies = null;
 
 export async function loadCurrencies() {
   if (!_currencies) {
-    try { _currencies = await fetch('./data/currencies.json').then((r) => r.json()); }
+    // v1.73.4：補逾時。這一支擋在**整個分帳頁**前面（expenses.js 在 render() 之前
+    // await 它），沒有逾時的話慢網路上就是一片空白等下去。抓的是本站的靜態檔、
+    // 也在 SW 預快取清單裡，所以 6 秒還沒回來就是不會回來了 —— 退回只有新台幣的
+    // 最小清單，畫面照樣出得來（金額顯示不受影響，只有幣別選單會少）。
+    const to = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+    try { _currencies = await fetch('./data/currencies.json', { signal: to(6000) }).then((r) => r.json()); }
     catch { _currencies = { list: [{ code: 'TWD', symbol: 'NT$', name: '新台幣', zero: false }], byCountry: {} }; }
   }
   return _currencies;

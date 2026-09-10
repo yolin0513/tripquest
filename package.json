@@ -43,6 +43,7 @@
     "layouttest": "node scripts/layouttest.mjs",
     "workertest": "node scripts/workertest.mjs",
     "shotlayout": "node scripts/shotlayout.mjs",
+    "shotxl": "node scripts/shotxl.mjs",
     "shots1670": "node scripts/shots1670.mjs",
     "zhtest": "node scripts/zhtest.mjs",
     "sweep": "node scripts/sweep.mjs",

@@ -7,6 +7,11 @@ const routes = [];
 let notFound = null;
 let current = null;
 
+// 「這一頁載很久」時要畫什麼 —— 由 app.js 注入（router 本身刻意零相依，
+// 直接 import app.js 會變成循環相依）。
+let slowIndicator = null;
+export function setSlowIndicator(fn) { slowIndicator = fn; }
+
 // 這個 App session 內，透過 push（非 replace）前進了幾步
 let depth = 0;
 // 記住每一步是哪個畫面，方便判斷 fallback
@@ -96,7 +101,15 @@ async function resolve() {
       r.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1])));
       current = { path, params, query, pattern: r.pattern };
       if (restore == null) window.scrollTo(0, 0);
-      try { await r.handler({ params, query, path, fresh: true }); } catch (e) { console.error(e); }
+      // view 函式是 async 的（載幣別、算矩陣、抓天氣…）。在它呼叫 render() 之前，
+      // 畫面上停的是上一頁的內容 —— 冷啟動或從空白進來時就是**全空、也沒有轉圈圈**，
+      // 使用者分不出「在載入」與「壞掉了」（線上巡檢就是這樣量到分帳頁 0 字的）。
+      // 但也不能無條件先畫 loading：多數頁面是同步就渲染完的，那會變成閃一下。
+      // 所以只有慢到 250ms 還沒畫東西才補上轉圈圈。
+      let slow = setTimeout(() => { if (slowIndicator && my === gen) slowIndicator(); }, 250);
+      try { await r.handler({ params, query, path, fresh: true }); }
+      catch (e) { console.error(e); }
+      finally { clearTimeout(slow); slow = null; }
       if (restore != null) {
         window.scrollTo(0, restore);
         // 有些畫面會在 render 之後才把內容補進來（照片、天氣條），再校正一次
