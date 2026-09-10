@@ -1845,6 +1845,19 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-transit-line { font-size: 0.9rem; margin-top: 3px; }
 .plan-transit-drive { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
 .plan-transit-note { font-size: 0.8rem; color: var(--muted); line-height: 1.45; padding: 2px 8px 6px 8px; }
+/* 行程檢查（v1.69）。一次最多三條、依當天時間先後排（不依嚴重度）：
+   長輩是照順序讀一天的行程的，而且修最早的那一條通常會連帶解掉後面的。 */
+.pd-check { min-height: 40px; padding: 4px 12px; margin-left: 6px; white-space: nowrap; }
+.pd-check.has-issue { border-color: #ffb14e; color: #ffb14e; font-weight: 700; }
+.pd-start { min-height: 40px; padding: 4px 10px; margin-left: 6px; white-space: nowrap; font-size: 0.85rem; }
+.chk-item { padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;
+  background: color-mix(in srgb, #ffb14e 12%, transparent); }
+.chk-item.note { background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.chk-item.done { background: color-mix(in srgb, var(--ok, #4caf50) 12%, transparent); }
+.chk-t { font-weight: 700; line-height: 1.5; }
+.chk-a { color: var(--muted); line-height: 1.5; margin-top: 4px; }
+.chk-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.chk-btns .btn { min-height: 44px; }
 .plan-eta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
 .plan-eta.warn { color: #ffb14e; font-weight: 700; }
 /* 使用者自己填的時間打架（v1.67）。比 .plan-eta.warn 更明顯：它是「確定有問題」，

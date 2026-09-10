@@ -40,6 +40,13 @@ export const TRACKED = {
     posterStyle: ['posterStyle'],
     baseCurrency: ['baseCurrency'],
     country: ['country'],
+    // 每一天幾點出發（v1.69）。**這是使用者自己設的，不是推導值** —— 所以放進同步層
+    // 完全正當，全家會看到同一份。自成一組：它跟行程名、日期都無關，各自 LWW。
+    //
+    // 為什麼需要它：chainTimes 的第一站沒有「幾點到」時 arrive 是 null，整天推不出
+    // 任何時刻（實測確認）。而「使用者一個時間都沒填」正是自動排時刻表最主要的情境。
+    // 沒有這個欄位，整個行程檢查在最常見的情況下什麼都檢查不到。
+    dayStarts: ['dayStarts'],
     album: ['albumId', 'albumUrl', 'albumAt'],
     // 使用者自己切的開關要各自成組（v1.64 健檢）。原本不在 TRACKED 裡 → 跟著整筆 LWW
     // 的勝方走：旅伴離線改了行程名再同步回來，建立者開的 AI 會被靜默關掉、

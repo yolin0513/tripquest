@@ -17,6 +17,7 @@ import { toISO, parseISO } from '../daterange.js';
 import { generateForTrip } from '../quests/generate.js';
 import { enrichTrip } from '../enrich.js';
 import { transitLeg, tzOffsetFor, rfc3339, VEHICLE_EMOJI } from '../transit.js';
+import { dayIssues, MAX_SHOWN, issueSig } from '../plancheck.js';
 import { getMapsKey, mapsBudget, addMapsCalls } from '../aikeys.js';
 
 const dayMS = 86400000;
@@ -28,6 +29,9 @@ const dayMS = 86400000;
 // 真正的快取在 transit.js（IndexedDB，24 小時），那一層是為了不重複燒 Google 額度。
 const TRANSIT = new Map();
 const tKey = (tripId, day) => `${tripId}:${day}`;
+
+// 這一天的檢查結果（跟 TRANSIT 一樣：推導值，只放記憶體）。
+const ISSUES = new Map();
 
 export default async function plan(tripId) {
   const t = store.get(tripId);
@@ -295,6 +299,24 @@ export default async function plan(tripId) {
   // 交通切換移除後內部一律用 drive 估（排序看的是相對距離，模式不影響結論）
   function dayMode() { return 'drive'; }
 
+  // 一天的時刻鏈。當天沒有任何景點填「幾點到」時，chainTimes 的第一站 arrive 是 null，
+  // 整天推不出任何時刻 —— 而「一個時間都沒填」正是最常見的情況。所以用「這一天幾點出發」
+  // 當起點（使用者可以改，存 trip.dayStarts）並回報 assumedStart，讓畫面講出來。
+  //
+  // **推算出來的時刻不寫進資料**（三代理 3:0 的決議）：它是推導值，而且每台裝置算出來
+  // 的可能不同（OSRM 或降級估算）。寫進去會讓機器算的東西偽裝成使用者的意圖，還會在
+  // 同步管道裡製造永不停止的雜訊。使用者按「這樣改」時，寫的是他確認過的那一個值。
+  function chainForDay(inDay, m, trip, d) {
+    const raw = chainTimes(inDay, m, dayMode());
+    if (raw.length && raw[0].arrive != null) return { chain: raw, assumedStart: false };
+    const seed = inDay.map((x, i) => (i === 0 ? { ...x, startMin: dayStartOf(trip, d) } : x));
+    const out = chainTimes(seed, m, dayMode());
+    // 第一站的時刻是我們塞進去的，不是使用者填的 —— 把 fixed 拿掉，
+    // 畫面才會把它讀成「約 07:30」而不是一個確定的約定。
+    if (out.length) out[0] = { ...out[0], fixed: false, seeded: true };
+    return { chain: out, assumedStart: true };
+  }
+
   async function dayMatrix(inDay) {
     const mode = dayMode();
     const coordIdx = [];
@@ -317,8 +339,8 @@ export default async function plan(tripId) {
     // 類別停留時間要讀 data/themes.json。這一頁原本沒載主題資料，
     // 不載的話 stayForSpot 會靜默退回 60，整個對照表等於沒作用。
     await loadThemes().catch(() => {});
+    const t2 = store.get(tripId) || t;
     list.querySelectorAll('.plan-conflict').forEach((x) => x.remove());
-    const mode = dayMode();
     const spots = store.spotsOf(tripId);
     const days = totalDays();
     let anyEst = false, anyOsrm = false;
@@ -327,7 +349,8 @@ export default async function plan(tripId) {
       if (!inDay.length) continue;
       const m = await dayMatrix(inDay);
       if (m.src === 'est') anyEst = true; else anyOsrm = true;
-      const chain = chainTimes(inDay, m, mode);
+      const { chain, assumedStart } = chainForDay(inDay, m, t2, d);
+      ISSUES.set(tKey(tripId, d), { list: dayIssues(inDay, chain, timeConflicts(inDay)), assumedStart });
       chain.forEach((c, i) => {
         const row = list.querySelector(`.plan-row[data-id="${c.id}"]`);
         if (!row) return;
@@ -392,6 +415,31 @@ export default async function plan(tripId) {
         eta.after(el);
       }
     }
+    // 每一天的分隔列補兩顆：出發時刻與檢查結果
+    list.querySelectorAll('.pd-start, .pd-check').forEach((x) => x.remove());
+    for (let d = 1; d <= days; d++) {
+      const div = list.querySelector(`.plan-divider[data-day="${d}"]`);
+      const st = ISSUES.get(tKey(tripId, d));
+      if (!div || !st) continue;
+      const t3 = store.get(tripId) || t;
+      const startMin = dayStartOf(t3, d);
+      // 只有「這一天完全沒人填時間」時才出現 —— 有人填了就以他填的為準，不要多嘴
+      if (st.assumedStart) {
+        div.append(h('button', {
+          class: 'btn btn-ghost pd-start', dataset: { day: String(d) },
+          title: '這一天幾點出發（推算時刻用的起點）',
+          onclick: () => setDayStart(d),
+        }, `🕘 ${fmtMin(startMin)} 出發`));
+      }
+      const hard = st.list.filter((x) => !x.note);
+      if (st.list.length) {
+        div.append(h('button', {
+          class: 'btn btn-soft pd-check' + (hard.length ? ' has-issue' : ''), dataset: { day: String(d) },
+          onclick: () => checkDay(d),
+        }, hard.length ? `⚠️ 檢查（${hard.length}）` : '🔎 檢查這一天'));
+      }
+    }
+
     // 大眾運輸用了假設的出發時間 → 講出來，不要讓人以為那是他自己設的
     list.querySelectorAll('.plan-transit-note').forEach((x) => x.remove());
     for (let d = 1; d <= days; d++) {
@@ -412,6 +460,130 @@ export default async function plan(tripId) {
         `移動時間是${anyEst && !anyOsrm ? '用直線距離' : '依開放路網（OSRM）'}粗略估計的，`
         + '不含大眾運輸、等車與塞車時間，僅供排順序參考。'));
     }
+  }
+
+  // 「這一天幾點出發」。這是使用者自己設的值，寫進 trip.dayStarts 並同步 —— 全家看到同一份。
+  async function setDayStart(d) {
+    const t3 = store.get(tripId);
+    const cur = dayStartOf(t3, d);
+    const v = await promptDialog(`第 ${d} 天大概幾點出發？`, { value: fmtMin(cur), placeholder: '09:00' });
+    if (v === null) return;
+    const m = String(v).match(/^(\d{1,2})[:：]?(\d{2})$/);
+    if (!m) { toast('請填像 09:00 這樣的時間'); return; }
+    const min = +m[1] * 60 + +m[2];
+    if (!(min >= 0 && min < 1440)) { toast('時間不對'); return; }
+    await store.patch(tripId, { dayStarts: { ...(t3.dayStarts || {}), [String(d)]: min } });
+    toast(`第 ${d} 天從 ${fmtMin(min)} 開始推算`);
+    draw();
+  }
+
+  // 「檢查這一天」：預覽 + 逐條套用。
+  //
+  // 三個設計決定都是代理點名的：
+  //  · **每套用一條就重新偵測**。問題大多是鏈式的（第 3 站晚 40 分和第 5 站晚 55 分
+  //    常常是同一個延遲在傳播），修好第一條後面的建議值就過期了。重新偵測是零網路
+  //    （chainTimes 是純函式、travelMatrix 的 canonical() 保證重排不觸發新請求）。
+  //  · **但存活的項目不重新排序、不重新編號** —— 長輩會找不到剛剛在看的那一條。
+  //    已解決的原地變成「✓ 已解決」，不無聲消失。
+  //  · **套用當下重讀記錄比對**。plan.js 原本沒有訂閱 store，而前景每 20 秒就 pull 一次；
+  //    旅伴的修改進了 IndexedDB 但畫面不動，按下去就會用預覽時算的舊值蓋掉他。
+  async function checkDay(d) {
+    const inDay0 = store.spotsOf(tripId).filter((x) => (x.day || 1) === d)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const stamps = new Map(inDay0.map((sp) => [sp.id, sp.updatedAt || 0]));
+    const undo = new Map();                       // spotId → 套用前的欄位
+    const box = h('div', {});
+
+    const rerun = async () => {
+      const inDay = store.spotsOf(tripId).filter((x) => (x.day || 1) === d)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const m = await dayMatrix(inDay);
+      const { chain, assumedStart } = chainForDay(inDay, m, store.get(tripId), d);
+      return { inDay, list: dayIssues(inDay, chain, timeConflicts(inDay)), assumedStart };
+    };
+
+    const paint = async (solved = []) => {
+      const { inDay, list, assumedStart } = await rerun();
+      const kids = [];
+      if (assumedStart) {
+        kids.push(h('p', { class: 'sm muted' },
+          `這一天沒有人填「幾點到」，下面的時刻是從 ${fmtMin(dayStartOf(store.get(tripId), d))} 出發推算的。`));
+      }
+      for (const done of solved) {
+        kids.push(h('div', { class: 'chk-item done' },
+          h('div', { class: 'chk-t' }, '✓ ' + done.title),
+          h('div', { class: 'chk-a' }, done.undoable ? '已改好' : '已解決'),
+          done.undoable ? h('button', { class: 'btn btn-ghost sm-btn', onclick: async () => {
+            for (const [id, prev] of undo) await store.patch(id, prev);
+            undo.clear();
+            await paint([]);
+            toast('已復原');
+          } }, '復原') : null));
+      }
+      const show = list.slice(0, MAX_SHOWN);
+      for (const it of show) {
+        kids.push(h('div', { class: 'chk-item' + (it.note ? ' note' : '') },
+          h('div', { class: 'chk-t' }, (it.note ? '🕛 ' : '⚠️ ') + it.title),
+          h('div', { class: 'chk-a' }, it.advice),
+          h('div', { class: 'chk-btns' },
+            it.fix ? h('button', { class: 'btn btn-primary sm-btn', onclick: () => applyFix(it) }, '這樣改') : null,
+            h('button', { class: 'btn btn-ghost sm-btn', onclick: () => dismiss(it) }, '這樣沒關係'))));
+      }
+      if (list.length > MAX_SHOWN) {
+        kids.push(h('p', { class: 'sm muted' }, `還有 ${list.length - MAX_SHOWN} 項，處理完上面的會再顯示。`));
+      }
+      if (!list.length && !solved.length) kids.push(h('p', {}, '這一天看起來沒問題 👍'));
+      else if (!list.length) kids.push(h('p', { class: 'sm muted' }, '都處理好了 👍'));
+      box.replaceChildren(...kids);
+      void inDay;
+    };
+
+    // 套用前重讀：旅伴剛剛改過就不寫，改成重新檢查並說明
+    const stale = (ids) => {
+      for (const id of ids) {
+        const cur = store.getRaw ? store.getRaw(id) : store.get(id);
+        if (!cur) return true;
+        if ((cur.updatedAt || 0) !== (stamps.get(id) || 0)) return true;
+      }
+      return false;
+    };
+
+    const applyFix = async (it) => {
+      const touched = it.fix.type === 'swap' ? [it.fix.a, it.fix.b] : [it.fix.id];
+      if (stale(touched)) {
+        toast('旅伴剛剛改過這個景點，已重新檢查');
+        for (const sp of store.spotsOf(tripId)) stamps.set(sp.id, sp.updatedAt || 0);
+        await paint([]);
+        return;
+      }
+      if (it.fix.type === 'swap') {
+        const a = store.get(it.fix.a), b = store.get(it.fix.b);
+        undo.set(a.id, { order: a.order }); undo.set(b.id, { order: b.order });
+        await store.patch(a.id, { order: b.order });
+        await store.patch(b.id, { order: a.order });
+      } else if (it.fix.type === 'stay') {
+        const sp = store.get(it.fix.id);
+        undo.set(sp.id, { stayMin: sp.stayMin ?? null, endTime: sp.endTime || '' });
+        // endTime 是舊的字串欄位，跟 stayMin 同一個欄位組；不清掉會讓 spotTimes 讀到舊值
+        await store.patch(sp.id, { stayMin: it.fix.stayMin, endTime: '' });
+      }
+      for (const sp of store.spotsOf(tripId)) stamps.set(sp.id, sp.updatedAt || 0);
+      draw();
+      await paint([{ title: it.title, undoable: true }]);
+    };
+
+    // 「這樣沒關係」：只寫本機旗標。`_` 開頭的欄位不觸發同步（store.patch 的既有規則），
+    // 所以這是免費的、不碰合併、不影響旅伴。帶簽章 —— 使用者之後改了時間，問題會重新出現。
+    const dismiss = async (it) => {
+      const sp = store.get(it.id);
+      if (sp) await store.patch(sp.id, { _ok: { ...(sp._ok || {}), [it.kind]: issueSig(it) } });
+      draw();
+      await paint([]);
+    };
+
+    await paint([]);
+    await modal({ title: `第 ${d} 天`, body: box, actions: [{ label: '關閉', value: null, primary: true }] });
+    draw();
   }
 
   // 「🚆 大眾運輸」：一段一段序列查 Google Routes。
@@ -455,12 +627,7 @@ export default async function plan(tripId) {
     // 出發時刻：照 v1.67 的時刻鏈推。當天完全沒有人填「幾點到」時，用早上 9 點當
     // 起點並在畫面上講出來 —— 不講的話使用者會以為那是他自己設的。
     const m = await dayMatrix(inDay);
-    let chain = chainTimes(inDay, m, dayMode());
-    const assumedStart = chain[0].arrive == null;
-    if (assumedStart) {
-      const seed = inDay.map((x, i) => (i === 0 ? { ...x, startMin: dayStartOf(t2, d) } : x));
-      chain = chainTimes(seed, m, dayMode());
-    }
+    const { chain, assumedStart } = chainForDay(inDay, m, t2, d);
 
     const entry = { legs: new Map(), assumedStart, tz, date, at: Date.now() };
     TRANSIT.set(tKey(tripId, d), entry);
@@ -668,6 +835,20 @@ export default async function plan(tripId) {
     pushDates();
     draw();
   }
+
+  // 訂閱記錄變動：前景每 20 秒 pull 一次，旅伴的修改本來會進了 IndexedDB 但畫面不動
+  // （這一頁原本沒有訂閱，是代理實測抓到的）。內容沒變就不重畫，免得拖拉到一半被打斷。
+  let lastSig = '';
+  const sigOf = () => store.spotsOf(tripId)
+    .map((x) => `${x.id}:${x.day}:${x.order}:${x.startMin ?? ''}:${x.stayMin ?? ''}:${x.name}`).sort().join('|');
+  const off = store.subscribe(() => {
+    const sg = sigOf();
+    if (sg === lastSig) return;
+    lastSig = sg;
+    if (document.querySelector('.modal-overlay')) return;   // 對話框開著時不要抽掉腳下的畫面
+    draw();
+  });
+  window.addEventListener('hashchange', () => { try { off && off(); } catch { /* noop */ } }, { once: true });
 
   draw();
 }
