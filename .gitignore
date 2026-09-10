@@ -13,6 +13,10 @@ desktop.ini
 screenshots/_smoke/
 screenshots/_*.png
 scripts/_*.mjs
+screenshots/_layout/
+screenshots/_layout-report.txt
+screenshots/_v147/
+screenshots/_recapcard/
 
 # 本機開發設定（不影響部署）
 .claude/settings.local.json

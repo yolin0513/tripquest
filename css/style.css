@@ -796,7 +796,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   appearance: none; border: 0; background: transparent; color: var(--muted);
   font-size: 1.4rem; cursor: pointer; line-height: 1;
   display: inline-grid; place-items: center;
-  width: 40px; height: 40px; margin: -8px -10px -8px 0; border-radius: 50%;
+  width: 44px; height: 44px; margin: -8px -12px -8px 0; border-radius: 50%;
   flex: none; touch-action: manipulation;
 }
 .chip-x:active { background: var(--bg-elev-2); }
@@ -949,9 +949,12 @@ textarea.field { resize: vertical; line-height: 1.6; }
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 .scrub-time { padding: 6px 10px; text-align: center; font-size: 0.92rem; color: var(--muted); background: var(--bg); font-variant-numeric: tabular-nums; }
-.pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0 2px; }
-.pager-btn { min-height: 44px; white-space: nowrap; }
-.pager-lbl { font-weight: 700; min-width: 130px; text-align: center; white-space: nowrap; }
+/* v1.73：三個東西都 nowrap、中間那個還有 130px 的硬底線 —— 320px×特大字級時
+   整頁被推寬到 365px，可以左右捲。兩顆按鈕的文字不能折（「下一張 ›」拆行很醜），
+   所以讓中間的標籤負責讓步：可折行、可縮到比內容窄。 */
+.pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 10px; margin: 10px 0 2px; }
+.pager-btn { min-height: 44px; white-space: nowrap; flex: 0 0 auto; }
+.pager-lbl { font-weight: 700; flex: 1 1 120px; min-width: 0; text-align: center; line-height: 1.4; }
 .record-overlay {
   position: fixed; inset: 0; z-index: 90;
   background: rgba(5, 8, 16, 0.92);
@@ -1020,7 +1023,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
   font-size: 1.7rem; line-height: 1; cursor: pointer; display: grid; place-items: center;
 }
 .cal-arrow:active { transform: scale(0.94); }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+/* v1.73：`1fr` 是 `minmax(auto, 1fr)`，而 `auto` 的下限是格子的 min-content ——
+   .cal-cell 有 min-height:44px + aspect-ratio:1，min-content 寬度就變成 44px，
+   7×44+24 = 332 > 320px 的對話框，日曆整個推出去。minmax(0,1fr) 拆掉那個下限：
+   格子變成「寬度照分、高度仍保 44px」，觸控區沒有變小。 */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-wd { text-align: center; font-size: 0.8rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
 .cal-cell {
   appearance: none; border: 0; background: transparent; color: var(--text);
@@ -1118,7 +1125,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
 .plan-row-actions .plan-mini {
   display: flex; align-items: center; justify-content: center; gap: 4px;
-  width: 100%; min-height: 40px; padding: 4px 6px; font-size: 0.85rem; border-radius: 10px;
+  width: 100%; min-height: 44px; padding: 4px 6px; font-size: 0.85rem; border-radius: 10px;
 }
 .plan-mini-ic { font-size: 0.95rem; line-height: 1; flex: none; }
 .plan-mini-t { font-weight: 700; white-space: nowrap; }
@@ -1129,13 +1136,13 @@ textarea.field { resize: vertical; line-height: 1.6; }
 }
 .plan-mini {
   appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
-  border-radius: 999px; padding: 8px 16px; font-weight: 800; font-size: 0.9rem; cursor: pointer; min-height: 42px;
+  border-radius: 999px; padding: 8px 16px; font-weight: 800; font-size: 0.9rem; cursor: pointer; min-height: 44px;
 }
 .plan-mini:active { transform: scale(0.95); }
 .plan-updown { display: flex; flex-direction: column; gap: 5px; flex: none; }
 .plan-arrow {
   appearance: none; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text);
-  border-radius: 10px; width: 42px; min-height: 40px; flex: 1; font-size: 1rem; font-weight: 800; cursor: pointer;
+  border-radius: 10px; width: 44px; min-height: 44px; flex: 1; font-size: 1rem; font-weight: 800; cursor: pointer;
 }
 .plan-arrow:active { transform: scale(0.94); }
 .plan-arrow:disabled { opacity: 0.28; cursor: default; }
@@ -1193,8 +1200,10 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .sos-addr { font-size: 1.1rem; font-weight: 700; }
 .sos-addr-full { font-size: 0.9rem; color: var(--muted); margin-top: 2px; line-height: 1.5; }
 .sos-coord { font-family: ui-monospace, monospace; margin-top: 6px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.sos-loc-btns { display: flex; gap: 10px; margin-top: 12px; }
-.sos-loc-btns .btn { flex: 1; text-decoration: none; }
+/* v1.73：320/360px 時兩顆各分到 ~135px，「🗺️ 打開地圖」放不下就折成兩行。
+   這是走失時要按的按鈕，折行＝難讀＝更慌。排不下就上下排，不要硬擠。 */
+.sos-loc-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.sos-loc-btns .btn { flex: 1 1 145px; text-decoration: none; white-space: nowrap; }
 
 .sos-tel-grid { display: flex; flex-direction: column; gap: 10px; }
 .sos-tel {
@@ -1279,16 +1288,21 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* ---------- 分帳 ---------- */
 .exp-summary { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
 .exp-total { text-align: center; }
-.exp-total-num { font-size: 2rem; font-weight: 900; margin: 4px 0; }
+/* v1.73：特大字級下 2rem = 50px，「NT$1,250.00」要 340px，320px 的手機直接切掉
+   尾巴（實機截圖看到的是「NT$1,250.0」）。改成同時受視窗寬度封頂。 */
+.exp-total-num { font-size: min(2rem, 9.5vw); font-weight: 900; margin: 4px 0; overflow-wrap: anywhere; }
 .exp-settle {
   display: flex; align-items: center; gap: 12px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
 }
 .exp-settle-txt { flex: 1; min-width: 0; }
 .exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent); }
-.exp-person { display: flex; align-items: center; gap: 12px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-.exp-person-main { flex: 1; min-width: 0; }
-.exp-person-bal { font-weight: 800; font-size: 0.95rem; }
+/* v1.73：金額（「應收 NT$1,250.00」）的最小寬度是不可斷行的數字，名字那一欄
+   min-width:0 就被壓到剩一個字的寬 —— 實機截圖是「阿」「嬤」直排、金額壓在上面。
+   讓整列可以換行：排得下就同一列，排不下金額自己掉到下一行靠右。 */
+.exp-person { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.exp-person-main { flex: 1 1 120px; min-width: 0; }
+.exp-person-bal { font-weight: 800; font-size: 0.95rem; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 .exp-person-bal.pos { color: var(--ok); }
 .exp-person-bal.neg { color: var(--danger); }
 .exp-item {
@@ -1863,7 +1877,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
    長輩是照順序讀一天的行程的，而且修最早的那一條通常會連帶解掉後面的。 */
 .pd-check { min-height: 40px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
 .pd-check.has-issue { border-color: #ffb14e; color: #ffb14e; font-weight: 700; }
-.pd-start { min-height: 40px; padding: 4px 10px; white-space: nowrap; font-size: 0.85rem; flex: 0 0 auto; }
+.pd-start { min-height: 44px; padding: 4px 10px; white-space: nowrap; font-size: 0.85rem; flex: 0 0 auto; }
 .chk-item { padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;
   background: color-mix(in srgb, #ffb14e 12%, transparent); }
 .chk-item.note { background: color-mix(in srgb, var(--muted) 12%, transparent); }
@@ -1880,8 +1894,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   margin-top: 4px; padding: 6px 8px; border-radius: 8px;
   background: color-mix(in srgb, #ffb14e 14%, transparent); }
 .plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }
-.pd-opt { min-height: 40px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
-.plan-divider { display: flex; align-items: center; gap: 10px; }
+.pd-opt { min-height: 44px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
 .opt-list {
   margin: 0; line-height: 1.9;
   /* 用 em 不用 px：標記寬度是跟著字級走的。固定 22px 在特大字級下只夠放一位數，
@@ -1928,7 +1941,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* 景點卡壓扁：名稱列右側放 📌 */
 .plan-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .plan-name-row .plan-name { flex: 1; min-width: 0; }
-.plan-pin.compact { flex: none; min-width: 46px; min-height: 40px; padding: 2px 8px; }
+.plan-pin.compact { flex: none; min-width: 46px; min-height: 44px; padding: 2px 8px; }
 
 /* ---------- 找附近（v1.59） ---------- */
 .nl-center { margin-bottom: 2px; }
