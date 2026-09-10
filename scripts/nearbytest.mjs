@@ -33,6 +33,19 @@ const FIX = {
     el(9, -0.002, 0.001, { amenity: 'parking', access: 'permit', parking: 'surface' }),                 // 要許可證 → 不列
     el(10, 0.005, 0.005, { amenity: 'parking', 'addr:street': '明德路', parking: 'surface', fee: 'yes' }),
     el(11, 0.004, -0.003, { amenity: 'parking', parking: 'lane' }),                                     // 無名路邊格
+    // ---- 石牌實測案例第二輪（v1.66）----
+    // 使用者回報「私人空地排在真正的停車場前面」。這是它在 OSM 的實際長相：
+    // 有人畫了一塊地說可以停車，然後沒有任何人回來補第二個欄位。它最近（15m），
+    // 但**應該排在所有有登記證據的後面**（降權，不是排除 —— 鄉下可能只剩它）。
+    el(12, 0.0001, 0.0001, { amenity: 'parking', parking: 'surface' }),
+    // 出口是同一個停車場，而且比入口更近 —— 不能佔掉第二個名額，也不能贏過入口
+    el(13, 0.0009, 0.0009, { amenity: 'parking_entrance', name: '羅東夜市地下停車場出口' }),
+    // 名字就寫明是員工專用，卻沒有 access 標記（石牌實測有三個）→ 不列
+    el(14, 0.002, 0.003, { amenity: 'parking', parking: 'surface', name: '員工停車場' }),
+    // 同名不代表同一個場：石牌 1.5 公里內三個節點都叫「地下停車場」，相距 794m 起跳。
+    // 這兩個相距約 1.1 公里，要當成兩個停車場（舊的全域同名去重會砍掉一個）
+    el(15, 0.003, 0.003, { amenity: 'parking_entrance', name: '地下停車場' }),
+    el(16, 0.009, 0.009, { amenity: 'parking_entrance', name: '地下停車場' }),
   ],
   'amenity=toilets': [
     el(21001, 0.001, -0.001, { amenity: 'toilets', wheelchair: 'yes', changing_table: 'yes', fee: 'no' }),
@@ -124,7 +137,7 @@ try {
   }));
   yes(parking.note.includes('總車位') && parking.note.includes('不是現在剩幾格'), '誠實標示：總車位 ≠ 即時剩餘');
   yes(parking.note.includes('免金鑰') || parking.note.includes('先不提供'), '誠實標示：即時車位沒有免金鑰來源、先不提供');
-  yes(parking.count.includes('7 個'), `private/permit/無名入口被濾掉、同名入口去重（11 筆進 7 筆出）：「${parking.count.trim()}」`);
+  yes(parking.count.includes('10 個'), `private/permit/員工/無名入口被濾掉、出入口與同名去重（16 筆進 10 筆出）：「${parking.count.trim()}」`);
   yes(!parking.cards.some((c) => c.name.includes('住戶專用')), 'access=private 不出現在清單');
   yes(!parking.cards.some((c) => c.chips.includes('停車場入口') && !c.name), '無名入口（大樓車道口）不出現');
   const names = parking.cards.map((c) => c.name).join('|');
@@ -140,8 +153,24 @@ try {
   yes(parking.cards.some((c) => c.name.endsWith('路邊停車格')), '無名路邊格 → 「路邊停車格」不是一律「停車場」');
   const unnamed = parking.cards.find((c) => c.chips.includes('免費'));
   yes(unnamed && unnamed.name.endsWith('平面停車場') && !unnamed.name.includes('明德路'), '無名平面場 → 「平面停車場」');
-  yes(parking.cards.filter((c) => c.name.endsWith('平面停車場')).length === 2, '產生的通用名不參與去重（兩塊不同的平面場都在）');
+  yes(parking.cards.filter((c) => c.name.endsWith('平面停車場')).length === 3, '產生的通用名不參與去重（三塊不同的平面場都在）');
   yes(parking.cards.some((c) => c.chips.includes('限顧客')), 'access=customers 標「限顧客」');
+
+  // ---- v1.66 停車場過濾 ----
+  const bare = parking.cards.findIndex((c) => c.chips.includes('⚠️ 只有位置資料'));
+  const evidenced = parking.cards.map((c, i) => (c.chips.includes('⚠️ 只有位置資料') ? -1 : i)).filter((i) => i >= 0);
+  yes(bare >= 0 && bare > Math.max(...evidenced),
+    `只有位置資料的空地被降到最後（它離中心 15 公尺、卻排第 ${bare + 1}／${parking.cards.length}）`);
+  yes(bare >= 0, '降權不是排除：沒有登記證據的仍然列得出來（鄉下可能只剩它）');
+  yes(!parking.cards.some((c) => c.name.includes('出口')),
+    '停車場「出口」不獨立成一筆 —— 那是同一個停車場，而且導航到出口是錯的');
+  const yeshi = parking.cards.filter((c) => c.name.includes('羅東夜市地下停車場'));
+  yes(yeshi.length === 1 && yeshi[0].chips.includes('總車位 120'),
+    '出入口合併後留下的是「入口」那一筆（出口比較近也一樣）：' + (yeshi[0] ? yeshi[0].chips.join('・') : '(沒有)'));
+  yes(!parking.cards.some((c) => c.name.includes('員工')),
+    '名字寫明員工專用、但沒有 access 標記的（石牌實測三個）→ 不列');
+  yes(parking.cards.filter((c) => c.name.replace(/^\S+\s*/, '') === '地下停車場').length === 2,
+    '同名但相距 1 公里 → 兩個不同的停車場都要列（舊的全域同名去重會砍掉一個）');
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
   yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);

@@ -113,6 +113,8 @@ export default async function nearbyView(tripId) {
       if (it.ptype) chips.push(it.ptype);
       if (it.fee) chips.push(it.fee);
       if (it.customers) chips.push('限顧客');
+      // 地圖上只畫了一塊地、什麼都沒填的 —— 排在後面了，但也要講明為什麼它看起來這麼空
+      if (it.thin) chips.push('⚠️ 只有位置資料');
     } else if (it.kind === 'toilets') {
       if (it.attached) chips.push('附設廁所');          // 掛在店家/車站上的，不是獨立公廁
       if (it.wheelchair) chips.push('♿ 無障礙');

@@ -179,7 +179,7 @@ export const LIFE = {
 const PTYPE = { surface: '平面', underground: '地下', 'multi-storey': '立體', rooftop: '頂樓', street_side: '路邊', lane: '路邊' };
 
 const LIFE_CACHE = 'tripquest.nearlife';
-function lifeKey(kind, lat, lng) { return `v1:${kind}:${lat.toFixed(2)},${lng.toFixed(2)}`; }
+function lifeKey(kind, lat, lng) { return `v2:${kind}:${lat.toFixed(2)},${lng.toFixed(2)}`; }
 function lifeRead(kind, lat, lng) {
   try { return (JSON.parse(localStorage.getItem(LIFE_CACHE) || '{}'))[lifeKey(kind, lat, lng)] || null; } catch { return null; }
 }
@@ -192,6 +192,29 @@ function lifeWrite(kind, lat, lng, data) {
     for (const k of keys) trimmed[k] = all[k];
     localStorage.setItem(LIFE_CACHE, JSON.stringify(trimmed));
   } catch { /* noop */ }
+}
+
+// 名稱就寫明是特定人專用的 —— 等同 access=employees/private，一般人開過去停不了。
+// 台北實測（石牌 1.5 公里）：三個節點叫「員工停車場」、完全沒有 access 標記，
+// 靠標記過濾抓不到，只能看名字。範圍刻意抓窄，避免誤殺（「限顧客」是另一回事，留著）。
+const PRIVATE_NAME = /員工|職員|教職員|員生|住戶|宿舍/;
+
+// 「有沒有人真的把它當停車場登記」的證據。
+// 使用者回報的問題：私人空地排在真正的停車場前面。這些空地在 OSM 長這樣 ——
+//   {"amenity":"parking","parking":"surface"}
+// 沒有名字、沒有費率、沒有車位數、沒有經營者，也沒有任何 access 標記（所以
+// v1.59 的 access 黑名單擋不到）。有人畫了一塊地說「這裡可以停車」，但沒有任何
+// 一個人再回來補第二個欄位 —— 這通常是路過的圖客順手畫的空地，不是營業場所。
+// 石牌實測：1.5 公里內 56 筆通過過濾，其中 20 筆是這種「只有位置」的；它們把
+// 明德平面停車場（北市停管處、29 格）壓到第 11 名、石牌國小地下停車場壓到第 23 名。
+//
+// 判斷刻意放寬：只要 name / brand / operator / ref / fee / capacity / opening_hours
+// 任一個有值，或有人明確標了 access=yes（「這裡是公開的」本身就是一次登記行為），
+// 就算有證據。寧可漏放也不要誤殺。
+function parkTier(t) {
+  const evid = t.name || t.brand || t.operator || t.ref
+    || t.fee || t.capacity || t.opening_hours || t.access === 'yes';
+  return evid ? 0 : 1;
 }
 
 // 停車場的名稱後援鏈：name → brand → operator →「街道 · 類型」→ 類型。
@@ -215,6 +238,7 @@ function lifeParse(el, kind) {
     // 一般人停不進去的不列：private/no（住戶）、permit（要許可證）、employees（員工）。
     // 石牌實測 90 公尺處就有一塊無名的 access=permit 私人地，混在清單裡只會誤導。
     if (['private', 'no', 'permit', 'employees'].includes(t.access)) return null;
+    if (t.name && PRIVATE_NAME.test(t.name)) return null;
     it.entrance = t.amenity === 'parking_entrance';
     if (it.entrance && !t.name) return null;           // 無名入口多半是大樓車道口，資訊量零
     it.cap = parseInt(t.capacity, 10) || 0;
@@ -223,6 +247,8 @@ function lifeParse(el, kind) {
     it.ptype = PTYPE[t.parking] || '';
     it.customers = t.access === 'customers';           // 限顧客（店家附設）
     it.named = !!(t.name || t.brand || t.operator);    // 真實名稱才參與同名去重
+    it.tier = parkTier(t);                             // 0＝有登記證據，1＝只有位置
+    it.thin = it.tier > 0;                             // 介面要標出來，不要假裝一樣可靠
     it.name = it.entrance ? (t.name || '') : parkName(t);
   } else if (kind === 'toilets') {
     if (t.toilets === 'no') return null;               // 明確標了「沒有廁所」
@@ -242,19 +268,47 @@ function lifeParse(el, kind) {
   return it;
 }
 
-// 停車場同名去重（依距離排序後呼叫，留最近的一筆）：
-// 大停車場常同時有「面」＋一到多個「入口」節點（石牌國小就有兩個入口），
-// 全列會像三個不同的停車場。無名的不去重——它們本來就是不同塊空地。
+// 停車場去重（依排序後呼叫，留最好的一筆）。要處理兩件事：
+//
+// 1. **出入口是同一個停車場**。石牌實測前 5 名裡有兩組是這樣：
+//    「第三門診停車場」77m 與「第三門診停車場出口」104m（相距 104m，同一個場）、
+//    「地下停車場入口」與「地下停車場出口」（相距 26m）。等於五個名額浪費掉兩個。
+//    所以比對前先把名字尾巴的「入口／出口／出入口」去掉，顯示也用去掉後的名字
+//    （卡片上本來就有「停車場入口」標籤，名字再寫一次是多的）。
+//    代表點優先選「不是出口」的那一個 —— 導航到出口是錯的。
+//
+// 2. **同名不代表同一個場**。石牌 1.5 公里內有三個節點都叫「地下停車場」，
+//    彼此相距 163m / 794m / 836m —— 後兩個顯然是不同的停車場。原本的全域同名
+//    去重會把它們併成一個，等於憑空砍掉兩個真實停車場。改成「同名**且**相距
+//    200 公尺內」才算同一個；200m 這條線是照實測資料畫的（同場的出入口
+//    5m / 26m / 104m / 163m，不同場的 794m 起跳）。
+const CLUSTER_M = 200;
+const EXIT_SUFFIX = /[（(]?\s*(出入口|出口|入口|entrance|exit)\s*[）)]?$/i;
+const isExit = (n) => /出口|\bexit\b/i.test(String(n || ''));
+function baseName(n) {
+  const b = String(n || '').trim().replace(EXIT_SUFFIX, '').trim();
+  return b || String(n || '').trim();     // 名字整個就是「入口」兩字時不要變成空的
+}
+
 function dedupeParking(items) {
-  const seen = new Set();
-  return items.filter((it) => {
-    // 只對「真實名稱」去重——無名場地的名字是我們產生的（例如兩塊不同的「平面停車場」），
-    // 拿它去重會把不同的空地誤砍
-    if (!it.named || !it.name) return true;
-    if (seen.has(it.name)) return false;
-    seen.add(it.name);
-    return true;
-  });
+  const out = [];
+  const groups = [];                      // { base, lat, lng, at }：at＝它在 out 裡的位置
+  for (const it of items) {
+    // 無名場地的名字是我們產生的（兩塊不同的「平面停車場」）—— 拿它去重會砍掉不同的空地
+    if (!it.named || !it.name) { out.push(it); continue; }
+    const base = baseName(it.name);
+    const named = { ...it, name: base };
+    const g = groups.find((x) => x.base === base
+      && haversine({ lat: x.lat, lng: x.lng }, { lat: it.lat, lng: it.lng }) <= CLUSTER_M);
+    if (!g) {
+      groups.push({ base, lat: it.lat, lng: it.lng, at: out.length, exit: isExit(it.name) });
+      out.push(named);
+      continue;
+    }
+    // 已經有代表了。只有一種情況要換：現有的是「出口」、這一筆不是（導航到出口是錯的）。
+    if (g.exit && !isExit(it.name)) { out[g.at] = named; g.exit = false; }
+  }
+  return out;
 }
 
 // 回傳 { at, stale, results:[{id,kind,name,lat,lng,dist,dir,…欄位}], failed? }
@@ -294,5 +348,11 @@ export async function nearbyLife(lat, lng, kind, { fresh = false } = {}) {
 function lifeRank(items, lat, lng) {
   return (items || [])
     .map((it) => ({ ...it, dist: Math.round(haversine({ lat, lng }, { lat: it.lat, lng: it.lng })) }))
-    .sort((a, b) => a.dist - b.dist);
+    .sort((a, b) => {
+      // 停車場：有登記證據的先（同級再比距離）。**降權不是排除** —— 鄉下可能整區
+      // 就只有那幾塊沒人補標記的地，全砍掉會變成「查不到停車場」，那更糟。
+      // 市區有二十幾個有證據的，這些自然被擠出前 15 名，看不到；鄉下則照樣列得出來。
+      if (a.kind === 'parking' && (a.tier || 0) !== (b.tier || 0)) return (a.tier || 0) - (b.tier || 0);
+      return a.dist - b.dist;
+    });
 }
