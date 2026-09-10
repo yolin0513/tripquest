@@ -1,10 +1,13 @@
-// 每個行程的 AI 設定卡（用在「旅程設定」）。
-// 只有行程建立者這台手機看得到金鑰輸入；其他人只看到「AI 由建立者提供」。
+// 每個行程的「自帶金鑰」設定卡（用在「旅程設定」）：AI（Claude／Google 語音）與
+// 地圖（Google Routes）兩張。只有行程建立者這台手機看得到金鑰輸入；
+// 其他人只看到「由建立者提供」。
+//
+// 地圖金鑰刻意**獨立於 AI 開關**：想查大眾運輸班次的人不一定想開 AI 加值。
 
 import * as store from '../store.js';
 import { h, toast, modal, confirmDialog } from '../ui.js';
 import { myDeviceId } from '../identity.js';
-import { getTripKey, setTripKey, clearTripKey, usageOf, looksLikeAnthropicKey, looksLikeGoogleKey, maskKey } from '../aikeys.js';
+import { getTripKey, setTripKey, clearTripKey, usageOf, looksLikeAnthropicKey, looksLikeGoogleKey, maskKey, MAPS_CAP_DEFAULT } from '../aikeys.js';
 import { aiTestKey, aiTestTtsKey } from '../ai.js';
 
 export function isTripCreator(trip) {
@@ -94,7 +97,8 @@ function checkbox(checked, onChange) {
 }
 
 async function pasteKey(tripId, provider, refresh) {
-  const isG = provider === 'google';
+  const isMaps = provider === 'maps';
+  const isG = provider === 'google' || isMaps;
   const field = h('input', {
     class: 'field mono', type: 'password', autocomplete: 'off', spellcheck: false,
     placeholder: isG ? 'AIza...' : 'sk-ant-...',
@@ -105,15 +109,18 @@ async function pasteKey(tripId, provider, refresh) {
   const status = h('p', { class: 'form-hint' }, '');
 
   const res = await modal({
-    title: isG ? '貼上 Google 語音金鑰' : '貼上 Claude API 金鑰',
+    title: isMaps ? '貼上 Google 地圖金鑰' : (isG ? '貼上 Google 語音金鑰' : '貼上 Claude API 金鑰'),
     body: h('div', {},
       h('p', { class: 'sm muted', style: 'margin:0 0 10px' },
         '這把鑰匙只會存在這支手機，旅伴看不到，也不會上傳到任何地方。'),
       h('div', { class: 'numpad-row' }, field, pasteBtn),
       status,
-      h('p', { class: 'form-hint' }, isG
-        ? '在 Google Cloud 建立 API 金鑰，建議加「HTTP 參照網址」限制到你的網站。'
-        : 'sk-ant- 開頭那一長串。建議用專用金鑰並在 Billing 設每月上限。'),
+      h('p', { class: 'form-hint' }, isMaps
+        ? '在 Google Cloud 啟用「Routes API」後建立金鑰，並加「HTTP 參照網址」限制到這個網站。'
+          + '如果你的語音金鑰同一個專案、也啟用了 Routes API，貼同一把就可以。'
+        : (isG
+          ? '在 Google Cloud 建立 API 金鑰，建議加「HTTP 參照網址」限制到你的網站。'
+          : 'sk-ant- 開頭那一長串。建議用專用金鑰並在 Billing 設每月上限。')),
     ),
     actions: [{ label: '取消', value: null }, { label: '測試並儲存', value: 'save', primary: true }],
   });
@@ -124,9 +131,10 @@ async function pasteKey(tripId, provider, refresh) {
   if (!isG && !looksLikeAnthropicKey(val)) { toast('看起來不像 Claude 金鑰（sk-ant- 開頭）'); return; }
 
   toast('測試中…');
-  const t = isG ? await aiTestTtsKey(val) : await aiTestKey(val);
+  const t = isMaps ? await (await import('../transit.js')).testMapsKey(val)
+    : (isG ? await aiTestTtsKey(val) : await aiTestKey(val));
   if (!t.ok) { toast(t.message); return; }
-  await setTripKey(tripId, isG ? { ttsKey: val } : { key: val });
+  await setTripKey(tripId, isMaps ? { mapsKey: val } : (isG ? { ttsKey: val } : { key: val }));
   toast(t.message);
   refresh();
 }
@@ -139,5 +147,63 @@ async function setCap(tripId, refresh) {
   const n = Math.max(0.5, Math.min(50, parseFloat(v) || 2));
   await setTripKey(tripId, { capUsd: n });
   toast(`上限設為 $${n.toFixed(2)}`);
+  refresh();
+}
+
+// ---------- 地圖加值（Google Routes，v1.68）----------
+// 跟 AI 加值分開：這裡不需要 Claude 金鑰、也不看 aiEnabled 開關。
+export function mapsConfigCard(tripId) {
+  const card = h('div', { class: 'card about' });
+  const creator = isTripCreator(store.get(tripId));
+
+  const draw = async () => {
+    const kids = [];
+    kids.push(h('p', { class: 'sm muted' },
+      '開啟後，「調整行程」每一天會多一顆「🚆 大眾運輸」，可以查實際班次、轉乘次數與步行時間。'
+      + (creator ? '' : '這趟由建立者提供。')));
+    if (!creator) { card.replaceChildren(...kids); return; }
+
+    const k = await getTripKey(tripId);
+    const u = await usageOf(tripId);
+    if (k && k.mapsKey) {
+      kids.push(h('div', { class: 'setting-row' },
+        h('div', {}, h('div', { style: 'font-weight:700' }, '地圖金鑰（Google）'),
+          h('div', { class: 'form-hint mono' }, maskKey(k.mapsKey))),
+        h('button', { class: 'btn btn-soft sm-btn', onclick: () => pasteKey(tripId, 'maps', draw) }, '更換')));
+      const used = u ? u.mapsUsed : 0, cap = u ? u.mapsCap : MAPS_CAP_DEFAULT;
+      kids.push(
+        h('div', { class: 'storage-bar', style: 'margin-top:6px' },
+          h('i', { style: `width:${Math.min(100, cap ? (used / cap) * 100 : 0)}%` })),
+        // 用次數不用美金：免費額度是「每月幾千次」，換算成美金永遠是 $0，講了等於沒講
+        h('p', { class: 'sm muted' }, `這個月已查 ${used} 次 / 上限 ${cap} 次`
+          + (used >= cap ? '（已達上限，這個月先停）' : '')
+          + '。Google 每月有數千次免費額度，這個上限是防止程式跑迴圈用的保險絲。'),
+        h('button', { class: 'btn btn-ghost sm-btn', onclick: () => setMapsCap(tripId, draw) }, '調整上限'),
+        h('button', { class: 'btn btn-danger btn-block', style: 'margin-top:10px', onclick: async () => {
+          if (await confirmDialog('清除這個行程的地圖金鑰？\n\n大眾運輸查詢會停用，開車估算照舊。', { danger: true, okLabel: '清除' })) {
+            await setTripKey(tripId, { mapsKey: '' }); toast('已清除'); draw();
+          }
+        } }, '🔑 清除地圖金鑰'));
+    } else {
+      kids.push(h('button', { class: 'btn btn-primary btn-block', onclick: () => pasteKey(tripId, 'maps', draw) },
+        '＋ 貼上我的 Google 地圖金鑰'));
+      kids.push(h('p', { class: 'form-hint' },
+        '沒有金鑰也完全不影響 —— 移動時間照樣用開放路網（OSRM）估算，只是沒有大眾運輸班次。'));
+    }
+    kids.push(h('p', { class: 'form-hint' }, '⚠ 金鑰只存在這支手機的瀏覽器，不會同步、不會進備份、不會出現在邀請連結。'));
+    card.replaceChildren(...kids);
+  };
+  draw();
+  return card;
+}
+
+async function setMapsCap(tripId, refresh) {
+  const { promptDialog } = await import('../ui.js');
+  const u = await usageOf(tripId);
+  const v = await promptDialog('這個行程每月最多查幾次大眾運輸？', { value: String(u ? u.mapsCap : MAPS_CAP_DEFAULT) });
+  if (v === null) return;
+  const n = Math.max(10, Math.min(5000, parseInt(v, 10) || MAPS_CAP_DEFAULT));
+  await setTripKey(tripId, { mapsCap: n });
+  toast(`上限設為 ${n} 次`);
   refresh();
 }

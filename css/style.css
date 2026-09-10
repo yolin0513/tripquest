@@ -1838,6 +1838,13 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* ---- 規劃第 2 批：時刻鏈、移動時間、排順序 ---- */
 .plan-travel-note { font-size: 0.82rem; color: var(--muted); padding: 2px 0 4px 54px; pointer-events: none; }
 .plan-travel-note.far { color: #ffb14e; padding-right: 8px; line-height: 1.45; }
+/* 大眾運輸（v1.68）：實際班次，跟「開車估算」要看得出差別 —— 所以給底色與正常字級，
+   開車那一行縮成附註。長輩看的是「幾點的車、在哪上車」，那一行不能小。 */
+.plan-travel-note.transit { color: var(--text); padding: 8px 10px 8px 54px; line-height: 1.5;
+  background: color-mix(in srgb, var(--primary) 10%, transparent); border-radius: 10px; margin: 2px 0 6px; }
+.plan-transit-line { font-size: 0.9rem; margin-top: 3px; }
+.plan-transit-drive { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
+.plan-transit-note { font-size: 0.8rem; color: var(--muted); line-height: 1.45; padding: 2px 8px 6px 8px; }
 .plan-eta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
 .plan-eta.warn { color: #ffb14e; font-weight: 700; }
 /* 使用者自己填的時間打架（v1.67）。比 .plan-eta.warn 更明顯：它是「確定有問題」，

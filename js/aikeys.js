@@ -40,7 +40,8 @@ export async function adoptDeviceKey(tripId) {
   if (!d || !d.key) return false;
   const cur = await db.tripSecretGet(tripId);
   if (cur && cur.key) return false;                 // 已經有自己的金鑰就不覆蓋
-  await setTripKey(tripId, { key: d.key, ttsKey: d.ttsKey || '', capUsd: d.capUsd ?? 2 });
+  await setTripKey(tripId, { key: d.key, ttsKey: d.ttsKey || '', mapsKey: d.mapsKey || '',
+    capUsd: d.capUsd ?? 2, mapsCap: d.mapsCap ?? MAPS_CAP_DEFAULT });
   return true;
 }
 
@@ -52,18 +53,51 @@ export async function hasTripKey(tripId) {
   return !!(e && e.key);
 }
 
-// patch: { key?, ttsKey?, capUsd? }
+// 地圖金鑰（Google Routes API，v1.68）的用量用**次數**算，不用美金：
+// 免費額度是「每月幾千次呼叫」，換算成美金永遠顯示 $0，對使用者沒有意義。
+// 每月自動歸零（ym = 'YYYY-MM'）。上限存在的理由不是省錢，是「迴圈寫錯一次
+// 就可能燒掉整個月的額度」—— 這是保險絲不是預算。
+export const MAPS_CAP_DEFAULT = 300;
+
+// patch: { key?, ttsKey?, mapsKey?, capUsd?, mapsCap? }
 export async function setTripKey(tripId, patch) {
   const cur = (await db.tripSecretGet(tripId)) || { tripId, usedMicroUsd: 0 };
   await db.tripSecretSet({
+    ...cur,
     tripId,
     provider: 'anthropic',
     key: patch.key !== undefined ? patch.key : (cur.key || ''),
     ttsKey: patch.ttsKey !== undefined ? patch.ttsKey : (cur.ttsKey || ''),
+    mapsKey: patch.mapsKey !== undefined ? patch.mapsKey : (cur.mapsKey || ''),
     capUsd: patch.capUsd !== undefined ? patch.capUsd : (cur.capUsd ?? 2),
+    mapsCap: patch.mapsCap !== undefined ? patch.mapsCap : (cur.mapsCap ?? MAPS_CAP_DEFAULT),
     usedMicroUsd: cur.usedMicroUsd || 0,
     at: Date.now(),
   });
+}
+
+const ym = () => new Date().toISOString().slice(0, 7);
+
+export async function getMapsKey(tripId) {
+  const e = await db.tripSecretGet(tripId);
+  return (e && e.mapsKey) || '';
+}
+
+// 回 { ok, used, cap }。ok=false 代表這個月用完了 —— 呼叫端要**明講**，不要靜默失敗。
+export async function mapsBudget(tripId) {
+  const e = await db.tripSecretGet(tripId);
+  if (!e) return { ok: false, used: 0, cap: MAPS_CAP_DEFAULT, noKey: true };
+  const cap = e.mapsCap ?? MAPS_CAP_DEFAULT;
+  const c = e.mapsCalls && e.mapsCalls.ym === ym() ? e.mapsCalls.n : 0;
+  return { ok: c < cap, used: c, cap, noKey: !e.mapsKey };
+}
+
+export async function addMapsCalls(tripId, n = 1) {
+  const e = await db.tripSecretGet(tripId);
+  if (!e) return;
+  const cur = e.mapsCalls && e.mapsCalls.ym === ym() ? e.mapsCalls.n : 0;
+  e.mapsCalls = { ym: ym(), n: cur + Math.max(0, n) };
+  await db.tripSecretSet(e);
 }
 
 export async function clearTripKey(tripId) { await db.tripSecretDelete(tripId); }
@@ -86,6 +120,9 @@ export async function usageOf(tripId) {
     overCap: (e.usedMicroUsd || 0) >= capUsd * 1e6,
     hasKey: !!e.key,
     hasTts: !!e.ttsKey,
+    hasMaps: !!e.mapsKey,
+    mapsUsed: e.mapsCalls && e.mapsCalls.ym === ym() ? e.mapsCalls.n : 0,
+    mapsCap: e.mapsCap ?? MAPS_CAP_DEFAULT,
     maskedKey: e.key ? maskKey(e.key) : '',
   };
 }

@@ -29,6 +29,16 @@ export function stayOptions(currentMin) {
   return opts;
 }
 
+// 一天的「幾點出發」。時刻鏈需要一個起點：當天沒有任何景點填「幾點到」時，
+// chainTimes 的第一站 arrive 是 null，於是整天推不出任何時刻（實測確認）。
+// v1.68 先用固定的早上 9 點；v1.69 會接上使用者可設定的 trip.dayStarts。
+// 這個值是「假設」，畫面上要講出來，不要讓人以為是他自己設的。
+export const DAY_START_DEFAULT = 9 * 60;
+export function dayStartOf(trip, day) {
+  const v = trip && trip.dayStarts && trip.dayStarts[String(day)];
+  return Number.isFinite(v) ? v : DAY_START_DEFAULT;
+}
+
 export function fmtHHMM(min) {
   if (!Number.isFinite(min)) return '';
   // 結束時間可能跨過午夜（23:30 停 2 小時）—— 換算成隔天並標示，不出現 25:30

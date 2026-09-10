@@ -6,7 +6,7 @@
 // 調整只改 spot 的 day / order，任務與照片掛在 spotId 上，進度完全跟著走。
 
 import { setTop, render } from '../app.js';
-import { spotTimes } from '../spottime.js';
+import { spotTimes, dayStartOf, DAY_START_DEFAULT } from '../spottime.js';
 import { travelMatrix, chainTimes, timeConflicts, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
 import { loadThemes } from '../theme.js';
 import * as store from '../store.js';
@@ -16,8 +16,18 @@ import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
 import { generateForTrip } from '../quests/generate.js';
 import { enrichTrip } from '../enrich.js';
+import { transitLeg, tzOffsetFor, rfc3339, VEHICLE_EMOJI } from '../transit.js';
+import { getMapsKey, mapsBudget, addMapsCalls } from '../aikeys.js';
 
 const dayMS = 86400000;
+
+// 查到的大眾運輸班次只放在記憶體裡（key：tripId:day → { legs: Map(spotId → 結果) }）。
+// **不寫進記錄**，理由跟 v1.67 的時刻表一樣（三代理 3:0）：這是推導值，而且每台裝置
+// 查到的班次可能不同（查詢時間不同、金鑰只有建立者有）。寫進去會讓機器算的東西
+// 偽裝成使用者的資料，還會在同步管道裡製造永不停止的雜訊。
+// 真正的快取在 transit.js（IndexedDB，24 小時），那一層是為了不重複燒 Google 額度。
+const TRANSIT = new Map();
+const tKey = (tripId, day) => `${tripId}:${day}`;
 
 export default async function plan(tripId) {
   const t = store.get(tripId);
@@ -30,6 +40,13 @@ export default async function plan(tripId) {
     const n = Math.round((parseISO(t.endDate) - parseISO(t.startDate)) / dayMS) + 1;
     if (n > 0) explicitDays = n;
   }
+  let hasMapsKey = false;
+  getMapsKey(tripId).then((k) => {
+    if (!k || hasMapsKey) return;
+    hasMapsKey = true;
+    draw();                        // 金鑰讀出來才知道要不要畫那顆按鈕
+  }).catch(() => {});
+
   const maxSpotDay = () => store.spotsOf(tripId).reduce((m, s) => Math.max(m, s.day || 1), 1);
   const totalDays = () => Math.max(explicitDays, maxSpotDay());
 
@@ -101,6 +118,11 @@ export default async function plan(tripId) {
           class: 'btn btn-soft pd-opt',
           onclick: () => suggestDay(d),
         }, '✨ 排順序') : null,
+        // 沒有地圖金鑰時這顆完全不出現 —— 不給看得到按不了的東西
+        (hasMapsKey && inDay.length >= 2) ? h('button', {
+          class: 'btn btn-soft pd-opt pd-transit', dataset: { day: String(d) },
+          onclick: () => runTransit(d),
+        }, '🚆 大眾運輸') : null,
       ));
       if (!inDay.length) {
         list.append(h('div', { class: 'plan-empty', dataset: { day: String(d) } }, '把景點拖來這裡，或按下面的「搜尋景點加入」'));
@@ -318,7 +340,24 @@ export default async function plan(tripId) {
               ? `✈️ 跨海移動（直線約 ${c.longHaul.km} 公里）— 開車到不了，交通方式請自行安排`
               : `✈️ 跨區移動（直線約 ${c.longHaul.km} 公里）— 通常搭飛機或高鐵／新幹線，交通請自行安排`));
         } else if (i > 0 && c.travel != null) {
-          row.prepend(h('div', { class: 'plan-travel-note' }, `↓ 移動約 ${fmtDur(c.travel)}`));
+          const tr = (TRANSIT.get(tKey(tripId, d)) || { legs: new Map() }).legs.get(c.id);
+          if (tr) {
+            // 大眾運輸是「實際班次」，開車是「估算」—— 兩個要看得出差別，不能混成一句
+            const bits = [`🚆 大眾運輸 ${fmtDur(tr.sec)}`];
+            if (tr.transfers > 0) bits.push(`轉乘 ${tr.transfers} 次`);
+            if (tr.walkSec > 60) bits.push(`走路 ${fmtDur(tr.walkSec)}`);
+            const note = h('div', { class: 'plan-travel-note transit' }, bits.join('・'));
+            for (const ln of tr.lines.slice(0, 3)) {
+              const emo = VEHICLE_EMOJI[ln.vehicle] || '🚌';
+              const seg = [ln.name, ln.from && ln.to ? `${ln.from} → ${ln.to}` : '', ln.depart ? `${ln.depart} 發車` : '']
+                .filter(Boolean).join('・');
+              if (seg) note.append(h('div', { class: 'plan-transit-line' }, `${emo} ${seg}`));
+            }
+            note.append(h('div', { class: 'plan-transit-drive' }, `（開車估算 ${fmtDur(c.travel)}）`));
+            row.prepend(note);
+          } else {
+            row.prepend(h('div', { class: 'plan-travel-note' }, `↓ 移動約 ${fmtDur(c.travel)}`));
+          }
         }
         const eta = row.querySelector('.plan-eta');
         if (!eta) return;
@@ -353,6 +392,19 @@ export default async function plan(tripId) {
         eta.after(el);
       }
     }
+    // 大眾運輸用了假設的出發時間 → 講出來，不要讓人以為那是他自己設的
+    list.querySelectorAll('.plan-transit-note').forEach((x) => x.remove());
+    for (let d = 1; d <= days; d++) {
+      const st = TRANSIT.get(tKey(tripId, d));
+      if (!st || !st.legs.size) continue;
+      const div = list.querySelector(`.plan-divider[data-day="${d}"]`);
+      if (!div) continue;
+      const msgs = [`🚆 班次是 ${st.date} 查到的實際時刻（Google）`];
+      if (st.assumedStart) msgs.push(`這一天沒有設定時間，從早上 ${Math.floor(DAY_START_DEFAULT / 60)} 點開始推算`);
+      if (st.tz.guessed) msgs.push('⚠ 認不出這趟的時區，用了這支手機的時區 —— 時間可能差幾小時');
+      div.after(h('div', { class: 'plan-transit-note' }, msgs.join('。')));
+    }
+
     const note = list.querySelector('.plan-src-note');
     note?.remove();
     if (anyEst || anyOsrm) {
@@ -360,6 +412,99 @@ export default async function plan(tripId) {
         `移動時間是${anyEst && !anyOsrm ? '用直線距離' : '依開放路網（OSRM）'}粗略估計的，`
         + '不含大眾運輸、等車與塞車時間，僅供排順序參考。'));
     }
+  }
+
+  // 「🚆 大眾運輸」：一段一段序列查 Google Routes。
+  //
+  // 為什麼不能一次查一整天：大眾運輸的答案取決於幾點出發，而第 n+1 段的出發時間
+  // 要等第 n 段查完才知道。所以只能接力，也因此要花好幾秒 —— 這是使用者按下去
+  // 才做的事，不是背景自動跑的（開車估算才是背景跑的那個）。
+  async function runTransit(d) {
+    const btn = list.querySelector(`.pd-transit[data-day="${d}"]`);
+    const setLabel = (x) => { if (btn) btn.textContent = x; };
+    const t2 = store.get(tripId);
+    const inDay = store.spotsOf(tripId).filter((x) => (x.day || 1) === d)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const pairs = [];
+    for (let i = 1; i < inDay.length; i++) {
+      const a = inDay[i - 1], b = inDay[i];
+      if (a.lat != null && b.lat != null && !longHaul(a, b)) pairs.push([a, b, i]);
+    }
+    if (!pairs.length) { toast('這一天沒有可以查的路段（要有座標、而且不是跨區移動）'); return; }
+
+    if (!t2.startDate) { toast('這趟還沒有日期 —— 大眾運輸要知道是哪一天才查得到班次'); return; }
+    const date = toISO(new Date(parseISO(t2.startDate).getTime() + (d - 1) * dayMS));
+
+    const budget = await mapsBudget(tripId);
+    if (budget.noKey) { toast('還沒設定地圖金鑰'); return; }
+    if (!budget.ok) {
+      toast(`這個月的查詢次數用完了（${budget.used}/${budget.cap}）—— 可以到旅程設定調高上限`);
+      return;
+    }
+    if (budget.used + pairs.length > budget.cap) {
+      const go = await confirmDialog(
+        `這一天要查 ${pairs.length} 段，但這個月只剩 ${Math.max(0, budget.cap - budget.used)} 次額度。\n\n`
+        + '要先到旅程設定調高上限嗎？', { okLabel: '還是先查', cancelLabel: '先不要' });
+      if (!go) return;
+    }
+
+    const key = await getMapsKey(tripId);
+    const first = inDay.find((x) => x.lat != null) || inDay[0];
+    const tz = tzOffsetFor(first.lat, first.lng, t2.country);
+
+    // 出發時刻：照 v1.67 的時刻鏈推。當天完全沒有人填「幾點到」時，用早上 9 點當
+    // 起點並在畫面上講出來 —— 不講的話使用者會以為那是他自己設的。
+    const m = await dayMatrix(inDay);
+    let chain = chainTimes(inDay, m, dayMode());
+    const assumedStart = chain[0].arrive == null;
+    if (assumedStart) {
+      const seed = inDay.map((x, i) => (i === 0 ? { ...x, startMin: dayStartOf(t2, d) } : x));
+      chain = chainTimes(seed, m, dayMode());
+    }
+
+    const entry = { legs: new Map(), assumedStart, tz, date, at: Date.now() };
+    TRANSIT.set(tKey(tripId, d), entry);
+
+    let done = 0, calls = 0, firstErr = '';
+    let clock = chain[0].leave;                       // 目前這一刻（分鐘，可跨日）
+    for (const [a, b, i] of pairs) {
+      setLabel(`查詢中… ${done + 1}/${pairs.length}`);
+      const departMin = Number.isFinite(clock) ? clock : (chain[i - 1].leave ?? dayStartOf(t2, d));
+      const at = rfc3339(date, departMin, tz.offset);
+      if (!at) break;
+      if (new Date(at).getTime() < Date.now()) {
+        firstErr = '這一天已經過了（或時間已經過去）—— 大眾運輸只查得到未來的班次';
+        break;
+      }
+      const r = await transitLeg(a, b, at, key);
+      if (!r.cached) calls++;
+      if (r.ok) {
+        entry.legs.set(b.id, { ...r, departMin });
+        // 下一段從「這一段到站 + 這一站的停留」開始
+        const stay = chain[i].stayUsed ?? 60;
+        clock = departMin + Math.round(r.sec / 60) + stay;
+      } else {
+        if (!firstErr) firstErr = transitErr(r.reason);
+        if (r.reason === 'key' || r.reason === 'quota' || r.reason === 'network') break;
+        clock = null;                                  // 這一段沒查到，後面的推算就不準了
+      }
+      done++;
+    }
+    if (calls) await addMapsCalls(tripId, calls);
+    setLabel('🚆 大眾運輸');
+    if (!entry.legs.size) { toast(firstErr || '這一天查不到大眾運輸班次'); TRANSIT.delete(tKey(tripId, d)); }
+    else if (firstErr) toast(`查到 ${entry.legs.size} 段；其餘：${firstErr}`);
+    await annotateTravel().catch(() => {});
+  }
+
+  function transitErr(reason) {
+    return ({
+      key: '金鑰被拒 —— 請到旅程設定確認 Routes API 已啟用、參照網址限制允許這個網站',
+      quota: 'Google 說太頻繁了，等一下再試',
+      network: '連不上 Google（可能沒有網路）',
+      badtime: '這個時間查不到（多半是出發時間已經過去）',
+      none: '這一段查不到大眾運輸路線（可能沒有班次或距離太近）',
+    })[reason] || '查詢失敗（' + reason + '）';
   }
 
   // 「✨ 排順序」：最近鄰 + 2-opt，📌 不動；永遠先預覽、按套用才寫入

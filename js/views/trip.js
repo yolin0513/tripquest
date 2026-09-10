@@ -17,7 +17,7 @@ import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
-import { aiConfigCard } from './ai-config.js';
+import { aiConfigCard, mapsConfigCard } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 
@@ -1173,6 +1173,9 @@ export async function settings(tripId) {
 
     h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, 'AI 加值（進階、可選）'),
     aiConfigCard(tripId, () => settings(tripId)),
+
+    h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '地圖加值（大眾運輸，進階、可選）'),
+    mapsConfigCard(tripId),
 
     h('div', { class: 'danger-zone' },
       h('button', { class: 'btn btn-soft btn-block', onclick: async () => {
