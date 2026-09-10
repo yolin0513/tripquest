@@ -1075,9 +1075,14 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-tip { font-size: 0.88rem; color: var(--muted); font-size: 0.95rem; line-height: 1.6; margin: 0 2px 16px; }
 .plan-list { display: block; }
 .plan-divider {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  /* v1.70.2：要能換行。v1.69 之後這一列最多會有四個東西（第 N 天／N 個景點／
+     ✨ 排順序／🕘 出發時刻／⚠️ 檢查），390px 排不下就會把「第 1 天」擠成直排
+     —— 實機截圖才看得出來，斷言只驗按鈕存不存在抓不到。 */
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
   margin: 22px 2px 10px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
 }
+.pd-day, .pd-count { flex: 0 0 auto; white-space: nowrap; }
+.pd-count { margin-right: auto; }      /* 按鈕靠右，但排不下時整組換到下一行 */
 .plan-divider:first-child { margin-top: 4px; }
 .pd-day { font-size: 1.15rem; font-weight: 800; }
 .pd-count { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
@@ -1847,9 +1852,9 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-transit-note { font-size: 0.8rem; color: var(--muted); line-height: 1.45; padding: 2px 8px 6px 8px; }
 /* 行程檢查（v1.69）。一次最多三條、依當天時間先後排（不依嚴重度）：
    長輩是照順序讀一天的行程的，而且修最早的那一條通常會連帶解掉後面的。 */
-.pd-check { min-height: 40px; padding: 4px 12px; margin-left: 6px; white-space: nowrap; }
+.pd-check { min-height: 40px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
 .pd-check.has-issue { border-color: #ffb14e; color: #ffb14e; font-weight: 700; }
-.pd-start { min-height: 40px; padding: 4px 10px; margin-left: 6px; white-space: nowrap; font-size: 0.85rem; }
+.pd-start { min-height: 40px; padding: 4px 10px; white-space: nowrap; font-size: 0.85rem; flex: 0 0 auto; }
 .chk-item { padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;
   background: color-mix(in srgb, #ffb14e 12%, transparent); }
 .chk-item.note { background: color-mix(in srgb, var(--muted) 12%, transparent); }
@@ -1866,7 +1871,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   margin-top: 4px; padding: 6px 8px; border-radius: 8px;
   background: color-mix(in srgb, #ffb14e 14%, transparent); }
 .plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }
-.pd-opt { min-height: 40px; padding: 4px 12px; margin-left: auto; white-space: nowrap; }
+.pd-opt { min-height: 40px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
 .plan-divider { display: flex; align-items: center; gap: 10px; }
 .opt-list { margin: 0; padding-left: 22px; line-height: 1.9; }
 .plan-src-note { margin-top: 10px; }

@@ -350,7 +350,13 @@ export default async function plan(tripId) {
       const m = await dayMatrix(inDay);
       if (m.src === 'est') anyEst = true; else anyOsrm = true;
       const { chain, assumedStart } = chainForDay(inDay, m, t2, d);
-      ISSUES.set(tKey(tripId, d), { list: dayIssues(inDay, chain, timeConflicts(inDay)), assumedStart });
+      const conflicts = timeConflicts(inDay);
+      // 連鎖項目收斂回根因 —— 這一條 dayIssues 裡已經做了（covered），但行程頁
+      // 那一列是各自渲染的。實測：訂位 11:30 的餐廳被拖到 14:00 的老街後面，
+      // 同一列會同時出現「⚠ 比預定晚 4 小時 3 分」與「順序可能排反了」——
+      // 兩個警告講同一件事，而且「晚 4 小時」對這個情境是胡說八道。
+      const conflicted = new Set(conflicts.map((c) => c.id));
+      ISSUES.set(tKey(tripId, d), { list: dayIssues(inDay, chain, conflicts), assumedStart });
       chain.forEach((c, i) => {
         const row = list.querySelector(`.plan-row[data-id="${c.id}"]`);
         if (!row) return;
@@ -366,9 +372,11 @@ export default async function plan(tripId) {
           const tr = (TRANSIT.get(tKey(tripId, d)) || { legs: new Map() }).legs.get(c.id);
           if (tr) {
             // 大眾運輸是「實際班次」，開車是「估算」—— 兩個要看得出差別，不能混成一句
-            const bits = [`🚆 大眾運輸 ${fmtDur(tr.sec)}`];
+            // Routes 回的 duration 是門到門的總時間，**已經含走路**。
+            // 寫成「26 分・走路 15 分」會被讀成 26＋15 —— 截圖看才看出來的。
+            const bits = [`🚆 大眾運輸 ${fmtDur(tr.sec)}`
+              + (tr.walkSec > 60 ? `（含走路 ${fmtDur(tr.walkSec)}）` : '')];
             if (tr.transfers > 0) bits.push(`轉乘 ${tr.transfers} 次`);
-            if (tr.walkSec > 60) bits.push(`走路 ${fmtDur(tr.walkSec)}`);
             const note = h('div', { class: 'plan-travel-note transit' }, bits.join('・'));
             for (const ln of tr.lines.slice(0, 3)) {
               const emo = VEHICLE_EMOJI[ln.vehicle] || '🚌';
@@ -391,19 +399,19 @@ export default async function plan(tripId) {
         // 遲到分軟硬（v1.67，三代理一致要求）：這個數字只要上游用過任何估算就不該當警告。
         // 車程可能是直線 ×1.4 猜的、上一站的停留可能是我們自己猜的 60 分 ——
         // 拿這種數字對長輩說「你趕不上」，錯一次他以後就不看了。
-        if (c.late > 0) {
+        if (c.late > 0 && !conflicted.has(c.id)) {
           const dur = c.late >= 60 ? fmtDur(c.late * 60) : c.late + ' 分';
           bits.push(c.lateSoft ? `可能有點趕（推算晚 ${dur}，含估算）` : `⚠ 比預定晚 ${dur}`);
         }
         if (c.stayAssumed) bits.push(`（停留未設，先用 ${fmtStay(c.stayUsed)}推算）`);
         eta.textContent = bits.join('　');
         eta.hidden = !bits.length;
-        eta.classList.toggle('warn', c.late > 0 && !c.lateSoft);
+        eta.classList.toggle('warn', c.late > 0 && !c.lateSoft && !conflicted.has(c.id));
       });
 
       // 使用者自己填的時間互相矛盾 —— 這一條完全不看車程與假設停留，所以永遠報得起。
       // 貼在「比較晚的那一站」上，位置就在使用者心裡那張行程表的正確位置。
-      for (const cf of timeConflicts(inDay)) {
+      for (const cf of conflicts) {
         const row = list.querySelector(`.plan-row[data-id="${cf.id}"]`);
         const eta = row && row.querySelector('.plan-eta');
         if (!eta) continue;

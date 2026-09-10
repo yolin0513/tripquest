@@ -476,6 +476,17 @@ try {
   });
   yes(cfSize >= 13, `矛盾提示字級沒縮小（${cfSize}px）—— 長輩要看得到`);
 
+  // 連鎖項目要收斂回根因（v1.70.2）：訂位 10:00 的景點被拖到 13:00 後面時，
+  // 同一列本來會同時出現「⚠ 比預定晚 N 小時」與「順序可能排反了」——
+  // 兩個警告講同一件事，而且前者對這個情境是胡說八道。
+  const dupRow = await page.evaluate(() => {
+    const r = [...document.querySelectorAll('.plan-row')].find((x) => x.querySelector('.plan-conflict'));
+    return r ? { eta: r.querySelector('.plan-eta:not([hidden])')?.textContent?.trim() || '',
+      conflict: !!r.querySelector('.plan-conflict') } : null;
+  });
+  yes(dupRow && dupRow.conflict && !/比預定晚/.test(dupRow.eta),
+    `有矛盾提示的那一列不再重複報「比預定晚」（eta＝「${dupRow ? dupRow.eta : '(沒有)'}」）`);
+
   // 建立行程頁有「幫我規劃」入口
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/new`, { waitUntil: 'networkidle0' });

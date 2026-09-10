@@ -40,6 +40,7 @@
     "chunktest": "node scripts/chunktest.mjs",
     "transittest": "node scripts/transittest.mjs",
     "checktest": "node scripts/checktest.mjs",
+    "shots1670": "node scripts/shots1670.mjs",
     "sweep": "node scripts/sweep.mjs",
     "livecheck-import": "node scripts/livecheck-import.mjs",
     "installtest": "node scripts/installtest.mjs",
