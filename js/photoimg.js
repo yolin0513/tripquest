@@ -88,7 +88,15 @@ export function subPhoto(sub, { className = 'fi-photo', alt = '' } = {}) {
     });
   };
   load().then(() => { if (img.hidden) watch(); });
-  window.addEventListener('online', () => { if (wrap.isConnected && img.hidden) load(); });
+  // v1.73.6：這個監聽器以前**從不移除** —— 一張照片一個，一趟 189 張就是 189 個，
+  // 每次重畫再累積一輪。它本身是無害的（有 isConnected 守衛），但那是「靠守衛
+  // 擋住後果」而不是「不要留下來」。上面的 onChange 已經會自己收（看 stop()），
+  // 這一條照同一個做法。
+  const onOnline = () => {
+    if (!wrap.isConnected) { window.removeEventListener('online', onOnline); return; }
+    if (img.hidden) load();
+  };
+  window.addEventListener('online', onOnline);
 
   return wrap;
 }

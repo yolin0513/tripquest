@@ -242,7 +242,10 @@ export default async function trip(tripId, { fresh = false } = {}) {
   if (t.aiEnabled && spots.length) {
     import('../aicontent.js').then(async ({ warmTripContent }) => {
       const changed = await warmTripContent(tripId);
-      if (changed && location.hash.includes(`/trip/${tripId}`) && !location.hash.match(/\/(spot|plan|poster|weather)/)) trip(tripId);
+      // v1.73.6：這裡跟 watchHere 是同一個病，而且黑名單更短（只有四個）。
+      // warmTripContent 要等 AI 回應、幾秒鐘才回來，這期間使用者早就換頁了 ——
+      // 回來就把人家的畫面畫掉。改用同一個白名單判斷：網址正好是行程頁本身才重畫。
+      if (changed && onTripPage(tripId)) trip(tripId);
     }).catch(() => {});
   }
 }
@@ -614,16 +617,41 @@ function tripSignature(tripId) {
   return [store.getHereSpot(tripId) || '', claims, spots.length, quests.length,
     store.submissionsOfTrip(tripId).length, store.membersOf(t.groupId).length, maxUp].join('|');
 }
+// 「還在行程頁本身嗎？」—— 白名單，不是黑名單。
+//
+// v1.73.6：以前是列出「哪些子頁不要重畫」（spot|plan|poster|weather|people|
+// expenses|memories）。那份清單漏了 album，於是在相簿／影片頁選一首配樂
+// （store.patch 會 bump trip.updatedAt，正好在 tripSignature 的 maxUp 裡）
+// 就會讓行程頁把相簿頁整個畫掉 —— 使用者看到的是「按了音樂就跳回任務頁」。
+// 線上逐頁實測，同樣中招的有 7 個：settings / album / findspot / sos /
+// nearby / badges / recap。
+//
+// 黑名單在這裡註定會漏：每加一個子頁就要記得回來補一行，而漏掉的後果是
+// 「使用者在那一頁做任何會寫入的事，畫面就被抽掉」。改成問一個不會漏的問題：
+// **網址是不是正好就是行程頁本身**（後面沒有東西）。新增子頁不必再回來改。
+function onTripPage(tripId) {
+  const path = (location.hash.replace(/^#/, '') || '/').split('?')[0].replace(/\/+$/, '');
+  return path === `/trip/${tripId}`;
+}
+
 function watchHere(tripId) {
   if (hereWatch) { hereWatch(); hereWatch = null; }
   let last = tripSignature(tripId);
   hereWatch = store.subscribe(() => {
-    if (!location.hash.includes(`/trip/${tripId}`) || location.hash.match(/\/(spot|plan|poster|weather|people|expenses|memories)/)) return;
+    if (!onTripPage(tripId)) return;
     const now = tripSignature(tripId);
     if (now === last) return;
     last = now;
     trip(tripId);
   });
+  // 而且離開就退訂 —— 光靠上面那道守衛，訂閱會一直掛著（plan.js 與 sos.js
+  // 都有做這件事，只有這裡沒有）。守衛是第二道防線，不是唯一那道。
+  const off = () => {
+    if (onTripPage(tripId)) return;                 // 只是換了 query／同一頁的話不退
+    if (hereWatch) { hereWatch(); hereWatch = null; }
+    window.removeEventListener('hashchange', off);
+  };
+  window.addEventListener('hashchange', off);
 }
 
 // ---------- 旅伴：誰真的加入了（v1.57.3）----------

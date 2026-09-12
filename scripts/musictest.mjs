@@ -9,6 +9,7 @@
 
 import { spawn } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
@@ -220,6 +221,103 @@ try {
   yes(src.items === 21 && src.lic, `來源彈窗列出全部 ${src.items} 首、有 CC BY 授權連結`);
   yes(src.txt.includes('CC0（免標示）') && src.txt.includes('公有領域（免標示）') && src.txt.includes('Kimiko Ishizaka'),
     '彈窗標明每首的授權種類與演奏者');
+
+
+  // ---------- ⑤ 選音樂不會把自己踢走（使用者實機回報，v1.73.6）----------
+  //
+  // 「回憶影片只要點選任何音樂就會跳回到任務頁面，不管是配樂或是合成音樂」。
+  //
+  // 根因：行程頁的 watchHere() 訂閱了 store 卻從來不取消，只靠一份 hash 排除清單
+  // 擋（spot|plan|poster|weather|people|expenses|memories）—— 漏了 album。
+  // 而 store.patch({musicStyle}) 會 bump trip.updatedAt，那正好在 tripSignature
+  // 的 maxUp 裡，簽章一變就呼叫 trip(tripId) 把相簿頁整個畫掉。
+  // 網址不會變（還是 /album），是畫面被蓋掉 —— 所以不是 navigate 的問題。
+  //
+  // **這一段一定要走使用者的真實路徑**：先進行程頁、再到相簿。
+  // 上面第 ④ 段用 goto 直接跳網址，那樣 watchHere 不會註冊，永遠測不到。
+  console.log('\n— 選音樂不會被彈回任務頁 —');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.daycollapse, .qline', { timeout: 15000 });
+  await sleep(1000);
+  await page.evaluate((t) => { location.hash = `#/trip/${t}/album`; }, ids.tid);
+  await page.waitForSelector('.music-pick', { timeout: 15000 });
+  await sleep(1200);
+
+  const onAlbum = () => page.evaluate(() => ({
+    album: !!document.querySelector('.music-pick'),
+    trip: !!document.querySelector('.daycollapse, .qline'),
+    hash: location.hash,
+  }));
+  const arrived = await onAlbum();
+  yes(arrived.album && !arrived.trip,
+    '從行程頁走到相簿／影片頁（使用者的真實路徑）', JSON.stringify(arrived));
+
+  // 每一類都點一次：R2 配樂、🔁 換一首、合成音樂、沒有音樂
+  const clickers = [
+    ['配樂（R2 曲目）', () => {
+      const b = [...document.querySelectorAll('.mp-row .mp-title')].map((x) => x.closest('button')).filter(Boolean)
+        .find((x) => !x.classList.contains('on'));
+      if (b) b.click(); return !!b;
+    }],
+    ['🔁 換一首', () => {
+      const b = document.querySelector('.mp-row .mp-alt'); if (b) b.click(); return !!b;
+    }],
+    ['合成音樂', () => {
+      const b = [...document.querySelectorAll('.music-pick > button')].find((x) => /溫柔|輕快|電影感|民謠/.test(x.textContent));
+      if (b) b.click(); return !!b;
+    }],
+    ['沒有音樂', () => {
+      const b = [...document.querySelectorAll('.music-pick > button')].find((x) => x.textContent.includes('沒有音樂'));
+      if (b) b.click(); return !!b;
+    }],
+  ];
+  for (const [label, fn] of clickers) {
+    const hit = await page.evaluate(fn).catch(() => false);
+    if (!hit) { fail(`「${label}」的按鈕找不到（選擇器過期？）`); continue; }
+    await sleep(1800);
+    const st = await onAlbum();
+    yes(st.album && !st.trip,
+      `點「${label}」之後還在相簿／影片頁（不會被任務頁畫掉）`,
+      `album=${st.album} trip=${st.trip} hash=${st.hash}`);
+    if (!st.album) {                       // 被踢走了就回去，讓後面幾條還測得到
+      await page.evaluate((t) => { location.hash = `#/trip/${t}/album`; }, ids.tid);
+      await page.waitForSelector('.music-pick', { timeout: 10000 }).catch(() => {});
+      await sleep(800);
+    }
+  }
+
+  // 原創碼守衛：不要讓「用 hash 黑名單擋重畫」這個寫法復活。
+  // 黑名單注定會漏（每加一個子頁就要記得回來補一行），而漏掉的後果是
+  // 「使用者在那一頁做任何會寫入的事，畫面就被抽掉」。
+  {
+    const src = await readFile(new URL('../js/views/trip.js', import.meta.url), 'utf8');
+    const deny = src.split('hash.match(').length - 1;   // 純字串比對，不要正則裡再寫正則
+    yes(deny === 0,
+      'trip.js 不再用 hash 黑名單判「要不要重畫」（改用 onTripPage 白名單）',
+      `還有 ${deny} 處黑名單`);
+    yes(/function onTripPage\(/.test(src) && (src.match(/onTripPage\(tripId\)/g) || []).length >= 2,
+      'onTripPage 兩個呼叫點都在（watchHere 與 AI 文案回來後的重畫）');
+  }
+
+  // 不只音樂 —— 根因在那個訂閱，所以其他子頁一起驗（線上實測受影響的有 7 個）
+  console.log('\n— 其他子頁也不會被行程頁畫掉 —');
+  for (const r of ['settings', 'findspot', 'sos', 'nearby', 'badges', 'recap']) {
+    await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.daycollapse, .qline', { timeout: 15000 }).catch(() => {});
+    await sleep(900);
+    await page.evaluate((o) => { location.hash = `#/trip/${o.t}/${o.r}`; }, { t: ids.tid, r });
+    await sleep(1400);
+    const before = await page.evaluate(() => !!document.querySelector('.daycollapse, .qline'));
+    if (before) { console.log(`  （${r}：頁面沒開起來，略過）`); continue; }
+    // 模擬「在這一頁做了一件會寫入的事」
+    await page.evaluate(async (o) => {
+      const s2 = await import('./js/store.js');
+      await s2.patch(o.t, { musicStyle: 'track:probe' + Date.now() });
+    }, { t: ids.tid });
+    await sleep(1600);
+    const after = await page.evaluate(() => !!document.querySelector('.daycollapse, .qline'));
+    yes(!after, `${r}：頁面上寫一筆資料不會被行程頁畫掉`);
+  }
 
   console.log('\n內建配樂測試結束');
 } catch (e) {
