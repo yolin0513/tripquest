@@ -42,3 +42,11 @@ STATUS.md 開頭有「目前進行中／交接」一節，先看那節掌握現�
 前端 GitHub Pages（`yolin0513/tripquest`，push main 即部署），後端 Cloudflare Worker + D1 +
 R2。繁體中文、手機優先、使用者是為長輩家庭設計。**含中文的 patch 腳本一律寫進 scratchpad
 檔案再執行**（Windows python heredoc 帶中文會 cp950 走樣）。
+
+## 共用慣例
+
+四個 App 共用的工作慣例在 `docs/CONVENTIONS.md`。那是副本，主檔在統籌工作區，**不要在這裡改它**。
+開工前把它跟 `docs/STATUS.md` 一起讀完，並在第一則回覆的**第一行**寫回執：`已讀共用慣例 vN（日期）`（N 與日期抄副本第一行）。
+本檔與 `docs/STATUS.md` 的規則優先於共用慣例；兩邊衝突時照較嚴的做，並在回報裡指出來。
+
+@docs/CONVENTIONS.md
