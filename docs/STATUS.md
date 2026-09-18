@@ -20,8 +20,9 @@ Session 第一則回覆第一行要寫回執 `已讀共用慣例 vN（日期）`
 **2026-09-19 兩件工單**（docs／工具，不算一版、未 bump VERSION、未部署）：①commit 作者信箱改
 GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬——依 `docs/SPEC_測試範圍.md` 新增
 `scripts/affected.mjs`／`run-affected.mjs`／`affectedtest.mjs`，每版改跑 `npm run test:affected`，
-全面檢測由 Yolin 指定（見「測試」節「測試範圍」）。**實作時發現三個規則問題已回報統籌者、未自行改規則**
-（同一節末尾），其中「放大器 C 讓每版都跑全套」不調整的話這次放寬等於沒放寬。
+全面檢測由 Yolin 指定（見「測試」節「測試範圍」）。實作時回報的三個規則問題統籌者全部採納，
+同日依 SPEC §11 修訂一執行：`sw.js` 只改 VERSION 行不算全套、閉包停在 `js/app.js`、`imgtest` 進放大器 A。
+**放大器 D 仍然不會響**（另一個入口是 `js/views/` 目錄引用），已附試算數據再回報統籌者，等裁決。
 
 **下一步該做什麼**：沒有被交代的下一個功能。若 Yolin 沒有新需求，就等他從下面「等 Yolin
 回覆」挑一件推進。要動工前先讀完本檔對應章節。
@@ -191,6 +192,7 @@ Yolin 的需求、拆解並寫成規格。規格檔放在本 App 的 `docs/SPEC_
   - `node scripts/synctest.mjs --url https://tripquest.yolin0513.workers.dev` — 兩台裝置打真 Worker。
   - `scripts/v148shots.mjs` — 真 Nominatim 的地理編碼覆蓋率（宜蘭實測行程）。
 - 每版流程見上面「工作慣例」第 3 條。
+- 注意：**localhost 沒存過同步設定時一律單機**（v1.56.3）——測試不會再打正式 Worker；要測真伺服器的腳本都用 `setConfig` 明確指定。
 
 ### 測試範圍（2026-09-19 起；規格 `docs/SPEC_測試範圍.md`）
 
@@ -204,14 +206,18 @@ Yolin 裁示（2026-09-19）：「請放寬，不用每一次小改動都全測�
 - **R2 底線**：`affectedtest`、`validate-places`、`zhtest`、`nearbytest`、`emptytest`、`tabbartest`。
 - **R3 挑選**（`scripts/affected.mjs`，純函式）：測試腳本本身被改／直接引用的檔或目錄被改／引用的程式檔的
   import 閉包（含動態 `import()` 與 `new URL('./x.js', import.meta.url)`）裡有檔被改／命中放大器。
-- **R4 放大器**：
+  **閉包展開到 `js/app.js` 就停**（修訂 1-B）：引用它的測試只算直接引用它這一個檔。
+- **R4 放大器**（含 2026-09-19 修訂一）：
 
 | 放大器 | 觸發 | 放大到 |
 |---|---|---|
-| A 畫面結構 | 任何 `js/views/*.js`、`css/style.css` | ＋`layouttest` `tabbartest` `scrolltest` `densitytest` `recapcardtest` `screenshots` `tagtest` `walltest` |
+| A 畫面結構 | 任何 `js/views/*.js`、`css/style.css` | ＋`layouttest` `tabbartest` `scrolltest` `densitytest` `recapcardtest` `screenshots` `tagtest` `walltest` `imgtest`（9 支） |
 | B 資料與同步層 | `js/store.js` `db.js` `outbox.js` `sync.js` `ids.js` `share.js` `photos.js` | ＋鏈裡所有會起 `server/index.mjs` 的測試（程式掃出來，不寫死） |
-| C 骨架與合併語意 | `sw.js`、`index.html`、`js/app.js`、`js/router.js`、`js/merge.js`、`workers/**`、`server/**`、新增或刪除 `js/views/*.js` | 全套 |
-| D 沒人認領 | `js/` `css/` `workers/` `server/` 底下沒有任何測試涵蓋的檔 | 全套，並點名 |
+| （VERSION 行） | `sw.js` 的 diff **只有** `const VERSION` 那一行一刪一增 | ＋`updatetest` `nearbytest`（不算 C） |
+| C 骨架與合併語意 | `sw.js` 其他任何改動（SHELL 清單、快取策略…；判斷不出來也算）、`index.html`、`js/app.js`、`js/router.js`、`js/merge.js`、`workers/**`、`server/**`、新增或刪除 `js/views/*.js` | 全套 |
+| D 沒人認領 | `js/` `css/` `workers/` `server/` 底下沒有任何測試涵蓋的檔 | 全套，並點名（`AMP_D_MODE='full'`：十版統計 D 觸發 0 版 ≤ 3，依修訂 1-B 門檻維持全套） |
+
+  `--files sw.js` 手動指定時一律當成 C（沒有 diff 可判斷）；要試算只改 VERSION 的情況用 `--files sw.js#VERSION`。
 
   另一條保守退路（規格沒寫、實作時加的）：改到的檔不屬於任何已知類別（例如 `icons/`、`media/`、
   `manifest.webmanifest` 而且沒有測試引用）→ 也放大到全套。只改 `docs/**`、`*.md`、`screenshots/**`、
@@ -223,14 +229,16 @@ Yolin 裁示（2026-09-19）：「請放寬，不用每一次小改動都全測�
 - **R8 沒有放寬的**：新斷言要證明會紅、修 bug 補回歸斷言、測試走真實路徑、Worker 先部署客戶端後推。
 - **R9**：新寫的測試若依賴日期，fixture 不要寫死「相對今天」的筆數；固定時鐘或斷言引用程式自己算的數量。
 
-**已知的規則問題（2026-09-19 實測，已回報統籌者，未自行改規則）**：
-1. **放大器 C 讓每一次發版都跑全套**：每版都 bump `sw.js` 的 VERSION，而 `sw.js` 在 C 裡。最近十版照規則全部 44/44。
-   若「只改 VERSION 那一行」不算 C，十版裡六版只要 12～29 支。
-2. **放大器 D 在現在的 repo 裡一次都不會響**：`nearbytest`、`updatetest` 引用 `js/app.js`，它的閉包就是整個 App，
-   所以每個程式檔都「有人涵蓋」。D 只剩「沒被 App 載入的檔」這一種情況抓得到。
-3. **嚴格回放（只看 `js/`、`css/` 改動）案例 ② 挑不到 `imgtest`**：它不引用 `trip.js`，也不在放大器 A 裡；
-   當年是 `trip.js` 畫面結構改動讓它紅的。`affectedtest` 把它記成已知缺口（`KNOWN_GAPS`）。
-- 注意：**localhost 沒存過同步設定時一律單機**（v1.56.3）——測試不會再打正式 Worker；要測真伺服器的腳本都用 `setConfig` 明確指定。
+**最近十版用現行規則各跑幾支**（2026-09-19 實測）：v1.73.6 44（C：app.js）、v1.73.5 44（C：app/router）、
+v1.73.3 **16**、v1.73.2 44（C：merge/Worker）、v1.73.1 44（改了 db/outbox/sync，閉包＋B 涵蓋全部）、v1.73.0 **15**、
+v1.72.2 **18**、v1.72.1 **21**、v1.72.0 **30**、v1.71.0 **25**——十版六版少於全套（修訂前十版全部 44）。
+
+**仍未解的規則問題（2026-09-19 實測，已回報統籌者，未自行改規則）**：
+- **放大器 D 仍然不會響**：閉包停在 `js/app.js` 之後，沒有任何測試點名的程式檔是 **0 / 86**。另一個入口是
+  `nearbytest`、`emptytest` 引用了**整個 `js/views/` 目錄**（它們把 view 當文字讀做路由／原始碼稽核，不執行），
+  23 個 view 的閉包又幾乎是整個 App。試算「目錄引用不展開閉包」：沒人點名的檔變成 5 個（`expenses.js`
+  `fx.js` `photoimg.js` `places.js` `viewer.js`），十版裡 D 觸發 2 版（v1.73.6 photoimg、v1.73.5 fx，兩版本來就是 C 全套），
+  各版支數不變。修訂 1-B 要求的「只被 app.js 閉包涵蓋的真實檔」斷言因此前置不成立，**沒有加**（不硬湊）。
 
 ## 重要架構決策（含理由）
 

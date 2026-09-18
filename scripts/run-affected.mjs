@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseChain, extractRefs, buildImportGraph, select, formatReport } from './affected.mjs';
+import { parseChain, extractRefs, buildImportGraph, select, formatReport, classifyChanges } from './affected.mjs';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -65,11 +65,15 @@ function parseNameStatus(text) {
   });
 }
 
+// sw.js 只改 VERSION 行的，換成虛擬路徑 sw.js#VERSION（修訂 1-A；判斷邏輯在 affected.mjs）
 export function changedFiles({ base = 'HEAD', commit = null } = {}) {
-  if (commit) return parseNameStatus(git(['show', '--name-status', '--format=', commit]));
+  if (commit) {
+    const list = parseNameStatus(git(['show', '--name-status', '--format=', commit]));
+    return classifyChanges(list, (p) => git(['show', '--format=', '-U0', commit, '--', p]));
+  }
   const tracked = parseNameStatus(git(['diff', '--name-status', base]));
   const untracked = git(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean).map((p) => ({ path: p, status: 'A' }));
-  return [...tracked, ...untracked];
+  return classifyChanges([...tracked, ...untracked], (p) => git(['diff', '-U0', base, '--', p]));
 }
 
 // 距上次全面檢測：讀 STATUS「上次全面檢測」那一行的日期與版本

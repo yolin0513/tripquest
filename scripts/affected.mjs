@@ -19,10 +19,46 @@ import path from 'node:path';
 export const BASELINE = ['affectedtest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest'];
 
 // ---------- 放大器（R4） ----------
-export const AMP_A_TESTS = ['layouttest', 'tabbartest', 'scrolltest', 'densitytest', 'recapcardtest', 'screenshots', 'tagtest', 'walltest'];
+// imgtest：案例 ②（v1.41）就是 trip.js 的畫面結構改動讓它紅的（修訂 1-C）
+export const AMP_A_TESTS = ['layouttest', 'tabbartest', 'scrolltest', 'densitytest', 'recapcardtest', 'screenshots', 'tagtest', 'walltest', 'imgtest'];
 export const AMP_B_FILES = ['js/store.js', 'js/db.js', 'js/outbox.js', 'js/sync.js', 'js/ids.js', 'js/share.js', 'js/photos.js'];
 const AMP_C_FILES = ['sw.js', 'index.html', 'js/app.js', 'js/router.js', 'js/merge.js'];
 const SERVER_ENTRY = 'server/index.mjs';
+
+// ---------- sw.js 只改 VERSION 那一行（修訂 1-A） ----------
+// 每一版都 bump VERSION；若整個 sw.js 都算放大器 C，每一版都會跑全套、放寬等於沒放寬。
+// 呼叫端用 classifyChanges() 把「只改 VERSION 行」的 sw.js 換成這個虛擬路徑；
+// 判斷不出來（取不到 diff、新檔、樣式對不上）就維持 sw.js → 照舊命中 C。
+export const SW_VERSION_ONLY = 'sw.js#VERSION';
+export const SW_VERSION_TESTS = ['updatetest', 'nearbytest'];   // 案例 ⑦ 當年的兩個受害者，當便宜的保險
+const VERSION_LINE = /^[-+]const VERSION = '[^'\n]*';\s*$/;
+// diff：`git diff -U0 … -- sw.js` 的文字。只有 VERSION 那一行一刪一增才算。
+export function swVersionOnly(diff) {
+  if (typeof diff !== 'string') return false;
+  const lines = diff.split('\n').filter((l) => /^[-+]/.test(l) && !/^(\+\+\+|---)( |$)/.test(l));
+  const plus = lines.filter((l) => l.startsWith('+')).length;
+  const minus = lines.filter((l) => l.startsWith('-')).length;
+  return plus === 1 && minus === 1 && lines.every((l) => VERSION_LINE.test(l));
+}
+// entries: [{ path, status }]；diffOf(path) 回傳 diff 文字（取不到回 null 或丟錯）
+export function classifyChanges(entries, diffOf) {
+  return entries.map((e) => {
+    const c = typeof e === 'string' ? { path: e, status: 'M' } : e;
+    if (c.path !== 'sw.js' || c.status !== 'M') return c;
+    let diff = null;
+    try { diff = diffOf('sw.js'); } catch { diff = null; }
+    return swVersionOnly(diff) ? { path: SW_VERSION_ONLY, status: 'M' } : c;
+  });
+}
+
+// ---------- 閉包的終點（修訂 1-B） ----------
+// js/app.js 是整個 App 的入口，它的閉包就是全部程式檔；拿它算「誰涵蓋誰」沒有鑑別力，
+// 放大器 D 會永遠不響。引用它的測試只算直接引用它這一個檔，閉包展開到它就停。
+export const CLOSURE_STOP = ['js/app.js'];
+
+// 放大器 D 放大到哪裡：由最近十個版本的統計決定（修訂 1-B 的門檻：觸發 ≤ 3 版 → 全套；
+// ≥ 4 版 → 放大器 A ∪ B 那兩組）。2026-09-19 實測十版裡觸發 N 版，見 STATUS「測試範圍」。
+export const AMP_D_MODE = 'full';
 
 const isView = (f) => /^js\/views\/[^/]+\.js$/.test(f);
 const isAmpA = (f) => isView(f) || f === 'css/style.css';
@@ -108,7 +144,7 @@ export function buildImportGraph(files) {
   return graph;
 }
 
-// 從 start 沿 import 往下展開（含 start 自己）
+// 從 start 沿 import 往下展開（含 start 自己）；遇到 CLOSURE_STOP 的檔只收它本身、不再往下
 export function closure(graph, start) {
   const seen = new Set();
   const stack = [start];
@@ -116,6 +152,7 @@ export function closure(graph, start) {
     const f = stack.pop();
     if (seen.has(f)) continue;
     seen.add(f);
+    if (CLOSURE_STOP.includes(f)) continue;
     for (const d of graph.get(f) || []) stack.push(d);
   }
   return seen;
@@ -129,7 +166,7 @@ const refHits = (ref, f) => (ref.endsWith('/') ? f.startsWith(ref) : ref === f);
 // refs:    { 測試名: extractRefs() 的結果 }
 // graph:   buildImportGraph() 的結果
 // 回傳 { selected: [測試名，依鏈順序], reasons: {測試名: [理由…]}, full, fullReasons, notes, n, m }
-export function select({ changed, chain, refs, graph }) {
+export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE }) {
   const entries = changed.map((c) => (typeof c === 'string' ? { path: c, status: 'M' } : c));
   const names = chain.map((t) => t.name);
   const chainFiles = new Set(chain.map((t) => t.file));
@@ -160,6 +197,12 @@ export function select({ changed, chain, refs, graph }) {
   for (const { path: f, status } of entries) {
     let claimed = false;
 
+    // sw.js 只改 VERSION 行（修訂 1-A）：不算放大器 C
+    if (f === SW_VERSION_ONLY) {
+      for (const t of SW_VERSION_TESTS) add(t, 'sw.js 只改了 VERSION 那一行');
+      continue;
+    }
+
     // 規則 1：測試腳本本身
     const self = chain.find((t) => t.file === f);
     if (self) { add(self.name, `腳本本身被改（${f}）`); claimed = true; }
@@ -181,8 +224,14 @@ export function select({ changed, chain, refs, graph }) {
     if (claimed) continue;
     if (isDocLike(f, chainFiles)) continue;
     if (f === 'package.json') { notes.push('package.json：底線（affectedtest 會驗鏈）'); continue; }
-    if (isCode(f)) fullReasons.push(`放大器 D：${f} 沒有任何一支測試涵蓋`);
-    else fullReasons.push(`沒有規則認領的檔：${f}`);
+    if (isCode(f)) {
+      if (dMode === 'full') fullReasons.push(`放大器 D：${f} 沒有任何一支測試涵蓋`);
+      else {
+        notes.push(`放大器 D：${f} 沒有任何一支測試涵蓋 → 加跑畫面組＋資料組`);
+        for (const t of AMP_A_TESTS) add(t, `放大器 D：${f}（沒人認領）`);
+        for (const t of serverTests) add(t, `放大器 D：${f}（沒人認領）`);
+      }
+    } else fullReasons.push(`沒有規則認領的檔：${f}`);
   }
 
   const full = fullReasons.length > 0;

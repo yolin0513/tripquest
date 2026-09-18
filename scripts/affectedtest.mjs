@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BASELINE, AMP_A_TESTS, parseChain, extractRefs, buildImportGraph, closure, select, formatReport } from './affected.mjs';
+import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges } from './affected.mjs';
 import { loadRepo } from './run-affected.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -109,6 +109,11 @@ console.log('\n[T12] 放大器 D：沒人涵蓋的程式檔');
   const r = pick(['js/__nobody.js']);
   yes(r.full && r.fullReasons.some((s) => s.includes('放大器 D') && s.includes('js/__nobody.js')),
     '改沒有任何測試涵蓋的 js/__nobody.js → 全套，而且點名這個檔', JSON.stringify(r.fullReasons));
+  // D 的另一種模式（修訂 1-B 的門檻：十版觸發 ≥ 4 版時改用）：畫面組＋資料組，照樣點名
+  const ab = select({ changed: ['js/__nobody.js'], ...repo, dMode: 'ab' });
+  yes(!ab.full && AMP_A_TESTS.every((t) => ab.selected.includes(t)) && ab.selected.includes('synctest')
+    && ab.notes.some((s) => s.includes('js/__nobody.js')),
+    'D 用「A∪B」模式時：不是全套、畫面組與資料組（含 synctest）全挑、點名 js/__nobody.js', JSON.stringify(ab.notes));
   const c = pick(['js/itinerary.js']);
   yes(!c.full && c.selected.includes('itintest'), '對照組：改有人涵蓋的 js/itinerary.js → 不觸發 D（挑到 itintest）', JSON.stringify(c.fullReasons));
 }
@@ -167,8 +172,6 @@ const CASES = [
 // 原文清單每一例都有 sw.js（每版 bump VERSION）→ 放大器 C 全套，七例靠 C 就全部「挑得到」，
 // 看不出挑選規則本身有沒有用；嚴格回放才量得到 A／B／C／閉包各自的貢獻。
 const strictOf = (files) => files.filter((f) => /^(js|css)\//.test(f.path));
-// 嚴格回放下已知挑不到的（已回報統籌者，見 STATUS「測試範圍」）：規則改了之後這裡要跟著改
-const KNOWN_GAPS = { '②': ['imgtest'] };
 
 console.log('\n[T1–T7] 七個歷史案例回放');
 for (const c of CASES) {
@@ -180,13 +183,72 @@ for (const c of CASES) {
   const miss = c.hit.filter((h) => !r.selected.includes(h));
   yes(miss.length === 0, `${c.id} 原文清單：受波及的全部挑得到（${r.n}/${r.m}${r.full ? '，全套' : ''}）`, '漏掉：' + miss.join('、'));
 
+  // 沒有「已知缺口」豁免：留著它，下一個缺口就會被靜默收進去（修訂 1-C）
   const s = pick(strictOf(c.files));
-  const gaps = KNOWN_GAPS[c.id] || [];
   const sMiss = c.hit.filter((h) => !s.selected.includes(h));
-  const unexpected = sMiss.filter((h) => !gaps.includes(h));
-  yes(unexpected.length === 0, `${c.id} 嚴格回放：受波及的挑得到（${s.n}/${s.m}${s.full ? '，全套' : ''}）` + (gaps.length ? `，已知缺口 ${gaps.join('、')}` : ''),
-    '漏掉：' + unexpected.join('、'));
-  if (gaps.length) yes(gaps.every((g) => sMiss.includes(g)), `${c.id} 已知缺口仍然存在（規則補上之後這條會紅，提醒來改 KNOWN_GAPS 與 STATUS）`);
+  yes(sMiss.length === 0, `${c.id} 嚴格回放：受波及的挑得到（${s.n}/${s.m}${s.full ? '，全套' : ''}）`, '漏掉：' + sMiss.join('、'));
+}
+{
+  // 案例 ② 的 imgtest：是放大器 A 挑到的（不是全套順便帶到）
+  const c2 = CASES.find((x) => x.id === '②');
+  const s2 = pick(strictOf(c2.files));
+  yes(!s2.full && (s2.reasons.imgtest || []).some((w) => w.startsWith('放大器 A')), '嚴格回放 ②：imgtest 被放大器 A 挑到（沒有放大到全套）', JSON.stringify(s2.reasons.imgtest));
+}
+
+// ---------- 修訂 1-A：sw.js 只改 VERSION 那一行 ----------
+console.log('\n[修訂 1-A] sw.js 只改 VERSION 行');
+{
+  const E = [{ path: 'sw.js', status: 'M' }];
+  // v1.73.3（31b33a7）實際的 sw.js diff：只有 VERSION 一刪一增
+  const VERSION_ONLY = "diff --git a/sw.js b/sw.js\nindex a619504..4411db6 100644\n--- a/sw.js\n+++ b/sw.js\n@@ -6 +6 @@\n-const VERSION = 'tripquest-v1.73.2';\n+const VERSION = 'tripquest-v1.73.3';\n";
+  // 案例 ⑦（81865e1）實際的 sw.js diff（節錄 +/- 行）：VERSION ＋ 快取策略
+  const CASE7 = [
+    '--- a/sw.js', '+++ b/sw.js', '@@ -6 +6 @@',
+    "-const VERSION = 'tripquest-v1.59.0';", "+const VERSION = 'tripquest-v1.59.1';", '@@ -71,0 +72,2 @@',
+    '+// SHELL 清單的路徑集合（fetch handler 用：這些檔案只從本版快取拿，不半路換檔）',
+    '+const SHELL_SET = new Set(SHELL_ASSETS.map((u) => new URL(u, self.location.href).pathname));',
+    '-  // 同源靜態資源：stale-while-revalidate',
+    '+  if (SHELL_SET.has(url.pathname)) {',
+    '+    e.respondWith(caches.match(request).then((hit) => hit || fetch(request)));',
+  ].join('\n');
+  const WITH_OTHER = VERSION_ONLY + "@@ -20,0 +21 @@\n+  './js/newfile.js',\n";
+
+  // (b) 只改 VERSION 行 → 不是全套、加跑 updatetest 與 nearbytest
+  const cb = classifyChanges(E, () => VERSION_ONLY);
+  yes(cb[0].path === SW_VERSION_ONLY, '只改 VERSION 行的 sw.js 被標成 sw.js#VERSION', JSON.stringify(cb));
+  const rb = pick(cb);
+  yes(!rb.full && SW_VERSION_TESTS.every((t) => (rb.reasons[t] || []).some((w) => w.includes('VERSION'))),
+    '只改 VERSION 行 → 不是全套，updatetest 與 nearbytest 因 VERSION 行被挑中', JSON.stringify(rb.fullReasons));
+  // (a) 案例 ⑦ 的 sw.js（快取策略）單獨拿出來 → 仍然全套
+  const ra = pick(classifyChanges(E, () => CASE7));
+  yes(ra.full && ra.fullReasons.some((w) => w.includes('放大器 C：sw.js')), '案例 ⑦ 的 sw.js（改了快取策略）單獨餵進去 → 仍然全套');
+  // (c) 對照組：VERSION 行＋另一行 → 全套
+  const rc = pick(classifyChanges(E, () => WITH_OTHER));
+  yes(rc.full, '對照組：VERSION 行＋SHELL 清單多一行 → 全套');
+  // 判斷不出來 → 保守當成全套
+  yes(pick(classifyChanges(E, () => { throw new Error('git 取不到'); })).full, '取不到 diff → 全套');
+  yes(pick(classifyChanges(E, () => '')).full, 'diff 是空的 → 全套');
+  yes(pick(classifyChanges([{ path: 'sw.js', status: 'A' }], () => VERSION_ONLY)).full, 'sw.js 是新檔 → 全套');
+  yes(pick(classifyChanges(E, () => VERSION_ONLY.replace(/const VERSION = /g, 'const VERSION_X = '))).full, 'VERSION 那一行樣式對不上 → 全套');
+  // 真實入口：回放 v1.73.3 的 commit（它的 sw.js 只 bump 了 VERSION）
+  const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--commit', '31b33a7', '--dry'], { cwd: ROOT, encoding: 'utf8' });
+  yes(p.status === 0 && p.stdout.includes('sw.js#VERSION') && p.stdout.includes('這不是全綠') && !p.stdout.includes('放大到全套'),
+    '真實入口 run-affected --commit 31b33a7：sw.js 認成只改 VERSION，沒有放大到全套', (p.stderr || p.stdout).slice(0, 400));
+}
+
+// ---------- 修訂 1-B：閉包不穿過 js/app.js ----------
+console.log('\n[修訂 1-B] 閉包不穿過 js/app.js');
+{
+  // 前置：不設終點的話，app.js 能走到 js/fx.js（用圖自己走，不經 closure()）
+  const reach = new Set(); const st = ['js/app.js'];
+  while (st.length) { const f = st.pop(); if (reach.has(f)) continue; reach.add(f); for (const d of graph.get(f) || []) st.push(d); }
+  yes(reach.size > 40 && reach.has('js/fx.js'), `前置：不設終點時 js/app.js 能走到 ${reach.size} 個檔（含 js/fx.js）`);
+  yes(CLOSURE_STOP.includes('js/app.js') && closure(graph, 'js/app.js').size === 1, 'closure(js/app.js) 只有它自己');
+  yes(refs.updatetest.includes('js/app.js'), '前置：updatetest 直接引用 js/app.js');
+  const r = pick(['js/fx.js']);
+  yes(!(r.reasons.updatetest || []).length, '改 js/fx.js → updatetest 不會因為引用 app.js 而被挑中', JSON.stringify(r.reasons.updatetest));
+  const r2 = pick(['js/app.js']);
+  yes((r2.reasons.updatetest || []).some((w) => w.includes('直接引用 js/app.js')), '改 js/app.js 本身 → updatetest 照樣因直接引用被挑中');
 }
 {
   // 放大器 A 的貢獻：②③⑥ 受波及的畫面類測試，嚴格回放下靠 A 挑到
