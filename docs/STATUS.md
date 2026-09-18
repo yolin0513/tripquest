@@ -17,6 +17,12 @@
 工作區，不要在本 repo 改）＋在 `CLAUDE.md` 檔尾追加「共用慣例」一節（只加不刪）。之後新開場的
 Session 第一則回覆第一行要寫回執 `已讀共用慣例 vN（日期）`。
 
+**2026-09-19 兩件工單**（docs／工具，不算一版、未 bump VERSION、未部署）：①commit 作者信箱改
+GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬——依 `docs/SPEC_測試範圍.md` 新增
+`scripts/affected.mjs`／`run-affected.mjs`／`affectedtest.mjs`，每版改跑 `npm run test:affected`，
+全面檢測由 Yolin 指定（見「測試」節「測試範圍」）。**實作時發現三個規則問題已回報統籌者、未自行改規則**
+（同一節末尾），其中「放大器 C 讓每版都跑全套」不調整的話這次放寬等於沒放寬。
+
 **下一步該做什麼**：沒有被交代的下一個功能。若 Yolin 沒有新需求，就等他從下面「等 Yolin
 回覆」挑一件推進。要動工前先讀完本檔對應章節。
 
@@ -113,8 +119,11 @@ Session 第一則回覆第一行要寫回執 `已讀共用慣例 vN（日期）`
 *已套用*：v1.66 那輪與 v1.73 這輪的全面健檢，Fable 額度都用盡（實測 429），
 七個代理全部改用 Opus 5 執行。
 
-**3. 每版的流程**：bump `sw.js` VERSION → `npm test` → commit/push → curl 確認線上
-VERSION → `npm run sweep` → 截圖放 `screenshots/features/` ＋鏡像資料夾。
+**3. 每版的流程**：bump `sw.js` VERSION → `npm run test:affected`（底線＋受影響，見下面
+「測試」節的「測試範圍」）→ commit/push → curl 確認線上 VERSION → `npm run sweep` → 截圖放
+`screenshots/features/` ＋鏡像資料夾。**全面檢測（完整 `npm test`＋`sweep`）由 Yolin 指定才跑**
+（2026-09-19 裁示）；回報與 commit 訊息**不准把部分測試寫成「全綠」**，要寫「底線＋受影響 N/M 支綠」，
+回報最後附「距上次全面檢測：N 版／D 天」。
 **動到 `js/merge.js` 或 `workers/` 時：Worker 先部署、客戶端後推**（v1.73.2 實測，
 反過來會造成永久分歧）。
 
@@ -172,16 +181,55 @@ Yolin 的需求、拆解並寫成規格。規格檔放在本 App 的 `docs/SPEC_
 
 ## 測試
 
-- `npm test` 一次跑 **43 支**（validate-places → … → zhtest → layouttest → workertest，全綠才算過）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 13。
+- `npm test` 是完整的鏈 **44 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 13。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
 - **`workertest`**：用 wrangler 把**真的** `workers/worker.mjs` 跑起來配本機 D1 —— 限流與 D1 分批在此之前從上線到 v1.73.1 一行都沒被測試執行過（v1.73.2）。
+- **`livesynctest`**（在鏈裡）：兩台模擬裝置量「多久看得到對方的動作」；只起本機 server、不打真網路。改同步排程時務必跑並看實際秒數。（先前誤列在下面「手動跑」清單，2026-09-19 更正。）
 - **手動跑**（不在 npm test，因為打真網路／真伺服器）：
-  - `npm run sweep` — 對**線上正式站**巡檢 67 項（含 R2 配樂 21 首 HEAD）。每次上版後必跑。
+  - `npm run sweep` — 對**線上正式站**巡檢 67 項（含 R2 配樂 21 首 HEAD）。每次上版後必跑——少跑全測之後，它是唯一的橫向掃描。
   - `npm run livetest` — 線上端到端（會在正式 D1 建「線上驗證團」，跑完記得清）。
   - `node scripts/synctest.mjs --url https://tripquest.yolin0513.workers.dev` — 兩台裝置打真 Worker。
   - `scripts/v148shots.mjs` — 真 Nominatim 的地理編碼覆蓋率（宜蘭實測行程）。
-  - `npm run livesynctest` — 兩台模擬裝置量「多久看得到對方的動作」（已在 npm test 內；改同步排程時務必重跑並看實際秒數）。
-- 慣例：每版 bump `sw.js` VERSION → `npm test` → commit/push → curl 確認線上 VERSION → `npm run sweep` → 截圖放 `screenshots/features/`＋鏡像資料夾。
+- 每版流程見上面「工作慣例」第 3 條。
+
+### 測試範圍（2026-09-19 起；規格 `docs/SPEC_測試範圍.md`）
+
+Yolin 裁示（2026-09-19）：「請放寬，不用每一次小改動都全測，我會定期進行全面檢測。」
+
+**上次全面檢測：2026-09-18、v1.73.6、當時的鏈 43 支 1425 條全綠、總耗時未量（下次全面檢測時順便量）、最慢五支未量**
+
+- **R1 每版跑**：`npm run test:affected` ＝ 底線 ∪ 挑選器算出來的測試，依鏈的順序一次一支（不平行），紅了就停。
+  只看清單不跑：`npm run affected`；指定假想改動：`npm run affected -- --files js/views/album.js`；
+  一版分好幾個 commit：`--base <上一個發版 commit>`；回放歷史：`--commit <sha>`。
+- **R2 底線**：`affectedtest`、`validate-places`、`zhtest`、`nearbytest`、`emptytest`、`tabbartest`。
+- **R3 挑選**（`scripts/affected.mjs`，純函式）：測試腳本本身被改／直接引用的檔或目錄被改／引用的程式檔的
+  import 閉包（含動態 `import()` 與 `new URL('./x.js', import.meta.url)`）裡有檔被改／命中放大器。
+- **R4 放大器**：
+
+| 放大器 | 觸發 | 放大到 |
+|---|---|---|
+| A 畫面結構 | 任何 `js/views/*.js`、`css/style.css` | ＋`layouttest` `tabbartest` `scrolltest` `densitytest` `recapcardtest` `screenshots` `tagtest` `walltest` |
+| B 資料與同步層 | `js/store.js` `db.js` `outbox.js` `sync.js` `ids.js` `share.js` `photos.js` | ＋鏈裡所有會起 `server/index.mjs` 的測試（程式掃出來，不寫死） |
+| C 骨架與合併語意 | `sw.js`、`index.html`、`js/app.js`、`js/router.js`、`js/merge.js`、`workers/**`、`server/**`、新增或刪除 `js/views/*.js` | 全套 |
+| D 沒人認領 | `js/` `css/` `workers/` `server/` 底下沒有任何測試涵蓋的檔 | 全套，並點名 |
+
+  另一條保守退路（規格沒寫、實作時加的）：改到的檔不屬於任何已知類別（例如 `icons/`、`media/`、
+  `manifest.webmanifest` 而且沒有測試引用）→ 也放大到全套。只改 `docs/**`、`*.md`、`screenshots/**`、
+  不在鏈裡的 `scripts/` 工具 → 只跑底線；`package.json` → 底線（`affectedtest` 驗鏈）。
+- **R5 口徑**：部分測試一律印「這不是全綠：本次跑 N/M 支」；回報與 commit 只能寫「底線＋受影響 N/M 支綠」。
+- **R6 全面檢測**：Yolin 指定才跑＝完整 `npm test`＋`npm run sweep`（`livetest` 除非點名）。跑完更新上面粗體那一行
+  （日期、版本、結果、總耗時、最慢五支秒數；`run-affected` 讀這一行算「距上次全面檢測」，格式別改）。
+- **R7**：每版回報最後一行「距上次全面檢測：N 版／D 天」（`npm run affected` 會印）。Session 不自己跑全套。
+- **R8 沒有放寬的**：新斷言要證明會紅、修 bug 補回歸斷言、測試走真實路徑、Worker 先部署客戶端後推。
+- **R9**：新寫的測試若依賴日期，fixture 不要寫死「相對今天」的筆數；固定時鐘或斷言引用程式自己算的數量。
+
+**已知的規則問題（2026-09-19 實測，已回報統籌者，未自行改規則）**：
+1. **放大器 C 讓每一次發版都跑全套**：每版都 bump `sw.js` 的 VERSION，而 `sw.js` 在 C 裡。最近十版照規則全部 44/44。
+   若「只改 VERSION 那一行」不算 C，十版裡六版只要 12～29 支。
+2. **放大器 D 在現在的 repo 裡一次都不會響**：`nearbytest`、`updatetest` 引用 `js/app.js`，它的閉包就是整個 App，
+   所以每個程式檔都「有人涵蓋」。D 只剩「沒被 App 載入的檔」這一種情況抓得到。
+3. **嚴格回放（只看 `js/`、`css/` 改動）案例 ② 挑不到 `imgtest`**：它不引用 `trip.js`，也不在放大器 A 裡；
+   當年是 `trip.js` 畫面結構改動讓它紅的。`affectedtest` 把它記成已知缺口（`KNOWN_GAPS`）。
 - 注意：**localhost 沒存過同步設定時一律單機**（v1.56.3）——測試不會再打正式 Worker；要測真伺服器的腳本都用 `setConfig` 明確指定。
 
 ## 重要架構決策（含理由）
@@ -1115,7 +1163,7 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
 - 同步為欄位組級 LWW：同一天兩台同時重排順序仍可能交錯（可解釋但非誰的原意）；時鐘偏移影響同現況。
 - 長輩實機待確認：iOS 滑桿手感、相簿檢視器手勢、吉諾佩第音質（使用者已說 OK）、旅伴清單新版。
   （2026-09-18 Yolin 初步回覆「整體使用沒有太大問題、有問題會再提出」——是整體無明顯問題，非逐項確認，以上仍列待確認。）
-- **git 作者 email**：歷史檔案內容已洗（filter-repo，力推 `b8107c1`）；commit 作者欄仍是帳號 email（公開資訊），要藏需改 GitHub noreply（未做）。此外 **filter-repo 前的舊 commit 物件在 GitHub 端仍可用 SHA 直接撈到**（實測 HTTP 200，會露出洗掉前的 email），本地 GC 無效，需請 GitHub Support 清 unreachable objects——見開頭「等 Yolin 回覆」②。
+- **git 作者 email**：歷史檔案內容已洗（filter-repo，力推 `b8107c1`）；commit 作者欄：**2026-09-19 起改用 GitHub noreply**（repo 層 `git config user.email`，見「環境與帳號注意事項」），但**不重寫歷史**，所以之前的 commit 作者欄仍是帳號 email。此外 **filter-repo 前的舊 commit 物件在 GitHub 端仍可用 SHA 直接撈到**（實測 HTTP 200，會露出洗掉前的 email），本地 GC 無效，需請 GitHub Support 清 unreachable objects——見開頭「等 Yolin 回覆」②。
 - 同步是輪詢不是推播（PWA 沒有推播）：前景每 20 秒問一次，所以旅伴的動作最慢 20 秒左右才出現；介面已講明並提供「立刻更新」。App 切到背景時手機會降頻計時器，回到前景會立刻補拉一次。
 - 家裡若還有裝置停在 v1.61 以前，它按「刪除旅程」仍會同步刪除給所有人——請家人開一次 App 更新到 v1.62 以後。
 - 貼地圖短網址需要連線（網址本身沒有座標，要跟隨轉址）；轉址後只有地名時，能不能定位取決於免費地圖資料有沒有收錄該地標——查不到時會請使用者改貼座標。
@@ -1137,6 +1185,11 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
 - **Worker rate limiting**：健檢判非必要，擱置。
 
 ## 環境與帳號注意事項
+
+- **commit 作者信箱＝GitHub noreply**（2026-09-19，Yolin 原話「照你的建議，請改noreply」）：本 repo 的
+  `.git/config` 設 `user.email = 43800182+yolin0513@users.noreply.github.com`（不加 `--global`；`user.name` 仍是
+  `yolin0513`）。**不要改回真實信箱**。只影響往後的 commit，不重寫歷史。新機器或重新 clone 時要再設一次
+  （`.git/config` 不隨 repo 走）；commit 前用 `git var GIT_AUTHOR_IDENT` 確認。
 
 - Cloudflare（wrangler 已登入）：D1 `tripquest`（**651KB，只剩 2 個真實群組**：`a3cf5587` 宜蘭家族旅行〔189 照片，家人在用，絕不動〕、`13f038d9` 宜蘭遊〔早期真實試用〕）；R2 `tripquest-photos`（照片 `<groupId>/<hash>`＋音樂 `music/v1/`，~182MB）。全部遠低於免費額度。
 - 備份：`D:\Claude\App\backups\`——`tripquest-20260909-0008.bundle`（filter-repo 前完整歷史）、`d1-tripquest-20260909-0011.sql`（清理前整庫）、清理計畫 json 數份。
