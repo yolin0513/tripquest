@@ -1,7 +1,71 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-09-12，線上版本 **v1.73.6**（每次上版請一併更新這一行）。
+> 最後更新：2026-09-18，線上版本 **v1.73.6**（每次上版請一併更新這一行）。
 > 給下一個工作階段快速接手用；架構細節見 `ARCHITECTURE_DECISION.md`，第三方平台實測見 `PLATFORM_NOTES.md`，配樂授權見根目錄 `MUSIC_LICENSES.md`。
+
+## 目前進行中／交接（給下一個接手的 Session）
+
+**現在正在做什麼**：沒有進行中的功能開發。最後一次發版 **v1.73.6 已完整上線並實測收尾**
+（1425 斷言全綠、67 項線上巡檢、四種手機換版情境實測）。這段對話的後半是把幾條常設規則
+寫進文件、查證 Remote Control、以及這次交接。
+
+**做到哪一步**：v1.73.6 的程式、測試、文件都已 commit＋push，git 樹乾淨。四條常設規則
+（開發流程慣例第 1–7 條、`CLAUDE.md`）已落檔。無殘留背景任務或代理。
+
+**下一步該做什麼**：沒有被交代的下一個功能。若 Yolin 沒有新需求，就等他從下面「等 Yolin
+回覆」挑一件推進。要動工前先讀完本檔對應章節。
+
+**正在等 Yolin 回覆**：見下一節，共 5 件，每件都附了選項與我的建議。
+
+## 等 Yolin 回覆（每項附選項與建議）
+
+> 這些是需要 Yolin 決定、我不能自行動手的事。用純文字列出，不要用互動式提示框。
+
+**① Remote Control 怎麼開**（他 2026-09-16 說「開啟 Remote Control」，我查證後尚未收到選擇）
+- 實測到的事實：**無法從 Session 內部靠改設定檔打開**——它是**啟動參數**
+  `claude --remote-control [name]`（另有 `--remote-control-session-name-prefix`）。
+  查 `ListAgents` 當時只有本機 peer、無雲端／遠端列 → 目前是**關著**的。
+  `~/.claude.json` 的 `remoteControlSurfacesSeen: ["desktop","mobile"]` 表示桌面 App 與
+  手機都有過入口；而 `remoteEnabled:false` 位在 `cachedGrowthBookFeatures.tengu_onyx_plover`
+  （伺服器功能旗標快取，改它無效，下次抓取就被覆蓋）。
+- **新線索（未驗證）**：本對話後段工具環境出現了 `mcp__ccd_session_mgmt__set_remote_control`
+  工具（先前查時沒有）。下一個 Session **或許能用它直接開、不必重啟**，但我沒驗證過它的行為，
+  且它會改動 Session 對外狀態，未經 Yolin 同意不宜自行呼叫。
+- 選項：**A**（建議）在**桌面 App 自己的開關**開——原設計路徑、最能保住現有脈絡，但要 Yolin
+  在那台 PC 操作；**C** 用 `claude --remote-control --resume <session-id>` 接回本 Session
+  （兩參數併用我沒驗證過，可一試，被擋退回 B）；**B** 開全新 `claude --remote-control tripquest`
+  （會丟掉本輪脈絡）。**建議順序 A → C → B。** 若下一個 Session 願意試新工具，可先問 Yolin
+  要不要讓它呼叫 `set_remote_control`。
+
+**② git 歷史舊物件的 email 揭露要不要處理**
+- 內容已用 filter-repo 洗過（力推 `b8107c1`），但**filter-repo 之前的舊 commit 物件在 GitHub
+  上仍可用 SHA 直接撈到**（更早的 window 實測 HTTP 200，會露出作者 email）。這是 GitHub 端保留
+  unreachable objects 的行為，本地已 GC 也沒用。
+- 選項：**A**（建議）請 **GitHub Support 對這個 repo 做 GC／清 unreachable objects**——這是唯一
+  能真正清掉的辦法，但要用 Yolin 的帳號提工單，我不能代做；**B** 把 repo 短暫轉私有再轉回（有時
+  會觸發 GC，但不保證）；**C** 接受現狀（作者 email 本就是公開 commit 的一部分，風險有限）。
+  **這是 Yolin 的帳號，我不會自行動手。**
+
+**③ D1 的測試殘留群組要不要清**
+- 本檔「環境與帳號注意事項」記錄 D1「只剩 2 個真實群組」（`a3cf5587` 家人在用、`13f038d9` 早期
+  試用）。但更早的對話提到**可能還有約 16 個測試殘留群組未清**——這個數字我**這個 window 沒有
+  親自實測**（要跑 `wrangler d1` 查詢才能確認），先當**待實測**看待。
+- 選項：**A**（建議）**先實測列出 D1 現有全部群組**（只讀、不刪），把清單給 Yolin 逐一確認哪些
+  是測試垃圾，再刪；**B** 全部保留（651KB 遠低於免費額度，不刪也沒成本）。**刪錯會毀掉家人正在
+  用的真實行程，所以未經逐一確認絕不刪。**
+
+**④ Web Push 要不要立項**（PWA 推播）
+- 更早的 window 做過可行性評估，**但全文已隨對話壓縮散失**，我手上只剩骨架。已把骨架與待決問題
+  寫進 `docs/SPEC_WEB_PUSH.md`（草稿，明確標註原評估細節已散失）。
+- 選項：**A**（建議）**先不做**——目前輪詢（前景 20 秒）對長輩家庭夠用，推播要處理訂閱、VAPID、
+  權限請求與長輩 UX，複雜度不低；**B** 要做的話**依開發流程慣例開 3 個 Fable 代理重做評估＋投票**，
+  再據投票結果補完 SPEC。
+
+**⑤ 建立者專屬權限要不要立項**（trip 設定的 creator-only）
+- 同樣評估過、**全文散失**，骨架寫進 `docs/SPEC_CREATOR_PERMISSIONS.md`（草稿）。核心待決是
+  `createdByDevice` 能不能當權限依據、以及對長輩的影響。
+- 選項：**A**（建議）**先不做**——多一層權限對長輩是負擔，且家庭情境信任成本低；**B** 要做就開
+  Fable 代理投票重做評估。
 
 ## 部署
 
@@ -1034,7 +1098,7 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
 - 跨區交通：>150km/4h 不給開車數字改提示；門檻可能誤標長途拉車（花蓮→墾丁），實測回饋再調。
 - 同步為欄位組級 LWW：同一天兩台同時重排順序仍可能交錯（可解釋但非誰的原意）；時鐘偏移影響同現況。
 - 長輩實機待確認：iOS 滑桿手感、相簿檢視器手勢、吉諾佩第音質（使用者已說 OK）、旅伴清單新版。
-- **git 作者 email**：歷史檔案內容已洗（filter-repo，力推 `b8107c1`）；commit 作者欄仍是帳號 email（公開資訊），要藏需改 GitHub noreply（未做）。
+- **git 作者 email**：歷史檔案內容已洗（filter-repo，力推 `b8107c1`）；commit 作者欄仍是帳號 email（公開資訊），要藏需改 GitHub noreply（未做）。此外 **filter-repo 前的舊 commit 物件在 GitHub 端仍可用 SHA 直接撈到**（實測 HTTP 200，會露出洗掉前的 email），本地 GC 無效，需請 GitHub Support 清 unreachable objects——見開頭「等 Yolin 回覆」②。
 - 同步是輪詢不是推播（PWA 沒有推播）：前景每 20 秒問一次，所以旅伴的動作最慢 20 秒左右才出現；介面已講明並提供「立刻更新」。App 切到背景時手機會降頻計時器，回到前景會立刻補拉一次。
 - 家裡若還有裝置停在 v1.61 以前，它按「刪除旅程」仍會同步刪除給所有人——請家人開一次 App 更新到 v1.62 以後。
 - 貼地圖短網址需要連線（網址本身沒有座標，要跟隨轉址）；轉址後只有地名時，能不能定位取決於免費地圖資料有沒有收錄該地標——查不到時會請使用者改貼座標。
@@ -1062,3 +1126,5 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
 - 測試 fixture `scripts/fixtures/yilan.txt` 已去識別化（民宿→山風民宿hillstay、溫泉會館→雲居溫泉會館），全歷史一致。
 - 截圖：`screenshots/features/` ＋ 鏡像 `%APPDATA%\Claude\local-agent-mode-sessions\<session>\...\outputs\tripquest\\outputs\tripquest\`（扁平、版本化檔名 v15xx-*）。
 - 慣例：架構/資料結構/部署/付費/授權級決策先開 **3 個 Fable 5.1 代理**獨立評估投票；Windows 下 python heredoc 帶中文會 cp950 走樣——**含中文的 patch 腳本一律寫進 scratchpad 檔案再執行**。
+- **`scripts/lf.py` 遇到 emoji 會壞**（v1.73.6 交接時實測）：它的 `save()` 用 `str.encode('utf-8')` 寫檔，字串裡有 surrogate（🎁 U+1F381、🎬、📸 之類）會噴 `UnicodeEncodeError: surrogates not allowed`，而且**留下 `<檔名>.tmp` 殘留**。教訓：**改含 emoji 的檔（STATUS.md 就是）用 Edit 工具最穩，別走 lf.py**；lf.py 只適合純中文＋要保 CRLF 的檔（如 `js/merge.js`）。
+- **換版實測基建**（重現「使用者手機上的舊版」用）：puppeteer + 持久化 `userDataDir` 設定檔＝那支手機的 SW／快取；在 scratchpad 跑 puppeteer 要把專案 `node_modules` 用 junction 連進去（`cmd //c mklink //J`），**用完 `rmdir` 移除 junction**，否則清 scratchpad 會穿透刪到專案 `node_modules`。模擬 GitHub Pages 換版＝本機靜態伺服器（`sw.js` 回 `no-cache`、其餘 `max-age`），把 served 目錄從舊版樹換成新版樹。探針一定要**真滑鼠點擊**（觸發 `pointerdown`），用 `location.hash` 導頁會讓 `interacted` 永遠 false、量到沒人走的路。
