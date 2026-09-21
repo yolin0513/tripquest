@@ -1719,7 +1719,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qline-add .addphoto-row { margin-top: 0; flex-wrap: wrap; }
 /* 基準寬度用 em 不用 px：字級放大時它跟著放大，所以「特大字＋360px」會自己換成上下排，
    而不是把「🖼️ 從相簿選」折成兩行（layouttest 在 320px/m 與 360px/xl 各抓到一次）。 */
-.qline-add .addphoto-row .btn { min-height: 48px; font-size: 1rem; flex: 1 1 9em; }
+.qline-add .addphoto-row .btn { min-height: 48px; font-size: 1rem; flex: 1 1 7em; }
 
 /* ---------- 任務列（收合 88px，點開才給大圖） ---------- */
 /* 之前每張卡固定 414px，一個螢幕只放得下 1.7 個任務，五個任務的景點要滑 2300px。*/
