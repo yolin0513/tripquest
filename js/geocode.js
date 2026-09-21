@@ -120,7 +120,9 @@ function rankHits(hits, q, near) {
     let score = 0;
     if (STOPPY.has(hit.type) && !wantsStop(q)) score -= 2;
     if (['aeroway', 'railway', 'tourism', 'amenity', 'leisure', 'historic', 'natural', 'shop'].includes(hit.cls)) score += 1;
-    if (hit.type === 'aerodrome' || hit.type === 'station') score += 1;
+    // OSM 的火車站在 jsonv2 常常是 `train_station`／`subway_station`，只認 `station`
+    // 的話「宜蘭火車站」排序後的第一名會變成黑龍江的車站。
+    if (hit.type === 'aerodrome' || hit.type === 'station' || hit.type === 'train_station' || hit.type === 'subway_station') score += 1;
     if (near) { const d = haversine(near, hit); score += d < 30000 ? 2 : d < 200000 ? 1 : 0; }
     out.push({ ...hit, _score: score });
   }
@@ -148,7 +150,11 @@ async function nominatimRaw(query, { limit, near }) {
           name: String(hit.display_name || '').split(',')[0].trim() || String(hit.name || query),
           fullName: area,
           lat: +(+hit.lat).toFixed(5), lng: +(+hit.lon).toFixed(5),
-          cls: hit.class || '', type: hit.type || '',
+          // `format=jsonv2` 回的欄位叫 `category`，不是 `class`（`class` 是 format=json 的名字）。
+          // 一直讀 `hit.class` 的結果是 `cls` 永遠空字串：rankHits 給景點類的 +1 從來沒加過，
+          // 類別中文後援也從沒作用過（晶華酒店因此排出 landuse/commercial 而不是旅館）。
+          // 兩個名字都收，舊形狀的回應仍然讀得到。
+          cls: hit.category || hit.class || '', type: hit.type || '',
         };
       });
     } catch { return undefined; }

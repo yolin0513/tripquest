@@ -22,12 +22,27 @@ const FIX = {
   // 陷阱：同名的店在冰島（離中心 9000 公里）——防呆要把它丟掉
   '同名很遠的店 宜蘭': [64.14, -21.94],
 };
+// v1.74 的 R9 用：改成回真正的 `format=jsonv2` 形狀（欄位是 category 不是 class）
+let geoMode = 'plain';
+const JSONV2 = {
+  '單筆類別': [{ lat: '24.75', lon: '121.75', display_name: '宜蘭火車站, 宜蘭縣', category: 'railway', type: 'train_station' }],
+  '舊格式類別': [{ lat: '24.75', lon: '121.75', display_name: '某景點, 宜蘭縣', class: 'tourism', type: 'attraction' }],
+  // 兩筆的 category 都是 railway（cls 的加分一樣），只差 type —— 這樣才驗得到
+  // 「train_station 有沒有被當成車站」。若兩筆的 cls 不同，勝負會被 cls 的加分先決定，
+  // 那條斷言就是被別條規則順便擋掉的假斷言（2026-09-21 突變實測踩過）。
+  // 排序是穩定的，所以把「不是車站」的那筆放前面：沒有 type 加分就會維持在第一名。
+  '同名車站': [
+    { lat: '45.80', lon: '126.53', display_name: '同名車站, 黑龍江', category: 'railway', type: 'rail' },
+    { lat: '24.75', lon: '121.75', display_name: '同名車站, 宜蘭縣', category: 'railway', type: 'train_station' },
+  ],
+};
 const geoSrv = createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const q = u.searchParams.get('q') || '';
   hits.push({ q, at: Date.now() });
-  const hit = FIX[q];
   res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+  if (geoMode === 'jsonv2') { res.end(JSON.stringify(JSONV2[q] || [])); return; }
+  const hit = FIX[q];
   res.end(JSON.stringify(hit ? [{ lat: String(hit[0]), lon: String(hit[1]), display_name: q }] : []));
 }).listen(GEO);
 await sleep(1400);
@@ -163,6 +178,26 @@ try {
   await page.waitForSelector('.page.form');
   const manual = await page.evaluate(() => [...document.querySelectorAll('.form-hint')].map((x) => x.textContent).find((x) => x.includes('位置')));
   yes(manual?.includes('手動'), `手動設定後顯示來源：「${manual}」`);
+
+  // ---------- v1.74：jsonv2 的欄位名與火車站排序（R9） ----------
+  // 兩個現行 bug：(1) `format=jsonv2` 回的是 `category` 不是 `class`，所以 `cls` 永遠空字串
+  //     —— rankHits 給景點類的 +1 從來沒加過；(2) 只認 `type === 'station'`，而 OSM 的
+  //     火車站多半是 `train_station`，「宜蘭火車站」因此排到黑龍江的車站後面。
+  geoMode = 'jsonv2';
+  // 端點要重設：前面每一次 `page.goto` 都會把模組狀態砍掉重來，BASE 會回到真的
+  // Nominatim（第一次寫這段時就是這樣打到真網路的 —— 打真網路的測試不進 npm test）。
+  const r9 = await page.evaluate(async (geoUrl) => {
+    const g = await import('./js/geocode.js');
+    g.setGeoEndpoint(geoUrl);
+    const one = await g.geocodeSearch('單筆類別', { limit: 3 });
+    const two = await g.geocodeSearch('同名車站', { limit: 5 });
+    const old = await g.geocodeSearch('舊格式類別', { limit: 3 });
+    return { cls: one[0] && one[0].cls, order: two.map((x) => x.type), oldCls: old[0] && old[0].cls, n: two.length };
+  }, `http://localhost:${GEO}/search`);
+  yes(r9.cls === 'railway', `jsonv2 的 category 讀得到（cls=${r9.cls}；修正前永遠是空字串）`);
+  yes(r9.oldCls === 'tourism', `對照組：舊形狀的 class 仍然讀得到（cls=${r9.oldCls}）`);
+  yes(r9.n === 2, `前置：同名車站有兩筆（${r9.n}）`);
+  yes(r9.order[0] === 'train_station', `火車站排在同類別的鐵軌之前（${r9.order.join('→')}）`);
 
   console.log('\n定位測試結束');
 } catch (e) {
