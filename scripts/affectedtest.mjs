@@ -118,6 +118,31 @@ console.log('\n[T12] 放大器 D：沒人涵蓋的程式檔');
   yes(!c.full && c.selected.includes('itintest'), '對照組：改有人涵蓋的 js/itinerary.js → 不觸發 D（挑到 itintest）', JSON.stringify(c.fullReasons));
 }
 
+// ---------- 修訂二：目錄引用不展開閉包，放大器 D 恢復作用 ----------
+console.log('\n[修訂二] 目錄引用不展開閉包');
+{
+  yes(refs.nearbytest.includes('js/views/') && refs.emptytest.includes('js/views/'),
+    '前置：nearbytest 與 emptytest 引用的是整個 js/views/ 目錄');
+  // 目錄引用仍然讓那支測試被挑中（規則 2 不變），只是不再往下展開閉包
+  const v = pick(['js/views/album.js']);
+  yes((v.reasons.emptytest || []).some((w) => w.includes('直接引用 js/views/album.js')),
+    '改 js/views/album.js → emptytest 照樣被挑中（規則 2）');
+
+  // 「沒有任何測試點名的程式檔」：以程式算出來的為準，不寫死
+  const codeFiles = [...graph.keys(), 'css/style.css'].filter((f) => /^(js|css|workers|server)\//.test(f)).sort();
+  const unnamed = codeFiles.filter((f) => pick([f]).fullReasons.some((w) => w.includes('放大器 D')));
+  yes(codeFiles.length > 50 && unnamed.length >= 1,
+    `前置：程式檔 ${codeFiles.length} 個，其中沒有任何測試點名的有 ${unnamed.length} 個：${unnamed.join('、')}`);
+  const one = unnamed[0];
+  const ru = pick([one]);
+  yes(ru.full && ru.n === ru.m && ru.fullReasons.some((w) => w.includes('放大器 D') && w.includes(one)),
+    `改 ${one}（沒人點名的真實檔）→ 觸發 D、放大到全套、輸出點名它`, JSON.stringify(ru.fullReasons));
+  // 對照組：有測試點名的真實檔不觸發 D
+  const named = pick(['js/itinerary.js']);
+  yes(!named.full && named.selected.includes('itintest'),
+    '對照組：改有測試點名的 js/itinerary.js → 不觸發 D', JSON.stringify(named.fullReasons));
+}
+
 // ---------- T13 測試腳本本身 ----------
 console.log('\n[T13] 改測試腳本本身');
 {
@@ -242,11 +267,13 @@ console.log('\n[修訂 1-B] 閉包不穿過 js/app.js');
   // 前置：不設終點的話，app.js 能走到 js/fx.js（用圖自己走，不經 closure()）
   const reach = new Set(); const st = ['js/app.js'];
   while (st.length) { const f = st.pop(); if (reach.has(f)) continue; reach.add(f); for (const d of graph.get(f) || []) st.push(d); }
-  yes(reach.size > 40 && reach.has('js/fx.js'), `前置：不設終點時 js/app.js 能走到 ${reach.size} 個檔（含 js/fx.js）`);
+  // 例子用 js/geocode.js：它有三支測試直接點名（所以不會觸發放大器 D 跑全套，
+  // 這條才驗得到「閉包不穿過 app.js」本身）
+  yes(reach.size > 40 && reach.has('js/geocode.js'), `前置：不設終點時 js/app.js 能走到 ${reach.size} 個檔（含 js/geocode.js）`);
   yes(CLOSURE_STOP.includes('js/app.js') && closure(graph, 'js/app.js').size === 1, 'closure(js/app.js) 只有它自己');
   yes(refs.updatetest.includes('js/app.js'), '前置：updatetest 直接引用 js/app.js');
-  const r = pick(['js/fx.js']);
-  yes(!(r.reasons.updatetest || []).length, '改 js/fx.js → updatetest 不會因為引用 app.js 而被挑中', JSON.stringify(r.reasons.updatetest));
+  const r = pick(['js/geocode.js']);
+  yes(!r.full && !(r.reasons.updatetest || []).length, '改 js/geocode.js → updatetest 不會因為引用 app.js 而被挑中', JSON.stringify(r.reasons.updatetest));
   const r2 = pick(['js/app.js']);
   yes((r2.reasons.updatetest || []).some((w) => w.includes('直接引用 js/app.js')), '改 js/app.js 本身 → updatetest 照樣因直接引用被挑中');
 }

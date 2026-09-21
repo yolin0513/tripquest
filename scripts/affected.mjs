@@ -51,6 +51,13 @@ export function classifyChanges(entries, diffOf) {
   });
 }
 
+// ---------- 目錄引用不展開閉包（修訂二） ----------
+// 辨認方式：extractRefs() 給的引用路徑**以 `/` 結尾**就是目錄引用（它只在指到的真的是目錄時
+// 才加那個斜線）。`nearbytest`、`emptytest` 引用整個 `js/views/`，是把檔案當文字讀來做路由與
+// 原始碼稽核、並不執行它們；沿著 23 個 view 的 import 往下算涵蓋，等於宣稱它們涵蓋了整個 App，
+// 放大器 D 就永遠不會響。改到目錄底下的檔，那支測試照樣被挑中（規則 2），只是不再往下展開。
+const isDirRef = (r) => r.endsWith('/');
+
 // ---------- 閉包的終點（修訂 1-B） ----------
 // js/app.js 是整個 App 的入口，它的閉包就是全部程式檔；拿它算「誰涵蓋誰」沒有鑑別力，
 // 放大器 D 會永遠不響。引用它的測試只算直接引用它這一個檔，閉包展開到它就停。
@@ -180,14 +187,13 @@ export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE }) {
 
   for (const t of BASELINE) add(t, '底線');
 
-  // 每支測試引用到的程式檔的閉包（目錄引用 → 目錄底下每一個程式檔都算起點）
-  const graphFiles = [...graph.keys()];
+  // 每支測試引用到的程式檔的閉包（目錄引用不展開，見 isDirRef）
   const cover = {};
   for (const t of chain) {
     const set = new Set();
     for (const r of refs[t.name] || []) {
-      const starts = r.endsWith('/') ? graphFiles.filter((f) => f.startsWith(r)) : (graph.has(r) ? [r] : []);
-      for (const s of starts) for (const f of closure(graph, s)) set.add(f);
+      if (isDirRef(r)) continue;                    // 目錄引用：規則 2 就夠了，不展開閉包（修訂二）
+      if (graph.has(r)) for (const f of closure(graph, r)) set.add(f);
     }
     cover[t.name] = set;
   }
