@@ -111,6 +111,9 @@ export default async function spot(tripId, spotId) {
     try {
       const { timeWindow, phraseOk } = await import('../quests/compose.js');
       const cur = store.getRaw(spotId);
+      // v1.74：只有策展命中的地點才有系統出的題，也只有它補得出新的題。
+      // 其餘地點若讓它往下走，會把不合時段的舊任務刪掉、又補不回任何一個。
+      if (!cur || cur.source !== 'curated') return;
       const win = timeWindow(cur);
       const clash = store.questsOf(spotId).filter((q) =>
         q.when && !phraseOk({ when: q.when }, win) && !store.submissionsOf(q.id).length);

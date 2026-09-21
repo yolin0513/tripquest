@@ -171,7 +171,10 @@ try {
   yes(added.lat != null && Math.abs(added.lat - 24.68) < 0.02 && Math.abs(added.lng - 121.77) < 0.02,
     `座標當下就寫進去（${added.lat}, ${added.lng}），不用事後再查`);
   yes(added.day === 2 && added.startMin === 750 && added.stayMin === 60, `第 2 天、12:30、停留 60 分（day=${added.day} start=${added.startMin} stay=${added.stayMin}）`);
-  yes(added.quests >= 1, `自動產生了 ${added.quests} 個拍照任務`);
+  // v1.74：「林場肉羹」是小吃店，不在策展資料庫裡（宜蘭庫裡只有礁溪溫泉、羅東夜市、太平山、
+  // 頭城老街．蘭陽博物館、龜山島、三星蔥）→ 一個任務都不產生，由使用者自己新增。
+  // 舊斷言「自動產生了 N 個拍照任務」正是 Yolin 回報的問題被測試背書的地方。
+  yes(added.quests === 0, `不在策展資料庫的小吃店：0 個任務（${added.quests}），留給使用者自己新增`);
   const marked = await page.evaluate(() => document.querySelector('.fs-results .fs-row .fs-add').textContent);
   yes(marked.includes('已加入'), `列上標示：${marked.trim()}`);
 
@@ -260,8 +263,10 @@ try {
     const sp = s.spotsOf(tid).find((x) => x.name.includes('完全查無此店'));
     return sp && { day: sp.day, lat: sp.lat ?? null, quests: s.questsOf(sp.id).length };
   }, tid);
-  yes(manualSpot && manualSpot.day === 2 && manualSpot.lat === null && manualSpot.quests >= 1,
-    `手動加入成功：第 ${manualSpot && manualSpot.day} 天、無座標（之後可自動補）、任務 ${manualSpot && manualSpot.quests} 個`);
+  // v1.74：手動打進來的店名（「完全查無此店」）當然對不上策展資料庫 → 0 個任務。
+  // 地點本身照樣建起來，照片與任務由使用者自己加（行程頁的「＋ 新增任務」／加照片）。
+  yes(manualSpot && manualSpot.day === 2 && manualSpot.lat === null && manualSpot.quests === 0,
+    `手動加入成功：第 ${manualSpot && manualSpot.day} 天、無座標（之後可自動補）、0 個任務（${manualSpot && manualSpot.quests}）`);
   const manualTime = await page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
     const sp = s.spotsOf(tid).find((x) => x.name.includes('完全查無此店'));

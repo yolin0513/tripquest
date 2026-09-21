@@ -80,22 +80,39 @@ try {
       const sp = spots.find((x) => x.name.includes(name));
       return quests.filter((q) => q.spotId === sp.id).map((q) => ({ t: q.title, h: q.hint, when: q.when || null }));
     };
+    // transit 主題的句子品質：直接呼叫 composeQuests（產生器已經不會替非策展地點出題）
+    const c = await import('./js/quests/compose.js');
+    await c.loadPhrases();
+    const transitPhrases = c.composeQuests({ name: '臺灣桃園國際機場' }, 'transit', c.makeCtx('air'), { max: 4 })
+      .map((q) => ({ t: q.title, h: q.hint }));
+    const cnPhrases = c.composeQuests({ name: '新千岁机场 / 新千歲機場' }, 'transit', c.makeCtx('cn'), { max: 4 })
+      .map((q) => ({ t: q.title, h: q.hint }));
     return {
       tid,
       airTheme: spots[0].theme, airEmoji: spots[0].emoji,
-      air: qOf('桃園'), morning101: qOf('101'), cn: qOf('新千'),
+      air: qOf('桃園'), morning101: qOf('101'), cn: qOf('新千'), transitPhrases, cnPhrases,
     };
   });
-  yes(gen.airTheme === 'transit' && gen.airEmoji === '✈️', `機場景點主題=${gen.airTheme}、emoji=${gen.airEmoji}`);
-  const airTxt = gen.air.map((q) => q.t + q.h).join('');
+  // v1.74 起語意相反：機場不在策展資料庫裡 → 產生時一個任務都不出，主題與圖示都中性。
+  // 「機場要判成 transit」這件事本身沒有變（上面 themeForSpot 那幾條還在驗），
+  // 只是不再拿它去出題 —— 判得對不代表出得對，那正是「白雲山鹿」的教訓。
+  yes(gen.airTheme === 'journey' && gen.airEmoji === '📍' && gen.air.length === 0,
+    `機場（不在策展庫）：0 個任務、中性主題與圖示（${gen.airTheme}／${gen.airEmoji}／${gen.air.length} 個任務）`);
+  // 句子品質的守門移到純函式層：主題確定是 transit 時，出的題要貼合機場
+  const airTxt = gen.transitPhrases.map((q) => q.t + q.h).join('');
+  yes(gen.transitPhrases.length > 0, `前置：transit 主題出得了題（${gen.transitPhrases.length} 個）`);
   yes(/指標|合照|行李|窗外|第一張|等待|出發/.test(airTxt) && !/人潮走動|整座|城市/.test(airTxt),
-    `機場任務貼合情境（${gen.air.map((q) => q.t).join('、')}）`);
+    `transit 主題的任務貼合機場情境（${gen.transitPhrases.map((q) => q.t).join('、')}）`);
   const m101 = gen.morning101.map((q) => q.t + q.h).join('');
   yes(!NIGHT_WORDS.some((w) => m101.includes(w)),
     `07:00 到的台北101 沒有夜間任務（${gen.morning101.map((q) => q.t).join('、')}）`);
-  const cnTxt = gen.cn.map((q) => q.t + q.h).join('');
+  // 長複合名的 shortName 也移到純函式層驗：這個機場同樣不在策展庫，產生器已經不替它出題，
+  // 拿 0 個任務去比對「不出現斜線」會變成母體是空的假斷言。
+  yes(gen.cn.length === 0, `前置：新千歲機場不在策展庫 → 0 個任務（${gen.cn.length}）`);
+  const cnTxt = gen.cnPhrases.map((q) => q.t + q.h).join('');
+  yes(gen.cnPhrases.length > 0, `前置：用 transit 主題出得了題（${gen.cnPhrases.length} 個）`);
   yes(!cnTxt.includes('/') && !cnTxt.includes('新千岁'),
-    `長複合名只嵌「新千歲機場」，不出現「新千岁机场 / …」（${gen.cn[0] && gen.cn[0].t}）`);
+    `長複合名只嵌「新千歲機場」，不出現「新千岁机场 / …」（${gen.cnPhrases[0] && gen.cnPhrases[0].t}）`);
 
   // 純函式層：過濾規則 + 沒設時間全池可用 + when 有落在任務上
   const pure = await page.evaluate(async () => {
@@ -108,8 +125,9 @@ try {
     let nightQuest = null;
     for (let i = 0; i < 30; i++) {
       const ctx = c.makeCtx('seed' + i);
-      for (const q of c.composeQuests(spotUntimed, 'urban', ctx, { max: 4 })) {
-        seen.add(q.title);
+      for (const q of c.composeQuests(spotUntimed, 'urban', ctx, { max: 4 })) seen.add(q.title);
+      // 對照組：同一個景點填上晚上的時間 → 夜間句出得來，而且 when 有落在任務上
+      for (const q of c.composeQuests({ name: '台北101', startMin: 19 * 60 + 30, stayMin: 90 }, 'urban', ctx, { max: 4 })) {
         if (q.title.includes('夜裡點燈')) nightQuest = q;
       }
     }
@@ -125,14 +143,16 @@ try {
       okNight: c.phraseOk({ when: 'night' }, nightWin), noNight: c.phraseOk({ when: 'night' }, morningWin),
       okAlways: c.phraseOk({ when: 'night' }, null),
       untimedHasNight: [...seen].some((t) => t.includes('夜裡點燈')),
-      nightQuestWhen: nightQuest && nightQuest.when, morningBad,
+      timedNightWhen: nightQuest && nightQuest.when, morningBad,
     };
   });
-  yes(pure.noNight === false && pure.okNight === true && pure.okAlways === true,
-    '過濾規則：早上擋夜間句、晚上放行、沒設時間全放行');
+  // v1.74 第三條改了：沒設時間**不再**全放行。「幾點到」預設就是未設定，
+  // 所以舊規則等於讓「夜裡點燈的樣子」在最常見的情況下照出不誤。
+  yes(pure.noNight === false && pure.okNight === true && pure.okAlways === false,
+    '過濾規則：早上擋夜間句、晚上放行、沒設時間也擋（不知道幾點去就不假設時段）');
   yes(!pure.morningBad, '早上景點 30 種種子都不出現夜間句', pure.morningBad);
-  yes(pure.untimedHasNight && pure.nightQuestWhen === 'night',
-    '沒設時間維持全池（含夜間句），且任務有記 when=night（改時間提示靠它）');
+  yes(!pure.untimedHasNight, '沒設時間的景點 30 種種子都不出現夜間句（改動前會出）');
+  yes(pure.timedNightWhen === 'night', '填了晚上的時間才出得了夜間句，而且任務有記 when=night（改時間提示靠它）');
 
   // ---------- ② 改時間 → 提示換任務（已拍照片的不動） ----------
   console.log('\n— 改時間提示 —');
@@ -142,7 +162,9 @@ try {
     const gid = uuid(), tid = uuid(), sid = uuid(), q1 = uuid(), q2 = uuid();
     await s.put({ id: gid, type: 'group', name: 'g' });
     await s.put({ id: tid, type: 'trip', groupId: gid, title: '換任務測試', region: '台北', allowWiki: false });
-    await s.put({ id: sid, type: 'spot', tripId: tid, name: '台北101', emoji: '🗼', day: 1, order: 0, theme: 'urban' });
+    // source: 'curated' —— v1.74 起只有策展命中的地點會被換題（其餘地點一律留白，
+    // 讓它往下走的話會刪掉不合時段的舊任務又補不回來）。產生器對台北101 設的就是這個值。
+    await s.put({ id: sid, type: 'spot', tripId: tid, name: '台北101', emoji: '🗼', day: 1, order: 0, theme: 'urban', source: 'curated' });
     await s.put({ id: q1, type: 'quest', tripId: tid, spotId: sid, title: '夜裡點燈的樣子', hint: '入夜後回來拍。', kind: 'view', source: 'template', when: 'night', order: 0, refImage: null });
     await s.put({ id: q2, type: 'quest', tripId: tid, spotId: sid, title: '有照片的夜拍', hint: '入夜後回來拍。', kind: 'view', source: 'template', when: 'night', order: 1, refImage: null });
     await s.put({ id: uuid(), type: 'submission', tripId: tid, questId: q2, blobId: null, createdAt: Date.now() });

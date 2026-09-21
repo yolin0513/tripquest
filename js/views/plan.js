@@ -22,6 +22,22 @@ import { getMapsKey, mapsBudget, addMapsCalls } from '../aikeys.js';
 
 const dayMS = 86400000;
 
+// 「＋ 新增任務」的兩個對話框。行程頁也用同一份（v1.74：沒有任務的地點要能一步新增，
+// 不必先進「調整每天的行程」再展開景點 —— 那是五步）。
+// 回傳新增的那一筆，取消回 null。
+export async function addQuestDialog(tripId, spotId) {
+  const title = await promptDialog('要拍什麼？', { placeholder: '例：找到那隻招財貓', okLabel: '下一步' });
+  if (!title) return null;
+  const hint = await promptDialog('提示（可留空）', { placeholder: '拍成怎樣算完成？', multiline: true, okLabel: '新增' }) || '';
+  const rec = {
+    id: uuid(), type: 'quest', tripId, spotId, title, hint,
+    kind: 'custom', source: 'custom', order: store.questsOf(spotId).length, refImage: null,
+  };
+  await store.put(rec);
+  toast('已新增');
+  return rec;
+}
+
 // 查到的大眾運輸班次只放在記憶體裡（key：tripId:day → { legs: Map(spotId → 結果) }）。
 // **不寫進記錄**，理由跟 v1.67 的時刻表一樣（三代理 3:0）：這是推導值，而且每台裝置
 // 查到的班次可能不同（查詢時間不同、金鑰只有建立者有）。寫進去會讓機器算的東西
@@ -251,14 +267,7 @@ export default async function plan(tripId) {
         );
       }) : [h('p', { class: 'muted sm', style: 'margin:4px 2px 10px' }, '這個景點還沒有任務')]),
       h('button', { class: 'btn btn-soft btn-block', onclick: async () => {
-        const title = await promptDialog('要拍什麼？', { placeholder: '例：找到那隻招財貓', okLabel: '下一步' });
-        if (!title) return;
-        const hint = await promptDialog('提示（可留空）', { placeholder: '拍成怎樣算完成？', multiline: true, okLabel: '新增' }) || '';
-        await store.put({
-          id: uuid(), type: 'quest', tripId, spotId: s.id, title, hint,
-          kind: 'custom', source: 'custom', order: store.questsOf(s.id).length, refImage: null,
-        });
-        toast('已新增'); redraw();
+        if (await addQuestDialog(tripId, s.id)) redraw();
       } }, '＋ 新增任務'),
     );
   }

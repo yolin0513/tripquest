@@ -80,10 +80,14 @@ try {
     const s = await import('./js/store.js');
     const tid = location.hash.split('/')[2];
     const spots = s.spotsOf(tid).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-    return { names: spots.map((x) => x.name), days: spots.map((x) => x.day), t0: spots[0] && spots[0].startMin, s0: spots[0] && spots[0].stayMin, q: s.questsOfTrip(tid).length };
+    return { names: spots.map((x) => x.name), days: spots.map((x) => x.day), t0: spots[0] && spots[0].startMin, s0: spots[0] && spots[0].stayMin, q: s.questsOfTrip(tid).length,
+      curated: spots.filter((x) => x.source === 'curated').map((x) => x.name),
+      noQuest: spots.filter((x) => s.questsOf(x.id).length === 0).map((x) => x.name) };
   });
   yes(data.names.length === 5, `線上：建立了 5 個景點（${data.names.join('、')}）`);
-  yes(data.q >= 5, `線上：出了 ${data.q} 個任務`);
+  // v1.74：任務只在對得上策展資料庫時才產生，其餘留白
+  yes(data.curated.length >= 1 && data.q >= 1, `線上：策展命中的 ${data.curated.length} 個地點出了 ${data.q} 個任務（${data.curated.join('、')}）`);
+  yes(data.noQuest.length === data.names.length - data.curated.length, `線上：其餘 ${data.noQuest.length} 個地點留白（${data.noQuest.join('、')}）`);
   yes(data.t0 === 540 && data.s0 === 120, '線上：時間與停留有存進 spot');
   yes(String(data.days) === '1,1,1,2,2', `線上：天數分配正確（${data.days}）`);
   const shown = await page.evaluate(() => document.body.textContent.includes('09:00 停留 2 小時'));

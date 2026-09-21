@@ -1705,6 +1705,22 @@ textarea.field { resize: vertical; line-height: 1.6; }
   font-size: 0.9rem; line-height: 1.6; color: var(--muted);
 }
 
+/* 景點卡最後一列：「＋ 新增任務」與加照片（v1.74）。
+   沒有任務的地點就只有這一列 —— 它同時是「自己出題」與「直接放照片」的入口。
+   按鈕都吃 44px 以上的觸控區（跟全 App 一致），字級跟著使用者的設定走。 */
+.qline-add {
+  display: grid; grid-template-columns: 1fr; gap: 8px;
+  margin: 2px 0 8px;
+}
+.qline-add > .btn { min-height: 48px; }
+/* 加照片的兩顆沿用 .addphoto-row（拍照／從相簿選），只把外距收掉 —— 這一列本身有間距。
+   320px（最窄的手機）並排放不下「🖼️ 從相簿選」，字會折成兩行（layouttest 抓到）：
+   給一個 flex-basis，擠不下就自己換行上下排，不要把字折斷。 */
+.qline-add .addphoto-row { margin-top: 0; flex-wrap: wrap; }
+/* 基準寬度用 em 不用 px：字級放大時它跟著放大，所以「特大字＋360px」會自己換成上下排，
+   而不是把「🖼️ 從相簿選」折成兩行（layouttest 在 320px/m 與 360px/xl 各抓到一次）。 */
+.qline-add .addphoto-row .btn { min-height: 48px; font-size: 1rem; flex: 1 1 9em; }
+
 /* ---------- 任務列（收合 88px，點開才給大圖） ---------- */
 /* 之前每張卡固定 414px，一個螢幕只放得下 1.7 個任務，五個任務的景點要滑 2300px。*/
 .qline {

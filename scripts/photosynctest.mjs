@@ -91,6 +91,13 @@ try {
     const { spots, quests } = await generateForTrip({ tripId: tid, region: '宜蘭', items: [{ name: '山風民宿hillstay', day: 1 }] });
     for (const x of spots) await s.put(x);
     for (const x of quests) await s.put(x);
+    // v1.74：民宿對不上策展資料庫 → 系統不出題（本版的重點）。這支測試要驗的是
+    // 「照片同步與顯示」，所以照使用者的真實做法自己加三個任務（行程頁的
+    // 「＋ 新增任務」存的就是這個形狀）—— 以前是靠猜出來的任務才有地方掛照片。
+    for (const [i, t] of ['民宿門口', '房間的窗景', '早餐'].entries()) {
+      await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: spots[0].id,
+        title: t, hint: '', kind: 'custom', source: 'custom', order: i, refImage: null });
+    }
     return { gid, tid, mMom, qs: s.questsOf(spots[0].id).map((q) => q.id) };
   });
   const subs = await mom.evaluate(async (st) => {

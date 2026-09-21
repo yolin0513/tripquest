@@ -37,6 +37,13 @@ STATUS.md 開頭有「目前進行中／交接」一節，先看那節掌握現�
 - **跨專案唯讀**——本 Session 只動 `D:\Claude\App\TripQuest` 這個 repo。同機還有別的專案
   Session 在跑（StockDiary、MealMate、JLPT 等），**一律不要碰它們的檔案**。
 
+## 設計原則（v1.74 起，Yolin 2026-09-21 明訂）
+
+**任務只在有把握時產生：寧可不產生，也不要產生錯的。** 只有對得上內建景點資料庫
+（`data/places/`）的地點才自動出題；其餘地點一律留白，由使用者自己新增。**猜出來的東西
+（名稱推測的類型、主題、表情符號）不准變成使用者看得到的字。** 理由與實例見
+`docs/STATUS.md` 的「v1.74.0」那一節——別再把猜測接回來。
+
 ## 專案速記
 
 原生 JS ESM PWA，無框架無打包；IndexedDB；版本化 Service Worker（每版 bump `VERSION`）。

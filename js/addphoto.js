@@ -13,7 +13,9 @@ import { importPhoto, blobURL } from './photos.js';
 import { ensureMember } from './claim.js';
 import { newlyEarned } from './badges.js';
 
-export function addPhotoButtons(tripId, questId, { compact = false, icons = false, onDone } = {}) {
+// ensureQuest：選了照片之後、開始匯入之前呼叫一次，用來「照片任務還不存在就先建起來」
+// （v1.74：沒有任務的地點也要能直接放照片 —— 照片仍然掛在任務底下，不動資料結構）。
+export function addPhotoButtons(tripId, questId, { compact = false, icons = false, onDone, ensureQuest = null } = {}) {
   // 拍照（叫相機）與從相簿選（不加 capture）各一個 input，共用同一套處理
   const camInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: true, hidden: true });
   const libInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
@@ -26,6 +28,7 @@ export function addPhotoButtons(tripId, questId, { compact = false, icons = fals
     if (!files.length) return;
 
     const trip = store.get(tripId);
+    if (ensureQuest && !store.get(questId)) { try { await ensureQuest(); } catch (e) { console.error(e); } }
     const q = store.get(questId);
     if (!trip || !q) return;
     const members = store.membersOf(trip.groupId);

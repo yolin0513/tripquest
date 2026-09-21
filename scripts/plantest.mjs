@@ -296,8 +296,35 @@ try {
     text: document.querySelector('.modal-card').innerText.replace(/\s+/g, ' '),
     actions: [...document.querySelectorAll('.modal-actions .btn')].map((b) => b.textContent.trim()),
   }));
-  yes(/個拍照任務/.test(warn.text), `說明會連帶刪掉幾個任務：「${warn.text.slice(0, 60)}…」`);
-  yes(/救不回來|還沒有任務/.test(warn.text), '講明救不回來');
+  // v1.74：香草菲菲是植物博物館，不在策展資料庫裡 → 0 個任務，所以這裡走的是
+  // 「還沒有任務或照片」那句。兩條路都要驗，不然改壞任何一句都不會紅。
+  const qCount = await page.evaluate(async (sid) => (await import('./js/store.js')).questsOf(sid).length, ids.sid);
+  yes(qCount === 0, `前置：這個景點目前 0 個任務（${qCount}）`);
+  yes(/還沒有任務/.test(warn.text), `0 任務時照實說：「${warn.text.slice(0, 60)}…」`);
+  yes(warn.actions.some((t) => /刪掉/.test(t)), '照樣刪得掉');
+  // 有任務時要講清楚會連帶刪掉幾個（自己加一個任務，走使用者的真實資料形狀）
+  await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => /再想想|不要/.test(b.textContent)).click());
+  await sleep(300);
+  await page.evaluate(async (sid) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const sp = s.getRaw(sid);
+    await s.put({ id: uuid(), type: 'quest', tripId: sp.tripId, spotId: sid, title: '自己加的任務', hint: '', kind: 'custom', source: 'custom', order: 0, refImage: null });
+  }, ids.sid);
+  // 要真的重新載入：同一個 hash 再 goto 一次不會重繪，刪除對話框用的還是第一次渲染時
+  // 算好的任務數（閉包），加了任務也看不到。
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/spot/${ids.sid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.page.form', { timeout: 15000 });
+  const q2Count = await page.evaluate(async (sid) => (await import('./js/store.js')).questsOf(sid).length, ids.sid);
+  yes(q2Count === 1, `前置：現在這個景點有 1 個任務（${q2Count}）`);
+  await page.evaluate(() => {
+    [...document.querySelectorAll('.page button')].find((b) => b.textContent.includes('刪除這個景點')).click();
+  });
+  await page.waitForSelector('.del-warn', { timeout: 8000 });
+  const warn2 = await page.evaluate(() => document.querySelector('.modal-card').innerText.replace(/\s+/g, ' '));
+  yes(/個拍照任務/.test(warn2), `有任務時說明會連帶刪掉幾個：「${warn2.slice(0, 60)}…」`);
+  yes(/救不回來/.test(warn2), '講明救不回來');
   yes(warn.actions.some((t) => /再想想|不要/.test(t)), `有明確的退出選項：${warn.actions.join(' / ')}`);
   await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => /再想想|不要/.test(b.textContent)).click());
   await sleep(400);

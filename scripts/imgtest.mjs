@@ -317,6 +317,13 @@ try {
     });
     for (const x of spots) await s.put(x);
     for (const x of quests) await s.put(x);
+    // v1.74：這兩家店都對不上策展資料庫 → 系統一個任務都不產生（那正是本版的重點）。
+    // 但這一段要驗的是「**任務卡**上的示意圖會不會亂配」，所以照使用者的真實做法
+    // 自己加一個任務（行程頁的「＋ 新增任務」存的就是這個形狀）。
+    for (const sp of spots) {
+      await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: sp.id,
+        title: `${sp.name} 的招牌`, hint: '', kind: 'custom', source: 'custom', order: 0, refImage: null });
+    }
     return tid;
   });
   await openTrip(V, volTid, 9000);

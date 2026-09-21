@@ -82,7 +82,10 @@ async function makeTrip(p, aiEnabled) {
     await s.put({ id: gid, type: 'group', name: 'g' });
     await s.put({ id: uuid(), type: 'member', groupId: gid, displayName: '阿明' });
     await s.put({ id: tid, type: 'trip', groupId: gid, title: '京都測試', region: '京都', country: 'JP', allowWiki: false, aiEnabled, createdByDevice: myDeviceId(), startDate: '2026-04-01', endDate: '2026-04-02' });
-    const { spots, quests } = await generateForTrip({ tripId: tid, itineraryText: '第1天 清水寺、金閣寺\n第2天 嵐山、伏見稻荷', region: '京都' });
+    // v1.74：只有對得上策展資料庫的地點才有內建介紹句（其餘留白）。
+    // 這支測試驗的是 AI 文案的開關與退路，不是留白規則，所以四個地點都用策展庫裡的名字
+    // （原本寫「嵐山」「伏見稻荷」，庫裡的是「嵐山竹林」「伏見稻荷大社」→ 留白後就沒有內建句可退）。
+    const { spots, quests } = await generateForTrip({ tripId: tid, itineraryText: '第1天 清水寺、金閣寺\n第2天 嵐山竹林、伏見稻荷大社', region: '京都' });
     for (const sp of spots) await s.put(sp);
     for (const q of quests) await s.put(q);
     return { tid, gid };

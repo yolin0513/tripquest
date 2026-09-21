@@ -166,10 +166,19 @@ try {
     return {
       spots: spots.map((x) => ({ name: x.name, day: x.day, startMin: x.startMin ?? null, stayMin: x.stayMin ?? null })),
       quests: quests.length,
+      // v1.74：任務只在對得上策展資料庫時才產生，所以要分兩類看
+      curated: spots.filter((x) => x.source === 'curated').map((x) => x.name),
+      withQuest: spots.filter((x) => s.questsOf(x.id).length > 0).map((x) => x.name),
+      noQuest: spots.filter((x) => s.questsOf(x.id).length === 0).map((x) => x.name),
     };
   });
   eq(data.spots.length, 5, '建立了 5 個景點');
-  yes(data.quests >= 6, `每個景點都出了任務（共 ${data.quests} 個）`);
+  // v1.74 起語意相反：以前是「每個景點都出了任務」，現在是「只有策展命中的才出」。
+  // 那條舊斷言正是 Yolin 回報的問題（餐廳被當成風景景點出題）被測試背書的地方。
+  yes(data.curated.length >= 2 && data.noQuest.length >= 2,
+    `前置：兩類地點各至少 2 個（策展 ${data.curated.length}：${data.curated.join('、')}；留白 ${data.noQuest.length}：${data.noQuest.join('、')}）`);
+  yes(data.curated.every((n) => data.withQuest.includes(n)), `策展命中的地點都出了任務（共 ${data.quests} 個）`);
+  yes(data.withQuest.every((n) => data.curated.includes(n)), `出了任務的都是策展命中的，其餘留白（留白：${data.noQuest.join('、')}）`);
   eq(data.spots.map((s) => s.name).join(','), '台北101,鼎泰豐 101店,士林夜市,15:00,九份老街', '順序照第幾天＋幾點排；沒時間的排在當天最後，沒勾的十分瀑布沒有建立');
   eq(data.spots[0].day, 1, '第一個在第 1 天');
   eq(data.spots[0].startMin, 540, '時間存進 spot（09:00 = 540 分）');
@@ -341,7 +350,16 @@ try {
     eq(made.title, '宜蘭遊', '真實資料：旅程真的叫「宜蘭遊」');
     yes(!made.noHome, '真實資料：「家」也照建（使用者若不要，確認畫面自己取消勾選）');
     eq(String(made.days), '1,2,3', '真實資料：分成 3 天');
-    eq(made.noQuest.length, 0, `真實資料：每個景點都出了任務（共 ${made.quests} 個）`, made.noQuest.join('、'));
+    // v1.74：32 筆裡多數是餐廳、民宿、店家 —— 它們一個任務都不該有（留白），
+    // 策展命中的那幾個照常出題。整趟匯入照樣不丟錯、景點一筆不少。
+    yes(made.curated.length >= 1 && made.noQuest.length >= 2,
+      `真實資料：前置——策展命中 ${made.curated.length} 個、留白 ${made.noQuest.length} 個`);
+    yes(made.curated.every((n) => !made.noQuest.includes(n)),
+      `真實資料：策展命中的地點都出了任務（全趟共 ${made.quests} 個）`);
+    yes(made.noQuest.length === made.n - made.curated.length,
+      `真實資料：其餘 ${made.noQuest.length} 個地點全部留白（含「白雲山鹿」這種名字裡有「山」的早餐店）`,
+      made.noQuest.join('、'));
+    yes(made.noQuest.includes('白雲山鹿'), '真實資料：Yolin 回報的「白雲山鹿」沒有任務');
     yes(made.curated.includes('羅東夜市'), `真實資料：羅東觀光夜市套用了策展資料（${made.curated.join('、') || '無'}）`);
     yes(made.withGeo >= 1, '真實資料：對到策展的景點帶了座標（地圖導航可用）');
     const asc = made.firstDay1.map(Number);

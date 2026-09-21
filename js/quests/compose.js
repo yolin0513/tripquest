@@ -30,7 +30,12 @@ export function timeWindow(spot) {
 // night＝離開時仍在 18:00 後、evening＝16:00 後、morning＝10:00 前就到。
 export function phraseOk(item, win) {
   const when = item && item.when;
-  if (!when || !win) return true;                 // 沒標時段、或景點沒設時間 → 都可以
+  if (!when) return true;                         // 沒標時段的句子：任何時間都行
+  // v1.74：**沒填時間就不出有時段假設的句子**。原本是「沒設時間 → 全部放行」，
+  // 而「幾點到」預設就是未設定 —— 所以最常見的情況下，「晨光裡的 {name}」
+  // 「夜裡點燈的樣子」照出不誤，時段守門等於只在少數有填時間的景點上生效。
+  // 不知道幾點去，就不要假設那個時段。
+  if (!win) return false;
   const [a, b] = win;
   if (when === 'night') return b >= 18 * 60;
   if (when === 'evening') return b >= 16 * 60;

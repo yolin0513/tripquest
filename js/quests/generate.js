@@ -5,8 +5,19 @@
 //   data/places/<city>.json    該城市的 flat places[]（惰性載入）
 //   data/templates.json        byTag 出題（策展地點用）+ typeRules/byType（自由輸入的景點用）
 //
-// 任務產生順序：地點有人工 quests[] → 直接用；否則依 tags 從 templates.byTag 產 + must 清單；
-//               自由輸入的景點 → 依名稱關鍵字判斷型別 → byType → 通用題保底。永不落空。
+// 任務產生順序：地點有人工 quests[] → 直接用；否則依 tags 從 templates.byTag 產 + must 清單。
+//
+// **沒對上策展資料庫的地點，一個任務都不產生**（Yolin 2026-09-21 明訂）。
+// 原話：「我希望任務只在有確定的景點時才產生對應任務，如果沒有相關資料讓使用者自己新增也可以；
+// 例如資料庫內沒有的景點不要硬加上『光影最好的時刻』這類，因為有時候景點是餐廳，但系統判斷成
+// 風景景點，這樣自動產生任務反而是扣分項目。」
+// 實例：宜蘭「白雲山鹿」是早餐店，名字裡有「山」就被當成自然景點，出了「拍下最開闊的一景」
+// 「一條路的盡頭」「光影最好的一刻」，家人真的去拍了，「光影最好的一刻」配到的是一碗食物。
+//
+// 名稱推測先天分不出「白雲山鹿」是店還是山，調規則只會少錯一些、到不了零。
+// 所以設計目標從「永不落空」改成「**沒把握就留白**」：寧可不產生，也不要產生錯的；
+// 猜出來的東西不准變成使用者看得到的字（任務、提示、介紹、依猜測挑的表情符號都算）。
+// 沒有任務的地點在行程頁上有「＋新增任務」與「＋照片」兩個一步就到的入口。
 
 import { uuid } from '../ids.js';
 import { loadThemes, themeForSpot } from '../theme.js';
@@ -103,7 +114,10 @@ export function placeById(id) {
 
 // 分店後綴。比對時要拿掉（「奕順軒 礁溪店」跟「奕順軒」是同一家），
 // 但**只在比對時**拿掉 —— 景點名字保留分店，導航才會帶到對的那一家。
-const BRANCH = /[\s\-]*[一-龥]{0,4}(?:總店|本店|旗艦店|創始店|分店|門市|店)$/;
+// 前面最多兩個字（「礁溪店」「信義店」「台中總店」）—— 原本允許四個字，
+// 「台北101便利商店」會被剝成「台北101」變成精確命中，然後出 101 的任務。
+// 店名前綴超過兩個字的（便利商店、早午餐店…）那是店的種類，不是分店名。
+const BRANCH = /[\s\-]*[一-龥]{0,2}(?:總店|本店|旗艦店|創始店|分店|門市|店)$/;
 
 // 策展名是不是輸入的「子序列」，而且只差幾個字。
 // 「羅東夜市」⊂「羅東觀光夜市」（中間插了「觀光」兩個字）—— 這種在台灣地名
@@ -114,6 +128,9 @@ function looseHit(curated, input) {
   const gap = input.length - curated.length;
   if (gap > 2) return false;
   if (curated.length < 4 && gap > 1) return false;
+  // 多出來的字不准在**結尾** ——「羅東觀光夜市」是中間插字（同一個地方），
+  // 「台北101民宿」是後面接了另一種場所（不同的地方）。結尾一致才往下比。
+  if (input[input.length - 1] !== curated[curated.length - 1]) return false;
   let i = 0;
   for (const ch of input) if (ch === curated[i]) i++;
   return i === curated.length;
@@ -135,7 +152,12 @@ export async function matchPlace(name, cityHint = '') {
       let s = 0;
       if (names.includes(q)) s = 100;
       else if (q.length >= 3 && names.some((x) => x.includes(q))) s = 70;
-      else if (names.some((x) => x.length >= 3 && q.includes(x))) s = 65;
+      // 「輸入裡含有策展名」曾經一律算命中 —— 那會讓「台北101停車場」「士林夜市民宿」
+      // 「太平山莊餐廳」全部對到那個景點，然後出那個景點的題。實測用策展名加八種店名
+      // 後綴造 1080 個假店名，1032 個誤命中。現在要求策展名在**結尾**、而且前面多出來的
+      // 字不超過 4 個：「宜蘭幾米公園」留得住（前面是地區），「幾米公園停車場」擋掉
+      // （後面接的是另一個場所）。
+      else if (names.some((x) => x.length >= 3 && q !== x && q.endsWith(x) && q.length - x.length <= 4)) s = 65;
       else if (names.some((x) => looseHit(x, q))) s = 64;
       if (q !== n) s -= 3;                                 // 要去掉分店才對到的，稍微降一點
       score = Math.max(score, s);
@@ -221,14 +243,16 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
         tags: place.tags || [], source: 'curated', placeId: place.id,
       };
     } else {
+      // 沒對上策展資料庫：留白。不猜類型、不出題、不寫介紹，表情符號用中性的地點圖示
+      // （`nameEmoji()` 是照名字猜的 —— 牛排館「大佛牛排」會得到 🛕，那也是使用者看得到的猜測）。
+      // `inferredType` 仍然留著，但只給「使用者看不到」的用途用（stayForSpot 推算停留分鐘數）。
       const name = it.name || '未命名景點';
-      const type = inferType(name);
       spot = {
         id: spotId, type: 'spot', tripId, name, nameLocal: name,
         region: it.region || region, day, order: order++,
         lat: null, lng: null, wikiRef: null,
-        emoji: nameEmoji(name) || typeEmoji(type) || '📍',
-        blurb: '', must: [], tags: [], source: 'auto', inferredType: type,
+        emoji: '📍',
+        blurb: '', must: [], tags: [], source: 'auto', inferredType: inferType(name),
       };
     }
 
@@ -236,10 +260,17 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
     if (Number.isFinite(it.startMin)) spot.startMin = it.startMin;
     if (Number.isFinite(it.stayMin)) spot.stayMin = it.stayMin;
 
-    // 主題判定 + 依主題組文案（同一趟不重複句型）
-    spot.theme = themeForSpot(spot);
-    const themed = composeQuestSet(spot, spot.theme, ctx, place);
-    if (!spot.blurb) spot.blurb = composeBlurb(spot, spot.theme, ctx);
+    // 主題判定 + 依主題組文案（同一趟不重複句型）。
+    // **只有策展命中的地點走這一段** —— 主題會決定外觀與文案語氣，對沒命中的地點
+    // 那就是一個猜測，而 `themeForSpot()` 的 byName 規則正是把「白雲山鹿」變成山的那一條。
+    const themed = [];
+    if (place) {
+      spot.theme = themeForSpot(spot);
+      themed.push(...composeQuestSet(spot, spot.theme, ctx, place));
+      if (!spot.blurb) spot.blurb = composeBlurb(spot, spot.theme, ctx);
+    } else {
+      spot.theme = 'journey';                // 中性；不是猜出來的類型
+    }
     delete spot.must; delete spot.primary;   // 這兩個只是產生時用，不落地
 
     spots.push(spot);
@@ -273,8 +304,15 @@ function mkQuest(tripId, spotId, q) {
   };
 }
 
-// 依主題補任務（trip.js「補齊任務」用）
+// 沒有任務的地點也要能放照片：照片仍然掛在任務底下（不動照片與同步的資料結構），
+// 第一次按加照片時才建這一筆中性的任務。id 是**確定性**的、不是 uuid ——
+// 兩台裝置離線各按一次，合併之後仍然只有這一筆（merge.js 逐筆 id 合併、沒有去重）。
+export const photoQuestId = (spotId) => 'q-photo-' + spotId;
+
+// 依主題補任務（trip.js「補齊任務」、spot.js 改時間換題用）。
+// **只替策展命中的地點補** —— 其餘地點一律留白，由使用者自己新增（R1／R7）。
 export async function themedQuestsForSpot(spot, tripId) {
+  if (!spot || spot.source !== 'curated') return [];
   await Promise.all([loadThemes(), loadPhrases()]);
   const theme = spot.theme || themeForSpot(spot);
   const ctx = makeCtx(String(tripId) + ':regen:' + spot.id);
@@ -311,8 +349,8 @@ export function inferType(name) {
   }
   return null;
 }
-function typeEmoji(type) {
-  return ({ temple: '⛩️', shrine: '⛩️', castle: '🏯', market: '🏮', park: '🌳', mountain: '🥾', water: '🌊', museum: '🖼️', street: '🏘️', station: '🚉', tower: '🗼', themepark: '🎡' })[type];
-}
+// typeEmoji() 在 v1.74 移除：它是「猜出來的類型 → 圖示」，而猜出來的東西不准變成
+// 使用者看得到的字（沒對上策展資料庫的地點一律用中性的 📍）。inferType() 仍然留著，
+// 但只餵給 stayForSpot() 推算停留分鐘數（看不到的推算，畫面上也標明是推算）。
 
 

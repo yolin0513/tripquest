@@ -51,7 +51,13 @@ export function stayForSpot(spot, themes = _themes) {
     const re = rx(src);
     if (re && re.test(name) && Number.isFinite(min)) return min;
   }
-  const key = spot.theme || themeForSpot(spot, themes);
+  // 沒對上策展資料庫的地點，`spot.theme` 一律是中性的 journey（v1.74：猜出來的類型
+  // 不准變成使用者看得到的字）。但**停留分鐘數不是文字、畫面上也標明是推算**，
+  // 所以這裡還是可以用猜出來的 inferredType —— 這是 R2 允許的無害用途，
+  // 留著它，長輩的時刻表才不會整排變成 journey 的預設值。
+  const map = (themes.map || {});
+  const guessed = spot.source !== 'curated' && spot.inferredType && map.byType && map.byType[spot.inferredType];
+  const key = guessed || spot.theme || themeForSpot(spot, themes);
   const v = themes.themes && themes.themes[key] && themes.themes[key].stayMin;
   return Number.isFinite(v) ? v : STAY_FALLBACK;
 }

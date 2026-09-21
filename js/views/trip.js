@@ -8,7 +8,7 @@ import { shooterOf } from '../badges.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import * as pos from '../pos.js';
 import { askShare } from './posconsent.js';
-import { generateForTrip, themedQuestsForSpot } from '../quests/generate.js';
+import { generateForTrip, themedQuestsForSpot, photoQuestId } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
 import { addPhotoButtons } from '../addphoto.js';
@@ -21,10 +21,13 @@ import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js'
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 
+// v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
+// 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
+// 會永遠卡在第一個沒有任務的地點上。
 function nextIncompleteSpot(tripId) {
   for (const s of store.spotsOf(tripId)) {
     const p = store.spotProgress(s.id);
-    if (p.total === 0 || p.done < p.total) return s;
+    if (p.total > 0 && p.done < p.total) return s;
   }
   return null;
 }
@@ -47,7 +50,7 @@ function focusSpot(tripId, todayDay) {
   const spots = store.spotsOf(tripId);
   const undone = spots.filter((s) => {
     const p = store.spotProgress(s.id);
-    return p.total === 0 || p.done < p.total;
+    return p.total > 0 && p.done < p.total;         // 0 任務的地點不算未完成（見 nextIncompleteSpot）
   });
   if (!undone.length) return null;
   if (todayDay === -1) return null;               // 旅程結束了：全部收合，把回顧推到最上面
@@ -548,7 +551,9 @@ function spotSection(s, tripId, focusId, hereId) {
   // 原本沒指定時是 `!allDone` —— 那會把當天所有未完成的景點通通展開，
   // 使用者實機看到的就是「第二天的全部任務都是展開的」。
   const isFocus = !!focusId && focusId === s.id;
-  const dflt = isFocus;                        // 沒有焦點（全完成／旅程已結束）就全部收合
+  // 沒有焦點（全完成／旅程已結束）就全部收合。**沒有任務的地點例外**：它收合起來
+  // 就只剩一行名字，「＋ 新增任務」與加照片兩個入口全被藏在裡面（v1.74 實機看到）。
+  const dflt = isFocus || quests.length === 0;
   let open = dflt;
   try {
     const stored = localStorage.getItem(openKey);
@@ -592,9 +597,45 @@ function spotSection(s, tripId, focusId, hereId) {
       // 景點的改名 / 刪除 / 改任務都集中到「調整每天的行程」。
     ),
     h('div', { class: 'qc-body' }, h('div', { class: 'qc-inner' },
-      ...quests.map((q) => questLine(q, s, tk)))),
+      ...quests.map((q) => questLine(q, s, tk)),
+      spotAddRow(s, tripId, quests.length))),
   );
   return sec;
+}
+
+async function ensurePhotoQuest(s) {
+  const id = photoQuestId(s.id);
+  if (store.get(id)) return store.get(id);
+  const rec = {
+    id, type: 'quest', tripId: s.tripId, spotId: s.id,
+    title: `${s.name} 的照片`, hint: '', kind: 'thing', source: 'photo',
+    order: store.questsOf(s.id).length, refImage: null,
+  };
+  await store.put(rec);
+  return rec;
+}
+
+// 任務列最後（沒有任務時就是整個內容）的兩個入口。
+// 以前要新增一個任務得走五步：行程頁 →「調整每天的行程」→ 展開景點 →「✏️ 任務」→「＋ 新增任務」。
+// 沒有任務的地點更麻煩：上傳鈕只畫在任務列上，所以它連放照片的地方都沒有。
+// 加照片的兩顆只給**沒有任務**的地點：有任務的地點每一列自己就有拍照／從相簿選
+// （那是先前定下來不能退讓的一條：加照片要一眼看到、一次點到），再放一組只會把
+// 卡片變高 —— 實測一個五個任務的景點會從 657px 變成 719px，densitytest 的門檻是 700。
+function spotAddRow(s, tripId, questCount) {
+  return h('div', { class: 'qline-add' + (questCount ? '' : ' empty') },
+    h('button', {
+      class: 'btn btn-soft btn-sm', onclick: async () => {
+        const { addQuestDialog } = await import('./plan.js');
+        if (await addQuestDialog(tripId, s.id)) trip(tripId);
+      },
+    }, '＋ 新增任務'),
+    // 照片仍然掛在任務底下：第一次選照片時才把中性的照片任務建起來（ensureQuest）
+    questCount ? null : addPhotoButtons(tripId, photoQuestId(s.id), {
+      compact: true,
+      ensureQuest: () => ensurePhotoQuest(s),
+      onDone: () => trip(tripId),
+    }),
+  );
 }
 
 // 同步進來的東西要自己出現在畫面上，不用使用者重開 App。
@@ -1343,7 +1384,9 @@ async function redoAiText(tripId, after) {
 }
 
 async function regenerate(tripId) {
-  if (!await confirmDialog('會依現有景點補上任務。你改過或自訂的不會動，重複的不會重加。')) return;
+  // v1.74：只替對得上內建景點資料庫的地點補。其餘地點一律留白（自己新增），
+  // 所以這裡照實講，不要讓使用者以為按了就會每個地點都長出任務。
+  if (!await confirmDialog('會替「內建景點資料庫裡有的地點」補上任務。你改過或自訂的不會動，重複的不會重加。\n\n資料庫裡沒有的地點（餐廳、民宿、店家…）不會自動產生任務，請用景點卡上的「＋ 新增任務」。')) return;
   let added = 0;
   for (const s of store.spotsOf(tripId)) {
     const existing = store.questsOf(s.id);
