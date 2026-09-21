@@ -128,19 +128,33 @@ console.log('\n[修訂二] 目錄引用不展開閉包');
   yes((v.reasons.emptytest || []).some((w) => w.includes('直接引用 js/views/album.js')),
     '改 js/views/album.js → emptytest 照樣被挑中（規則 2）');
 
-  // 「沒有任何測試點名的程式檔」：以程式算出來的為準，不寫死
+  // 目錄引用**不**展開閉包：`js/geocode.js` 是被好幾個 view import 的，如果目錄引用
+  // 會往下展開，引用整個 `js/views/` 的 emptytest 就會被算成「涵蓋 geocode」。
+  // 這是修訂二真正的行為，也是放大器 D 能不能響的關鍵。
+  yes(!!graph.get('js/views/plan.js')?.includes('js/geocode.js') || !!graph.get('js/views/findspot.js')?.includes('js/geocode.js'),
+    '前置：js/geocode.js 確實被某個 view import（所以「展不展開」分得出差別）');
+  const geo = pick(['js/geocode.js']);
+  yes(!(geo.reasons.emptytest || []).some((w) => w.includes('閉包')),
+    '改 js/geocode.js → 引用整個 js/views/ 的 emptytest 不會因「閉包」被挑中', JSON.stringify(geo.reasons.emptytest));
+  yes(geo.selected.includes('geotest'), '但真的點名 js/geocode.js 的 geotest 照樣被挑中');
+
+  // 「沒有任何測試點名的程式檔」：以程式算出來的為準，不寫死。
+  // v1.74 把最後五個（expenses、fx、photoimg、places、viewer）補完之後應該是 0。
   const codeFiles = [...graph.keys(), 'css/style.css'].filter((f) => /^(js|css|workers|server)\//.test(f)).sort();
   const unnamed = codeFiles.filter((f) => pick([f]).fullReasons.some((w) => w.includes('放大器 D')));
-  yes(codeFiles.length > 50 && unnamed.length >= 1,
-    `前置：程式檔 ${codeFiles.length} 個，其中沒有任何測試點名的有 ${unnamed.length} 個：${unnamed.join('、')}`);
-  const one = unnamed[0];
-  const ru = pick([one]);
-  yes(ru.full && ru.n === ru.m && ru.fullReasons.some((w) => w.includes('放大器 D') && w.includes(one)),
-    `改 ${one}（沒人點名的真實檔）→ 觸發 D、放大到全套、輸出點名它`, JSON.stringify(ru.fullReasons));
+  yes(codeFiles.length > 50, `前置：程式檔 ${codeFiles.length} 個`);
   // 對照組：有測試點名的真實檔不觸發 D
   const named = pick(['js/itinerary.js']);
   yes(!named.full && named.selected.includes('itintest'),
     '對照組：改有測試點名的 js/itinerary.js → 不觸發 D', JSON.stringify(named.fullReasons));
+
+  // 算錢的那幾個檔（v1.74 補了斷言）：現在有人點名，不再因為「沒人認領」跑全套
+  for (const [file, test] of [['js/fx.js', 'moneytest'], ['js/expenses.js', 'moneytest'], ['js/places.js', 'moneytest'],
+    ['js/photoimg.js', 'photosynctest'], ['js/viewer.js', 'albumtest']]) {
+    const r = pick([file]);
+    yes(!r.full && r.selected.includes(test), `改 ${file} → 挑中 ${test}，不再放大到全套（${r.n}/${r.m}）`, JSON.stringify(r.fullReasons));
+  }
+  yes(unnamed.length === 0, `沒有任何測試點名的程式檔：${unnamed.length} 個（v1.74 補完之後應該是 0）`, unnamed.join('、'));
 }
 
 // ---------- T13 測試腳本本身 ----------

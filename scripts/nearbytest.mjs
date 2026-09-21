@@ -267,6 +267,34 @@ try {
   placeMode = 'ok';
   yes(afterCount === beforeCount + 1,
     `等待中途換分類，那次 Google 呼叫照樣計入用量（${beforeCount} → ${afterCount}）—— 漏記等於把花費保險絲弄鬆`);
+
+  // ---- 金鑰被拒（403）：以前假端點有這個模式，但 placeMode = 'forbidden' 從來沒有人設過 ----
+  // 機制寫好了、母體是空的 —— 跟 v1.73.3 那批假斷言同一類。現在真的走一次，
+  // 而且驗使用者看得到的那句話（錯誤訊息要講得出「要去哪裡改」）。
+  await page.evaluate(() => [...document.querySelectorAll('.nl-cat')].find((x) => x.textContent.includes('停車場')).click());
+  await page.waitForFunction(() => document.querySelector('.nl-count')?.textContent.includes('停車場'), { timeout: 8000 });
+  placeMode = 'forbidden';
+  const reqsBefore403 = placeReqs.length;
+  await page.evaluate(() => document.querySelector('.nl-google').click());
+  await new Promise((r) => setTimeout(r, 1800));
+  const denied = await page.evaluate(() => ({
+    // toast 是固定那一個 #toast 元素（2.4 秒後才收起來）
+    toast: (document.getElementById('toast') || {}).textContent || '',
+    toastShown: !!document.getElementById('toast') && !document.getElementById('toast').hidden,
+    stillOsm: !(document.querySelector('.nl-count') || {}).textContent?.includes('Google'),
+    cards: document.querySelectorAll('.nl-card').length,
+    btn: document.querySelector('.nl-google')?.textContent.trim(),
+    btnDisabled: document.querySelector('.nl-google')?.disabled,
+  }));
+  placeMode = 'ok';
+  yes(placeReqs.length === reqsBefore403 + 1, `前置：403 這條路真的打出去了一次（${reqsBefore403} → ${placeReqs.length}）`);
+  // 給長輩看的那一句（v1.73.2 刻意不講 API 名詞：那是寫給「正在辦金鑰的人」看的，
+  // 而他在設定頁；「找附近」是長輩自己會按的頁面）
+  yes(denied.toastShown && denied.toast.includes('暫時不能用') && denied.toast.includes('旅程設定'),
+    `金鑰被拒時講得出「怎麼了、去哪裡調」：「${denied.toast}」`);
+  yes(denied.toast.includes('先用免費的資料'), '而且講明現在看到的是免費資料，不是查不到');
+  yes(denied.stillOsm && denied.cards > 0, `被拒之後照樣看得到原本的地圖資料（${denied.cards} 張卡）—— 免費路徑不受影響`);
+  yes(denied.btn === '🔍 用 Google 再查一次' && !denied.btnDisabled, `按鈕復原、可以再試（「${denied.btn}」）`);
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
   yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);

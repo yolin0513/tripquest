@@ -64,8 +64,21 @@ export function sharePerMember(e) {
 
 // 整趟結算。baseCurrency = 顯示幣別。ratesObj 來自 fx.getRates()。
 // 回傳 { totals: {byMember, grand}, balances: {memberId: net}, transfers: [{from,to,amount}], missingRate:bool }
+//
+// 這一層只負責「去 store 拿這趟的花費」，算錢的部分全在 settleCore()。
+// 拆開的理由（v1.74，只是搬家、一個運算都沒改）：`store` 讀 IndexedDB，
+// 在 Node 裡 import 得進來但一碰就丟 `indexedDB is not defined`，所以金額的邊界情況
+// （除不盡、查不到匯率、權重、轉帳收斂）沒辦法用便宜的純 Node 測試驗，
+// 只能每一種都開一次瀏覽器。核心拆出來之後，moneytest 直接餵花費清單就能驗。
 export function settleTrip(tripId, baseCurrency, ratesObj) {
-  const expenses = tripExpenses(tripId);
+  return settleCore({ expenses: tripExpenses(tripId), baseCurrency, ratesObj });
+}
+
+// 純計算：吃進花費清單、基準幣別、匯率表，不碰 store／fetch／DOM。
+// **與拆出來之前逐字相同**：同樣的 toBase、同樣的 sharePerMember、同樣的 minTransfers、
+// 同樣的 eps = 0.01。已知的缺陷（查不到匯率時直接把原幣別金額當基準幣別加總、
+// 權重全 0、參與者空、付款人空）在這一版**刻意原樣保留**，修正另有規格。
+export function settleCore({ expenses, baseCurrency, ratesObj }) {
   const balances = {};   // memberId -> net（正 = 別人欠他）
   let grand = 0;
   const byMember = {};   // memberId -> 他付出去的總額（base）
