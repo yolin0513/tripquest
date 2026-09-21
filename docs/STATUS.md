@@ -1,6 +1,6 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-09-21，線上版本 **v1.74.0**（每次上版請一併更新這一行）。
+> 最後更新：2026-09-21，線上版本 **v1.74.1**（每次上版請一併更新這一行）。
 > 給下一個工作階段快速接手用；架構細節見 `ARCHITECTURE_DECISION.md`，第三方平台實測見 `PLATFORM_NOTES.md`，配樂授權見根目錄 `MUSIC_LICENSES.md`。
 
 ## 目前進行中／交接（給下一個接手的 Session）
@@ -11,7 +11,9 @@
 宜蘭「白雲山鹿」是早餐店，名字裡有「山」就被當成自然景點出了「光影最好的一刻」。詳見下面
 「v1.74.0」那一節。
 
-**做到哪一步**：v1.74.0 的程式、測試、文件都已 commit＋push，git 樹乾淨。
+**做到哪一步**：v1.74.0 與 v1.74.1（留白卡片上加照片兩顆在 390px 並排；CSS 進 SHELL 是
+cache-first 釘在版本上，所以動 CSS 一定要 bump VERSION）都已 commit＋push、線上 curl 確認、
+`npm run sweep` 67 項通過，git 樹乾淨。
 **下一件是 `docs/SPEC_算錢的測試.md`（已放好，未開工）**：替 `expenses.js`／`fx.js` 補金額斷言，
 `places.js` 只補錯誤分支與計費守衛，`photoimg.js`／`viewer.js` 只處理挑選器點不到名的記帳問題。
 
