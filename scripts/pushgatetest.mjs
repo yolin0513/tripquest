@@ -8,6 +8,7 @@
 //   B2 兩個 commit、只有前一個帶假信箱 → 1（自查掃遠端還沒有的**每一個** commit，不是只看 HEAD）
 //   C 檢查器壞了（讀不到使用者名稱）→ 4、user 那一類、沒推
 //   C2 檢查器壞了（email 的搜尋式壞掉、對照組沒命中）→ 4、email 那一類、沒推
+//   I 取訊息與作者欄的指令輸出是空的（模擬換環境後解析壞掉）→ 4、「訊息與作者欄」壞了、沒推（故障時不放行）
 //   H 假信箱只寫在 commit 訊息裡 → 1、email 那一類、來源是 commit 訊息（v8 §2.5：訊息一樣會公開）
 //   H2 作者信箱是假信箱 → 1、email 那一類、來源是作者欄
 //   F 本機以為已經推上去、遠端其實沒有（帶命中的 commit 繞過閘門推上去、抓回來，再把遠端倒退）→ 1、email 那一類
@@ -61,6 +62,7 @@ try {
       hitMsg: 'email：對照組命中=true，命中=1\n擋下：有命中（email（1 行；來源：commit 訊息））\n✗ 公開前自查有命中——不推',
       hitMix: '擋下：有命中（email（2 行；來源：新增行、作者欄））、path（1 行；來源：commit 訊息））',
       broken: 'email：對照組命中=false，新增行命中=0\n擋下：檢查器壞了（email）\n✗ 公開前自查的檢查器壞了——不推',
+      metaBroken: '範圍： x..HEAD ；commit 數： 1 ；新增行數： 1 ；commit 訊息行數： 0 ；作者欄： 0\n✗ 範圍內有 1 個 commit，卻只解析出 0 筆…——解析壞了\n擋下：檢查器壞了（訊息與作者欄）',
       unreachable: 'fatal: bad\n✗ 抓不到遠端，無法決定要檢查哪些 commit\n擋下：檢查器壞了（抓不到遠端）',
       push: 'error: failed to push some refs\n✗ git push 失敗——停',
       mismatch: '✗ 推完了但遠端（a）不等於本機（b）——停',
@@ -71,6 +73,9 @@ try {
       '對照（擷取樣式）：「檢查器壞了」抓得到、而且分得出是哪一類');
     yes(WHO.unreachable.test(SAMPLE.unreachable) && !WHO.unreachable.test(SAMPLE.broken),
       '對照（擷取樣式）：「抓不到遠端」跟一般的檢查器壞了分得開');
+    yes(WHO.broken('訊息與作者欄').test(SAMPLE.metaBroken) && !WHO.broken('訊息與作者欄').test(SAMPLE.broken)
+      && !WHO.hit.test(SAMPLE.metaBroken),
+      '對照（擷取樣式）：「訊息與作者欄解析壞了」抓得到、跟別類的檢查器壞了分得開');
     yes(WHO.pushFail.test(SAMPLE.push) && !WHO.pushFail.test(SAMPLE.mismatch) && WHO.mismatch.test(SAMPLE.mismatch) && !WHO.mismatch.test(SAMPLE.push),
       '對照（擷取樣式）：「推送失敗」與「遠端不等於本機」分得開');
     yes(WHO.hitFrom('commit 訊息').test(SAMPLE.hitMsg) && !WHO.hitFrom('新增行').test(SAMPLE.hitMsg)
@@ -128,6 +133,15 @@ try {
   yes(r.code === 4 && WHO.broken('email').test(r.out) && /email：對照組命中=false/.test(r.out),
     `C2 email 的搜尋式壞了（對照組沒命中）→ 回 4、寫明是 email 那一類（實得 ${r.code}）`, r.out.slice(-300));
   yes(remoteHead() === before, 'C2 遠端沒被動到');
+
+  // I 取訊息與作者欄的指令輸出是空的（模擬換環境後解析壞掉）：要停下，不能印「0 行」就放行
+  yes(Number(sh(`git rev-list --count ${before}..HEAD`).trim()) > 0,
+    'I 前置：範圍裡確實有要推的 commit（不然「0 行」可能只是真的沒東西可掃）');
+  r = gate({ PREPUSH_SELFTEST_BREAK: 'meta' });
+  yes(r.code === 4 && WHO.broken('訊息與作者欄').test(r.out) && !WHO.hit.test(r.out),
+    `I 訊息與作者欄解析出 0 筆 → 回 4、寫明「訊息與作者欄」壞了（實得 ${r.code}）`, r.out.slice(-300));
+  yes(remoteHead() === before, 'I 遠端沒被動到');
+  sh(`git --git-dir="${bare}" update-ref refs/heads/main ${before}`);   // 閘門壞了時遠端會被推前；拉回原位
 
   // H 命中寫在 commit 訊息裡（檔案內容乾淨）
   fs.writeFileSync(path.join(work, 'h.txt'), 'clean-h\n');

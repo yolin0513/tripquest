@@ -18,16 +18,21 @@ import { execSync } from 'node:child_process';
 const range = process.argv[2] || '';
 // 每一行記下來源（新增行／commit 訊息／作者欄），命中時講得出是哪裡（共用慣例 v8 §2.5：commit 訊息、作者與提交者的
 // 名字與信箱一樣會永久公開；§5.11：要講得出是誰、為什麼擋）
-let added;
+// 測試用（pushgatetest）：弄壞指定的那一類或那一段，模擬檢查器壞掉。只會讓結果更嚴（回 4、不推），不會放行任何東西。
+const selftestBreak = process.env.PREPUSH_SELFTEST_BREAK || '';
+let added, commits = 0, parsed = 0;
 try {
   const run = (cmd) => execSync(cmd, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] });
   const cmd = range ? `git log -p --format= --unified=0 ${range}` : 'git show HEAD --format= --unified=0';
   added = run(cmd).split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))
     .map((l) => ({ src: '新增行', text: l.slice(1) }));
-  const meta = run(`git log --format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e ${range ? range : '-1 HEAD'}`);
+  commits = Number(run(`git rev-list --count ${range ? range : '-1 HEAD'}`).trim());
+  // 'meta'：模擬「取訊息與作者欄的指令輸出是空的」（換一台機器、git 版本或輸出格式不同時可能發生）
+  const meta = selftestBreak === 'meta' ? '' : run(`git log --format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e ${range ? range : '-1 HEAD'}`);
   for (const rec of meta.split('\x1e')) {
     const f = rec.replace(/^\n/, '').split('\x00');
     if (f.length < 6) continue;
+    parsed++;
     const [h, an, ae, cn, ce, body] = f;
     for (const t of [an, ae, cn, ce]) added.push({ src: '作者欄', text: t, at: h });
     for (const t of body.split('\n')) if (t) added.push({ src: 'commit 訊息', text: t, at: h });
@@ -60,9 +65,7 @@ const checks = {
   },
 };
 
-// 測試用（pushgatetest 的「搜尋式壞了」那一種）：把指定那一類的搜尋式換成永遠不命中的，模擬檢查器壞掉。
-// 只會讓結果更嚴（對照組沒命中 → 回 4、不推），不會讓任何東西放行。
-const selftestBreak = process.env.PREPUSH_SELFTEST_BREAK || '';
+// 「搜尋式壞了」那一種：把指定那一類的搜尋式換成永遠不命中的
 if (checks[selftestBreak]) checks[selftestBreak].re = /(?!)/g;
 
 const broken = [], hit = [];
@@ -81,7 +84,18 @@ for (const [name, c] of Object.entries(checks)) {
   for (const h of hits) console.log('   ', `[${h.src}${h.at ? ' ' + h.at : ''}]`, c.hide ? '（不印出）' : h.text.slice(0, 160));
 }
 const count = (s) => added.filter((l) => l.src === s).length;
-console.log('範圍：', range || 'HEAD', '；新增行數：', count('新增行'), '；commit 訊息行數：', count('commit 訊息'), '；作者欄：', count('作者欄'));
+console.log('範圍：', range || 'HEAD', '；commit 數：', commits, '；新增行數：', count('新增行'), '；commit 訊息行數：', count('commit 訊息'), '；作者欄：', count('作者欄'));
+// 故障時不放行：每個 commit 一定有作者欄（4 欄）與訊息；數不起來只可能是解析壞了，不是「沒東西可掃」。
+// （2026-09-24 統籌者探測：解析整個壞掉時印出「0 行」照樣通過。換個環境就會發生，不需要任何人改壞程式。）
+// commit 數是 0 只在「真的沒有要推的」時成立：那時也不該有任何新增行。
+const metaBroken = !Number.isInteger(commits) || commits < 0
+  || (commits === 0 ? count('新增行') > 0
+    : parsed !== commits || count('作者欄') !== 4 * commits || count('commit 訊息') < commits);
+if (metaBroken) {
+  console.log(`✗ 範圍內有 ${commits} 個 commit，卻只解析出 ${parsed} 筆訊息與作者欄（訊息 ${count('commit 訊息')} 行、作者欄 ${count('作者欄')}）——解析壞了`);
+  console.log('擋下：檢查器壞了（訊息與作者欄）');
+  process.exit(4);
+}
 if (broken.length) { console.log(`擋下：檢查器壞了（${broken.join('、')}）`); process.exit(4); }
 if (hit.length) { console.log(`擋下：有命中（${hit.join('、')}）`); process.exit(1); }
 console.log('通過');
