@@ -20,6 +20,26 @@ const B = `http://127.0.0.1:${PORT}`;
 let pass = 0;
 const yes = (c, m, x = '') => { if (c) { pass++; console.log('✓ ' + m); } else { console.log('✗ ' + m + (x ? '\n   ' + x : '')); process.exitCode = 1; } };
 const rnd = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+// 連續打 40 次，計 429。Worker 的限流是**對齊整分鐘的固定視窗**（worker.mjs：win = floor(now / (period*1000))），
+// 40 次若剛好跨過整分鐘，前後兩個視窗各自都不到 31 次 → 一次 429 都沒有（2026-09-23 在完整的鏈裡、機器忙時
+// 紅過一次；單獨跑綠）。只放寬斷言的話，跨視窗時就會「情境沒成立卻判綠」。所以記下這一輪開始與結束落在
+// 哪個視窗；跨了就代表剛進入新視窗，立刻在這個視窗裡再打一輪。回傳 sameWin 給呼叫端寫前置斷言。
+const PUSH_PERIOD_MS = 60 * 1000;                  // 跟 worker.mjs 的 LIMITS.push.period 一致
+const winOf = (t) => Math.floor(t / PUSH_PERIOD_MS);
+async function burst40(send) {
+  let n429 = 0, retryAfter = null, sameWin = false, rounds = 0;
+  for (; rounds < 2 && !sameWin; rounds++) {
+    n429 = 0;
+    const w0 = winOf(Date.now());
+    for (let i = 0; i < 40; i++) {
+      const rr = await send(i, rounds);
+      if (rr.status === 429) { n429++; if (retryAfter === null) retryAfter = rr.headers.get('retry-after'); }
+    }
+    sameWin = winOf(Date.now()) === w0;
+  }
+  return { n429, retryAfter, sameWin, rounds };
+}
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 // 上一次跑剩下的 workerd 會抱著 .wrangler 的 sqlite 檔不放（Windows 檔案鎖），
@@ -108,22 +128,21 @@ try {
   // 副作用（刻意接受）：未驗證的請求與「建新群組的第一次推送」共用同一個 IP 桶。
   // 代價是同一個 IP 連續掃描之後，一分鐘內建不了新行程；換來的是「未驗證的請求
   // 不能無限寫 D1」。newgroup 本來就是 3 次/60 秒，所以這個耦合不會更緊。
-  let got429 = 0;
-  for (let i = 0; i < 40; i++) {
-    const rr = await push(gid, rnd() + rnd(), [{ id: 'x' + i, type: 'trip', title: 'x', updatedAt: Date.now(), deviceId: 'z' }]);
-    if (rr.status === 429) got429++;
-  }
+  // 未驗證的請求也走 push 的限流桶（30 次／60 秒，以 IP 為 key），所以同樣要確認 40 次落在同一個視窗（見下面 burst40）
+  const scan = await burst40((i, round) => push(gid, rnd() + rnd(), [{ id: `x${round}_${i}`, type: 'trip', title: 'x', updatedAt: Date.now(), deviceId: 'z' }]));
+  yes(scan.sameWin, `前置：掃描那一輪 40 次落在同一個 60 秒視窗裡（打了 ${scan.rounds} 輪）`);
+  const got429 = scan.n429;
   yes(got429 > 0, `每次換一把錯祕鑰的掃描會被擋（40 次裡 ${got429} 次 429）—— 以前一次都不會擋`);
   r = await push(gid, secret, [{ id: 'r2', type: 'spot', tripId: 'r1', name: 'ok', updatedAt: Date.now(), deviceId: 'd1' }]);
   yes(r.ok, `自己人不會被剛才那波掃描連坐（HTTP ${r.status}）`);
 
   // ---------- 限流本身（v1.65，上線至今從未被執行過）----------
-  let n429 = 0;
-  for (let i = 0; i < 40; i++) {
-    const rr = await push(gid, secret, [{ id: 'p' + i, type: 'spot', tripId: 'r1', name: 'p', updatedAt: Date.now() + i, deviceId: 'd1' }]);
-    if (rr.status === 429) { n429++; if (n429 === 1) yes(rr.headers.get('retry-after') === '60', '429 帶 Retry-After: 60'); }
-  }
+  // 40 次要落在同一個固定視窗裡才算數，見檔頭的 burst40
+  const own = await burst40((i, round) => push(gid, secret, [{ id: `p${round}_${i}`, type: 'spot', tripId: 'r1', name: 'p', updatedAt: Date.now() + i, deviceId: 'd1' }]));
+  const { n429, retryAfter } = own;
+  yes(own.sameWin, `前置：計數的那一輪 40 次 push 落在同一個 60 秒視窗裡（打了 ${own.rounds} 輪）`);
   yes(n429 > 0, `push 超過額度會回 429（40 次裡 ${n429} 次；LIMITS.push=30/60s）`);
+  yes(retryAfter === '60', `429 帶 Retry-After: 60（實得 ${retryAfter}）`);
 
   // 讀取不該被限流 —— 輪詢是常態，擋了等於自己鎖死自己
   let pullOk = 0;
