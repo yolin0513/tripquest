@@ -21,8 +21,13 @@ cd "$ROOT"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# 遠端現在的 main；本機沒有那個 commit 就先抓下來，抓不到就當成檢查器壞了（不猜範圍）
-REMOTE="$(git ls-remote origin refs/heads/main | cut -f1 || true)"
+# 遠端現在的 main——**問遠端的實際狀態，不讀本機的追蹤分支**（共用慣例 v8 §2.5）：上一次「推了卻沒更新」之後，
+# 本機的追蹤分支會跑在遠端前面；照它算範圍，那個 commit 會落在範圍外，下一次就不經檢查被帶出去。
+# 先把輸出存到檔案再取值，不接管線（ls-remote 失敗時才擋得下來）。本機沒有那個 commit 就先抓下來。
+if ! git ls-remote origin refs/heads/main > "$TMP/remote" 2> "$TMP/remote.err"; then
+  cat "$TMP/remote.err"; echo "✗ 抓不到遠端，無法決定要檢查哪些 commit"; echo "擋下：檢查器壞了（抓不到遠端）"; exit 4
+fi
+REMOTE="$(cut -f1 < "$TMP/remote")"
 if [ -n "$REMOTE" ] && ! git cat-file -e "$REMOTE^{commit}" 2>/dev/null; then
   git fetch -q origin main > "$TMP/fetch" 2>&1 || true
 fi
@@ -47,7 +52,10 @@ if ! git push origin main > "$TMP/push" 2>&1; then
 fi
 tail -n 1 "$TMP/push"
 LOCAL="$(git rev-parse HEAD)"
-AFTER="$(git ls-remote origin refs/heads/main | cut -f1 || true)"
+if ! git ls-remote origin refs/heads/main > "$TMP/after" 2> "$TMP/after.err"; then
+  cat "$TMP/after.err"; echo "✗ 推完了但讀不到遠端，無法確認有沒有推上去——停"; exit 3
+fi
+AFTER="$(cut -f1 < "$TMP/after")"
 if [ "$LOCAL" != "$AFTER" ]; then
   echo "✗ 推完了但遠端（${AFTER:-讀不到}）不等於本機（$LOCAL）——停"; exit 3
 fi
