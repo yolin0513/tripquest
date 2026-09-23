@@ -40,7 +40,7 @@
 不需要 WSL，用 Node 版腳本：
 
 ```
-cd D:\Claude\App\TripQuest
+cd <本 repo 的根目錄>
 node scripts/publish-cloud.mjs
 ```
 

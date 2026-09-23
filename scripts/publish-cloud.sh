@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TripQuest —— Cloudflare 一鍵部署（回到電腦前跑這一支）
 #
-#   cd D:/Claude/App/TripQuest
+#   cd <本 repo 的根目錄>
 #   bash scripts/publish-cloud.sh
 #
 # 過程中會開一次瀏覽器，請按「Allow」授權 wrangler。其餘全自動。

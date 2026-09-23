@@ -33,9 +33,10 @@ try {
     const db = await import('./js/db.js');
     const gid = uuid(), tid = uuid(), me = uuid();
     await s.put({ id: gid, type: 'group', name: '家族' });
-    await s.put({ id: tid, type: 'trip', groupId: gid, title: '宜蘭家族小旅行', region: '宜蘭',
-      startDate: '2026-09-05', endDate: '2026-09-07' });
-    for (const n of ['阿嬤', '爸爸', '媽媽', '小明']) {
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: '範例家族小旅行', region: '宜蘭',
+      startDate: '2024-01-06', endDate: '2024-01-08' });
+    // 行程名稱、日期、人數都是合成的；字數跟原本那張實機截圖一樣，換行行為才一樣（2026-09-23 個資清理）
+    for (const n of ['阿嬤', '爸爸', '媽媽', '小明', '小華']) {
       await s.put({ id: n === '阿嬤' ? me : uuid(), type: 'member', tripId: tid, groupId: gid, displayName: n });
     }
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));

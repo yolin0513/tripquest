@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // TripQuest —— Cloudflare 一鍵部署（跨平台 Node 版，不需要 WSL）
 //
-//   cd D:\Claude\App\TripQuest
+//   cd <本 repo 的根目錄>
 //   node scripts/publish-cloud.mjs
 //
 // 過程中會開一次瀏覽器，請按「Allow」授權 wrangler。其餘全自動：

@@ -37,7 +37,7 @@ try {
     const gid = uuid(), tid = uuid();
     await s.put({ id: gid, type: 'group', name: '家族' });
     await s.put({ id: tid, type: 'trip', groupId: gid, title: '宜蘭遊', region: '宜蘭',
-      startDate: '2026-09-05', endDate: '2026-09-06', allowWiki: false });
+      startDate: '2024-01-06', endDate: '2024-01-07', allowWiki: false });
     const parsed = parseItinerary(text);
     const items = parsed.items.map((it) => ({ name: it.name, day: it.day, startMin: it.startMin ?? null, stayMin: it.stayMin ?? null }));
     const { spots, quests } = await generateForTrip({ tripId: tid, region: '宜蘭', items });
