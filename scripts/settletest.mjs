@@ -306,13 +306,13 @@ try {
   await page.evaluate(() => localStorage.setItem('tripquest.fx', JSON.stringify({
     base: 'USD', rates: { USD: 1, TWD: 32 }, updatedAt: 'Mon, 21 Sep 2026 00:00:00 +0000', fetchedAt: Date.now(),
   })));
-  const seedTrip = (title, rows) => page.evaluate(async (title, rows) => {
+  const seedTrip = (title, rows, names = ['阿公', '阿嬤'], base = 'TWD') => page.evaluate(async (title, rows, names, base) => {
     const s = await import('./js/store.js');
     const { uuid } = await import('./js/ids.js');
-    const g = uuid(), tid = uuid(), who = { 阿公: uuid(), 阿嬤: uuid() };
+    const g = uuid(), tid = uuid(), who = Object.fromEntries(names.map((n) => [n, uuid()]));
     await s.put({ id: g, type: 'group', name: title });
     for (const [n, id] of Object.entries(who)) await s.put({ id, type: 'member', groupId: g, displayName: n });
-    await s.put({ id: tid, type: 'trip', groupId: g, title, region: '測試', baseCurrency: 'TWD', allowWiki: false });
+    await s.put({ id: tid, type: 'trip', groupId: g, title, region: '測試', baseCurrency: base, allowWiki: false });
     let t = Date.now();
     for (const r of rows) {
       const shares = r.shares ? Object.fromEntries(Object.entries(r.shares).map(([n, w]) => [who[n], w])) : null;
@@ -320,7 +320,7 @@ try {
         amount: r.amount, currency: r.currency, payerId: r.payer ? who[r.payer] : '', participants: r.parts.map((n) => who[n]), shares });
     }
     return tid;
-  }, title, rows);
+  }, title, rows, names, base);
   const openTripExpenses = async (title) => {
     await page.goto('about:blank');
     await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
@@ -350,6 +350,10 @@ try {
         summary: txt(document.querySelector('.exp-summary')),
         grand: txt(document.querySelector('.exp-total-num')) || null,
         settle: settleArea.join(' | '),
+        transfers: [...document.querySelectorAll('.exp-settle')].map((r) => ({
+          who: txt(r.querySelector('.exp-settle-txt')), amt: txt(r.querySelector('.exp-settle-amt')) })),
+        persons: [...document.querySelectorAll('.exp-person')].map((r) => ({
+          name: txt(r.querySelector('.exp-person-main > div')), bal: txt(r.querySelector('.exp-person-bal')) })),
         all: txt(document.querySelector('.page')),
       };
     });
@@ -457,6 +461,41 @@ try {
   const tt = await toastText();
   yes(tt.includes('份數') && tt.includes('大於 0'), `T5 份數全 0 → 儲存被擋，看得到原因（${tt}）`, tt);
   eq(await storedIn(tid6, '全部打零'), null, 'T5 那一筆沒有存進去');
+
+  // ---------- T10：除不盡的一分錢，畫面上的數字互相對得起來（R5）----------
+  // 手算：100 元阿公付、三人均分 → 阿公應收約 66.67、兩人各應付約 33.33；
+  //       捨入後阿公的應收必須**恰好**等於兩列轉帳相加（修正前：66.67 vs 33.33 + 33.33 ＝ 66.66）
+  const money = (s) => Math.round(Number(String(s).replace(/[^0-9.]/g, '')) * 100);   // 字串 → 分（整數）
+  await seedTrip('除不盡的一趟', [
+    { title: '三人分一百', amount: 100, currency: 'TWD', payer: '阿公', parts: ['阿公', '阿嬤', '小美'] },
+  ], ['阿公', '阿嬤', '小美']);
+  const r10 = await openTripExpenses('除不盡的一趟');
+  yes(r10.transfers.length === 2 && r10.transfers.every((t) => t.amt), `前置：畫面上讀得到兩列轉帳（${JSON.stringify(r10.transfers)}）`);
+  const gong = r10.persons.find((p) => p.name === '阿公');
+  yes(!!gong && gong.bal.startsWith('應收'), `前置：讀得到阿公那一列的應收（${gong && gong.bal}）`);
+  const tsum = r10.transfers.reduce((a, t) => a + money(t.amt), 0);
+  eq(money(gong && gong.bal), tsum, `T10 阿公的應收（${gong && gong.bal}）＝ 兩列轉帳相加（分）`);
+  const owe = r10.persons.filter((p) => p.name !== '阿公').reduce((a, p) => a + money(p.bal), 0);
+  eq(owe, money(gong && gong.bal), 'T10 另外兩人的應付加起來 ＝ 阿公的應收（分）');
+  // 淨額 0.40：不會一邊寫「打平」、一邊又有一筆轉帳
+  // 手算：0.80 元阿公付、兩人均分 → 阿嬤應付 0.40、轉帳一筆 0.40
+  await seedTrip('四毛錢的一趟', [
+    { title: '一顆糖', amount: 0.8, currency: 'TWD', payer: '阿公', parts: ['阿公', '阿嬤'] },
+  ]);
+  const r10b = await openTripExpenses('四毛錢的一趟');
+  const ma = r10b.persons.find((p) => p.name === '阿嬤');
+  yes(r10b.transfers.length === 1 && r10b.transfers[0].amt === 'NT$0.40', `前置：結清方案有一筆 NT$0.40（${JSON.stringify(r10b.transfers)}）`);
+  yes(!!ma && ma.bal !== '打平' && ma.bal.includes('0.40'), `T10 阿嬤那一列寫應付 NT$0.40、不是「打平」（${ma && ma.bal}）`);
+  // 零小數的基準幣別（日圓）：最小單位是 1 圓，由 settleTrip 依 currencies.json 決定
+  // 手算：100 圓阿公付、三人均分 → 應收約 66.67 圓；捨入到圓之後，應收必須恰好等於兩列轉帳相加
+  const yenInt = (s) => Number(String(s).replace(/[^0-9]/g, ''));
+  await seedTrip('日圓除不盡的一趟', [
+    { title: '三人分一百圓', amount: 100, currency: 'JPY', payer: '阿公', parts: ['阿公', '阿嬤', '小美'] },
+  ], ['阿公', '阿嬤', '小美'], 'JPY');
+  const r10j = await openTripExpenses('日圓除不盡的一趟');
+  const gj = r10j.persons.find((p) => p.name === '阿公');
+  yes(r10j.transfers.length === 2 && !!gj && gj.bal.includes(yen), `前置：以日圓顯示、讀得到兩列轉帳與阿公的應收（${gj && gj.bal}）`);
+  eq(yenInt(gj && gj.bal), r10j.transfers.reduce((a, t) => a + yenInt(t.amt), 0), 'T10 日圓：阿公的應收 ＝ 兩列轉帳相加（圓）');
 
   console.log('\n分帳結清測試結束');
 } catch (e) {

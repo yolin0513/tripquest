@@ -101,8 +101,10 @@ export default async function expenses(tripId) {
       h('div', { class: 'exp-person-main' },
         h('div', { style: 'font-weight:700' }, m.displayName),
         h('div', { class: 'muted sm' }, `付了 ${fmtMoney(paid, base)}`)),
-      h('div', { class: 'exp-person-bal ' + (bal > 0.5 ? 'pos' : bal < -0.5 ? 'neg' : '') },
-        Math.abs(bal) < 0.5 ? '打平' : (bal > 0 ? `應收 ${fmtMoney(bal, base)}` : `應付 ${fmtMoney(-bal, base)}`)),
+      // balances 已經捨入到最小單位（R5），所以「打平」就是恰好 0。v1.74.6 以前門檻是 0.5：
+      // 應付 0.40 顯示成打平，結清方案裡卻又有一筆 0.40。
+      h('div', { class: 'exp-person-bal ' + (bal > 0 ? 'pos' : bal < 0 ? 'neg' : '') },
+        bal === 0 ? '打平' : (bal > 0 ? `應收 ${fmtMoney(bal, base)}` : `應付 ${fmtMoney(-bal, base)}`)),
     );
   })));
 

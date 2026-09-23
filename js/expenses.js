@@ -2,7 +2,7 @@
 
 import * as store from './store.js';
 import { uuid } from './ids.js';
-import { convert } from './fx.js';
+import { convert, currencyInfo } from './fx.js';
 
 // store 沒有 expense 選擇器，這裡自己過濾（走 exportRecords 的存活記錄）
 export function tripExpenses(tripId) {
@@ -89,13 +89,16 @@ export function sharePerMember(e) {
 export function settleTrip(tripId, baseCurrency, ratesObj) {
   const trip = store.get(tripId);
   const memberIds = trip ? store.membersOf(trip.groupId).map((m) => m.id) : null;
-  return settleCore({ expenses: tripExpenses(tripId), baseCurrency, ratesObj, memberIds });
+  // 結清的最小單位：零小數的幣別（日圓、韓元…）是 1 圓，其他是 0.01（R5）
+  const decimals = currencyInfo(baseCurrency).zero ? 0 : 2;
+  return settleCore({ expenses: tripExpenses(tripId), baseCurrency, ratesObj, memberIds, decimals });
 }
 
 // 純計算：吃進花費清單、基準幣別、匯率表，不碰 store／fetch／DOM。
 // v1.74.2 拆出來時與原本逐字相同；之後的修正見 docs/SPEC_分帳金額守恆.md（R1–R5）。
 // memberIds（可省略）：這個群組現在的成員；付款人不在裡面的花費當成「沒有付款人」（R4）。
-export function settleCore({ expenses, baseCurrency, ratesObj, memberIds = null }) {
+// decimals：基準幣別的小數位（預設 2）。回傳的 balances 與 transfers 都是捨入到這個單位之後的值。
+export function settleCore({ expenses, baseCurrency, ratesObj, memberIds = null, decimals = 2 }) {
   const balances = {};   // memberId -> net（正 = 別人欠他）
   let grand = 0;
   const byMember = {};   // memberId -> 他付出去的總額（base）
@@ -134,18 +137,41 @@ export function settleCore({ expenses, baseCurrency, ratesObj, memberIds = null 
     }
   }
 
-  const transfers = minTransfers(balances);
+  // R5：以基準幣別的最小單位做整數運算。畫面上每個人的應收／應付與結清方案每一筆，
+  // 都是同一組整數換出來的，加起來一定相等。v1.74.6 以前金額到顯示那一刻才各自四捨五入：
+  // 三人分 100 → 應收 66.67、但兩筆轉帳 33.33 ＋ 33.33 ＝ 66.66。
+  const unit = 10 ** decimals;
+  const units = toUnits(balances, unit);
+  const transfers = minTransfers(units).map((t) => ({ ...t, amount: t.amount / unit }));
+  const rounded = Object.fromEntries(Object.entries(units).map(([m, v]) => [m, v / unit]));
   const unconverted = [...unconv.values()].sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
-  return { totals: { grand, byMember }, balances, transfers, missingRate, count: expenses.length, counted, unconverted, noPayer };
+  return { totals: { grand, byMember }, balances: rounded, transfers, missingRate, count: expenses.length, counted, unconverted, noPayer };
 }
 
-// 貪婪法：最大債權人 <-> 最大債務人，逼近最少轉帳次數
-function minTransfers(balances) {
-  const eps = 0.01;
+// 每人淨額 → 最小單位的整數，而且總和恰好 0。
+// 先各自四捨五入；總和不是 0 時，把差的那幾個單位一個一個分掉：
+// 未捨入淨額的絕對值最大的人先、同值比 id 字串（確定性：同一組資料永遠同一個人多那一分）。
+function toUnits(balances, unit) {
+  const out = {};
+  for (const [m, v] of Object.entries(balances)) out[m] = Math.round(v * unit);
+  let diff = Object.values(out).reduce((a, b) => a + b, 0);
+  if (diff !== 0) {
+    const order = Object.keys(balances).sort((a, b) => (Math.abs(balances[b]) - Math.abs(balances[a])) || (a < b ? -1 : a > b ? 1 : 0));
+    const step = diff > 0 ? -1 : 1;
+    for (let k = 0; diff !== 0 && order.length; k++) {
+      out[order[k % order.length]] += step;
+      diff += step;
+    }
+  }
+  return out;
+}
+
+// 貪婪法：最大債權人 <-> 最大債務人，逼近最少轉帳次數。吃的是最小單位的整數，門檻是「不等於 0」。
+function minTransfers(units) {
   const cred = [], debt = [];
-  for (const [m, v] of Object.entries(balances)) {
-    if (v > eps) cred.push({ m, v });
-    else if (v < -eps) debt.push({ m, v: -v });
+  for (const [m, v] of Object.entries(units)) {
+    if (v > 0) cred.push({ m, v });
+    else if (v < 0) debt.push({ m, v: -v });
   }
   cred.sort((a, b) => b.v - a.v);
   debt.sort((a, b) => b.v - a.v);
@@ -155,8 +181,8 @@ function minTransfers(balances) {
     const pay = Math.min(debt[i].v, cred[j].v);
     out.push({ from: debt[i].m, to: cred[j].m, amount: pay });
     debt[i].v -= pay; cred[j].v -= pay;
-    if (debt[i].v < eps) i++;
-    if (cred[j].v < eps) j++;
+    if (debt[i].v === 0) i++;
+    if (cred[j].v === 0) j++;
   }
   return out;
 }

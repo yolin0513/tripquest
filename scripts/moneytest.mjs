@@ -7,9 +7,8 @@
 // **期望值一律手算**，算式寫在每一段的註解裡；不准把程式的輸出貼回來當期望值。
 // 畫面那一半在 settletest.mjs（真實入口：行程頁 → 分帳分頁 → 結清方案）。
 //
-// 已知缺陷**不寫斷言**（不把 bug 釘死成規格）：見下面標「已知缺陷」的註解與
-// `docs/SPEC_算錢的測試.md` §6。唯一的例外是「查不到匯率時 missingRate 為 true」——
-// 那個旗標本身是對的行為。
+// v1.74.2 盤點到的五個缺陷（`docs/SPEC_算錢的測試.md` §6 的 D1–D5）當時只留註解、不寫斷言
+// （不把 bug 釘死成規格）；v1.74.4–v1.74.6 依 `docs/SPEC_分帳金額守恆.md` 修掉，斷言在 T1–T9。
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -190,6 +189,46 @@ console.log('\n— T8 守恆：怪資料與正常資料混在一起 —');
   for (const t of r.transfers) { after[t.from] = (after[t.from] || 0) + t.amount; after[t.to] = (after[t.to] || 0) - t.amount; }
   yes(Object.values(after).every((v) => Math.abs(v) < 0.01), 'T8 照轉帳方案執行完，每個人都歸零', JSON.stringify(after));
   yes(Object.keys(r.balances).every((m) => MEM.includes(m)), 'T8 淨額裡只有這個群組的成員（沒有 Z、沒有空字串）', JSON.stringify(Object.keys(r.balances)));
+}
+
+// ---------- T9 除不盡：以最小單位的整數結清（R5，D5）----------
+console.log('\n— T9 除不盡的一分錢 —');
+{
+  // 手算：100 元 A 付，A、B、C 均分 → 未捨入的淨額 A +66.666…、B −33.333…、C −33.333…
+  //       換成「分」的整數：四捨五入是 +6667、−3333、−3333，總和 +1 → 差 1 分要照規則分掉，
+  //       分完三個人的整數加起來恰好 0；A 的應收恰好等於兩筆轉帳相加。
+  const cents = (v) => v * 100;
+  const isWhole = (x) => Math.abs(x - Math.round(x)) < 1e-6;
+  const exps = [{ amount: 100, currency: 'TWD', payerId: 'A', participants: ['A', 'B', 'C'], shares: null }];
+  yes(!isWhole(cents(100 / 3)), '前置：100 / 3 換成分不是整數（這組資料真的除不盡）');
+  const r = ex.settleCore({ expenses: exps, baseCurrency: 'TWD', ratesObj: RATES });
+  const c = Object.fromEntries(Object.entries(r.balances).map(([m, v]) => [m, cents(v)]));
+  yes(Object.values(c).every(isWhole), 'T9 每個人的淨額都是整分', JSON.stringify(c));
+  const ci = Object.fromEntries(Object.entries(c).map(([m, v]) => [m, Math.round(v)]));
+  eq(Object.values(ci).reduce((a, b) => a + b, 0), 0, 'T9 三個人的淨額（分）加起來恰好 0');
+  const tc = r.transfers.map((t) => cents(t.amount));
+  yes(tc.length === 2 && tc.every(isWhole), `前置：兩筆轉帳、金額都是整分（${JSON.stringify(tc)}）`);
+  eq(tc.reduce((a, b) => a + Math.round(b), 0), ci.A, 'T9 A 的應收（分）恰好等於兩筆轉帳相加');
+  yes(['A', 'B', 'C'].every((m) => Math.abs(c[m] - cents(m === 'A' ? 200 / 3 : -100 / 3)) <= 1),
+    'T9 每個人跟未捨入的值差不到 1 分', JSON.stringify(c));
+  // 確定性：同一組資料跑兩次一樣；參與者的順序換了也一樣
+  const r2 = ex.settleCore({ expenses: exps, baseCurrency: 'TWD', ratesObj: RATES });
+  const r3 = ex.settleCore({ expenses: [{ ...exps[0], participants: ['C', 'B', 'A'] }], baseCurrency: 'TWD', ratesObj: RATES });
+  yes(JSON.stringify(r2.balances) === JSON.stringify(r.balances) && JSON.stringify(r2.transfers) === JSON.stringify(r.transfers),
+    'T9 同一組資料跑兩次，淨額與轉帳一模一樣');
+  yes(['A', 'B', 'C'].every((m) => r3.balances[m] === r.balances[m]), 'T9 參與者順序換了，誰多一分不變', JSON.stringify({ r: r.balances, r3: r3.balances }));
+  // 零小數的基準幣別（日圓）：100 圓三人分 → 整數圓，同樣守恆
+  const j = ex.settleCore({ expenses: [{ amount: 100, currency: 'JPY', payerId: 'A', participants: ['A', 'B', 'C'], shares: null }],
+    baseCurrency: 'JPY', ratesObj: RATES, decimals: 0 });
+  yes(Object.values(j.balances).every((v) => Number.isInteger(v)), 'T9 零小數：每個人的淨額都是整數圓', JSON.stringify(j.balances));
+  eq(Object.values(j.balances).reduce((a, b) => a + b, 0), 0, 'T9 零小數：淨額加起來恰好 0');
+  eq(j.transfers.reduce((a, t) => a + t.amount, 0), j.balances.A, 'T9 零小數：A 的應收恰好等於轉帳相加');
+  yes(j.transfers.every((t) => Number.isInteger(t.amount)), 'T9 零小數：每筆轉帳都是整數圓', JSON.stringify(j.transfers));
+  // 淨額 0.40 的一筆：捨入後不是 0 → 有一筆 0.40 的轉帳（不能一邊打平、一邊又要轉）
+  const small = ex.settleCore({ expenses: [{ amount: 0.8, currency: 'TWD', payerId: 'A', participants: ['A', 'B'], shares: null }],
+    baseCurrency: 'TWD', ratesObj: RATES });
+  yes(small.transfers.length === 1 && Math.round(cents(small.transfers[0].amount)) === 40 && Math.round(cents(small.balances.B)) === -40,
+    'T9 淨額 0.40：B 應付 0.40、也有一筆 0.40 的轉帳', JSON.stringify(small));
 }
 
 // ---------- M5 守恆 ----------
