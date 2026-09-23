@@ -5,6 +5,8 @@ package-lock.json
 # 暫存 / 系統
 *.tmp
 *.log
+# 整套測試的完整 log（共用慣例 v6 §5.7：寫在 repo 底下、被擋掉的目錄，不寫系統暫存目錄）
+.logs/
 Thumbs.db
 .DS_Store
 desktop.ini
