@@ -186,9 +186,59 @@ console.log('\n— 查不到匯率 —');
     baseCurrency: 'TWD', ratesObj: { base: 'USD', rates: { TWD: 32 } },   // 沒有 JPY
   });
   eq(r.missingRate, true, '查不到那個幣別的匯率 → missingRate 是 true');
-  // 已知缺陷 D1（**不寫斷言**）：此時 toBase() 直接把 12000 當成台幣加進合計，
-  // 畫面照樣顯示金額、只多一行小字。修正規格已由統籌者撰寫（查不到匯率的幣別不併進合計、
-  // 另列「另有 ¥12,000 尚未換算」）。修正時在這裡補斷言。見 SPEC §6 D1。
+  // v1.74.3 以前這裡是已知缺陷 D1：toBase() 查不到就回原值，12000 日圓被當成 12000 台幣加進合計。
+  // 修法（SPEC_分帳金額守恆 R1）：整筆不進合計與結清，另外回傳 unconverted。斷言在下面 T1。
+}
+
+// ---------- T1 查不到匯率的花費整筆不算（SPEC_分帳金額守恆 R1）----------
+console.log('\n— T1 查不到匯率：整筆不進合計與結清、另列 —');
+{
+  // 手算（基準 TWD，匯率表**沒有 JPY**）：
+  //   t1 300 TWD   A 付  A,B 均分 → 各 150
+  //   t2 100 TWD   B 付  A,B 均分 → 各 50
+  //   j1 8000 JPY  A 付  A,B      → 查不到，整筆不算
+  //   j2 4000 JPY  B 付  A,B      → 查不到，整筆不算
+  //   合計 ＝ 300 + 100 ＝ 400；A 付出 300、B 付出 100
+  //   淨額：A ＝ 300 − (150 + 50) ＝ +100；B ＝ 100 − (150 + 50) ＝ −100
+  //   未換算：JPY 8000 + 4000 ＝ 12000，2 筆
+  const NOJPY = { base: 'USD', rates: { USD: 1, TWD: 32 } };
+  const exps = [
+    { amount: 300, currency: 'TWD', payerId: 'A', participants: ['A', 'B'], shares: null },
+    { amount: 8000, currency: 'JPY', payerId: 'A', participants: ['A', 'B'], shares: null },
+    { amount: 100, currency: 'TWD', payerId: 'B', participants: ['A', 'B'], shares: null },
+    { amount: 4000, currency: 'JPY', payerId: 'B', participants: ['A', 'B'], shares: null },
+  ];
+  yes(fx.convert(8000, 'JPY', 'TWD', NOJPY) === null, '前置：這張匯率表真的換不了 JPY');
+  const r = ex.settleCore({ expenses: exps, baseCurrency: 'TWD', ratesObj: NOJPY });
+  near(r.totals.grand, 300 + 100, 'T1 合計只含兩筆台幣 ＝ 300 + 100 ＝ 400');
+  near(r.totals.byMember.A, 300, 'T1 A 付出只算台幣那筆 300');
+  near(r.totals.byMember.B, 100, 'T1 B 付出只算台幣那筆 100');
+  near(r.balances.A, 100, 'T1 A 淨額 ＝ 300 − 200 ＝ +100');
+  near(r.balances.B, -100, 'T1 B 淨額 ＝ 100 − 200 ＝ −100');
+  near(Object.values(r.balances).reduce((a, b) => a + b, 0), 0, 'T1 淨額總和為 0（守恆）', 0.01);
+  yes(Array.isArray(r.unconverted) && r.unconverted.length === 1, `T1 unconverted 恰好一組（${JSON.stringify(r.unconverted)}）`);
+  const u = (r.unconverted || [])[0] || {};
+  eq(u.code, 'JPY', 'T1 那一組是 JPY');
+  eq(u.total, 8000 + 4000, 'T1 原幣別加總 ＝ 8000 + 4000 ＝ 12000');
+  eq(u.count, 2, 'T1 筆數 2');
+  eq(r.missingRate, true, 'T1 missingRate 為 true');
+  eq(r.count, 4, 'T1 count 仍是全部 4 筆');
+  eq(r.counted, 2, 'T1 有算進去的是 2 筆');
+  // 兩種查不到的幣別：順序穩定（照幣別代碼）
+  const two = ex.settleCore({ expenses: [
+    { amount: 5, currency: 'KRW', payerId: 'A', participants: ['A'], shares: null },
+    ...exps,
+  ], baseCurrency: 'TWD', ratesObj: NOJPY });
+  eq((two.unconverted || []).map((x) => x.code).join(), 'JPY,KRW', 'T1 兩種查不到的幣別照代碼排序（JPY、KRW）');
+  // 沒有匯率表（第一次開、離線）：外幣整筆不算，基準幣別照算
+  const none = ex.settleCore({ expenses: exps, baseCurrency: 'TWD', ratesObj: null });
+  near(none.totals.grand, 400, 'T1 匯率表是 null → 合計仍只含台幣 400');
+  // 對照組：同一組資料、匯率表有 JPY → 沒有未換算、合計含四筆
+  //   8000 JPY ＝ 8000 / 160 × 32 ＝ 1600；4000 JPY ＝ 800 → 合計 300 + 1600 + 100 + 800 ＝ 2800
+  const full = ex.settleCore({ expenses: exps, baseCurrency: 'TWD', ratesObj: RATES });
+  eq((full.unconverted || []).length, 0, 'T1 對照：匯率查得到 → unconverted 是空的');
+  near(full.totals.grand, 300 + 1600 + 100 + 800, 'T1 對照：合計含四筆 ＝ 2800', 1e-9);
+  eq(full.counted, 4, 'T1 對照：四筆都算進去');
 }
 
 // ---------- M7 getRates 的快取 ----------

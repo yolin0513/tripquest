@@ -46,20 +46,35 @@ export default async function expenses(tripId) {
 
   const nameOf = (id) => (members.find((m) => m.id === id) || {}).displayName || '（未指定）';
 
+  // 查不到匯率的花費整筆沒有算進去（R1）：每個幣別一行，講出多少錢、幾筆、沒算進哪裡。
+  // 不寫「可能不準」——那句講不出錯在哪、錯多少。
+  const unconvLines = (s.unconverted || []).map((u) =>
+    `另有 ${fmtMoney(u.total, u.code)}（${u.count} 筆）查不到匯率，沒有算進合計與結清方案。`);
+  // 全部都換算不了（第一次開又離線、或這趟只有查不到匯率的外幣）：算不出來就照實講，不顯示 0 元
+  const nothingCounted = s.counted === 0;
+
   // ---- 總覽 ----
   page.append(h('div', { class: 'exp-summary' },
     h('div', { class: 'exp-total' },
-      h('span', { class: 'muted sm' }, `共 ${s.count} 筆・以${currencyInfo(base).name}計`),
-      h('div', { class: 'exp-total-num' }, fmtMoney(s.totals.grand, base)),
-      h('div', { class: 'muted sm' }, members.length ? `每人平均 ${fmtMoney(s.totals.grand / members.length, base)}` : ''),
+      h('span', { class: 'muted sm' },
+        (s.counted === s.count ? `共 ${s.count} 筆` : `共 ${s.count} 筆（${s.counted} 筆算進合計、${s.count - s.counted} 筆沒有）`)
+        + `・以${currencyInfo(base).name}計`),
+      nothingCounted
+        ? h('div', { class: 'exp-total-none', style: 'font-weight:800;font-size:1.15rem;margin:6px 0' }, '還沒有可以換算的花費')
+        : h('div', { class: 'exp-total-num' }, fmtMoney(s.totals.grand, base)),
+      h('div', { class: 'muted sm' }, members.length && !nothingCounted ? `每人平均 ${fmtMoney(s.totals.grand / members.length, base)}` : ''),
     ),
-    s.missingRate ? h('p', { class: 'form-hint' }, '⚠ 有幣別查不到匯率，換算可能不準。') : null,
+    ...unconvLines.map((t) => h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t)),
     rates ? h('p', { class: 'form-hint' }, `匯率更新：${fmtFxDate(rates.updatedAt)}${rates.stale ? '（離線快取）' : ''}`) : null,
   ));
 
   // ---- 結清方案 ----
   page.append(h('div', { class: 'section-label' }, '結清方案（最少轉帳）'));
-  if (!s.transfers.length) {
+  // 使用者最可能只看這一區就去轉帳，所以同一句再講一次
+  for (const t of unconvLines) page.append(h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t));
+  if (nothingCounted) {
+    page.append(h('div', { class: 'card about exp-settle-none' }, h('p', { class: 'sm' }, '查到匯率之後才算得出來。')));
+  } else if (!s.transfers.length) {
     page.append(h('div', { class: 'card about' }, h('p', { class: 'sm' }, '目前大家打平，不用還來還去 🎉')));
   } else {
     page.append(h('div', { class: 'stack' }, ...s.transfers.map((t) =>
@@ -73,7 +88,10 @@ export default async function expenses(tripId) {
 
   // ---- 每個人 ----
   page.append(h('div', { class: 'section-label' }, '每個人'));
-  page.append(h('div', { class: 'stack' }, ...members.map((m) => {
+  if (nothingCounted) {
+    // 一筆都換算不了時，「付了 NT$0.00・打平」是用 0 冒充算不出來
+    page.append(h('p', { class: 'form-hint' }, '查到匯率之後才算得出每個人付了多少、該收或該付多少。'));
+  } else page.append(h('div', { class: 'stack' }, ...members.map((m) => {
     const bal = s.balances[m.id] || 0;
     const paid = s.totals.byMember[m.id] || 0;
     return h('div', { class: 'exp-person' },

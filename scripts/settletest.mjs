@@ -300,6 +300,99 @@ try {
   yes(!!gotShares && ['阿公', '阿嬤', '小美'].every((n) => gotShares[n] === wantShares[n]),
     `T0b 存進去的份數是 ${JSON.stringify(wantShares)}（${twoName} 是 2）`, JSON.stringify(gotShares));
 
+  // ---------- T2／T3：查不到匯率（R1）----------
+  // 另開幾趟行程，資料用 page.evaluate 灌，進去的路照使用者的走：首頁 → 行程卡 → 底部「分帳」。
+  // 匯率快取換成**沒有 JPY** 的一張（fetchedAt 是現在 → 12 小時內不重抓、不打真網路）。
+  await page.evaluate(() => localStorage.setItem('tripquest.fx', JSON.stringify({
+    base: 'USD', rates: { USD: 1, TWD: 32 }, updatedAt: 'Mon, 21 Sep 2026 00:00:00 +0000', fetchedAt: Date.now(),
+  })));
+  const seedTrip = (title, rows) => page.evaluate(async (title, rows) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const g = uuid(), tid = uuid(), who = { 阿公: uuid(), 阿嬤: uuid() };
+    await s.put({ id: g, type: 'group', name: title });
+    for (const [n, id] of Object.entries(who)) await s.put({ id, type: 'member', groupId: g, displayName: n });
+    await s.put({ id: tid, type: 'trip', groupId: g, title, region: '測試', baseCurrency: 'TWD', allowWiki: false });
+    let t = Date.now();
+    for (const r of rows) {
+      await s.put({ id: uuid(), type: 'expense', tripId: tid, groupId: g, createdAt: t--, title: r.title, category: 'food',
+        amount: r.amount, currency: r.currency, payerId: who[r.payer], participants: r.parts.map((n) => who[n]), shares: null });
+    }
+    return tid;
+  }, title, rows);
+  const openTripExpenses = async (title) => {
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.trip-card, .card');
+    let card = null;
+    for (const c of await page.$$('.trip-card')) if ((await c.evaluate((e) => e.textContent)).includes(title)) { card = c; break; }
+    if (!card) throw new Error('首頁找不到行程卡：' + title);
+    await card.click();
+    // 不能只等 `#tabbar .tab`：首頁本來就有底部功能列，那個條件在換頁前就成立了
+    await page.waitForFunction(() => location.hash.includes('/trip/')
+      && [...document.querySelectorAll('#tabbar .tab')].some((t) => t.textContent.includes('分帳')), { timeout: 8000 });
+    let tab = null;
+    for (const t of await page.$$('#tabbar .tab')) if ((await t.evaluate((e) => e.textContent)).includes('分帳')) { tab = t; break; }
+    await tab.click();
+    await page.waitForFunction(() => location.hash.includes('/expenses'), { timeout: 8000 });
+    await page.waitForSelector('.exp-summary', { timeout: 8000 });
+    await sleep(200);
+    return page.evaluate(() => {
+      const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
+      const labels = [...document.querySelectorAll('.page .section-label')];
+      const settleLabel = labels.find((x) => x.textContent.includes('結清方案'));
+      const personLabel = labels.find((x) => x.textContent.includes('每個人'));
+      // 「結清方案」那一區＝它的標題到「每個人」標題之間的元素
+      const settleArea = [];
+      for (let el = settleLabel && settleLabel.nextElementSibling; el && el !== personLabel; el = el.nextElementSibling) settleArea.push(txt(el));
+      return {
+        summary: txt(document.querySelector('.exp-summary')),
+        grand: txt(document.querySelector('.exp-total-num')) || null,
+        settle: settleArea.join(' | '),
+        all: txt(document.querySelector('.page')),
+      };
+    });
+  };
+
+  // T2：兩筆台幣 ＋ 兩筆日圓（查不到）
+  // 手算：t1 300 TWD 阿公付、兩人分；t2 100 TWD 阿嬤付、兩人分 → 合計 400；
+  //       阿公淨額 300 − 150 − 50 ＝ +100 → 結清：阿嬤給阿公 100
+  //       日圓 8000 ＋ 4000 ＝ 12000（2 筆）沒有算進去
+  const CUR = JSON.parse(await (await import('node:fs')).promises.readFile(new URL('../data/currencies.json', import.meta.url), 'utf8'));
+  const yen = CUR.list.find((c) => c.code === 'JPY').symbol;
+  await seedTrip('查不到日圓的一趟', [
+    { title: '早餐', amount: 300, currency: 'TWD', payer: '阿公', parts: ['阿公', '阿嬤'] },
+    { title: '拉麵', amount: 8000, currency: 'JPY', payer: '阿公', parts: ['阿公', '阿嬤'] },
+    { title: '飲料', amount: 100, currency: 'TWD', payer: '阿嬤', parts: ['阿公', '阿嬤'] },
+    { title: '車票', amount: 4000, currency: 'JPY', payer: '阿嬤', parts: ['阿公', '阿嬤'] },
+  ]);
+  const r2 = await openTripExpenses('查不到日圓的一趟');
+  yes(!!yen, `前置：日圓的符號從 currencies.json 讀到「${yen}」`);
+  eq(r2.grand, 'NT$400.00', 'T2 合計只含兩筆台幣（300 + 100）');
+  const yenAmt = `${yen}12,000`;
+  yes(r2.summary.includes(yenAmt) && r2.summary.includes('2 筆') && r2.summary.includes('沒有算進'),
+    `T2 總覽看得到「${yenAmt}（2 筆）」與「沒有算進」`, r2.summary);
+  yes(r2.settle.includes(yenAmt) && r2.settle.includes('沒有算進'), 'T2 結清方案那一區也看得到同一句', r2.settle);
+  yes(r2.summary.includes('2 筆算進合計') && r2.summary.includes('2 筆沒有'), 'T2「共 4 筆」分得出幾筆有算、幾筆沒算', r2.summary);
+  yes(r2.settle.includes('阿嬤 給 阿公') && r2.settle.includes('NT$100.00'), 'T2 結清方案只算台幣：阿嬤給阿公 NT$100.00', r2.settle);
+  yes(!r2.all.includes('可能不準'), 'T2 舊的「換算可能不準」不再出現', r2.all.slice(0, 200));
+
+  // T3：這趟只有查不到匯率的日圓 → 合計不是 0 元、結清不是「打平」
+  await seedTrip('只有日圓的一趟', [
+    { title: '拉麵', amount: 8000, currency: 'JPY', payer: '阿公', parts: ['阿公', '阿嬤'] },
+  ]);
+  const r3 = await openTripExpenses('只有日圓的一趟');
+  yes(!r3.summary.includes('NT$0.00'), 'T3 全部查不到 → 合計不是「NT$0.00」', r3.summary);
+  yes(r3.summary.includes('還沒有可以換算'), 'T3 合計那格照實講「還沒有可以換算的花費」', r3.summary);
+  yes(!r3.settle.includes('打平') && r3.settle.includes('查到匯率之後'), 'T3 結清方案不是「打平」，而是「查到匯率之後才算得出來」', r3.settle);
+  yes(!r3.all.includes('NT$0.00'), 'T3 整頁沒有任何「NT$0.00」（每個人那一區也不冒充 0）', r3.all.slice(0, 300));
+  // 對照組：真的打平的一趟仍顯示打平
+  await seedTrip('真的打平的一趟', [
+    { title: '各付各的', amount: 100, currency: 'TWD', payer: '阿公', parts: ['阿公'] },
+  ]);
+  const r3c = await openTripExpenses('真的打平的一趟');
+  yes(r3c.settle.includes('打平'), 'T3 對照：真的打平 → 結清方案仍寫「打平」', r3c.settle);
+
   console.log('\n分帳結清測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
