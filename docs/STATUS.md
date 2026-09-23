@@ -5,8 +5,9 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
-**現在正在做什麼**：把推送閘（公開前自查＋推送＋比對遠端）從 Session 暫存區搬進 `scripts/`；`workertest` 補記時間戳。
-之後：`docs/SPEC_共用慣例更新_v7.md`（統籌者放的，排在所有工作之後）。共用慣例副本已更新到 v6（2026-09-23）。
+**現在正在做什麼**：沒有進行中的工作。下一件：`docs/SPEC_共用慣例更新_v7.md`（統籌者放的，排在所有工作之後）。
+共用慣例副本已更新到 v6（2026-09-23）。**推送一律用 `bash scripts/safe-push.sh`**（2026-09-23 從 Session 暫存區搬進 repo，
+見「環境與帳號注意事項」的「推送閘」）。
 旅伴移除後的帳已上線（v1.74.9，`docs/SPEC_旅伴移除後的帳.md`，R1＋R2）；分帳規格四段已上線（R0 v1.74.3、
 R1 v1.74.4、R2–R4 v1.74.5、R5 v1.74.6）；個資普查已回報（結果不進 repo）；個資清理 v1.74.7；Q1–Q3 v1.74.8
 （見下面各版那一節）。
@@ -153,7 +154,8 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 七個代理全部改用 Opus 5 執行（當時的模型設定）。
 
 **3. 每版的流程**：bump `sw.js` VERSION → `npm run test:affected`（底線＋受影響，見下面
-「測試」節的「測試範圍」）→ commit/push → curl 確認線上 VERSION → `npm run sweep` → 截圖放
+「測試」節的「測試範圍」）→ commit → **`bash scripts/safe-push.sh` 推送**（公開前自查＋推送＋比對遠端，
+不要自己 `git push`；見下面「推送閘」）→ curl 確認線上 VERSION → `npm run sweep` → 截圖放
 `screenshots/features/` ＋鏡像資料夾。**全面檢測（完整 `npm test`＋`sweep`）由 Yolin 指定才跑**
 （2026-09-19 裁示）；回報與 commit 訊息**不准把部分測試寫成「全綠」**，要寫「底線＋受影響 N/M 支綠」，
 回報最後附「距上次全面檢測：N 版／D 天」。
@@ -215,7 +217,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **50 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **51 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
 - **`workertest`**：用 wrangler 把**真的** `workers/worker.mjs` 跑起來配本機 D1 —— 限流與 D1 分批在此之前從上線到 v1.73.1 一行都沒被測試執行過（v1.73.2）。
 - **`moneytest`**（純 Node，v1.74，0.13 秒）：算錢的斷言——匯率換算（手算值）、`fmtMoney`（零小數幣別
@@ -230,6 +232,11 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
   查不到匯率的畫面（T2 另列、T3 全部查不到＋真的打平的對照組）；v1.74.5 起再驗份數全 0 的明細副標（T6）、
   沒有付款人的提示、表單擋下份數全 0 與夾住負數（T5）；v1.74.6 起驗除不盡時應收＝轉帳相加（台幣與日圓）、
   0.40 不寫成打平（T10），75 項。
+- **`pushgatetest`**（純 Node＋本機 git，2026-09-23）：推送閘 `scripts/safe-push.sh`＋`scripts/prepush-scan.mjs`。
+  用本機 bare repo 當遠端（不碰 GitHub），七種情況都比對**回傳值、擋下的是哪一關哪一類、遠端有沒有被動到**：乾淨→0；
+  新增行命中→1（email 那一類）；兩個 commit 只有前一個有問題→1（掃每一個 commit）；讀不到使用者名稱→4；某一類的
+  搜尋式壞了（對照組沒命中）→4；遠端拒收（`pre-receive` hook）→2；推了卻沒更新（`post-receive` hook 退回舊值）→3。
+  16 項。六條突變各自紅（其中「拿掉 pipefail、push 接 `| tail`」回的是 3 不是 2——最後一關比對遠端擋住了）。
 - **`membergonetest`**（puppeteer，v1.74.9）：移除旅伴之後的帳。從旅程設定的 🗑️ 進去：移除前的確認講得出
   整個群組的帳（付了幾筆、分攤幾筆）與照片、按鈕「移除」「取消」；沒帳沒照片的直接移除（對照組）；移除後分帳頁寫
   「○○（已移除）」、不出現「（未指定）」、他付的錢照樣進結清；`settleTrip` 對「已移除」與「從沒存在過」的 id 分得開；
@@ -1582,6 +1589,18 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
 - **日期一律先跑 `date`，不要從對話推、也不要照抄別人的文件**（2026-09-19 實測：統籌者的規格把今天寫成 09-20，
   我照抄進 STATUS 兩處；回報的「距上次全面檢測」也手寫成 2 天）。回報最後那行一律貼 `npm run affected` 印出來的。
 
+- **推送閘**（2026-09-23）：推送一律 `bash scripts/safe-push.sh`（或 `npm run safepush`），不要自己 `git push`。
+  它依序做：① `scripts/prepush-scan.mjs` 掃**遠端還沒有的每一個 commit** 的新增行（金鑰或 token、email、本機使用者名稱、
+  磁碟機或家目錄路徑；每一類先在合成樣本上命中）→ ② `git push` → ③ 比對遠端 main ＝ 本機 HEAD。回傳值：0 已推送；
+  1 自查有命中；4 自查的檢查器壞了；2 push 失敗；3 推了卻沒更新——一看就知道是哪一關。它抓不到個資，**新增的文件行
+  還是要自己看一遍**（共用慣例附錄 A）。新 Session 不需要準備任何東西：使用者名稱是執行當下從環境變數讀的，
+  email 的對照組是當場組的合成字串，腳本裡沒有不能公開的樣式或黑名單。
+  **為什麼長這樣**（今天四個 App 各踩一次的同一類坑）：推送流程原本是「跑自查、看輸出、另外推」，擋的是人眼；
+  接成一行後又用 `| tail -1` 截輸出——管線的回傳值是最後一個指令的，本 App 實測 `git push` 失敗時照樣回 0，後面的
+  線上確認會對著舊版驗、看起來還是綠的。原本只看 HEAD 一個 commit，一次推兩個時前一個沒被掃。原本放在 Session
+  的暫存區，換 Session 就沒有防線。以上都由 `pushgatetest`（在鏈裡）守著。
+  **注意**：挑選器（`scripts/affected.mjs`）不把 `scripts/` 底下的工具當程式檔，只改 `safe-push.sh` 或
+  `prepush-scan.mjs` 時**不會自動挑中 `pushgatetest`**——改它們時要自己跑 `npm run pushgatetest`。
 - **commit 作者信箱＝GitHub noreply**（2026-09-19，Yolin 原話「照你的建議，請改noreply」）：本 repo 的
   `.git/config` 設 `user.email = 43800182+yolin0513@users.noreply.github.com`（不加 `--global`；`user.name` 仍是
   `yolin0513`）。**不要改回真實信箱**。只影響往後的 commit，不重寫歷史。新機器或重新 clone 時要再設一次

@@ -27,18 +27,23 @@ const rnd = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.t
 // 哪個視窗；跨了就代表剛進入新視窗，立刻在這個視窗裡再打一輪。回傳 sameWin 給呼叫端寫前置斷言。
 const PUSH_PERIOD_MS = 60 * 1000;                  // 跟 worker.mjs 的 LIMITS.push.period 一致
 const winOf = (t) => Math.floor(t / PUSH_PERIOD_MS);
+// 每一輪記下開始與結束的時間（寫進前置斷言的訊息）：下次再跨視窗，就看得到是不是真的跨了整分鐘。
+const hms = (t) => new Date(t).toISOString().slice(11, 23);
 async function burst40(send) {
   let n429 = 0, retryAfter = null, sameWin = false, rounds = 0;
+  const spans = [];
   for (; rounds < 2 && !sameWin; rounds++) {
     n429 = 0;
-    const w0 = winOf(Date.now());
+    const t0 = Date.now();
     for (let i = 0; i < 40; i++) {
       const rr = await send(i, rounds);
       if (rr.status === 429) { n429++; if (retryAfter === null) retryAfter = rr.headers.get('retry-after'); }
     }
-    sameWin = winOf(Date.now()) === w0;
+    const t1 = Date.now();
+    sameWin = winOf(t1) === winOf(t0);
+    spans.push(`${hms(t0)}–${hms(t1)} UTC${sameWin ? '' : '，跨了整分鐘'}`);
   }
-  return { n429, retryAfter, sameWin, rounds };
+  return { n429, retryAfter, sameWin, rounds, spans: spans.join('；') };
 }
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
@@ -130,7 +135,7 @@ try {
   // 不能無限寫 D1」。newgroup 本來就是 3 次/60 秒，所以這個耦合不會更緊。
   // 未驗證的請求也走 push 的限流桶（30 次／60 秒，以 IP 為 key），所以同樣要確認 40 次落在同一個視窗（見下面 burst40）
   const scan = await burst40((i, round) => push(gid, rnd() + rnd(), [{ id: `x${round}_${i}`, type: 'trip', title: 'x', updatedAt: Date.now(), deviceId: 'z' }]));
-  yes(scan.sameWin, `前置：掃描那一輪 40 次落在同一個 60 秒視窗裡（打了 ${scan.rounds} 輪）`);
+  yes(scan.sameWin, `前置：掃描那一輪 40 次落在同一個 60 秒視窗裡（打了 ${scan.rounds} 輪：${scan.spans}）`);
   const got429 = scan.n429;
   yes(got429 > 0, `每次換一把錯祕鑰的掃描會被擋（40 次裡 ${got429} 次 429）—— 以前一次都不會擋`);
   r = await push(gid, secret, [{ id: 'r2', type: 'spot', tripId: 'r1', name: 'ok', updatedAt: Date.now(), deviceId: 'd1' }]);
@@ -140,7 +145,7 @@ try {
   // 40 次要落在同一個固定視窗裡才算數，見檔頭的 burst40
   const own = await burst40((i, round) => push(gid, secret, [{ id: `p${round}_${i}`, type: 'spot', tripId: 'r1', name: 'p', updatedAt: Date.now() + i, deviceId: 'd1' }]));
   const { n429, retryAfter } = own;
-  yes(own.sameWin, `前置：計數的那一輪 40 次 push 落在同一個 60 秒視窗裡（打了 ${own.rounds} 輪）`);
+  yes(own.sameWin, `前置：計數的那一輪 40 次 push 落在同一個 60 秒視窗裡（打了 ${own.rounds} 輪：${own.spans}）`);
   yes(n429 > 0, `push 超過額度會回 429（40 次裡 ${n429} 次；LIMITS.push=30/60s）`);
   yes(retryAfter === '60', `429 帶 Retry-After: 60（實得 ${retryAfter}）`);
 

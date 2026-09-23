@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# 推送閘：公開前自查 → 推送 → 確認遠端等於本機。任何一步失敗就停、回傳非 0。
+#   bash scripts/safe-push.sh          （在 repo 根目錄執行；推 main 到 origin）
+#
+# 回傳值——一看就知道是哪一關擋的：
+#   0 已推送、遠端 main ＝ 本機 HEAD
+#   1 自查有命中（新增行裡真的有金鑰／email／使用者名稱／本機路徑）——不推
+#   4 自查的檢查器壞了（某一類的對照組沒命中、無法檢查、或讀不到範圍）——不推
+#   2 git push 失敗（被拒、連不上）——停
+#   3 推完了但遠端不等於本機（推了卻沒更新）——停
+#
+# 為什麼長這樣（2026-09-23 實測踩到的）：
+# - 不接管線。管線的回傳值是最後一個指令的：`git push ... | tail -1` 在 push 失敗時照樣回 0，後面的線上確認
+#   會對著舊版驗、看起來還是綠的。所以輸出都寫到檔案，最後才印。
+# - 自查掃的是「遠端還沒有的**每一個** commit」，不是只看 HEAD：一次推兩個 commit 時，前一個也會公開。
+# - 最後一關比對遠端 HEAD：前兩關都失效時（例如有人又接了管線），它仍擋得住「推了但沒成功」。
+# - 放在 repo 裡，不放 Session 的暫存區：防線不該跟著 Session 生死。
+set -eo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# 遠端現在的 main；本機沒有那個 commit 就先抓下來，抓不到就當成檢查器壞了（不猜範圍）
+REMOTE="$(git ls-remote origin refs/heads/main | cut -f1 || true)"
+if [ -n "$REMOTE" ] && ! git cat-file -e "$REMOTE^{commit}" 2>/dev/null; then
+  git fetch -q origin main > "$TMP/fetch" 2>&1 || true
+fi
+if [ -n "$REMOTE" ] && ! git cat-file -e "$REMOTE^{commit}" 2>/dev/null; then
+  echo "✗ 遠端的 main（$REMOTE）本機沒有、也抓不下來——無法決定要檢查哪些 commit"; echo "擋下：檢查器壞了（範圍）"; exit 4
+fi
+RANGE="${REMOTE:+$REMOTE..}HEAD"
+[ -z "$REMOTE" ] && RANGE="HEAD"
+
+set +e
+node scripts/prepush-scan.mjs "$RANGE" > "$TMP/check" 2>&1
+CHECK=$?
+set -e
+cat "$TMP/check"
+if [ "$CHECK" -ne 0 ]; then
+  if [ "$CHECK" -eq 1 ]; then echo "✗ 公開前自查有命中——不推"; exit 1; fi
+  echo "✗ 公開前自查的檢查器壞了——不推"; exit 4
+fi
+
+if ! git push origin main > "$TMP/push" 2>&1; then
+  cat "$TMP/push"; echo "✗ git push 失敗——停"; exit 2
+fi
+tail -n 1 "$TMP/push"
+LOCAL="$(git rev-parse HEAD)"
+AFTER="$(git ls-remote origin refs/heads/main | cut -f1 || true)"
+if [ "$LOCAL" != "$AFTER" ]; then
+  echo "✗ 推完了但遠端（${AFTER:-讀不到}）不等於本機（$LOCAL）——停"; exit 3
+fi
+echo "✓ 已推送，遠端 main ＝ 本機 HEAD（$LOCAL）"
