@@ -129,27 +129,38 @@ try {
     const r = document.querySelector('.plan-row .plan-handle').getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   });
+  // 等待一律等「條件成立」、不等固定時間（2026-09-23：全面檢測時偶發紅一次——捲了 4600px、
+  // 景點仍在第 1 天。推論是放手後 commitFromDOM 逐筆 await store.patch，被拖的那一列排在很後面，
+  // 機器忙時固定的 900ms 還沒輪到它就去讀了。偶發紅會養成「紅了重跑就好」的習慣，所以改掉）。
   await touch('touchStart', h0.x, h0.y);
   await touch('touchMove', h0.x, h0.y + 30);
   const edgeY = 844 - 90;
-  for (let i = 0; i < 160; i++) {                   // 停在下緣，讓自動捲動帶它走
+  // 被拖的那一列（.is-dragging）在 DOM 裡已經排到第 3 天的分隔線之後＝放手就會落在第 3 天
+  const inDay3 = () => page.evaluate(() => {
+    const d3 = [...document.querySelectorAll('.plan-divider')][2];
+    const row = document.querySelector('.plan-row.is-dragging');
+    return !!(d3 && row && (d3.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING));
+  });
+  const t0 = Date.now();
+  let reached = false;
+  while (Date.now() - t0 < 15000) {                 // 停在下緣，讓自動捲動帶它走（上限 15 秒，只是保險）
     await touch('touchMove', h0.x, edgeY);
-    await sleep(45);
-    const done = await page.evaluate(() => {
-      const d3 = [...document.querySelectorAll('.plan-divider')][2];
-      return d3 ? d3.getBoundingClientRect().bottom < innerHeight - 200 : false;
-    });
-    if (done) break;
+    if ((reached = await inDay3())) break;
+    await sleep(50);
   }
-  await sleep(300);
+  yes(reached, `前置：手指停在下緣，被拖的那一列排進了第 3 天（${Date.now() - t0}ms）`);
   await touch('touchEnd', 0, 0);
-  await sleep(900);
-  const moved = await page.evaluate(async (tid) => {
-    const s = await import('./js/store.js');
-    const sp = s.spotsOf(tid);
-    const first = sp.find((x) => x.name === '家');
-    return { day: first ? first.day : null, scrolled: Math.round(scrollY) };
-  }, ids.tid);
+  // 放手之後等存檔真的寫到那一筆（上限 10 秒）；寫不到就照實紅
+  let moved = null;
+  for (const t1 = Date.now(); Date.now() - t1 < 10000;) {
+    moved = await page.evaluate(async (tid) => {
+      const s = await import('./js/store.js');
+      const first = s.spotsOf(tid).find((x) => x.name === '家');
+      return { day: first ? first.day : null, scrolled: Math.round(scrollY) };
+    }, ids.tid);
+    if (moved.day === 3) break;
+    await sleep(100);
+  }
   yes(moved.day === 3, `拖到畫面外的第 3 天成功（那個景點現在在第 ${moved.day} 天，過程中自動捲了 ${moved.scrolled}px）`,
     JSON.stringify(moved));
 
