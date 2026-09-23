@@ -1628,6 +1628,8 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
   我照抄進 STATUS 兩處；回報的「距上次全面檢測」也手寫成 2 天）。回報最後那行一律貼 `npm run affected` 印出來的。
 
 - **推送閘**（2026-09-23）：推送一律 `bash scripts/safe-push.sh`（或 `npm run safepush`），不要自己 `git push`。
+  **舊規格裡的推送指令已作廢，一律用 `safe-push.sh`**（2026-09-24，Dispatch 核可）：`docs/SPEC_共用慣例更新_v2`～`v6`、
+  `SPEC_測試範圍`、`SPEC_測試範圍_修訂二` 寫著 `git push origin main`，那是推送閘出現前的結案工單，保留原樣不改寫。
   它依序做：① `scripts/prepush-scan.mjs` 掃**遠端還沒有的每一個 commit** 的新增行、commit 訊息、作者與提交者的名字信箱（2026-09-24 起；範圍照
   `ls-remote` 問到的遠端實際狀態算，不照本機追蹤分支）（金鑰或 token、email、本機使用者名稱、
   磁碟機或家目錄路徑；每一類先在合成樣本上命中）→ ② `git push` → ③ 比對遠端 main ＝ 本機 HEAD。回傳值：0 已推送；
