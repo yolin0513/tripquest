@@ -3,7 +3,8 @@
 // 沒給範圍就只看 HEAD 這一個 commit。
 //
 // 掃**範圍內每一個 commit 的新增行**（不是只看最後一個 commit——一次推好幾個 commit 時，前面那幾個也會公開；
-// 也不是看淨差異——先加後刪的一行，在歷史裡照樣看得到）。四類：金鑰或 token、email（GitHub 與 Anthropic 的
+// 也不是看淨差異——先加後刪的一行，在歷史裡照樣看得到），以及每一個 commit 的**訊息與作者、提交者的名字信箱**
+// （2026-09-24 補：它們一樣永久留在公開歷史裡）。命中時寫明來源。四類：金鑰或 token、email（GitHub 與 Anthropic 的
 // noreply 除外）、本機使用者名稱（執行當下從環境變數讀，不寫進檔案、不印出來）、磁碟機代號與家目錄路徑。
 // 每一類先在當場組出的合成樣本（對照組）上命中，才算這一類有在檢查。
 //
@@ -15,11 +16,22 @@
 import { execSync } from 'node:child_process';
 
 const range = process.argv[2] || '';
+// 每一行記下來源（新增行／commit 訊息／作者欄），命中時講得出是哪裡（共用慣例 v8 §2.5：commit 訊息、作者與提交者的
+// 名字與信箱一樣會永久公開；§5.11：要講得出是誰、為什麼擋）
 let added;
 try {
+  const run = (cmd) => execSync(cmd, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] });
   const cmd = range ? `git log -p --format= --unified=0 ${range}` : 'git show HEAD --format= --unified=0';
-  const diff = execSync(cmd, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] });
-  added = diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1));
+  added = run(cmd).split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+    .map((l) => ({ src: '新增行', text: l.slice(1) }));
+  const meta = run(`git log --format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e ${range ? range : '-1 HEAD'}`);
+  for (const rec of meta.split('\x1e')) {
+    const f = rec.replace(/^\n/, '').split('\x00');
+    if (f.length < 6) continue;
+    const [h, an, ae, cn, ce, body] = f;
+    for (const t of [an, ae, cn, ce]) added.push({ src: '作者欄', text: t, at: h });
+    for (const t of body.split('\n')) if (t) added.push({ src: 'commit 訊息', text: t, at: h });
+  }
 } catch (e) {
   console.log(`✗ 讀不到要檢查的範圍（${range || 'HEAD'}）：${String(e.message).split('\n')[0]}`);
   console.log('擋下：檢查器壞了（範圍）');
@@ -62,13 +74,14 @@ for (const [name, c] of Object.entries(checks)) {
     return c.re.test(line);
   };
   const ctrlHit = test(c.ctrl);
-  const hits = added.filter(test);
-  console.log(`${name}：對照組命中=${ctrlHit}，新增行命中=${hits.length}`);
+  const hits = added.filter((l) => test(l.text));
+  console.log(`${name}：對照組命中=${ctrlHit}，命中=${hits.length}`);
   if (!ctrlHit) broken.push(name);
-  if (hits.length) hit.push(`${name}（${hits.length} 行）`);
-  if (!c.hide) for (const h of hits) console.log('   ', h.slice(0, 160));
+  if (hits.length) hit.push(`${name}（${hits.length} 行；來源：${[...new Set(hits.map((l) => l.src))].join('、')}）`);
+  for (const h of hits) console.log('   ', `[${h.src}${h.at ? ' ' + h.at : ''}]`, c.hide ? '（不印出）' : h.text.slice(0, 160));
 }
-console.log('範圍：', range || 'HEAD', '；新增行數：', added.length);
+const count = (s) => added.filter((l) => l.src === s).length;
+console.log('範圍：', range || 'HEAD', '；新增行數：', count('新增行'), '；commit 訊息行數：', count('commit 訊息'), '；作者欄：', count('作者欄'));
 if (broken.length) { console.log(`擋下：檢查器壞了（${broken.join('、')}）`); process.exit(4); }
 if (hit.length) { console.log(`擋下：有命中（${hit.join('、')}）`); process.exit(1); }
 console.log('通過');

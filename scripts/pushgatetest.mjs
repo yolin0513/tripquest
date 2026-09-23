@@ -8,6 +8,8 @@
 //   B2 兩個 commit、只有前一個帶假信箱 → 1（自查掃遠端還沒有的**每一個** commit，不是只看 HEAD）
 //   C 檢查器壞了（讀不到使用者名稱）→ 4、user 那一類、沒推
 //   C2 檢查器壞了（email 的搜尋式壞掉、對照組沒命中）→ 4、email 那一類、沒推
+//   H 假信箱只寫在 commit 訊息裡 → 1、email 那一類、來源是 commit 訊息（v8 §2.5：訊息一樣會公開）
+//   H2 作者信箱是假信箱 → 1、email 那一類、來源是作者欄
 //   F 本機以為已經推上去、遠端其實沒有（帶命中的 commit 繞過閘門推上去、抓回來，再把遠端倒退）→ 1、email 那一類
 //     （共用慣例 v8 §2.5：自查範圍要照遠端的實際狀態算；把「問遠端」換成讀本機追蹤分支時，只有這一種會報不符）
 //   D 遠端拒收（pre-receive hook 回 1）→ 2、push 那一關
@@ -44,6 +46,8 @@ const hook = (name, body) => { const p = path.join(bare, 'hooks', name); fs.writ
 // 比對「是誰擋的」用的樣式（§5.11 第二層：擷取程式本身也要有對照組）
 const WHO = {
   hit: /擋下：有命中（email/,
+  // 命中的來源（新增行／commit 訊息／作者欄）；來源清單在「來源：」到第一個全形右括號之間
+  hitFrom: (src) => new RegExp(`擋下：有命中（email（\\d+ 行；來源：[^）]*${src}`),
   broken: (k) => new RegExp(`擋下：檢查器壞了（${k}`),
   unreachable: /擋下：檢查器壞了（抓不到遠端）/,
   pushFail: /git push 失敗/,
@@ -53,7 +57,9 @@ const WHO = {
 try {
   {
     const SAMPLE = {
-      hit: 'email：對照組命中=true，新增行命中=1\n擋下：有命中（email（1 行））\n✗ 公開前自查有命中——不推',
+      hit: 'email：對照組命中=true，命中=1\n擋下：有命中（email（1 行；來源：新增行））\n✗ 公開前自查有命中——不推',
+      hitMsg: 'email：對照組命中=true，命中=1\n擋下：有命中（email（1 行；來源：commit 訊息））\n✗ 公開前自查有命中——不推',
+      hitMix: '擋下：有命中（email（2 行；來源：新增行、作者欄））、path（1 行；來源：commit 訊息））',
       broken: 'email：對照組命中=false，新增行命中=0\n擋下：檢查器壞了（email）\n✗ 公開前自查的檢查器壞了——不推',
       unreachable: 'fatal: bad\n✗ 抓不到遠端，無法決定要檢查哪些 commit\n擋下：檢查器壞了（抓不到遠端）',
       push: 'error: failed to push some refs\n✗ git push 失敗——停',
@@ -67,6 +73,10 @@ try {
       '對照（擷取樣式）：「抓不到遠端」跟一般的檢查器壞了分得開');
     yes(WHO.pushFail.test(SAMPLE.push) && !WHO.pushFail.test(SAMPLE.mismatch) && WHO.mismatch.test(SAMPLE.mismatch) && !WHO.mismatch.test(SAMPLE.push),
       '對照（擷取樣式）：「推送失敗」與「遠端不等於本機」分得開');
+    yes(WHO.hitFrom('commit 訊息').test(SAMPLE.hitMsg) && !WHO.hitFrom('新增行').test(SAMPLE.hitMsg)
+      && WHO.hitFrom('新增行').test(SAMPLE.hit) && !WHO.hitFrom('commit 訊息').test(SAMPLE.hit)
+      && WHO.hitFrom('作者欄').test(SAMPLE.hitMix) && !WHO.hitFrom('commit 訊息').test(SAMPLE.hitMix),
+      '對照（擷取樣式）：命中的來源分得出新增行、commit 訊息、作者欄（別類的來源不會被算到 email 頭上）');
   }
 
   sh(`git init -q --bare "${bare}"`, base);
@@ -94,7 +104,7 @@ try {
   commit('b.txt', `contact: ${fakeMail()}\n`, 'leak');
   r = gate();
   yes(r.code === 1, `B 新增行帶合成假信箱 → 回 1（實得 ${r.code}）`, r.out.slice(-300));
-  yes(WHO.hit.test(r.out) && !WHO.broken('').test(r.out), 'B 擋下的是自查的 email 那一類（不是別關、也不是檢查器壞了）', r.out.slice(-300));
+  yes(WHO.hitFrom('新增行').test(r.out) && !WHO.broken('').test(r.out), 'B 擋下的是自查的 email 那一類、來源是新增行（不是別關、也不是檢查器壞了）', r.out.slice(-300));
   yes(remoteHead() === before, 'B 遠端沒被動到');
   sh('git reset -q --hard HEAD~1');
 
@@ -118,6 +128,31 @@ try {
   yes(r.code === 4 && WHO.broken('email').test(r.out) && /email：對照組命中=false/.test(r.out),
     `C2 email 的搜尋式壞了（對照組沒命中）→ 回 4、寫明是 email 那一類（實得 ${r.code}）`, r.out.slice(-300));
   yes(remoteHead() === before, 'C2 遠端沒被動到');
+
+  // H 命中寫在 commit 訊息裡（檔案內容乾淨）
+  fs.writeFileSync(path.join(work, 'h.txt'), 'clean-h\n');
+  sh('git add h.txt');
+  sh(`git commit -q -m "note: ${fakeMail()}"`);
+  yes(sh('git log -1 --format=%B').includes(fakeMail()) && !sh('git show HEAD --format=').includes(fakeMail()),
+    'H 前置：假信箱只在 commit 訊息裡、不在新增行裡（情境成立）');
+  r = gate();
+  yes(r.code === 1 && WHO.hitFrom('commit 訊息').test(r.out) && !WHO.hitFrom('新增行').test(r.out),
+    `H 命中寫在 commit 訊息裡 → 回 1、email 那一類、來源是 commit 訊息（實得 ${r.code}）`, r.out.slice(-300));
+  yes(remoteHead() === before, 'H 遠端沒被動到');
+  sh(`git --git-dir="${bare}" update-ref refs/heads/main ${before}`);   // 閘門壞了時遠端會被推前；拉回原位
+  sh('git reset -q --hard HEAD~1');
+
+  // H2 作者欄是假信箱（檔案內容與訊息都乾淨）
+  fs.writeFileSync(path.join(work, 'h2.txt'), 'clean-h2\n');
+  sh('git add h2.txt');
+  sh(`git -c user.email=${fakeMail()} commit -q -m clean-h2`);
+  yes(sh('git log -1 --format=%ae').trim() === fakeMail(), 'H2 前置：這個 commit 的作者信箱是合成假信箱（情境成立）');
+  r = gate();
+  yes(r.code === 1 && WHO.hitFrom('作者欄').test(r.out) && !WHO.hitFrom('新增行').test(r.out),
+    `H2 作者欄是假信箱 → 回 1、email 那一類、來源是作者欄（實得 ${r.code}）`, r.out.slice(-300));
+  yes(remoteHead() === before, 'H2 遠端沒被動到');
+  sh(`git --git-dir="${bare}" update-ref refs/heads/main ${before}`);   // 閘門壞了時遠端會被推前；拉回原位
+  sh('git reset -q --hard HEAD~1');
 
   // F 本機以為已經推上去、遠端其實沒有：帶命中的 commit 繞過閘門推上去（本機追蹤分支跟著前進），
   // 遠端再倒退回 before；之後疊一個乾淨的 commit 走閘門。範圍照遠端的實際狀態算，才掃得到那個命中。
