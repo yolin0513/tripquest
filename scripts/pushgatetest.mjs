@@ -9,6 +9,7 @@
 //   C 檢查器壞了（讀不到使用者名稱）→ 4、user 那一類、沒推
 //   C2 檢查器壞了（email 的搜尋式壞掉、對照組沒命中）→ 4、email 那一類、沒推
 //   I 取訊息與作者欄的指令輸出是空的（模擬換環境後解析壞掉）→ 4、「訊息與作者欄」壞了、沒推（故障時不放行）
+//   J 內容本身以 ++ 開頭的命中行、加了又刪 → 1、來源是新增行（抽新增行要照 diff 結構，並用 --numstat 的行數核對）
 //   H 假信箱只寫在 commit 訊息裡 → 1、email 那一類、來源是 commit 訊息（v8 §2.5：訊息一樣會公開）
 //   H2 作者信箱是假信箱 → 1、email 那一類、來源是作者欄
 //   F 本機以為已經推上去、遠端其實沒有（帶命中的 commit 繞過閘門推上去、抓回來，再把遠端倒退）→ 1、email 那一類
@@ -63,6 +64,7 @@ try {
       hitMix: '擋下：有命中（email（2 行；來源：新增行、作者欄））、path（1 行；來源：commit 訊息））',
       broken: 'email：對照組命中=false，新增行命中=0\n擋下：檢查器壞了（email）\n✗ 公開前自查的檢查器壞了——不推',
       metaBroken: '範圍： x..HEAD ；commit 數： 1 ；新增行數： 1 ；commit 訊息行數： 0 ；作者欄： 0\n✗ 範圍內有 1 個 commit，卻只解析出 0 筆…——解析壞了\n擋下：檢查器壞了（訊息與作者欄）',
+      extractBroken: '✗ 抽出 0 行新增行，git 算 1 行——抽取壞了\n擋下：檢查器壞了（新增行抽取）',
       unreachable: 'fatal: bad\n✗ 抓不到遠端，無法決定要檢查哪些 commit\n擋下：檢查器壞了（抓不到遠端）',
       push: 'error: failed to push some refs\n✗ git push 失敗——停',
       mismatch: '✗ 推完了但遠端（a）不等於本機（b）——停',
@@ -76,6 +78,9 @@ try {
     yes(WHO.broken('訊息與作者欄').test(SAMPLE.metaBroken) && !WHO.broken('訊息與作者欄').test(SAMPLE.broken)
       && !WHO.hit.test(SAMPLE.metaBroken),
       '對照（擷取樣式）：「訊息與作者欄解析壞了」抓得到、跟別類的檢查器壞了分得開');
+    yes(WHO.broken('新增行抽取').test(SAMPLE.extractBroken) && !WHO.broken('新增行抽取').test(SAMPLE.metaBroken)
+      && !WHO.hit.test(SAMPLE.extractBroken),
+      '對照（擷取樣式）：「新增行抽取壞了」抓得到、跟別類的檢查器壞了分得開');
     yes(WHO.pushFail.test(SAMPLE.push) && !WHO.pushFail.test(SAMPLE.mismatch) && WHO.mismatch.test(SAMPLE.mismatch) && !WHO.mismatch.test(SAMPLE.push),
       '對照（擷取樣式）：「推送失敗」與「遠端不等於本機」分得開');
     yes(WHO.hitFrom('commit 訊息').test(SAMPLE.hitMsg) && !WHO.hitFrom('新增行').test(SAMPLE.hitMsg)
@@ -142,6 +147,19 @@ try {
     `I 訊息與作者欄解析出 0 筆 → 回 4、寫明「訊息與作者欄」壞了（實得 ${r.code}）`, r.out.slice(-300));
   yes(remoteHead() === before, 'I 遠端沒被動到');
   sh(`git --git-dir="${bare}" update-ref refs/heads/main ${before}`);   // 閘門壞了時遠端會被推前；拉回原位
+
+  // J 內容本身以 ++ 開頭的命中行，加了又刪（只有逐 commit 掃新增行才抓得到；舊寫法把它當 diff 檔頭丟掉）
+  commit('j.txt', `++ contact: ${fakeMail()}\n`, 'leak-plusplus');
+  commit('j.txt', 'cleaned\n', 'cleanup-j');
+  yes(sh('git show HEAD~1 --format=').split('\n').some((l) => l.startsWith('+++ contact: ') && l.includes(fakeMail()))
+    && !fs.readFileSync(path.join(work, 'j.txt'), 'utf8').includes(fakeMail()),
+    'J 前置：命中行在 diff 裡長得像 +++ 檔頭、而且最新版已經刪掉（情境成立）');
+  r = gate();
+  yes(r.code === 1 && WHO.hitFrom('新增行').test(r.out) && !WHO.broken('').test(r.out),
+    `J ++ 開頭的命中行、加了又刪 → 回 1、email 那一類、來源是新增行（實得 ${r.code}）`, r.out.slice(-300));
+  yes(remoteHead() === before, 'J 遠端沒被動到');
+  sh(`git --git-dir="${bare}" update-ref refs/heads/main ${before}`);   // 閘門壞了時遠端會被推前；拉回原位
+  sh('git reset -q --hard HEAD~2');
 
   // H 命中寫在 commit 訊息裡（檔案內容乾淨）
   fs.writeFileSync(path.join(work, 'h.txt'), 'clean-h\n');

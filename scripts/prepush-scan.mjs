@@ -24,8 +24,25 @@ let added, commits = 0, parsed = 0;
 try {
   const run = (cmd) => execSync(cmd, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] });
   const cmd = range ? `git log -p --format= --unified=0 ${range}` : 'git show HEAD --format= --unified=0';
-  added = run(cmd).split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-    .map((l) => ({ src: '新增行', text: l.slice(1) }));
+  // 照 diff 的結構抽：只有 @@ 之後、以 + 開頭的行才是內容。不能用「以 +++ 開頭就當檔頭跳過」——內容本身以 ++ 開頭的行，
+  // 加上 diff 的 + 也變成 +++，會被默默丟掉、根本沒掃（2026-09-24 統籌者查出，四個 App 全中）。
+  added = [];
+  let inHunk = false;
+  for (const l of run(cmd).split('\n')) {
+    if (l.startsWith('diff --git ')) inHunk = false;
+    else if (l.startsWith('@@')) inHunk = true;
+    else if (inHunk && l.startsWith('+')) added.push({ src: '新增行', text: l.slice(1) });
+  }
+  // 核對：抽出來的行數要等於 git 自己用 --numstat 算的新增行數（獨立來源；二進位檔記成 -，不算）。
+  // 對不上就是抽取壞了——不論是上面那種寫法的錯，還是換環境後輸出格式變了。
+  const numCmd = range ? `git log --numstat --format= ${range}` : 'git show HEAD --numstat --format=';
+  const expected = run(numCmd).split('\n').map((l) => l.split('\t')[0]).filter((n) => /^\d+$/.test(n))
+    .reduce((s, n) => s + Number(n), 0);
+  if (added.length !== expected) {
+    console.log(`✗ 抽出 ${added.length} 行新增行，git 算 ${expected} 行——抽取壞了`);
+    console.log('擋下：檢查器壞了（新增行抽取）');
+    process.exit(4);
+  }
   commits = Number(run(`git rev-list --count ${range ? range : '-1 HEAD'}`).trim());
   // 'meta'：模擬「取訊息與作者欄的指令輸出是空的」（換一台機器、git 版本或輸出格式不同時可能發生）
   const meta = selftestBreak === 'meta' ? '' : run(`git log --format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e ${range ? range : '-1 HEAD'}`);
