@@ -400,6 +400,12 @@ export function membersOf(groupId) {
   return list().filter((r) => r.type === 'member' && r.groupId === groupId && alive(r))
     .sort((a, b) => a.createdAt - b.createdAt);
 }
+// 已移除的旅伴（唯讀）：移除是軟刪除，墓碑上的名字還在、也會同步。
+// 只給「帳面叫得出他」用（分帳的結清）；挑人的地方一律用 membersOf，不要讓他們出現。
+export function formerMembersOf(groupId) {
+  return list().filter((r) => r.type === 'member' && r.groupId === groupId && r.deleted)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
 export function spotsOf(tripId) {
   return list().filter((r) => r.type === 'spot' && r.tripId === tripId && alive(r))
     .sort((a, b) => (a.day || 0) - (b.day || 0) || (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt);

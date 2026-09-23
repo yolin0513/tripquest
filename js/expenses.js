@@ -11,6 +11,21 @@ export function tripExpenses(tripId) {
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
+// 某位旅伴在「整個群組」裡的帳：付了幾筆、參與分攤幾筆（移除旅伴前的提醒用）。
+// 旅伴是群組層級的，所以不只看這一趟；舊資料的 expense 若沒有 groupId，就用它的 tripId 對回群組。
+export function memberExpenseCounts(groupId, memberId) {
+  const recs = store.exportRecords();
+  const tripIds = new Set(recs.filter((r) => r.type === 'trip' && r.groupId === groupId).map((r) => r.id));
+  let paid = 0, shared = 0;
+  for (const e of recs) {
+    if (e.type !== 'expense' || e.deleted) continue;
+    if (e.groupId !== groupId && !tripIds.has(e.tripId)) continue;
+    if (e.payerId === memberId) paid++;
+    if ((e.participants || []).includes(memberId)) shared++;
+  }
+  return { paid, shared };
+}
+
 export async function saveExpense(e) {
   const rec = {
     id: e.id || uuid(),
@@ -88,7 +103,11 @@ export function sharePerMember(e) {
 // 只能每一種都開一次瀏覽器。核心拆出來之後，moneytest 直接餵花費清單就能驗。
 export function settleTrip(tripId, baseCurrency, ratesObj) {
   const trip = store.get(tripId);
-  const memberIds = trip ? store.membersOf(trip.groupId).map((m) => m.id) : null;
+  // 成員名單含已移除的旅伴（墓碑）：他付的錢照樣進結清、名字叫得出來。只有連墓碑都沒有的 id
+  // 才算「沒有付款人」（v1.74.9 以前已移除的旅伴也被當成沒有付款人，他付的錢不進結清）。
+  const memberIds = trip
+    ? [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)].map((m) => m.id)
+    : null;
   // 結清的最小單位：零小數的幣別（日圓、韓元…）是 1 圓，其他是 0.01（R5）
   const decimals = currencyInfo(baseCurrency).zero ? 0 : 2;
   return settleCore({ expenses: tripExpenses(tripId), baseCurrency, ratesObj, memberIds, decimals });

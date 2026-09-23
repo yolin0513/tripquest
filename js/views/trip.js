@@ -1310,8 +1310,22 @@ function memberEditor(tripId, groupId) {
           draw();
         } }, '✎'),
         h('button', { class: 'btn btn-danger sm-btn', onclick: async () => {
-          const used = store.submissionsOfTrip(tripId).some((s) => s.memberId === m.id);
-          if (used && !await confirmDialog(`${m.displayName} 已有照片，移除後那些照片會標為「未指定」。要繼續嗎？`)) return;
+          // 旅伴是群組層級的：帳與照片都照「整個群組」算，不只這一趟（v1.74.9 以前照片只看這一趟、帳完全不看）
+          const { memberExpenseCounts } = await import('../expenses.js');
+          const { paid, shared } = memberExpenseCounts(groupId, m.id);
+          const photos = store.trips().filter((t) => t.groupId === groupId)
+            .reduce((n, t) => n + store.submissionsOfTrip(t.id).filter((s) => s.memberId === m.id).length, 0);
+          if (paid || shared || photos) {
+            const lines = [];
+            if (paid || shared) {
+              lines.push(`${m.displayName} 在分帳裡有帳：付了 ${paid} 筆、參與分攤 ${shared} 筆。`);
+              lines.push(`移除之後這些帳照樣算，結清方案會寫成「${m.displayName}（已移除）」，錢一樣對得上。`);
+              lines.push('如果是記錯了，請先到「分帳」把那幾筆改掉，再回來移除。');
+            }
+            if (photos) lines.push(`${m.displayName} 有 ${photos} 張照片，移除後那些照片會標為「未指定」。`);
+            lines.push('', '要移除嗎？');
+            if (!await confirmDialog(lines.join('\n'), { danger: true, okLabel: '移除' })) return;
+          }
           await store.remove(m.id);
           draw();
         } }, '🗑️'),

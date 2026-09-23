@@ -44,7 +44,10 @@ export default async function expenses(tripId) {
   const rates = await getRates();
   const s = settleTrip(tripId, base, rates);
 
-  const nameOf = (id) => (members.find((m) => m.id === id) || {}).displayName || '（未指定）';
+  // 查名字：現在的旅伴照舊；已移除的旅伴用墓碑上的名字＋「（已移除）」；連墓碑都沒有的才寫「（未指定）」。
+  // 結清方案、「每個人」、明細副標都用這一個（v1.74.9 以前已移除的人一律寫成「（未指定）」）。
+  const former = store.formerMembersOf(trip.groupId);
+  const nameOf = memberNamer(members, former);
 
   // 查不到匯率的花費整筆沒有算進去（R1）：每個幣別一行，講出多少錢、幾筆、沒算進哪裡。
   // 不寫「可能不準」——那句講不出錯在哪、錯多少。
@@ -93,13 +96,17 @@ export default async function expenses(tripId) {
   if (nothingCounted) {
     // 一筆都換算不了時，「付了 NT$0.00・打平」是用 0 冒充算不出來
     page.append(h('p', { class: 'form-hint' }, '查到匯率之後才算得出每個人付了多少、該收或該付多少。'));
-  } else page.append(h('div', { class: 'stack' }, ...members.map((m) => {
+  } else page.append(h('div', { class: 'stack' }, ...[
+    ...members,
+    // 已移除的旅伴只在這一趟有帳時才列（付過錢，或淨額不是 0），排在現在的旅伴後面
+    ...former.filter((m) => (s.totals.byMember[m.id] || 0) !== 0 || (s.balances[m.id] || 0) !== 0),
+  ].map((m) => {
     const bal = s.balances[m.id] || 0;
     const paid = s.totals.byMember[m.id] || 0;
     return h('div', { class: 'exp-person' },
       avatar(m.displayName, hashHue(m.id)),
       h('div', { class: 'exp-person-main' },
-        h('div', { style: 'font-weight:700' }, m.displayName),
+        h('div', { style: 'font-weight:700' }, nameOf(m.id)),
         h('div', { class: 'muted sm' }, `付了 ${fmtMoney(paid, base)}`)),
       // balances 已經捨入到最小單位（R5），所以「打平」就是恰好 0。v1.74.6 以前門檻是 0.5：
       // 應付 0.40 顯示成打平，結清方案裡卻又有一筆 0.40。
@@ -245,6 +252,15 @@ async function openEdit(tripId, existing) {
   await saveExpense({ ...st, id: existing?.id, amount: amt, title: titleEl.value.trim() });
   toast('已記錄');
   expenses(tripId);
+}
+
+// 分帳頁查名字用的函式（見 expenses() 裡的說明）。
+function memberNamer(members, former) {
+  const now = new Map(members.map((m) => [m.id, m.displayName]));
+  const gone = new Map(former.map((m) => [m.id, m.displayName]));
+  return (id) => (now.has(id) ? now.get(id)
+    : gone.has(id) ? `${gone.get(id) || '旅伴'}（已移除）`
+      : '（未指定）');
 }
 
 // 包「單一輸入框」用：點標題字會聚焦那個框，這是對的。
