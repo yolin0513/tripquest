@@ -33,24 +33,30 @@ try {
     else if (l.startsWith('@@')) inHunk = true;
     else if (inHunk && l.startsWith('+')) added.push({ src: '新增行', text: l.slice(1) });
   }
+  // 'dupline'：模擬「抽多了」（某種解析錯誤把同一行重複計入）
+  if (selftestBreak === 'dupline' && added.length) added.push(added[0]);
   // 核對：抽出來的行數要等於 git 自己用 --numstat 算的新增行數（獨立來源；二進位檔記成 -，不算）。
   // 對不上就是抽取壞了——不論是上面那種寫法的錯，還是換環境後輸出格式變了。
   const numCmd = range ? `git log --numstat --format= ${range}` : 'git show HEAD --numstat --format=';
   const expected = run(numCmd).split('\n').map((l) => l.split('\t')[0]).filter((n) => /^\d+$/.test(n))
     .reduce((s, n) => s + Number(n), 0);
+  console.log(`新增行核對：抽出 ${added.length} 行，git 算 ${expected} 行`);
   if (added.length !== expected) {
     console.log(`✗ 抽出 ${added.length} 行新增行，git 算 ${expected} 行——抽取壞了`);
     console.log('擋下：檢查器壞了（新增行抽取）');
     process.exit(4);
   }
   commits = Number(run(`git rev-list --count ${range ? range : '-1 HEAD'}`).trim());
-  // 'meta'：模擬「取訊息與作者欄的指令輸出是空的」（換一台機器、git 版本或輸出格式不同時可能發生）
-  const meta = selftestBreak === 'meta' ? '' : run(`git log --format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e ${range ? range : '-1 HEAD'}`);
+  // 模擬解析壞掉（換一台機器、git 版本或輸出格式不同時可能發生）：
+  //   'meta' 取訊息與作者欄的指令輸出是空的；'metapartial' 只輸出第一個 commit 的；'nobody' 每個 commit 的訊息都遺失
+  let meta = selftestBreak === 'meta' ? '' : run(`git log --format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e ${range ? range : '-1 HEAD'}`);
+  if (selftestBreak === 'metapartial') meta = meta.split('\x1e')[0] + '\x1e';
   for (const rec of meta.split('\x1e')) {
     const f = rec.replace(/^\n/, '').split('\x00');
     if (f.length < 6) continue;
     parsed++;
-    const [h, an, ae, cn, ce, body] = f;
+    const [h, an, ae, cn, ce] = f;
+    const body = selftestBreak === 'nobody' ? '' : f[5];
     for (const t of [an, ae, cn, ce]) added.push({ src: '作者欄', text: t, at: h });
     for (const t of body.split('\n')) if (t) added.push({ src: 'commit 訊息', text: t, at: h });
   }
@@ -101,16 +107,21 @@ for (const [name, c] of Object.entries(checks)) {
   for (const h of hits) console.log('   ', `[${h.src}${h.at ? ' ' + h.at : ''}]`, c.hide ? '（不印出）' : h.text.slice(0, 160));
 }
 const count = (s) => added.filter((l) => l.src === s).length;
-console.log('範圍：', range || 'HEAD', '；commit 數：', commits, '；新增行數：', count('新增行'), '；commit 訊息行數：', count('commit 訊息'), '；作者欄：', count('作者欄'));
-// 故障時不放行：每個 commit 一定有作者欄（4 欄）與訊息；數不起來只可能是解析壞了，不是「沒東西可掃」。
+console.log('範圍：', range || 'HEAD', '；commit 數：', commits, '；解析出訊息與作者欄：', parsed, '筆；新增行數：', count('新增行'), '；commit 訊息行數：', count('commit 訊息'), '；作者欄：', count('作者欄'));
+// 故障時不放行：每個 commit 一定有一筆作者欄與訊息；數不起來只可能是解析壞了，不是「沒東西可掃」。
 // （2026-09-24 統籌者探測：解析整個壞掉時印出「0 行」照樣通過。換個環境就會發生，不需要任何人改壞程式。）
-// commit 數是 0 只在「真的沒有要推的」時成立：那時也不該有任何新增行。
-const metaBroken = !Number.isInteger(commits) || commits < 0
-  || (commits === 0 ? count('新增行') > 0
-    : parsed !== commits || count('作者欄') !== 4 * commits || count('commit 訊息') < commits);
-if (metaBroken) {
-  console.log(`✗ 範圍內有 ${commits} 個 commit，卻只解析出 ${parsed} 筆訊息與作者欄（訊息 ${count('commit 訊息')} 行、作者欄 ${count('作者欄')}）——解析壞了`);
-  console.log('擋下：檢查器壞了（訊息與作者欄）');
+// 每一條守一種壞法（pushgatetest 各有一種情境、拿掉那一條只紅它自己）。不另查「作者欄＝4×commit 數」：
+// 每解析一筆固定推 4 欄，它恆等於 4×解析筆數，筆數那條已經涵蓋（突變實測是等價的）。
+const metaFaults = [];
+// 範圍：commit 數讀不成數字，或是 0（真的沒有要推的）卻有新增行
+if (!Number.isInteger(commits) || commits < 0 || (commits === 0 && count('新增行') > 0)) metaFaults.push('範圍');
+// 筆數：有 commit 卻解析不出同樣筆數（整個壞掉、或只解出一部分）
+if (commits > 0 && parsed !== commits) metaFaults.push('筆數');
+// 訊息：筆數對、訊息卻遺失（每個 commit 至少一行）
+if (commits > 0 && count('commit 訊息') < commits) metaFaults.push('訊息');
+if (metaFaults.length) {
+  console.log(`✗ 範圍內有 ${commits} 個 commit，解析出 ${parsed} 筆訊息與作者欄（訊息 ${count('commit 訊息')} 行、作者欄 ${count('作者欄')}）——解析壞了`);
+  console.log(`擋下：檢查器壞了（訊息與作者欄：${metaFaults.join('、')}）`);
   process.exit(4);
 }
 if (broken.length) { console.log(`擋下：檢查器壞了（${broken.join('、')}）`); process.exit(4); }
