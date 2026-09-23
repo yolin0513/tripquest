@@ -188,9 +188,9 @@ async function openEdit(tripId, existing) {
     h('div', { class: 'numpad-row' }, curBtn, amountEl),
     numpad,
     field('這筆是什麼', titleEl),
-    field('分類', catRow),
-    field('誰付的', payRow),
-    field('分給誰', h('div', {}, partWrap, splitToggle)),
+    fieldGroup('分類', catRow),
+    fieldGroup('誰付的', payRow),
+    fieldGroup('分給誰', h('div', {}, partWrap, splitToggle)),
   );
 
   const res = await modal({
@@ -216,8 +216,17 @@ async function openEdit(tripId, existing) {
   expenses(tripId);
 }
 
+// 包「單一輸入框」用：點標題字會聚焦那個框，這是對的。
 function field(label, control) {
   return h('label', { class: 'form-field' }, h('span', { class: 'form-label' }, label), control);
+}
+
+// 包「一組控制項」用（一排 chip、勾選清單＋按鈕）：**不能用 <label>**。
+// label 會把點擊轉發給裡面第一個控制項——被點的 chip 重繪後離開 DOM，冒泡到 label 時
+// 就被轉發給第一顆，選擇落回第一個人；手指落在標題字上也會去點第一顆（v1.74.3 前實測：
+// 點「小美」得到「阿公」、點「分給誰」三個字會取消阿公的勾）。class 不變，版面不變。
+function fieldGroup(label, control) {
+  return h('div', { class: 'form-field', role: 'group', 'aria-label': label }, h('span', { class: 'form-label' }, label), control);
 }
 
 function fmtFxDate(s) {

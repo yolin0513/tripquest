@@ -1,19 +1,15 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-09-23，線上版本 **v1.74.2**（每次上版請一併更新這一行）。
+> 最後更新：2026-09-23，線上版本 **v1.74.3**（每次上版請一併更新這一行）。
 > 給下一個工作階段快速接手用；架構細節見 `ARCHITECTURE_DECISION.md`，第三方平台實測見 `PLATFORM_NOTES.md`，配樂授權見根目錄 `MUSIC_LICENSES.md`。
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
-**現在正在做什麼**：線上 v1.74.2。v1.74.0（任務只在有把握時產生）、v1.74.1、v1.74.2（算錢的測試）
-都已 commit＋push、規格都已執行。2026-09-23 做完共用慣例 v5 工單（docs-only，見下）。
-
-**下一件是 `docs/SPEC_分帳金額守恆.md`（統籌者 2026-09-21 放好，未開工）**：四個 commit——
-**R0 記帳表單 chip 選不動**（`js/views/expenses.js` 的 `field()` 把整列 chip 包進 `<label>`，
-`<button>` 是 labelable，點哪顆都落回第一顆；見「v1.74.2」那一節）**獨立一版、最先上線**；R1 查不到
-匯率的另列；R2–R4；R5 除不盡的一分錢（改結清算法）。**Dispatch 2026-09-23 交代：等確認這份的
-effort 再開工**（統籌者建議 high）。R0 上線後是跑全面檢測的好時機（v1.74.2 新增的斷言從未全套跑過，
-已超過下面「整套上限」的 20 條），但由 Yolin 指定，不自己啟動。
+**現在正在做什麼**：`docs/SPEC_分帳金額守恆.md`（effort high，Yolin 2026-09-23 拍板）。分四個 commit：
+**R0 已上線（v1.74.3，見下面「v1.74.3」那一節）**；接著是 R1 查不到匯率的另列 → R2–R4 份數全 0／
+參與者空／付款人空 → R5 除不盡的一分錢（改結清算法）。每做完一段回報一次，commit 不合併。
+**全面檢測**：v1.74.2 起新增的斷言從未全套跑過，已超過下面「整套上限」的 20 條；Dispatch 說 R0 上線後
+由他問 Yolin 要不要跑，**Session 不自己啟動**。
 
 **2026-09-19 導入共用慣例 v1**（docs-only，不算一版、未 bump VERSION）：依統籌工單
 `docs/SPEC_共用慣例導入.md` 新增 `docs/CONVENTIONS.md`（四個 App 共用慣例的**副本**，主檔在統籌
@@ -198,7 +194,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **48 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 13。
+- `npm test` 是完整的鏈 **49 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 13。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
 - **`workertest`**：用 wrangler 把**真的** `workers/worker.mjs` 跑起來配本機 D1 —— 限流與 D1 分批在此之前從上線到 v1.73.1 一行都沒被測試執行過（v1.73.2）。
 - **`moneytest`**（純 Node，v1.74，0.13 秒）：算錢的斷言——匯率換算（手算值）、`fmtMoney`（零小數幣別
@@ -206,7 +202,11 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
   轉帳方案只驗語意、`getRates` 的 12 小時快取與 stale、`places` 的錯誤對映與**計費守衛**
   （FieldMask 不含 `rating`／`userRatingCount`，含了會升到 Enterprise 計費）。
 - **`settletest`**（puppeteer，v1.74）：分帳的真實入口——行程頁 → 底部「分帳」分頁 → 結清方案，
-  畫面上的每一個金額都對照手算值（轉帳金額在**那一列裡**比對，不是比對整頁文字）。
+  畫面上的每一個金額都對照手算值（轉帳金額在**那一列裡**比對，不是比對整頁文字）。v1.74.3 起最後用
+  真的滑鼠從「記一筆」表單記兩筆（T0 付款人與分類、T0b 分給誰與自訂份數），44 項。
+- **`formgrouptest`**（puppeteer，v1.74.3）：建立旅程的「有誰要一起」與景點設定的「幾點到」不包在
+  `<label>` 裡——點標題字不會刪掉第一位旅伴、點 × 只刪那一位、群組唸得出名稱；單一輸入框的欄位仍是
+  `<label>`（對照組）。12 項。
 - **`curatedtest`**（純 Node，v1.74）：產生器層的「沒把握就留白」——反例不命中（17 個真實店名＋1080 個
   用策展名造的假店名）、135 筆正例不掉、沒命中的地點一個句庫的字都沒有、時段守門、照片任務的確定性 id。
   不開瀏覽器，毫秒級。
@@ -296,6 +296,48 @@ v1.74 之前有 5 個：`expenses.js`、`fx.js`（算錢的，補了 `moneytest`
 9.5 **SOS 醫院只列大醫院（v1.60）**：只查 `amenity=hospital`（國術館在 OSM 常被標成 `amenity=clinic`），上限 80→300（**根因**：80 是「任意取前 N 筆」，台北 8km 內有 312 家診所，真正的醫院整個擠不進回應——石牌實測回應裡只有 1 家醫院、清單前幾名是診所與國術館）。emergency 填寫率實測：大台北 46%、札幌 15%、京都 1% → 需名稱後備（台「醫院」日「病院」優先；「診所/クリニック/医院/Clinic」降級；畫了院區的 way/relation 再加分）。同名去重（大醫院常有多個節點，實測京都第一赤十字病院 ×2）。急診標示三態：明說有→🚨、明說沒有→灰標、沒資料→不寫（不裝懂）。藥局維持現狀。
 8.5 **找附近（v1.59）**：放獨立頁不進 SOS——SOS 是走失/急救的緊急畫面，生活設施會稀釋緊急性（藥局兩邊都有，語境不同）。與 SOS 共用 Overpass 機制（免金鑰雙鏡像、12 秒逾時、離線回快取），分開快取（tripquest.nearlife，1 天）；濾掉 access=private 停車場。**誠實標示**：capacity＝總車位非即時剩餘（實測填寫率：羅東夜市 1/67、清水寺 25/206——有就顯示、不當賣點）；即時剩餘車位查證結論＝台北市舊免金鑰 JSON（tcgbusfs）已 404、主管道 TDX 要註冊金鑰、台中等縣市有零散自建端點但格式不一、日本無可靠免費來源 → 不接，介面講明，未來列 TDX 自帶金鑰選配。
 8. **短邀請連結（v1.58，三代理 3:0 採 P1）**：連結 `#/join?g=<groupId b64url 22>&k=<祕鑰>&t=<tripId 前8>&n=<行程名 b64url>[&u=<自架網址>]`，728→~154 字。摘要改由 `GET /invite` 用群組記錄現算（js/invite.js，Worker 與 LAN server 共用；只收 Bearer、回應 no-store）——伺服器本來就存明文記錄，這不多給它任何東西；反而 v4 連結可被任何撿到連結的人離線解碼出成員名，新格式要過祕鑰驗證，是隱私改善。**祕鑰維持在 # fragment**（不進伺服器網址記錄）；新群組祕鑰改 base64url 22 字（頭尾避開 -/_），既有 hex 祕鑰不輪替、兩伺服器 regex 同版放寬。摘要拿不到（push 競態 404／離線）**不擋加入**；403 講「連結不完整請重傳」。分享訊息文字帶行程名＋日期＋邀請人（0 秒訊號搬進聊天室文字）。否決項：P2 祕鑰雜湊查找（省 25 字買三個新失效面）、workers.dev 入口（40 字比 Pages 前綴 38 字還長）、第三方短網址（祕鑰會進別人伺服器）；自訂網域要花錢，列給使用者決定未採。
+
+## v1.74.3 表單的一排按鈕不再包在 `<label>` 裡（`SPEC_分帳金額守恆.md` R0）
+
+**使用者現象**：記帳時「誰付的」「分類」點哪一個都跳回第一個 → 每一筆都記成第一個人付的餐飲。
+
+**根因**：三個頁面各有一份一模一樣的 `field()`，回傳 `<label class="form-field">`。label 會把點擊轉發給
+裡面第一個可被標記的控制項（`<button>`、`<input>`、`<select>` 都算），有兩條路會中：
+① 被點的按鈕在 `onclick` 裡重繪、離開 DOM，點擊冒泡到 label 時它已不是 label 的子孫，label 就去點第一顆；
+② 手指落在標題字上，label 直接去點第一顆。
+
+**修法**：包「一組控制項」的改用新的 `fieldGroup()`＝`<div class="form-field" role="group" aria-label>`；
+包單一輸入框的維持 `field()`（`<label>`，點標題字聚焦輸入框是對的）。class 不變、版面不變。
+三個檔逐一盤點的呼叫點：
+
+| 檔 | 欄位 | 包的是什麼 | 處理 |
+|---|---|---|---|
+| `expenses.js` | 這筆是什麼 | 單一 input | 維持 `field` |
+| `expenses.js` | 分類／誰付的 | 一排會重繪的按鈕 | → `fieldGroup` |
+| `expenses.js` | 分給誰 | 每人一個巢狀 `<label class="exp-part">`（勾選框＋份數框）＋切換鈕 | → `fieldGroup` |
+| `create.js` | 旅程名稱／直接貼上行程文字 | 單一 input／textarea | 維持 |
+| `create.js` | 哪幾天去？ | 單一按鈕（開月曆） | 維持 |
+| `create.js` | 有誰要一起 | 旅伴 chip（每個有「×」，會重繪）＋輸入框 | → `fieldGroup` |
+| `spot.js` | 景點名稱／停留多久 | 單一 input／select | 維持 |
+| `spot.js` | 幾點到 | 兩個下拉＋「清除」鈕 | → `fieldGroup` |
+
+全 `js/views/` 其他的 `<label>`：`switch-row`（只包一個勾選框）、`import.js` 的 `imp-chk-w`（只包勾選框）、
+`findspot.js` 的三個（下拉，沒有按鈕、不重繪）——查過，沒有同型寫法。
+
+**修正前實測到、規格沒列的兩件（都是同一個根因，這一版一起修掉）**：
+- 分帳表單點「分給誰」三個字 → **第一個人的勾被取消**，那一筆就少一個人分（使用者看不出來）。
+- 建立旅程點「有誰要一起」四個字 → **第一位旅伴（預設的「我」）被刪掉**。`create.js` 裡那段
+  「350ms 內擋第二次觸發」的註解描述的「殘留點擊落到移位後的鄰居身上」，很可能就是這條路①。
+
+**「分給誰」點名字、點勾選框、在份數框打字**：修正前後都正常（巢狀 label 裡點擊落在內層 label，
+不會傳到外層）；壞的只有點標題字那一條。
+
+**測試**：`settletest` 改成最後用真的滑鼠從表單記兩筆（T0／T0b，44 項）；新增 `formgrouptest`（12 項）。
+修正前的程式跑：`settletest` 9 條紅、`formgrouptest` 4 條紅；修正後全綠。兩支都在檔頭寫了「涵蓋的程式」
+——它們從畫面進去，程式碼裡沒有那幾個檔名，不寫的話改 `js/views/expenses.js` 挑選器**不會挑中** `settletest`
+（實測過）。
+**踩到的測試陷阱**：`store.membersOf()` 的順序不固定，表單上旅伴的排列每次可能不同——期望值要用
+「點的那一顆上寫的名字」，不能寫死第幾個是誰（第一版寫死，5 次裡紅 1 次）。
 
 ## v1.74.2 算錢的測試（規格 `docs/SPEC_算錢的測試.md`）
 

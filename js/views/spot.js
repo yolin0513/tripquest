@@ -177,7 +177,7 @@ export default async function spot(tripId, spotId) {
 
   render(h('div', { class: 'page form compact' },
     field('景點名稱', nameField),
-    field('幾點到', h('div', { class: 'spot-time-row' },
+    fieldGroup('幾點到', h('div', { class: 'spot-time-row' },
       h('div', { class: 'fs-hm spot-time' }, hourSel, minSel),
       h('button', {
         class: 'btn btn-sm', type: 'button',
@@ -324,6 +324,12 @@ async function explainPaste(why) {
   });
 }
 
+// 包「單一輸入框」用：點標題字會聚焦那個框，這是對的。
 function field(label, control) {
   return h('label', { class: 'form-field' }, h('span', { class: 'form-label' }, label), control);
+}
+
+// 包「一組控制項」用：不能用 <label>，它會把點擊轉發給裡面第一個控制項（見 expenses.js 同名函式）。
+function fieldGroup(label, control) {
+  return h('div', { class: 'form-field', role: 'group', 'aria-label': label }, h('span', { class: 'form-label' }, label), control);
 }

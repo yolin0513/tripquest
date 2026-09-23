@@ -1,12 +1,18 @@
 // 分帳結清的真實入口測試（npm run settletest）。
+// 涵蓋的程式：js/views/expenses.js （分帳頁與「記一筆」表單）。寫出來是給挑選器認的 ——
+// 這支從畫面進去，程式碼裡不會出現那個檔名，不寫的話改分帳頁不會挑中這一支。
 //
 // 為什麼要有這一支：`js/expenses.js` 與 `js/fx.js` 在這之前**沒有任何一條斷言在驗金額**
 // （全 repo 沒有一支測試提到 fmtMoney、匯率、結清）。改到它們會跑全套，但那是「沒人認領
 // 所以保守全跑」，不是守護 —— 沒有人在看錢算得對不對。
 //
-// 這一支走使用者的真實路徑：行程頁底部的「分帳」分頁 → 看結清方案；其中一筆用畫面上的
-// 「記一筆花費」表單真的記進去（不是只灌資料）。**期望值是手算的**，寫在下面的算式裡，
-// 不是把程式的輸出貼回來當期望值。
+// 這一支走使用者的真實路徑：行程頁底部的「分帳」分頁 → 看結清方案；最後用畫面上的
+// 「記一筆花費」表單、真的滑鼠點擊記兩筆（T0／T0b）。**期望值是手算的**，寫在下面的
+// 算式裡，不是把程式的輸出貼回來當期望值。
+//
+// v1.74.2 時表單那段只驗「打得開」：當時「分類」「誰付的」的 chip 一點就跳回第一顆
+// （`field()` 把整排按鈕包在 `<label>` 裡），從表單記帳測不出使用者做得到的事。
+// v1.74.3 修掉之後改成真的記帳。
 //
 // 匯率用假的：把 fx 的 localStorage 快取先塞好（12 小時內不重抓），所以不打真網路。
 
@@ -93,28 +99,6 @@ try {
   await page.waitForSelector('.exp-total-num', { timeout: 8000 });
   ok('真實入口：行程頁 → 底部「分帳」分頁');
 
-  // ---------- 記帳表單打得開（記帳那條路的入口） ----------
-  // 這裡**只驗表單開得起來**，不從表單記一筆。2026-09-21 實測到：用真的滑鼠點
-  // 「誰付的」與「分類」的 chip，選擇永遠跳回第一個選項（`field()` 把整列包在
-  // `<label>` 裡，label 會把點擊轉發給第一個控制項；重繪後就落回第一顆）。
-  // 在那個 bug 修好之前，從表單驅動的「記一筆」測不出使用者真的做得到的事 ——
-  // 硬寫成用 JS 直接改 st 的話，就是一條沒有使用者在走的路。見回報與 SPEC §6。
-  await page.evaluate(() => document.getElementById('topActionBtn').click());
-  await page.waitForSelector('#modalRoot .exp-form', { timeout: 6000 });
-  const form = await page.evaluate(() => {
-    const root = document.querySelector('#modalRoot');
-    const r = {
-      numpad: root.querySelectorAll('.numpad-key, .numpad button').length > 0 || !!root.querySelector('.numpad-display'),
-      payers: [...(document.querySelectorAll('#modalRoot .quick-pick')[1]?.querySelectorAll('button') || [])].map((b) => b.textContent.trim()),
-      parts: root.querySelectorAll('.exp-part').length,
-    };
-    [...root.querySelectorAll('.modal-actions button')].find((b) => b.textContent.trim() === '取消').click();
-    return r;
-  });
-  yes(form.numpad && form.payers.length === 3 && form.parts === 3,
-    `「加一筆帳」表單打得開：數字鍵盤、三個付款人、三個參與者（${form.payers.join('／')}）`, JSON.stringify(form));
-  await sleep(300);
-
   // ---------- 畫面上的金額 = 手算的值 ----------
   await page.waitForSelector('.exp-total-num');
   const ui = await page.evaluate(() => {
@@ -175,8 +159,148 @@ try {
   yes(core.transfers.length === 2 && core.transfers.every((t) => t.to === ids.A),
     `核心：兩筆轉帳、都是付給阿公（${core.transfers.length}）`, JSON.stringify(core.transfers));
 
-  console.log('\n分帳結清測試結束');
   console.log('M10 用的指紋：' + JSON.stringify({ grand: round2(core.grand), balances: Object.fromEntries(Object.entries(core.balances).map(([k, v]) => [k === ids.A ? '阿公' : k === ids.B ? '阿嬤' : '小美', round2(v)])), transfers: core.transfers.map((t) => round2(t.amount)).sort(), count: core.count }));
+
+  // ---------- T0：從真的表單記一筆（R0，SPEC_分帳金額守恆）----------
+  // 放在金額比對**之後**：這裡新記的幾筆會改變合計，上面的 WANT 不受影響。
+  //
+  // 點擊一律用 ElementHandle.click()：它移動真的滑鼠、在元素中心按下放開（pointerdown →
+  // mouseup → click），跟手指點下去是同一條路。v1.74.2 就是這樣實測到 bug 的：
+  // 「分類」「誰付的」整排按鈕包在 `<label>` 裡，被點的那顆重繪後離開 DOM，點擊冒泡到
+  // label 時被轉發給排第一的控制項，選擇落回第一顆。用 `el.click()` 在 page.evaluate 裡
+  // 點也會重現（同一個冒泡），但我們要的是使用者那條路。
+  const openForm = async () => {
+    const btn = await page.$('#topActionBtn');
+    await btn.click();
+    try {
+      await page.waitForSelector('#modalRoot .exp-form', { timeout: 6000 });
+    } catch (e) {
+      const why = await page.evaluate(() => ({
+        hash: location.hash, top: document.getElementById('topActionBtn')?.outerHTML.slice(0, 200),
+        modal: document.getElementById('modalRoot')?.innerHTML.slice(0, 300),
+        hit: (() => { const b = document.getElementById('topActionBtn'); if (!b) return null; const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return el && (el.id || el.className || el.tagName); })(),
+      }));
+      throw new Error('記帳表單沒打開：' + JSON.stringify(why));
+    }
+    await sleep(250);
+  };
+  const formState = () => page.evaluate(() => {
+    const rows = [...document.querySelectorAll('#modalRoot .quick-pick')];
+    const pick = (row) => [...(row?.querySelectorAll('button') || [])].map((b) => ({ t: b.textContent.trim(), on: b.classList.contains('on') }));
+    const parts = [...document.querySelectorAll('#modalRoot .exp-part')].map((p) => ({
+      t: p.querySelector('.exp-part-name')?.textContent.trim(),
+      on: !!p.querySelector('input[type=checkbox]')?.checked,
+      share: p.querySelector('.exp-share')?.value ?? null,
+    }));
+    return { cat: pick(rows[0]), pay: pick(rows[1]), parts };
+  });
+  const handles = async (sel) => page.$$(sel);
+  const labelOf = async (text) => {
+    // 欄位標題那段字（.form-label）；點它是使用者會做的事（手指落在標題上）
+    const hs = await handles('#modalRoot .form-label');
+    for (const hd of hs) if ((await hd.evaluate((e) => e.textContent.trim())) === text) return hd;
+    return null;
+  };
+  const typeAmount = async (digits) => {
+    for (const d of digits) {
+      const keys = await handles('#modalRoot .numpad-key');
+      for (const k of keys) if ((await k.evaluate((e) => e.textContent.trim())) === d) { await k.click(); break; }
+    }
+  };
+  const save = async () => {
+    const bs = await handles('#modalRoot .modal-actions button');
+    for (const b of bs) if ((await b.evaluate((e) => e.textContent.trim())) === '儲存') { await b.click(); break; }
+    await page.waitForFunction(() => !document.querySelector('#modalRoot .exp-form'), { timeout: 6000 });
+    await sleep(300);
+  };
+  const stored = (title) => page.evaluate(async (tid, title) => {
+    const { tripExpenses } = await import('./js/expenses.js');
+    return tripExpenses(tid).find((e) => e.title === title) || null;
+  }, ids.tid, title);
+
+  await openForm();
+  let st0 = await formState();
+  yes(st0.pay.length >= 3 && st0.cat.length >= 2, `前置：表單有 ${st0.pay.length} 個付款人、${st0.cat.length} 個分類`, JSON.stringify(st0));
+  yes(st0.pay[0].on && !st0.pay[2].on && st0.cat[0].on && !st0.cat[1].on,
+    '前置：一開始選中的是第一個付款人與第一個分類（不然「點了才變」分不出來）', JSON.stringify(st0));
+
+  // 依排的順序取：第一排是分類、第二排是付款人
+  const payBtns = await page.$$('#modalRoot .quick-pick');
+  const catBtns = await payBtns[0].$$('button');
+  const whoBtns = await payBtns[1].$$('button');
+  await whoBtns[2].click(); await sleep(150);
+  await catBtns[1].click(); await sleep(150);
+  let st1 = await formState();
+  yes(st1.pay[2].on && !st1.pay[0].on, `T0 點第三個付款人「${st1.pay[2].t}」→ 它被選中、第一個沒有`, JSON.stringify(st1.pay));
+  yes(st1.cat[1].on && !st1.cat[0].on, `T0 點第二個分類「${st1.cat[1].t}」→ 它被選中、第一個沒有`, JSON.stringify(st1.cat));
+
+  // 手指落在欄位標題上（「誰付的」「分類」這幾個字）不應該改掉已經選好的
+  for (const t of ['誰付的', '分類']) {
+    const lb = await labelOf(t);
+    if (lb) { await lb.click(); await sleep(150); }
+  }
+  const st2 = await formState();
+  yes(st2.pay[2].on && !st2.pay[0].on && st2.cat[1].on && !st2.cat[0].on,
+    'T0 點「誰付的」「分類」的標題字 → 已選的付款人與分類不變', JSON.stringify({ pay: st2.pay, cat: st2.cat }));
+
+  await typeAmount(['1', '2', '0']);
+  const titleIn = await page.$('#modalRoot .exp-form input.field[type=text]');
+  await titleIn.click(); await titleIn.type('回程計程車');
+  await save();
+  const e0 = await stored('回程計程車');
+  yes(!!e0, 'T0 從表單記的那一筆真的存進去了');
+  // 旅伴在表單上的排列順序不固定（store.membersOf 沒排序），所以期望值用「點的那一顆上寫的名字」，
+  // 不寫死是誰。前置已確認它不是第一顆。
+  const nameOf = { [ids.A]: '阿公', [ids.B]: '阿嬤', [ids.C]: '小美' };
+  const clickedPayer = st1.pay[2].t;
+  yes(clickedPayer !== st0.pay[0].t, `前置：點的付款人「${clickedPayer}」不是一開始選中的「${st0.pay[0].t}」`);
+  eq(e0 && (nameOf[e0.payerId] || e0.payerId), clickedPayer, `T0 存進去的付款人是點的那一個（${clickedPayer}）`);
+  eq(e0 && e0.category, 'transport', 'T0 存進去的分類是點的那一個（交通）');
+  eq(e0 && e0.amount, 120, 'T0 存進去的金額是鍵盤按的 120');
+
+  // ---------- T0b：「分給誰」那一格 ----------
+  await openForm();
+  const p0 = await formState();
+  yes(p0.parts.length === 3 && p0.parts.every((p) => p.on), `前置：三個人一開始都有勾（${p0.parts.map((p) => p.t).join('／')}）`, JSON.stringify(p0.parts));
+  // 點第二個人的名字（手指最常落的地方）
+  const names = await page.$$('#modalRoot .exp-part-name');
+  await names[1].click(); await sleep(150);
+  const p1 = await formState();
+  yes(!p1.parts[1].on && p1.parts[0].on && p1.parts[2].on, `T0b 點「${p1.parts[1].t}」→ 只有他取消、第一個人沒變`, JSON.stringify(p1.parts));
+  // 再點他的勾選框本身，勾回來
+  const boxes = await page.$$('#modalRoot .exp-part input[type=checkbox]');
+  await boxes[1].click(); await sleep(150);
+  const p2 = await formState();
+  yes(p2.parts.every((p) => p.on), 'T0b 點他的勾選框 → 勾回來、其他人不變', JSON.stringify(p2.parts));
+  // 手指落在「分給誰」這幾個字上，不應該動到任何人的勾
+  const lbParts = await labelOf('分給誰');
+  if (lbParts) { await lbParts.click(); await sleep(150); }
+  const p3 = await formState();
+  yes(p3.parts.every((p) => p.on), 'T0b 點「分給誰」的標題字 → 沒有人的勾被改掉', JSON.stringify(p3.parts));
+  // 切到自訂比例，把第二個人的份數改成 2
+  const toggles = await page.$$('#modalRoot .exp-form .btn-ghost');
+  for (const t of toggles) if ((await t.evaluate((e) => e.textContent)).includes('自訂比例')) { await t.click(); break; }
+  await sleep(200);
+  const shares = await page.$$('#modalRoot .exp-share');
+  yes(shares.length === 3, `T0b 切到自訂比例 → 出現 ${shares.length} 個份數欄`);
+  await shares[1].click({ clickCount: 3 }); await shares[1].type('2'); await sleep(100);
+  const p4 = await formState();
+  yes(p4.parts.every((p) => p.on) && p4.parts[1].share === '2', 'T0b 在份數欄打字 → 值是 2、焦點沒跳走、勾選沒變', JSON.stringify(p4.parts));
+  await typeAmount(['4', '0', '0']);
+  const titleIn2 = await page.$('#modalRoot .exp-form input.field[type=text]');
+  await titleIn2.click(); await titleIn2.type('水果');
+  await save();
+  const e1 = await stored('水果');
+  yes(!!e1, 'T0b 那一筆存進去了');
+  yes(e1 && e1.participants.length === 3 && [ids.A, ids.B, ids.C].every((m) => e1.participants.includes(m)), 'T0b 存進去的參與者是三個人', JSON.stringify(e1 && e1.participants));
+  // 份數改成 2 的是表單上第二個人（順序不固定，用他的名字對）
+  const twoName = p4.parts[1].t;
+  const gotShares = e1 && e1.shares ? Object.fromEntries(Object.entries(e1.shares).map(([k, v]) => [nameOf[k] || k, v])) : null;
+  const wantShares = Object.fromEntries(['阿公', '阿嬤', '小美'].map((n) => [n, n === twoName ? 2 : 1]));
+  yes(!!gotShares && ['阿公', '阿嬤', '小美'].every((n) => gotShares[n] === wantShares[n]),
+    `T0b 存進去的份數是 ${JSON.stringify(wantShares)}（${twoName} 是 2）`, JSON.stringify(gotShares));
+
+  console.log('\n分帳結清測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
 } finally {

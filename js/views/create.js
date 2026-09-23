@@ -327,7 +327,7 @@ export default async function create() {
   render(h('div', { class: 'page form' },
     field('旅程名稱', titleField),
     field('哪幾天去？', dateField),
-    field('有誰要一起', h('div', {}, memberList, memberField)),
+    fieldGroup('有誰要一起', h('div', {}, memberList, memberField)),
 
     h('div', { class: 'section-label' }, '選景點'),
     crumb,
@@ -357,8 +357,15 @@ function tripDays(start, end) {
   return d > 0 && d < 30 ? d : 1;
 }
 
+// 包「單一輸入框」用：點標題字會聚焦那個框，這是對的。
 function field(label, control) {
   return h('label', { class: 'form-field' }, h('span', { class: 'form-label' }, label), control);
+}
+
+// 包「一組控制項」用：不能用 <label>，它會把點擊轉發給裡面第一個控制項（見 expenses.js 同名函式）。
+// 「有誰要一起」裡第一個控制項是第一位旅伴的「×」——手指落在標題字上就會把他刪掉。
+function fieldGroup(label, control) {
+  return h('div', { class: 'form-field', role: 'group', 'aria-label': label }, h('span', { class: 'form-label' }, label), control);
 }
 function grid(children) { return h('div', { class: 'quick-pick' }, ...children); }
 function bigBtn(label, onclick) { return h('button', { class: 'pick-big', onclick }, label); }
