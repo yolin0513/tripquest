@@ -101,10 +101,96 @@ console.log('\n— M4 sharePerMember —');
   eq(one.a, 50, '權重 1:0 → a 全拿');
   eq(one.b, 0, '權重 1:0 → b 是 0');
 }
-// 已知缺陷（不寫斷言）：
-//  · D2 權重全填 0 → total 退回 1，每人攤 0，總和不等於花費金額（實測：表單存得進去）
-//  · D3 參與者是空的 → 回 {}，付款人被記全額、沒有人被扣（表單擋得住）
-//  修正時在這裡補斷言，見 docs/SPEC_算錢的測試.md §6。
+// v1.74.5 以前這裡是兩個已知缺陷：D2 權重全填 0 → 每人攤 0、總和不等於花費；D3 參與者是空的 →
+// 付款人被記全額、沒有人被扣。修法（SPEC_分帳金額守恆 R2、R3）與斷言在下面 T4、T7。
+
+// ---------- T4 份數全是 0：退回平均分（R2）----------
+console.log('\n— T4 份數全是 0 —');
+// 修正前沒有這個函式；拿不到就回 undefined，讓每一條都跑得到、各自紅（不要一個例外吞掉後面全部）
+const fallbackOf = (e) => (typeof ex.sharesFallback === 'function' ? ex.sharesFallback(e) : undefined);
+{
+  // 手算：600 元 A 付，A、B、C 參與，份數都是 0 → 退回平均分，每人 600 / 3 ＝ 200
+  //       A 淨額 ＝ 600 − 200 ＝ +400；B、C 各 −200；總和 0
+  const e = { amount: 600, currency: 'TWD', payerId: 'A', participants: ['A', 'B', 'C'], shares: { A: 0, B: 0, C: 0 } };
+  const sh = ex.sharePerMember(e);
+  yes(sh.A === 200 && sh.B === 200 && sh.C === 200, 'T4 份數全 0 → 每人攤 600 / 3 ＝ 200', JSON.stringify(sh));
+  eq(fallbackOf(e), true, 'T4 sharesFallback 講得出這一筆是「份數都是 0，先照平均分」');
+  const r = ex.settleCore({ expenses: [e], baseCurrency: 'TWD', ratesObj: RATES });
+  near(r.balances.A, 400, 'T4 A 淨額 ＝ 600 − 200 ＝ +400');
+  near(r.balances.B, -200, 'T4 B 淨額 −200');
+  near(Object.values(r.balances).reduce((a, b) => a + b, 0), 0, 'T4 淨額總和為 0', 0.01);
+  // 負數當 0：{A:−1, B:2, C:0} → 有效份數 {0,2,0} → B 全拿 600
+  const neg = ex.sharePerMember({ amount: 600, participants: ['A', 'B', 'C'], shares: { A: -1, B: 2, C: 0 } });
+  yes(neg.A === 0 && neg.B === 600 && neg.C === 0, 'T4 負的份數當 0：{−1, 2, 0} → B 全拿 600', JSON.stringify(neg));
+  // 全部都是負數 → 有效份數全 0 → 平均分
+  const allNeg = ex.sharePerMember({ amount: 90, participants: ['A', 'B', 'C'], shares: { A: -1, B: -2, C: -3 } });
+  yes(allNeg.A === 30 && allNeg.B === 30 && allNeg.C === 30, 'T4 份數全是負數 → 也退回平均分，各 30', JSON.stringify(allNeg));
+  // 對照：份數 1:0 仍是「a 全拿」，而且不算退回平均分
+  const one = { amount: 50, participants: ['a', 'b'], shares: { a: 1, b: 0 } };
+  const so = ex.sharePerMember(one);
+  yes(so.a === 50 && so.b === 0, 'T4 對照：份數 1:0 → a 全拿 50（沒被弄壞）', JSON.stringify(so));
+  eq(fallbackOf(one), false, 'T4 對照：份數 1:0 不算「先照平均分」');
+  eq(fallbackOf({ amount: 50, participants: ['a', 'b'], shares: null }), false, 'T4 對照：本來就平均分的不算');
+}
+
+// ---------- T7 參與者空、付款人空或不在成員裡（R3、R4）----------
+console.log('\n— T7 參與者空、付款人空 —');
+{
+  const MEM = ['A', 'B'];
+  // R3 參與者空 → 當成只有付款人自己分：300 元 A 付 → A 付 300、攤 300、淨額 0；合計照算 300
+  const r3 = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: 'A', participants: [], shares: null }],
+    baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
+  near(r3.balances.A || 0, 0, 'T7 參與者空 → 付款人自己分，A 淨額 0（不是 +300）');
+  near(r3.totals.grand, 300, 'T7 參與者空 → 合計照算 300');
+  near(Object.values(r3.balances).reduce((a, b) => a + b, 0), 0, 'T7 參與者空 → 淨額總和 0', 0.01);
+  // 對照：補上參與者 A、B → A +150
+  const r3c = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: 'A', participants: ['A', 'B'], shares: null }],
+    baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
+  near(r3c.balances.A, 150, 'T7 對照：補上參與者 A、B → A 淨額 +150');
+
+  // R4 付款人空 → 整筆不進淨額（沒有人被扣、也沒有人入帳），合計照算，noPayer 計 1
+  const r4 = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: '', participants: ['A', 'B'], shares: null }],
+    baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
+  yes(Object.values(r4.balances).every((v) => Math.abs(v) < 1e-9), 'T7 付款人空 → 沒有任何人被扣', JSON.stringify(r4.balances));
+  eq(r4.noPayer, 1, 'T7 付款人空 → noPayer 是 1');
+  near(r4.totals.grand, 300, 'T7 付款人空 → 合計照算 300');
+  // 付款人不在這個群組的成員裡（例如被移除的旅伴）→ 同上
+  const r4b = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: 'Z', participants: ['A', 'B'], shares: null }],
+    baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
+  yes(Object.values(r4b.balances).every((v) => Math.abs(v) < 1e-9), 'T7 付款人不在成員裡 → 沒有任何人被扣', JSON.stringify(r4b.balances));
+  eq(r4b.noPayer, 1, 'T7 付款人不在成員裡 → noPayer 是 1');
+  // 對照：付款人是 A → 照常分，noPayer 0
+  const r4c = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: 'A', participants: ['A', 'B'], shares: null }],
+    baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
+  yes(r4c.noPayer === 0 && Math.abs(r4c.balances.B + 150) < 1e-9, 'T7 對照：付款人是 A → B 被扣 150、noPayer 0', JSON.stringify(r4c));
+}
+
+// ---------- T8 守恆的總斷言：各種怪資料混在一起 ----------
+console.log('\n— T8 守恆：怪資料與正常資料混在一起 —');
+{
+  const NOJPY = { base: 'USD', rates: { USD: 1, TWD: 32 } };
+  const MEM = ['A', 'B', 'C'];
+  const mix = [
+    { k: '正常', amount: 900, currency: 'TWD', payerId: 'A', participants: ['A', 'B', 'C'], shares: null },
+    { k: '正常（除不盡）', amount: 100, currency: 'TWD', payerId: 'B', participants: ['A', 'B', 'C'], shares: null },
+    { k: '查不到匯率', amount: 5000, currency: 'JPY', payerId: 'C', participants: ['A', 'C'], shares: null },
+    { k: '份數全 0', amount: 600, currency: 'TWD', payerId: 'C', participants: ['A', 'B', 'C'], shares: { A: 0, B: 0, C: 0 } },
+    { k: '參與者空', amount: 250, currency: 'TWD', payerId: 'B', participants: [], shares: null },
+    { k: '付款人空', amount: 400, currency: 'TWD', payerId: '', participants: ['A', 'B'], shares: null },
+    { k: '付款人不在成員裡', amount: 700, currency: 'TWD', payerId: 'Z', participants: ['B', 'C'], shares: null },
+  ];
+  const kinds = new Set(mix.map((e) => e.k));
+  yes(['查不到匯率', '份數全 0', '參與者空', '付款人空', '付款人不在成員裡'].every((k) => kinds.has(k)),
+    `前置：每一種怪法至少一筆（${[...kinds].join('、')}）`);
+  const r = ex.settleCore({ expenses: mix, baseCurrency: 'TWD', ratesObj: NOJPY, memberIds: MEM });
+  const sum = Object.values(r.balances).reduce((a, b) => a + b, 0);
+  near(sum, 0, 'T8 淨額總和為 0', 0.01);
+  yes(Object.values(r.balances).every((v) => Number.isFinite(v)), 'T8 每個人的淨額都是有限的數（沒有 NaN）', JSON.stringify(r.balances));
+  const after = { ...r.balances };
+  for (const t of r.transfers) { after[t.from] = (after[t.from] || 0) + t.amount; after[t.to] = (after[t.to] || 0) - t.amount; }
+  yes(Object.values(after).every((v) => Math.abs(v) < 0.01), 'T8 照轉帳方案執行完，每個人都歸零', JSON.stringify(after));
+  yes(Object.keys(r.balances).every((m) => MEM.includes(m)), 'T8 淨額裡只有這個群組的成員（沒有 Z、沒有空字串）', JSON.stringify(Object.keys(r.balances)));
+}
 
 // ---------- M5 守恆 ----------
 console.log('\n— M5 結清核心：守恆 —');

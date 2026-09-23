@@ -47,15 +47,29 @@ const CATEGORIES = [
 export { CATEGORIES };
 export function categoryOf(id) { return CATEGORIES.find((c) => c.id === id) || CATEGORIES[5]; }
 
+// 份數：負數與非數字一律當 0（v1.74.5 以前 {−1, 2, 0} 會讓總份數變 1、B 攤到兩倍的錢）
+const weightOf = (e, m) => Math.max(0, Number(e.shares[m]) || 0);
+
+// 這一筆選了自訂比例、但參與的人份數加起來 ≤ 0 → sharePerMember 退回平均分。
+// 這是替使用者補了一個他沒填的東西，所以明細要講出來（R2）。
+export function sharesFallback(e) {
+  const parts = e.participants || [];
+  if (!parts.length || !e.shares || !Object.keys(e.shares).length) return false;
+  return parts.reduce((s, m) => s + weightOf(e, m), 0) <= 0;
+}
+
 // 每個人的分攤額（該筆花費、原幣別）
 export function sharePerMember(e) {
   const parts = e.participants && e.participants.length ? e.participants : [];
-  if (!parts.length) return {};
+  // R3：參與者是空的 → 當成只有付款人自己分（表單擋得住，這是給同步來的舊資料的防線；
+  // v1.74.5 以前回 {}，付款人被記全額應收、沒有任何人被扣）
+  if (!parts.length) return e.payerId ? { [e.payerId]: e.amount } : {};
   const out = {};
-  if (e.shares && Object.keys(e.shares).length) {
-    const total = parts.reduce((s, m) => s + (Number(e.shares[m]) || 0), 0) || 1;
-    for (const m of parts) out[m] = e.amount * (Number(e.shares[m]) || 0) / total;
+  if (e.shares && Object.keys(e.shares).length && !sharesFallback(e)) {
+    const total = parts.reduce((s, m) => s + weightOf(e, m), 0);
+    for (const m of parts) out[m] = e.amount * weightOf(e, m) / total;
   } else {
+    // 本來就平均分；或 R2：份數全是 0 → 退回平均分（v1.74.5 以前每人攤 0，那筆錢沒有人分攤）
     const per = e.amount / parts.length;
     for (const m of parts) out[m] = per;
   }
@@ -64,7 +78,8 @@ export function sharePerMember(e) {
 
 // 整趟結算。baseCurrency = 顯示幣別。ratesObj 來自 fx.getRates()。
 // 回傳 { totals: {byMember, grand}, balances: {memberId: net}, transfers: [{from,to,amount}], missingRate:bool,
-//        count（全部筆數）, counted（有算進合計與結清的筆數）, unconverted: [{code, total, count}] }
+//        count（全部筆數）, counted（有算進合計的筆數）, unconverted: [{code, total, count}],
+//        noPayer（算進合計、但沒有付款人所以沒進結清的筆數）}
 //
 // 這一層只負責「去 store 拿這趟的花費」，算錢的部分全在 settleCore()。
 // 拆開的理由（v1.74，只是搬家、一個運算都沒改）：`store` 讀 IndexedDB，
@@ -72,17 +87,22 @@ export function sharePerMember(e) {
 // （除不盡、查不到匯率、權重、轉帳收斂）沒辦法用便宜的純 Node 測試驗，
 // 只能每一種都開一次瀏覽器。核心拆出來之後，moneytest 直接餵花費清單就能驗。
 export function settleTrip(tripId, baseCurrency, ratesObj) {
-  return settleCore({ expenses: tripExpenses(tripId), baseCurrency, ratesObj });
+  const trip = store.get(tripId);
+  const memberIds = trip ? store.membersOf(trip.groupId).map((m) => m.id) : null;
+  return settleCore({ expenses: tripExpenses(tripId), baseCurrency, ratesObj, memberIds });
 }
 
 // 純計算：吃進花費清單、基準幣別、匯率表，不碰 store／fetch／DOM。
 // v1.74.2 拆出來時與原本逐字相同；之後的修正見 docs/SPEC_分帳金額守恆.md（R1–R5）。
-export function settleCore({ expenses, baseCurrency, ratesObj }) {
+// memberIds（可省略）：這個群組現在的成員；付款人不在裡面的花費當成「沒有付款人」（R4）。
+export function settleCore({ expenses, baseCurrency, ratesObj, memberIds = null }) {
   const balances = {};   // memberId -> net（正 = 別人欠他）
   let grand = 0;
   const byMember = {};   // memberId -> 他付出去的總額（base）
   let missingRate = false;
   let counted = 0;
+  let noPayer = 0;
+  const isMember = memberIds ? new Set(memberIds) : null;
   const unconv = new Map();   // 幣別 -> { code, total（原幣別）, count }
 
   // 查得到匯率才會走到這裡（下面先整筆檢查過），所以沒有「查不到就回原值」這條路。
@@ -103,10 +123,11 @@ export function settleCore({ expenses, baseCurrency, ratesObj }) {
     counted++;
     const amtBase = toBase(e.amount, e.currency);
     grand += amtBase;
-    if (e.payerId) {
-      balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;
-      byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase;
-    }
+    // R4：沒有付款人、或付款人已不在這個群組 → 整筆不進淨額（不扣任何人、也沒有人入帳），
+    // 合計照算、另外計數讓畫面講出來。v1.74.5 以前只保護入帳那一半：分攤照扣、沒有人收。
+    if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }
+    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;
+    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase;
     const shares = sharePerMember(e);
     for (const [m, s] of Object.entries(shares)) {
       balances[m] = (balances[m] || 0) - toBase(s, e.currency);
@@ -115,7 +136,7 @@ export function settleCore({ expenses, baseCurrency, ratesObj }) {
 
   const transfers = minTransfers(balances);
   const unconverted = [...unconv.values()].sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
-  return { totals: { grand, byMember }, balances, transfers, missingRate, count: expenses.length, counted, unconverted };
+  return { totals: { grand, byMember }, balances, transfers, missingRate, count: expenses.length, counted, unconverted, noPayer };
 }
 
 // 貪婪法：最大債權人 <-> 最大債務人，逼近最少轉帳次數

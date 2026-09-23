@@ -7,7 +7,7 @@ import { navigate } from '../router.js';
 import { hashHue } from '../ids.js';
 import { avatar } from '../ui.js';
 import { loadCurrencies, currencyInfo, currencyForCountry, getRates, fmtMoney } from '../fx.js';
-import { tripExpenses, saveExpense, deleteExpense, settleTrip, CATEGORIES, categoryOf, sharePerMember } from '../expenses.js';
+import { tripExpenses, saveExpense, deleteExpense, settleTrip, CATEGORIES, categoryOf, sharesFallback } from '../expenses.js';
 
 export default async function expenses(tripId) {
   const trip = store.get(tripId);
@@ -48,8 +48,10 @@ export default async function expenses(tripId) {
 
   // 查不到匯率的花費整筆沒有算進去（R1）：每個幣別一行，講出多少錢、幾筆、沒算進哪裡。
   // 不寫「可能不準」——那句講不出錯在哪、錯多少。
-  const unconvLines = (s.unconverted || []).map((u) =>
+  const noteLines = (s.unconverted || []).map((u) =>
     `另有 ${fmtMoney(u.total, u.code)}（${u.count} 筆）查不到匯率，沒有算進合計與結清方案。`);
+  // R4：沒有付款人（或付款人已不在這趟的旅伴裡）的花費：算進合計，但沒辦法算誰該給誰
+  if (s.noPayer) noteLines.push(`有 ${s.noPayer} 筆沒有付款人，沒有算進結清方案。`);
   // 全部都換算不了（第一次開又離線、或這趟只有查不到匯率的外幣）：算不出來就照實講，不顯示 0 元
   const nothingCounted = s.counted === 0;
 
@@ -64,14 +66,14 @@ export default async function expenses(tripId) {
         : h('div', { class: 'exp-total-num' }, fmtMoney(s.totals.grand, base)),
       h('div', { class: 'muted sm' }, members.length && !nothingCounted ? `每人平均 ${fmtMoney(s.totals.grand / members.length, base)}` : ''),
     ),
-    ...unconvLines.map((t) => h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t)),
+    ...noteLines.map((t) => h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t)),
     rates ? h('p', { class: 'form-hint' }, `匯率更新：${fmtFxDate(rates.updatedAt)}${rates.stale ? '（離線快取）' : ''}`) : null,
   ));
 
   // ---- 結清方案 ----
   page.append(h('div', { class: 'section-label' }, '結清方案（最少轉帳）'));
   // 使用者最可能只看這一區就去轉帳，所以同一句再講一次
-  for (const t of unconvLines) page.append(h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t));
+  for (const t of noteLines) page.append(h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t));
   if (nothingCounted) {
     page.append(h('div', { class: 'card about exp-settle-none' }, h('p', { class: 'sm' }, '查到匯率之後才算得出來。')));
   } else if (!s.transfers.length) {
@@ -113,7 +115,8 @@ export default async function expenses(tripId) {
       h('span', { class: 'exp-item-cat' }, cat.emoji),
       h('span', { class: 'exp-item-main' },
         h('span', { class: 'exp-item-title' }, e.title),
-        h('span', { class: 'muted sm' }, `${nameOf(e.payerId)} 付 · ${partN} 人分`)),
+        h('span', { class: 'muted sm' }, `${nameOf(e.payerId)} 付 · ${partN} 人分`
+          + (sharesFallback(e) ? ' · 份數都是 0，先照平均分' : ''))),
       h('span', { class: 'exp-item-amt' }, fmtMoney(e.amount, e.currency)),
     );
   })));
@@ -179,7 +182,12 @@ async function openEdit(tripId, existing) {
         h('span', { class: 'exp-part-name' }, m.displayName),
         st.shares ? h('input', {
           class: 'field exp-share', type: 'number', min: 0, step: 1, value: w, placeholder: '份',
-          oninput: (ev) => { st.shares[m.id] = Number(ev.target.value) || 0; },
+          oninput: (ev) => {
+            // 負數一律當 0，而且輸入框上就改掉（R2），不留一個看得到、算的時候卻不是它的數字
+            const v = Number(ev.target.value) || 0;
+            if (v < 0) ev.target.value = '0';
+            st.shares[m.id] = Math.max(0, v);
+          },
         }) : null,
       );
     }));
@@ -229,6 +237,9 @@ async function openEdit(tripId, existing) {
   const amt = parseFloat(amountStr) || 0;
   if (amt <= 0) { toast('金額要大於 0'); return; }
   if (!st.participants.length) { toast('至少選一個人分'); return; }
+  if (st.shares && st.participants.reduce((s, m) => s + Math.max(0, Number(st.shares[m]) || 0), 0) <= 0) {
+    toast('份數至少要有一個人大於 0'); return;
+  }
   await saveExpense({ ...st, id: existing?.id, amount: amt, title: titleEl.value.trim() });
   toast('已記錄');
   expenses(tripId);

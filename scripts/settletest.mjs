@@ -315,8 +315,9 @@ try {
     await s.put({ id: tid, type: 'trip', groupId: g, title, region: '測試', baseCurrency: 'TWD', allowWiki: false });
     let t = Date.now();
     for (const r of rows) {
+      const shares = r.shares ? Object.fromEntries(Object.entries(r.shares).map(([n, w]) => [who[n], w])) : null;
       await s.put({ id: uuid(), type: 'expense', tripId: tid, groupId: g, createdAt: t--, title: r.title, category: 'food',
-        amount: r.amount, currency: r.currency, payerId: who[r.payer], participants: r.parts.map((n) => who[n]), shares: null });
+        amount: r.amount, currency: r.currency, payerId: r.payer ? who[r.payer] : '', participants: r.parts.map((n) => who[n]), shares });
     }
     return tid;
   }, title, rows);
@@ -392,6 +393,70 @@ try {
   ]);
   const r3c = await openTripExpenses('真的打平的一趟');
   yes(r3c.settle.includes('打平'), 'T3 對照：真的打平 → 結清方案仍寫「打平」', r3c.settle);
+
+  // ---------- T6／R4 畫面：舊資料裡的怪花費（用 page.evaluate 灌，當成同步來的）----------
+  // 手算：正常 200 元 阿公付、兩人均分 → 阿嬤給阿公 100
+  //       份數全 0 的 600 元 阿嬤付 → 退回平均分：各 300 → 阿公再欠阿嬤 300
+  //       沒有付款人的 400 元 → 算進合計、不進結清
+  //       淨額：阿公 ＝ 200 − 100 − 300 ＝ −200；阿嬤 ＝ 600 − 100 − 300 ＝ +200 → 阿公給阿嬤 200
+  //       合計 ＝ 200 + 600 + 400 ＝ 1200
+  const tid6 = await seedTrip('份數的一趟', [
+    { title: '正常的一筆', amount: 200, currency: 'TWD', payer: '阿公', parts: ['阿公', '阿嬤'] },
+    { title: '份數全零', amount: 600, currency: 'TWD', payer: '阿嬤', parts: ['阿公', '阿嬤'], shares: { 阿公: 0, 阿嬤: 0 } },
+    { title: '沒人付的', amount: 400, currency: 'TWD', payer: '', parts: ['阿公', '阿嬤'] },
+  ]);
+  const r6 = await openTripExpenses('份數的一趟');
+  const items6 = await page.evaluate(() => [...document.querySelectorAll('.exp-item')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
+  yes(items6.length === 3, `前置：明細有 3 筆（${items6.length}）`);
+  const zeroRow = items6.find((t) => t.includes('份數全零'));
+  const normalRow = items6.find((t) => t.includes('正常的一筆'));
+  yes(!!zeroRow && zeroRow.includes('份數都是 0') && zeroRow.includes('平均分'), 'T6 份數全 0 的那一筆，副標講「份數都是 0，先照平均分」', zeroRow);
+  yes(!!normalRow && !normalRow.includes('份數都是 0'), 'T6 對照：正常的那一筆沒有這句', normalRow);
+  eq(r6.grand, 'NT$1,200.00', 'R4 合計含沒有付款人的那筆（200 + 600 + 400）');
+  yes(r6.summary.includes('1 筆沒有付款人') && r6.summary.includes('沒有算進結清'), 'R4 總覽講「有 1 筆沒有付款人，沒有算進結清方案」', r6.summary);
+  yes(r6.settle.includes('阿公 給 阿嬤') && r6.settle.includes('NT$200.00'), 'R4／T6 結清：阿公給阿嬤 NT$200.00（手算）', r6.settle);
+
+  // ---------- T5：表單擋下份數全 0（真實入口）----------
+  const storedIn = (tid, title) => page.evaluate(async (tid, title) => {
+    const { tripExpenses } = await import('./js/expenses.js');
+    return tripExpenses(tid).find((e) => e.title === title) || null;
+  }, tid, title);
+  const toCustom = async () => {
+    for (const t of await page.$$('#modalRoot .exp-form .btn-ghost')) {
+      if ((await t.evaluate((e) => e.textContent)).includes('自訂比例')) { await t.click(); break; }
+    }
+    await sleep(200);
+    return page.$$('#modalRoot .exp-share');
+  };
+  const setShare = async (hd, v) => { await hd.click({ clickCount: 3 }); await hd.type(v); await sleep(80); };
+  const toastText = () => page.evaluate(() => document.getElementById('toast')?.textContent.trim() || '');
+  // 前置：同一張表單、份數 1:1 存得進去（證明擋的是全 0、不是自訂比例）
+  await openForm();
+  let sh = await toCustom();
+  yes(sh.length === 2, `前置：自訂比例出現 ${sh.length} 個份數欄`);
+  await setShare(sh[0], '-3');
+  const clamped = await sh[0].evaluate((e) => e.value);
+  eq(clamped, '0', 'T5 份數打負數 → 輸入框上就變成 0');
+  await setShare(sh[0], '1'); await setShare(sh[1], '1');
+  await typeAmount(['5', '0']);
+  let ti = await page.$('#modalRoot .exp-form input.field[type=text]');
+  await ti.click(); await ti.type('一比一');
+  await save();
+  const ok11 = await storedIn(tid6, '一比一');
+  yes(!!ok11 && Object.values(ok11.shares || {}).join() === '1,1', '前置：份數 1:1 存得進去', JSON.stringify(ok11 && ok11.shares));
+  // 全部打 0 → 被擋、看得到原因、沒存進去
+  await openForm();
+  sh = await toCustom();
+  await setShare(sh[0], '0'); await setShare(sh[1], '0');
+  await typeAmount(['5', '0']);
+  ti = await page.$('#modalRoot .exp-form input.field[type=text]');
+  await ti.click(); await ti.type('全部打零');
+  const bs = await page.$$('#modalRoot .modal-actions button');
+  for (const b of bs) if ((await b.evaluate((e) => e.textContent.trim())) === '儲存') { await b.click(); break; }
+  await sleep(300);
+  const tt = await toastText();
+  yes(tt.includes('份數') && tt.includes('大於 0'), `T5 份數全 0 → 儲存被擋，看得到原因（${tt}）`, tt);
+  eq(await storedIn(tid6, '全部打零'), null, 'T5 那一筆沒有存進去');
 
   console.log('\n分帳結清測試結束');
 } catch (e) {
