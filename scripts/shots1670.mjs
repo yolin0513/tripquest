@@ -17,10 +17,9 @@ import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = path.join(ROOT, 'screenshots', 'features');
-const MIRROR = process.env.TQ_SHOT_MIRROR
-  || path.join(process.env.APPDATA || '', 'Claude', 'local-agent-mode-sessions',
-    '96633e0f-6657-4920-af21-2039cbedc8f8', '5e6efb1a-4a56-4945-8423-90b8a2c6df6b',
-    'agent', 'local_ditto_5e6efb1a-4a56-4945-8423-90b8a2c6df6b', 'outputs', 'tripquest');
+// 鏡像資料夾（給工作階段的輸出區用）只讀環境變數；沒設就不複製。
+// 2026-09-23 以前這裡寫死了兩個本機工作階段的編號——那不該進 repo（個資清理 Q3）。
+const MIRROR = process.env.TQ_SHOT_MIRROR || null;
 
 const WEB = 5641, OSRM = 5642, ROUTES = 5643, PLACES = 5644, OP = 5645;
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
@@ -121,14 +120,14 @@ const shots = [];
 async function shot(page, name, note) {
   const file = path.join(OUT, name + '.png');
   await page.screenshot({ path: file });
-  fs.copyFileSync(file, path.join(MIRROR, name + '.png'));
+  if (MIRROR) fs.copyFileSync(file, path.join(MIRROR, name + '.png'));
   const b = fs.readFileSync(file);
   shots.push({ name, px: b.readUInt32BE(16) + '×' + b.readUInt32BE(20), kb: Math.round(b.length / 1024), note });
   console.log(`  📸 ${name}.png  ${b.readUInt32BE(16)}×${b.readUInt32BE(20)}  ${Math.round(b.length / 1024)}KB`);
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-fs.mkdirSync(MIRROR, { recursive: true });
+if (MIRROR) fs.mkdirSync(MIRROR, { recursive: true });
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 try {
@@ -321,7 +320,7 @@ try {
 
   console.log('\n完成 ' + shots.length + ' 張');
   console.log('  → ' + OUT);
-  console.log('  → ' + MIRROR);
+  if (MIRROR) console.log('  → ' + MIRROR);
 } catch (e) {
   console.error('✗ 例外：' + (e && e.stack || e));
   process.exitCode = 1;

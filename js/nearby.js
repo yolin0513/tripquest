@@ -44,14 +44,14 @@ function buildQuery(lat, lng, radius) {
   const parts = [
     `nwr[amenity=police](around:${radius},${lat},${lng});`,
     `nwr[amenity=pharmacy](around:${radius},${lat},${lng});`,
-    // 只查 amenity=hospital。緊急時列出小診所、國術館是有害的（實測石牌：
-    // 現行查詢的前 5 名全是診所與中醫，振興醫院排第 6、北榮第 7）。
+    // 只查 amenity=hospital。緊急時列出小診所、國術館是有害的（台北某處實測：
+    // 現行查詢的前 5 名全是診所與中醫，附近兩家醫學中心排第 6、第 7）。
     // 台灣的國術館/整復多半標成 shop=massage 或 healthcare=alternative，
     // 但也有標成 amenity=clinic 的（實測大台北 6 筆）—— 不查 clinic 就一起解決。
     `nwr[amenity=hospital](around:${hospRadius},${lat},${lng});`,
   ].join('');
   // 上限 80 是「任意取前 80 筆」不是「最近的 80 筆」。台北 8 公里內光是診所就有 300+ 筆，
-  // 80 筆會被小診所塞滿、真正的大醫院整個不在回應裡（實測石牌：振興、北榮都沒進來，
+  // 80 筆會被小診所塞滿、真正的大醫院整個不在回應裡（台北某處實測：附近兩家醫學中心都沒進來，
   // 只擠進 1 筆醫院，清單前幾名變成診所與被標成 clinic 的國術館 —— 使用者回報的正是這個）。
   // 現在只查 amenity=hospital，筆數本來就少，上限再放寬當保險。
   return `[out:json][timeout:10];(${parts});out center tags 300;`;
@@ -168,7 +168,7 @@ export { KIND };
 
 export const LIFE = {
   // 停車場要連 parking_entrance 一起查：市區的地下/大型停車場在 OSM 常常只標
-  // 「入口」節點、場體本身沒有 amenity=parking（實例：石牌國小地下停車場）。
+  // 「入口」節點、場體本身沒有 amenity=parking（實例：一所國小的地下停車場）。
   // 對開車的人來說，導航到「入口」本來就是最想要的點。
   parking:     { label: '停車場',   emoji: '🅿️', radius: 1500, sel: '[amenity=parking]', sel2: '[amenity=parking_entrance]' },
   // 廁所連「附設廁所」一起查（咖啡店、超商、市場、捷運站等）：使用者要的是
@@ -200,7 +200,7 @@ function lifeWrite(kind, lat, lng, data) {
 }
 
 // 名稱就寫明是特定人專用的 —— 等同 access=employees/private，一般人開過去停不了。
-// 台北實測（石牌 1.5 公里）：三個節點叫「員工停車場」、完全沒有 access 標記，
+// 台北實測（某處 1.5 公里內）：三個節點叫「員工停車場」、完全沒有 access 標記，
 // 靠標記過濾抓不到，只能看名字。範圍刻意抓窄，避免誤殺（「限顧客」是另一回事，留著）。
 const PRIVATE_NAME = /員工|職員|教職員|員生|住戶|宿舍/;
 
@@ -210,8 +210,8 @@ const PRIVATE_NAME = /員工|職員|教職員|員生|住戶|宿舍/;
 // 沒有名字、沒有費率、沒有車位數、沒有經營者，也沒有任何 access 標記（所以
 // v1.59 的 access 黑名單擋不到）。有人畫了一塊地說「這裡可以停車」，但沒有任何
 // 一個人再回來補第二個欄位 —— 這通常是路過的圖客順手畫的空地，不是營業場所。
-// 石牌實測：1.5 公里內 56 筆通過過濾，其中 20 筆是這種「只有位置」的；它們把
-// 明德平面停車場（北市停管處、29 格）壓到第 11 名、石牌國小地下停車場壓到第 23 名。
+// 台北實測：1.5 公里內 56 筆通過過濾，其中 20 筆是這種「只有位置」的；它們把
+// 一個公營平面停車場（29 格）壓到第 11 名、一所國小的地下停車場壓到第 23 名。
 //
 // 判斷刻意放寬：只要 name / brand / operator / ref / fee / capacity / opening_hours
 // 任一個有值，或有人明確標了 access=yes（「這裡是公開的」本身就是一次登記行為），
@@ -241,7 +241,7 @@ function lifeParse(el, kind) {
   const it = { id: el.type[0] + el.id, kind, lat: p.lat, lng: p.lon, name: t.name || t.brand || '', hours: t.opening_hours || '' };
   if (kind === 'parking') {
     // 一般人停不進去的不列：private/no（住戶）、permit（要許可證）、employees（員工）。
-    // 石牌實測 90 公尺處就有一塊無名的 access=permit 私人地，混在清單裡只會誤導。
+    // 台北實測 90 公尺處就有一塊無名的 access=permit 私人地，混在清單裡只會誤導。
     if (['private', 'no', 'permit', 'employees'].includes(t.access)) return null;
     if (t.name && PRIVATE_NAME.test(t.name)) return null;
     it.entrance = t.amenity === 'parking_entrance';
@@ -261,7 +261,7 @@ function lifeParse(el, kind) {
     if (it.attached && !(t.name || t.brand || t.operator)) return null;   // 無名附設講不出是哪裡
     it.name = t.name || t.brand || t.operator || '';   // 公廁有的掛管理單位名，也比空白好
     // 附設的 ♿ 只看 toilets:wheelchair——店家的 wheelchair=yes 是「門口進得去」，
-    // 不代表它的廁所無障礙（石牌 7-Eleven：店 yes、廁所 no）
+    // 不代表它的廁所無障礙（台北實測的一家超商：店 yes、廁所 no）
     it.wheelchair = it.attached ? t['toilets:wheelchair'] === 'yes'
       : (t.wheelchair === 'yes' || t['toilets:wheelchair'] === 'yes');
     it.changing = t.changing_table === 'yes';
@@ -275,14 +275,14 @@ function lifeParse(el, kind) {
 
 // 停車場去重（依排序後呼叫，留最好的一筆）。要處理兩件事：
 //
-// 1. **出入口是同一個停車場**。石牌實測前 5 名裡有兩組是這樣：
-//    「第三門診停車場」77m 與「第三門診停車場出口」104m（相距 104m，同一個場）、
+// 1. **出入口是同一個停車場**。台北實測前 5 名裡有兩組是這樣：
+//    「某門診停車場」77m 與「某門診停車場出口」104m（相距 104m，同一個場）、
 //    「地下停車場入口」與「地下停車場出口」（相距 26m）。等於五個名額浪費掉兩個。
 //    所以比對前先把名字尾巴的「入口／出口／出入口」去掉，顯示也用去掉後的名字
 //    （卡片上本來就有「停車場入口」標籤，名字再寫一次是多的）。
 //    代表點優先選「不是出口」的那一個 —— 導航到出口是錯的。
 //
-// 2. **同名不代表同一個場**。石牌 1.5 公里內有三個節點都叫「地下停車場」，
+// 2. **同名不代表同一個場**。台北實測 1.5 公里內有三個節點都叫「地下停車場」，
 //    彼此相距 163m / 794m / 836m —— 後兩個顯然是不同的停車場。原本的全域同名
 //    去重會把它們併成一個，等於憑空砍掉兩個真實停車場。改成「同名**且**相距
 //    200 公尺內」才算同一個；200m 這條線是照實測資料畫的（同場的出入口

@@ -213,7 +213,7 @@ try {
       { id: 'b', name: '羅東夜市', lat: 24.68, lng: 121.77 },
       { id: 'c', name: '桃園國際機場', lat: 24.69, lng: 121.78 },
       { id: 'd', name: '六福村主題遊樂園', lat: 24.70, lng: 121.79 },
-      { id: 'e', name: '石牌捷運站', lat: 24.71, lng: 121.80 },
+      { id: 'e', name: '台北車站', lat: 24.71, lng: 121.80 },
       { id: 'f', name: '阿嬤家', lat: 24.72, lng: 121.81 },
     ], null, 'drive').map(pick);
 
@@ -265,7 +265,7 @@ try {
   yes(fix.stays[1].stay === 90 && fix.stays[1].asm, `夜市沒填停留 → 用 90 分推算（不是一律 60）`);
   yes(fix.stays[2].stay === 120, `機場 → 120 分（名稱覆寫贏過 transit 類別的 20 分）`);
   yes(fix.stays[3].stay === 240, `遊樂園 → 240 分`);
-  yes(fix.stays[4].stay === 20, `捷運站 → 20 分（同屬 transit，靠名稱分開）`);
+  yes(fix.stays[4].stay === 20, `車站 → 20 分（同屬 transit，靠名稱分開）`);
   yes(fix.stays[5].stay === 60, `判斷不出類別的維持 60 分，不裝懂`);
 
   yes(fix.gate.small.l === 15 && fix.gate.small.soft, '晚不到 20 分 → 不當警告（OSRM 本來就不含紅燈與找車位）');

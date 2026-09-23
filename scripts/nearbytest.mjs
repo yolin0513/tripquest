@@ -26,31 +26,31 @@ const FIX = {
     el(3, -0.004, 0.003, { amenity: 'parking', access: 'private', name: '住戶專用' }),                  // 要被濾掉
     el(4, 0.006, 0.004, { amenity: 'parking', access: 'customers', parking: 'surface', name: '超商附設停車場' }),
     el(5, -0.008, -0.006, { amenity: 'parking', parking: 'multi-storey', capacity: '250' }),
-    // ---- 石牌實測案例（v1.59.2）----
-    el(6, 0.0008, 0.0006, { amenity: 'parking_entrance', name: '石牌國小地下停車場', parking: 'underground' }),  // 只標入口的地下停車場
-    el(7, 0.0009, 0.0007, { amenity: 'parking_entrance', name: '石牌國小地下停車場', parking: 'underground' }),  // 第二個入口（要去重）
+    // ---- 台北實測案例（v1.59.2）----
+    el(6, 0.0008, 0.0006, { amenity: 'parking_entrance', name: '站前地下停車場', parking: 'underground' }),  // 只標入口的地下停車場
+    el(7, 0.0009, 0.0007, { amenity: 'parking_entrance', name: '站前地下停車場', parking: 'underground' }),  // 第二個入口（要去重）
     el(8, 0.0004, -0.0004, { amenity: 'parking_entrance' }),                                            // 無名入口（大樓車道）→ 不列
     el(9, -0.002, 0.001, { amenity: 'parking', access: 'permit', parking: 'surface' }),                 // 要許可證 → 不列
-    el(10, 0.005, 0.005, { amenity: 'parking', 'addr:street': '明德路', parking: 'surface', fee: 'yes' }),
+    el(10, 0.005, 0.005, { amenity: 'parking', 'addr:street': '中山路', parking: 'surface', fee: 'yes' }),
     el(11, 0.004, -0.003, { amenity: 'parking', parking: 'lane' }),                                     // 無名路邊格
-    // ---- 石牌實測案例第二輪（v1.66）----
+    // ---- 台北實測案例第二輪（v1.66）----
     // 使用者回報「私人空地排在真正的停車場前面」。這是它在 OSM 的實際長相：
     // 有人畫了一塊地說可以停車，然後沒有任何人回來補第二個欄位。它最近（15m），
     // 但**應該排在所有有登記證據的後面**（降權，不是排除 —— 鄉下可能只剩它）。
     el(12, 0.0001, 0.0001, { amenity: 'parking', parking: 'surface' }),
     // 出口是同一個停車場，而且比入口更近 —— 不能佔掉第二個名額，也不能贏過入口
     el(13, 0.0009, 0.0009, { amenity: 'parking_entrance', name: '羅東夜市地下停車場出口' }),
-    // 名字就寫明是員工專用，卻沒有 access 標記（石牌實測有三個）→ 不列
+    // 名字就寫明是員工專用，卻沒有 access 標記（台北實測有三個）→ 不列
     el(14, 0.002, 0.003, { amenity: 'parking', parking: 'surface', name: '員工停車場' }),
-    // 同名不代表同一個場：石牌 1.5 公里內三個節點都叫「地下停車場」，相距 794m 起跳。
+    // 同名不代表同一個場：台北實測 1.5 公里內三個節點都叫「地下停車場」，相距 794m 起跳。
     // 這兩個相距約 1.1 公里，要當成兩個停車場（舊的全域同名去重會砍掉一個）
     el(15, 0.003, 0.003, { amenity: 'parking_entrance', name: '地下停車場' }),
     el(16, 0.009, 0.009, { amenity: 'parking_entrance', name: '地下停車場' }),
   ],
   'amenity=toilets': [
     el(21001, 0.001, -0.001, { amenity: 'toilets', wheelchair: 'yes', changing_table: 'yes', fee: 'no' }),
-    el(21002, 0.004, 0.002, { amenity: 'toilets', operator: '北投區公所' }),                             // 沒 name 但有管理單位
-    el(21003, 0.002, 0.002, { amenity: 'cafe', name: '丹提咖啡', 'toilets:wheelchair': 'yes' }),       // 附設（石牌實際標法：只有子鍵）
+    el(21002, 0.004, 0.002, { amenity: 'toilets', operator: '中正區公所' }),                             // 沒 name 但有管理單位
+    el(21003, 0.002, 0.002, { amenity: 'cafe', name: '丹提咖啡', 'toilets:wheelchair': 'yes' }),       // 附設（台北實測的標法：只有子鍵）
     el(21006, 0.0025, 0.0025, { amenity: 'cafe', name: '無障礙只在門口', wheelchair: 'yes', 'toilets:wheelchair': 'no' }),  // 店可進、廁所不行 → 不給 ♿
     el(21004, 0.003, -0.002, { amenity: 'restaurant', toilets: 'yes' }),                                 // 無名附設 → 不列
     el(21005, 0.002, -0.003, { amenity: 'cafe', name: '無廁咖啡', toilets: 'no' }),                       // 明確沒有廁所 → 不列
@@ -174,18 +174,18 @@ try {
   yes(!parking.cards.some((c) => c.name.includes('住戶專用')), 'access=private 不出現在清單');
   yes(!parking.cards.some((c) => c.chips.includes('停車場入口') && !c.name), '無名入口（大樓車道口）不出現');
   const names = parking.cards.map((c) => c.name).join('|');
-  yes(parking.cards.filter((c) => c.name.includes('石牌國小地下停車場')).length === 1,
-    '只標「入口」的地下停車場查得到，且兩個入口去重成一筆（石牌案例）');
+  yes(parking.cards.filter((c) => c.name.includes('站前地下停車場')).length === 1,
+    '只標「入口」的地下停車場查得到，且兩個入口去重成一筆（台北實測案例）');
   const first = parking.cards[0];
-  yes(first.name.includes('石牌國小地下停車場') && first.chips.includes('停車場入口') && first.chips.includes('地下'),
+  yes(first.name.includes('站前地下停車場') && first.chips.includes('停車場入口') && first.chips.includes('地下'),
     `距離排序：最近的入口在最上面（${first.name}｜${first.chips.join('/')}）`);
   const luodong = parking.cards.find((c) => c.name.includes('羅東夜市地下停車場'));
   yes(luodong && luodong.chips.includes('總車位 120') && luodong.chips.includes('♿ 無障礙 3 格') && luodong.chips.includes('收費') && luodong.chips.includes('地下'),
     `欄位齊：${luodong.chips.join(' / ')}`);
-  yes(parking.cards.some((c) => c.name.includes('明德路 · 平面停車場')), `無名但有街道 → 「明德路 · 平面停車場」（${names.slice(0, 60)}…）`);
+  yes(parking.cards.some((c) => c.name.includes('中山路 · 平面停車場')), `無名但有街道 → 「中山路 · 平面停車場」（${names.slice(0, 60)}…）`);
   yes(parking.cards.some((c) => c.name.endsWith('路邊停車格')), '無名路邊格 → 「路邊停車格」不是一律「停車場」');
   const unnamed = parking.cards.find((c) => c.chips.includes('免費'));
-  yes(unnamed && unnamed.name.endsWith('平面停車場') && !unnamed.name.includes('明德路'), '無名平面場 → 「平面停車場」');
+  yes(unnamed && unnamed.name.endsWith('平面停車場') && !unnamed.name.includes('中山路'), '無名平面場 → 「平面停車場」');
   yes(parking.cards.filter((c) => c.name.endsWith('平面停車場')).length === 3, '產生的通用名不參與去重（三塊不同的平面場都在）');
   yes(parking.cards.some((c) => c.chips.includes('限顧客')), 'access=customers 標「限顧客」');
 
@@ -201,7 +201,7 @@ try {
   yes(yeshi.length === 1 && yeshi[0].chips.includes('總車位 120'),
     '出入口合併後留下的是「入口」那一筆（出口比較近也一樣）：' + (yeshi[0] ? yeshi[0].chips.join('・') : '(沒有)'));
   yes(!parking.cards.some((c) => c.name.includes('員工')),
-    '名字寫明員工專用、但沒有 access 標記的（石牌實測三個）→ 不列');
+    '名字寫明員工專用、但沒有 access 標記的（台北實測三個）→ 不列');
   yes(parking.cards.filter((c) => c.name.replace(/^\S+\s*/, '') === '地下停車場').length === 2,
     '同名但相距 1 公里 → 兩個不同的停車場都要列（舊的全域同名去重會砍掉一個）');
 
@@ -307,14 +307,14 @@ try {
   yes(wc.length === 4 && wc[0].chips.includes('♿ 無障礙') && wc[0].chips.includes('🚼 尿布台') && wc[0].chips.includes('免費'),
     `廁所：無障礙＋尿布台＋免費（${wc[0].chips.join(' / ')}）`);
   yes(wc.some((c) => c.name.includes('公共廁所')), '無名廁所給通用名「公共廁所」');
-  yes(wc.some((c) => c.name.includes('北投區公所')), '沒名字但有管理單位的廁所 → 顯示管理單位');
+  yes(wc.some((c) => c.name.includes('中正區公所')), '沒名字但有管理單位的廁所 → 顯示管理單位');
   const dante = wc.find((c) => c.name.includes('丹提咖啡'));
   yes(dante && dante.chips.includes('附設廁所') && dante.chips.includes('♿ 無障礙'),
-    'toilets=yes 的店家也列出：「丹提咖啡」標「附設廁所」＋無障礙（石牌案例）');
+    'toilets=yes 的店家也列出：「丹提咖啡」標「附設廁所」＋無障礙（台北實測案例）');
   yes(wc.length === 4 && !wc.some((c) => c.name.includes('無廁咖啡')), '無名附設與 toilets=no 都不列（6 筆進 4 筆出）');
   const gate = wc.find((c) => c.name.includes('無障礙只在門口'));
   yes(gate && gate.chips.includes('附設廁所') && !gate.chips.includes('♿ 無障礙'),
-    '店門口無障礙≠廁所無障礙：附設的 ♿ 只看 toilets:wheelchair（石牌 7-Eleven 案例）');
+    '店門口無障礙≠廁所無障礙：附設的 ♿ 只看 toilets:wheelchair（台北實測的超商案例）');
   const noteHidden = await page.evaluate(() => document.querySelector('.nl-note').hidden);
   yes(noteHidden, '車位數的說明只在停車場分類出現');
 

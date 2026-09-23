@@ -63,7 +63,7 @@ const routesSrv = createServer((req, res) => {
             { travelMode: 'TRANSIT', staticDuration: '1080s',
               transitDetails: {
                 stopDetails: {
-                  departureStop: { name: '石牌站' }, arrivalStop: { name: '中山站' },
+                  departureStop: { name: '台北車站' }, arrivalStop: { name: '中山站' },
                   departureTime: board.toISOString(), arrivalTime: off.toISOString(),
                 },
                 transitLine: { nameShort: '淡水信義線', name: '淡水信義線', vehicle: { type: 'SUBWAY' } },
@@ -229,7 +229,7 @@ try {
   // 會被讀成 28＋10 —— v1.70.2 改成明講「含」。
   yes(got.transit[0].includes('（含走路 10 分）'),
     `走路時間要講明是「含」在總時間裡（不是另外再加）：「${(got.transit[0] || '').slice(0, 30)}」`);
-  yes(got.lines.length >= 3 && got.lines[0].includes('淡水信義線') && got.lines[0].includes('石牌站 → 中山站') && /\d\d:\d\d 發車/.test(got.lines[0]),
+  yes(got.lines.length >= 3 && got.lines[0].includes('淡水信義線') && got.lines[0].includes('台北車站 → 中山站') && /\d\d:\d\d 發車/.test(got.lines[0]),
     `列出路線與上下車站與發車時刻：「${got.lines[0] || ''}」`);
   yes(got.drive.length === 3 && got.drive[0].includes('開車估算'),
     `開車估算降級成附註（「${got.drive[0] || ''}」）—— 一個是實際班次一個是估算，要看得出差別`);
