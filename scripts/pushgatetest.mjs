@@ -58,12 +58,15 @@ const hook = (name, body) => { const p = path.join(bare, 'hooks', name); fs.writ
 // 只看錯誤訊息的位置（補充說明四第 1 點）：整份輸出裡「出現過」不等於「是理由」——正常輸出的某一行也可能剛好含有同一段字
 const R = (out) => out.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('擋下：') || l.startsWith('✗')).join('\n');
 const WHO = {
-  hit: /^擋下：有命中（email/m,
-  // 命中的來源（新增行／commit 訊息／作者欄）；來源清單在「來源：」到第一個全形右括號之間
-  hitFrom: (src) => new RegExp(`^擋下：有命中（email（\\d+ 行；來源：[^）]*${src}`, 'm'),
-  broken: (k) => new RegExp(`^擋下：檢查器壞了（${k}`, 'm'),
-  // 訊息與作者欄壞了的是哪一條（範圍／筆數／訊息）；清單在冒號到第一個全形右括號之間
-  metaFault: (k) => new RegExp(`^擋下：檢查器壞了（訊息與作者欄：[^）]*${k}`, 'm'),
+  // 名字要對到完整的一項（前面是「（」或「、」、後面是「）」「、」「：」「（」），不能只是前綴——
+  // 補充說明四：MealMate 的 r-foo 被 r-foo-veg 湊到；這裡則是 email 不能被 emailx 湊到
+  hit: /^擋下：有命中（email（/m,
+  // 命中的來源（新增行／commit 訊息／作者欄）；來源清單在「來源：」到第一個全形右括號之間，用頓號分開
+  hitFrom: (src) => new RegExp(`^擋下：有命中（email（\\d+ 行；來源：(?:[^）、]*、)*${src}(?=[）、])`, 'm'),
+  broken: (k) => new RegExp(`^擋下：檢查器壞了（(?:[^）、]*、)*${k}(?=[）、：（])`, 'm'),
+  anyBroken: /^擋下：檢查器壞了（/m,
+  // 訊息與作者欄壞了的是哪一條（範圍／筆數／訊息）；清單在冒號到第一個全形右括號之間，用頓號分開
+  metaFault: (k) => new RegExp(`^擋下：檢查器壞了（訊息與作者欄：(?:[^）、]*、)*${k}(?=[）、])`, 'm'),
   unreachable: /^擋下：檢查器壞了（抓不到遠端）/m,
   pushFail: /^✗ git push 失敗/m,
   mismatch: /^✗ 推完了但遠端.*不等於本機/m,
@@ -119,6 +122,19 @@ try {
     yes(WHO.broken('新增行抽取').test(R(SAMPLE.extractBroken)) && !WHO.broken('新增行抽取').test(R(SAMPLE.metaBroken))
       && !WHO.hit.test(R(SAMPLE.extractBroken)),
       '對照（擷取樣式）：「新增行抽取壞了」抓得到、跟別類的檢查器壞了分得開');
+    {
+      // 邊界的對照組（兩個方向）：多一個字的不能被湊到；清單中間、用頓號隔開的每一項都要認得出來
+      const B = {
+        brokenX: '擋下：檢查器壞了（emailx）', brokenList: '擋下：檢查器壞了（secret、email、user）',
+        fromX: '擋下：有命中（email（1 行；來源：新增行X））', fromList: '擋下：有命中（email（2 行；來源：作者欄、新增行））',
+        metaX: '擋下：檢查器壞了（訊息與作者欄：訊息X）', metaList: '擋下：檢查器壞了（訊息與作者欄：範圍、訊息）',
+      };
+      const notX = !WHO.broken('email').test(B.brokenX) && !WHO.hitFrom('新增行').test(B.fromX) && !WHO.metaFault('訊息').test(B.metaX);
+      const list = ['secret', 'email', 'user'].every((k) => WHO.broken(k).test(B.brokenList)) && WHO.hitFrom('新增行').test(B.fromList)
+        && WHO.hitFrom('作者欄').test(B.fromList) && WHO.metaFault('訊息').test(B.metaList) && WHO.metaFault('範圍').test(B.metaList);
+      yes(notX, '對照（邊界）：emailx、新增行X、訊息X 不會被 email、新增行、訊息湊到');
+      yes(list, '對照（邊界）：清單中間用頓號隔開的每一項都認得出來（secret、email、user；作者欄、新增行；範圍、訊息）');
+    }
     yes(WHO.pushFail.test(R(SAMPLE.push)) && !WHO.pushFail.test(R(SAMPLE.mismatch)) && WHO.mismatch.test(R(SAMPLE.mismatch)) && !WHO.mismatch.test(R(SAMPLE.push)),
       '對照（擷取樣式）：「推送失敗」與「遠端不等於本機」分得開');
     yes(WHO.hitFrom('commit 訊息').test(R(SAMPLE.hitMsg)) && !WHO.hitFrom('新增行').test(R(SAMPLE.hitMsg))
@@ -198,7 +214,7 @@ try {
       commit('b.txt', `contact: ${fakeMail()}\n`, 'leak');
       const r = gate();
       yes(r.code === 1, `B 新增行帶合成假信箱 → 回 1（實得 ${r.code}）`, r.out.slice(-300));
-      yes(WHO.hitFrom('新增行').test(R(r.out)) && !WHO.broken('').test(R(r.out)), 'B 擋下的是自查的 email 那一類、來源是新增行（不是別關、也不是檢查器壞了）', r.out.slice(-300));
+      yes(WHO.hitFrom('新增行').test(R(r.out)) && !WHO.anyBroken.test(R(r.out)), 'B 擋下的是自查的 email 那一類、來源是新增行（不是別關、也不是檢查器壞了）', r.out.slice(-300));
       untouched('B');
     }],
     ['B2', () => {
@@ -268,7 +284,7 @@ try {
         && !fs.readFileSync(path.join(work, 'j.txt'), 'utf8').includes(fakeMail()),
         'J 前置：命中行在 diff 裡長得像 +++ 檔頭、而且最新版已經刪掉（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hitFrom('新增行').test(R(r.out)) && !WHO.broken('').test(R(r.out)),
+      yes(r.code === 1 && WHO.hitFrom('新增行').test(R(r.out)) && !WHO.anyBroken.test(R(r.out)),
         `J ++ 開頭的命中行、加了又刪 → 回 1、email 那一類、來源是新增行（實得 ${r.code}）`, r.out.slice(-300));
       untouched('J');
     }],
@@ -304,7 +320,7 @@ try {
       yes(sh('git rev-parse origin/main').trim() === leaked && remoteHead() === BASE,
         'F 前置：本機的追蹤分支停在帶命中的那個 commit，遠端實際上沒有它（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hit.test(R(r.out)) && !WHO.broken('').test(R(r.out)),
+      yes(r.code === 1 && WHO.hit.test(R(r.out)) && !WHO.anyBroken.test(R(r.out)),
         `F 本機以為已推、遠端其實沒有 → 回 1、擋在自查的 email 那一類（實得 ${r.code}）`, r.out.slice(-300));
       untouched('F');
     }],
