@@ -135,7 +135,11 @@ if (leakKeys.length) { console.log('✗ 金鑰洩漏於：', leakKeys.join(', ')
 // 肯定句只在每一條路徑都真的掃到、而且都沒命中時才印，而且只列真的掃到的
 const missing = EXPECTED.filter((k) => !result.scanned.includes(k) && !(k in result.skipped));
 if (missing.length) { console.log('✗ 掃到的路徑少於預期（沒丟錯、也沒掃到）：' + missing.join(', ')); ok = false; }
-if (!ctrlBad.length && result.ctrl && !leakKeys.length && !skippedKeys.length && !missing.length) {
+// 情境（兩把假金鑰真的存進去了）沒造出來時，「無金鑰」恆真——不准印肯定句
+// （2026-09-24 T13 成對驗：只讓金鑰沒存進去，前置紅了、後面卻照樣印「皆無金鑰」）
+const situationOk = result.stored && result.deviceStored;
+if (!situationOk) console.log('✗ 假金鑰沒存進去，沒有東西可以漏——下面不下「無金鑰」的結論');
+if (situationOk && !ctrlBad.length && result.ctrl && !leakKeys.length && !skippedKeys.length && !missing.length) {
   console.log(`✓ ${result.scanned.join(' / ')} 皆無金鑰（${result.scanned.length} 條路徑都真的掃到）`);
 }
 if (result.swBad.length) { console.log('✗ SW 快取到 API 主機：', result.swBad); ok = false; }
