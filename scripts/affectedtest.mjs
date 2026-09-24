@@ -312,4 +312,16 @@ console.log('\n[修訂 1-B] 閉包不穿過 js/app.js');
   yes((s5.reasons.synctest || []).some((w) => w.startsWith('放大器 B')), '嚴格回放 ⑤：synctest 被放大器 B 挑到');
 }
 
+// ---------- 改推送閘 → 挑中驗它的 pushgatetest（2026-09-24 盤點實測：原本只挑到底線，閘門的行為沒人驗）----------
+console.log('\n[T16] 改推送閘 → 挑中 pushgatetest');
+{
+  const chainNow = parseChain(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')), () => true);
+  yes(chainNow.some((t) => t.name === 'pushgatetest') && !BASELINE.includes('pushgatetest'),
+    '前置：pushgatetest 在鏈裡、但不在底線（所以挑不挑得中全看引用有沒有撈到）');
+  for (const f of ['scripts/safe-push.sh', 'scripts/prepush-scan.mjs']) {
+    const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', f, '--dry'], { cwd: ROOT, encoding: 'utf8' });
+    yes(p.status === 0 && /^ {2}pushgatetest\s+←/m.test(p.stdout), `真實入口 run-affected --files ${f}：挑中 pushgatetest`, p.stdout.split('\n').filter((l) => /←/.test(l)).join(' | '));
+  }
+}
+
 console.log(`\n${process.exitCode ? '✗ 有失敗' : '✓ 全部通過'}（${pass} 項）`);

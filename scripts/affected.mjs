@@ -109,7 +109,9 @@ export function parseChain(pkg, exists) {
 // exists(p) 回傳 'file' | 'dir' | null；不存在的一律丟掉（網址裡剛好長得像 data/ 的片段）。
 // 路徑後面必須接分隔字元（引號、空白、括號…）才算完整的一段：否則 '/js/中文.js' 會在
 // 第一個中文字被截斷成 'js/'，變成「引用整個 js 目錄」—— 那支測試從此什麼都涵蓋，放大器 D 永遠不響。
-const REF_RE = /(?:^|[^A-Za-z0-9_.-])((?:js|css|workers|server|data|icons|media|scripts\/fixtures)\/[A-Za-z0-9_./-]*|sw\.js|index\.html|manifest\.webmanifest)(?=$|['"`\s),;?#\]}])/g;
+// scripts/<名稱>.sh|.mjs 也算（2026-09-24）：pushgatetest 在檔頭寫「涵蓋的程式：scripts/safe-push.sh…」，
+// 原本這個樣式不認 scripts/ 底下的檔，改推送閘時挑選器就不會挑中驗它的那支測試（盤點實測）。
+const REF_RE = /(?:^|[^A-Za-z0-9_.-])((?:js|css|workers|server|data|icons|media|scripts\/fixtures)\/[A-Za-z0-9_./-]*|scripts\/[A-Za-z0-9_-]+\.(?:sh|mjs)|sw\.js|index\.html|manifest\.webmanifest)(?=$|['"`\s),;?#\]}])/g;
 const HELPER_RE = /(?:from\s*|import\(\s*)['"]\.\/([A-Za-z0-9_-]+\.mjs)['"]/g;
 export function extractRefs(text, exists) {
   const out = new Set();

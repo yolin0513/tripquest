@@ -1,5 +1,7 @@
 // 線上正式站的匯入流程驗證（node scripts/livecheck-import.mjs）
 // 本機全過不代表線上正確 —— SW 快取、CSP、檔案有沒有真的上去都只在這裡才看得到。
+// 什麼時候跑：**手動**，改了匯入行程表的流程、推上去之後跑一次（sweep 不涵蓋這條流程）。打正式站，不進 npm test。
+import fs from 'node:fs';
 import puppeteer from 'puppeteer';
 
 const BASE = 'https://yolin0513.github.io/tripquest/';
@@ -27,7 +29,9 @@ try {
   await page.goto(BASE + '#/new', { waitUntil: 'networkidle0', timeout: 60000 });
   await page.waitForSelector('.page.form', { timeout: 30000 });
   const ver = await page.evaluate(() => fetch('./sw.js', { cache: 'reload' }).then((r) => r.text()).then((t) => (t.match(/tripquest-v[\d.]+/) || [''])[0]));
-  yes(ver === 'tripquest-v1.36.0', `線上版本是 ${ver}`);
+  // 比的是「線上＝本機這一版」，不寫死版號（原本寫死 v1.36.0，升版之後永遠紅，等於沒人在跑——2026-09-24 盤點）
+  const local = (fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf8').match(/const VERSION = '(tripquest-v[\d.]+)'/) || [])[1];
+  yes(!!local && ver === local, `線上版本 ${ver || '（讀不到）'} ＝ 本機 sw.js 的 ${local || '（讀不到）'}`);
 
   await page.evaluate(() => { document.querySelector('details').open = true; });
   yes(await clickText('button', '匯入行程表'), '線上：進階區有匯入按鈕，按得下去');
