@@ -311,7 +311,7 @@ pushgatetest」那件待議的有了證據）。
     下了 `rm -rf` 沒先看內容（推論原本不存在、是那次執行才建的，證明不了）。
 #### 三段證據、F8 的矩陣 → 移到 `docs/EVIDENCE_檢查器修補.md`（2026-09-24，四家統一檔名）
 
-T1–T13、T10 修、build-places／importshots／audittest／livecheck-import／checktest、F8 每一件的「怎麼取舊版、怎麼證明是舊版、① 修正前 ② 修正後 ③ 突變」都在那個檔。這裡只記結論：全部擋下；F8 build-places 16 城市 × 7 情境、importshots 17 個單位，舊版全部沒擋、新版全部擋下。
+T1–T13、T10 修、build-places／importshots／audittest／livecheck-import／checktest、F8 每一件的「怎麼取舊版、怎麼證明是舊版、① 修正前 ② 修正後 ③ 突變」都在那個檔。這裡只記結論：全部擋下。F8 第二版（清理也要能失敗、不能中斷，2026-09-24）：build-places 16 城市 × 10 情境＝160 格、importshots 20 格＋清理 4 格，舊版清理失敗全部沒擋（importshots 舊版會刪掉別人放的暫存、鎖檔時把 `_import/` 刪到剩 1 張），新版全部擋下；補充說明四第 1 點（只在錯誤訊息的位置比對、名字對邊界）、第 4 點（跳脫掃描擴到 scripts/ 全部 79 支，找到 4 處被吃掉的反斜線，待授權修）也在那個檔。
 
 - **另外看到的**：`npm run sweep`（正式站）今天 4 次裡有 1 次紅在「分帳：畫面幾乎空白（0 字）」，其餘 3 次同一項 197 字——偶發，
   跟這一批的改動無關（那一次改的是 `sweep` 最後接 `livecheck-import` 的段落，重跑同一個版本就綠）。
