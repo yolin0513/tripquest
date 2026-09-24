@@ -66,8 +66,7 @@ export const KINDS = {
 export const EXCEPTIONS = [
   { file: 'scripts/safe-push.sh', kind: 'ortrue', match: /git fetch -q origin main > "\$TMP\/fetch" 2>&1 \|\| true/,
     why: 'fetch 失敗不在這一行停，是因為下一段緊接著查「本機有沒有遠端那個 commit」，沒有就回 4（擋下：檢查器壞了（範圍））。'
-      + '（2026-09-24 一次性實測：假遠端 main 指向不存在的 commit，ls-remote 讀得到、fetch 回 128 → 閘門回 4、假遠端沒動；'
-      + 'pushgatetest 還沒有這一種情境）' },
+      + '（常設：pushgatetest 的 Q2——遠端的 commit 本機沒有、假 git 讓 fetch 失敗 → 回 4「範圍」；拿掉那一道「停」只紅 Q2）' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.\w+(\([^)]*\))?\.test\(R\(SAMPLE\.\w+\)\)/,
     why: '擷取樣式本身的對照組：同一條斷言先證明這個樣式抓得到它該抓的樣本，再證明它不會誤抓別的樣本' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.\w+(\([^)]*\))?\.test\(R\(r\.out\)\)/,

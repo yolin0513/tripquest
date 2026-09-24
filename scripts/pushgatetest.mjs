@@ -30,6 +30,11 @@
 //   P4 沒動到 F8 那幾支、也沒有 F8 登記 → 0、推出去（沒動到就不看這一關，§5.14 正常情況要放行）
 //   P5 動到 f8verify.mjs 的是較早的 commit、最新的 commit 很乾淨 → 6（範圍裡每一個 commit 都算）
 //   P6 比照 M4：改過的 build-places.mjs 已 commit、工作區又改回登記時的樣子 → 6（F8 那一關也比 HEAD）
+//   F10「取不到就停」的分支，用 PATH 最前面的假 git 讓那個子指令真的失敗（假 git 自己先跑對照組）：
+//   Q1 git log 失敗（列不出動到的檔）→ 4「動到的檔」；Q2 遠端的 commit 本機沒有、fetch 又失敗 → 4「範圍」；
+//   Q4 推完那次 ls-remote 失敗 → 3「讀不到遠端」；Q5 hash-object 失敗 → 5、工作區取不到；Q6 rev-parse 失敗 → 5、HEAD 取不到；
+//   Q7 F8 那一關的 rev-parse 失敗 → 6。V5 regAction（驗法跑完登記怎麼辦）；V6 登記前的檢查遇到 git 取不到。
+//   （抓不到遠端＝G，用不存在的網址，本來就是真的失敗）
 //   V1–V4 登記前的檢查（verified-reg.mjs）：乾淨 → 可登記；工作區有沒 commit 的改動、還沒 commit、工作區沒有 → 不登記、
 //     點名那一支、舊的登記一起刪掉
 // 每個情境開始前 reset() 回到同一個起點；PUSHGATE_ORDER=reverse 或 shuffle:<種子> 換順序跑，結果要不變。
@@ -42,7 +47,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { headProblems, writeReg, dropReg } from './verified-reg.mjs';
+import { headProblems, writeReg, dropReg, regAction, realGit } from './verified-reg.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
@@ -221,6 +226,55 @@ try {
   const F8REG = path.join(work, '.logs', 'f8.verified');
   const f8Reg = () => fs.writeFileSync(F8REG, '# 測試用的 F8 登記\n'
     + F8.map((f) => `${sh(`git rev-parse HEAD:scripts/${f}`).trim()} scripts/${f}`).join('\n') + '\n');
+  // ---------- F10：假 git（只讓指定的子指令失敗、其他照常交給真的 git）----------
+  // 放在 PATH 最前面，只在測試時用；正式的 safe-push.sh 裡沒有任何「設了某個變數就故意失敗」的後門。
+  // FAKEGIT_NTH=n：那個子指令第 n 次（含）以後才失敗（例如「推送前的 ls-remote 照常、推完之後那一次失敗」）。
+  const FAKEBIN = path.join(base, 'fakebin');
+  const COUNT = path.join(base, 'fakegit.count');
+  const REALGIT = spawnSync('bash', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  fs.mkdirSync(FAKEBIN);
+  fs.writeFileSync(path.join(FAKEBIN, 'git'), [
+    '#!/bin/sh',
+    '# pushgatetest 的假 git（F10）',
+    'sub=""; skip=0',
+    'for a in "$@"; do',
+    '  if [ "$skip" = 1 ]; then skip=0; continue; fi',
+    '  case "$a" in -c|-C) skip=1 ;; -*) ;; *) sub="$a"; break ;; esac',
+    'done',
+    'if [ -n "$FAKEGIT_FAIL" ] && [ "$sub" = "$FAKEGIT_FAIL" ]; then',
+    '  n=1; if [ -f "$FAKEGIT_COUNT" ]; then n=$(( $(cat "$FAKEGIT_COUNT") + 1 )); fi',
+    '  echo "$n" > "$FAKEGIT_COUNT"',
+    '  if [ "$n" -ge "${FAKEGIT_NTH:-1}" ]; then echo "假 git：$sub 故意失敗（第 $n 次）" >&2; exit 1; fi',
+    'fi',
+    'exec "$FAKEGIT_REAL" "$@"',
+    ''].join('\n'));
+  fs.chmodSync(path.join(FAKEBIN, 'git'), 0o755);
+  const fakeEnv = (sub, nth = 1) => {
+    if (fs.existsSync(COUNT)) fs.unlinkSync(COUNT);
+    const env = { ...process.env };
+    const k = Object.keys(env).find((x) => /^path$/i.test(x)) || 'PATH';
+    env[k] = FAKEBIN + path.delimiter + env[k];
+    return { ...env, FAKEGIT_REAL: REALGIT, FAKEGIT_FAIL: sub, FAKEGIT_NTH: String(nth), FAKEGIT_COUNT: COUNT };
+  };
+  const calls = () => (fs.existsSync(COUNT) ? Number(fs.readFileSync(COUNT, 'utf8').trim()) : 0);
+  {
+    // 假 git 自己的對照組：bash 找到的是它；指定的子指令失敗（前面帶 -c 也認得出）；不相干的照常、輸出跟真的一樣；第 n 次才失敗
+    const b = (cmd, env) => spawnSync('bash', ['-c', cmd], { cwd: work, encoding: 'utf8', env });
+    const e = fakeEnv('ls-remote');
+    const which = b('command -v git', e).stdout.trim();
+    const f1 = b('git ls-remote origin', e);
+    const f2 = b('git -c core.x=1 ls-remote origin', e);
+    const same = b('git log -1 --format=%H', e);
+    const real = b('git log -1 --format=%H', { ...process.env });
+    const e2 = fakeEnv('ls-remote', 2);
+    const n1 = b('git ls-remote origin', e2).status, n2 = b('git ls-remote origin', e2).status;
+    yes(!!REALGIT && which.endsWith('/fakebin/git') && which !== REALGIT, `對照（假 git）：bash 找到的是假的（${which}）、真的在 ${REALGIT}`);
+    yes(f1.status === 1 && /假 git：ls-remote 故意失敗/.test(f1.stderr) && f2.status === 1,
+      '對照（假 git）：指定的子指令失敗（前面帶 -c 選項也認得出）', f1.stderr + f2.stderr);
+    yes(same.status === 0 && same.stdout.trim() === real.stdout.trim() && /^[0-9a-f]{40}$/.test(real.stdout.trim()),
+      '對照（假 git）：不相干的子指令照常交給真的 git、輸出一樣', same.stderr);
+    yes(n1 === 0 && n2 === 1, `對照（假 git）：FAKEGIT_NTH=2 → 第 1 次照常、第 2 次失敗（實得 ${n1}、${n2}）`);
+  }
   const touch = (f, id) => { fs.appendFileSync(path.join(work, 'scripts', f), `// ${id} 改一行\n`); sh(`git add scripts/${f}`); sh(`git commit -q -m ${id}-${f.replace('.', '-')}`); };
 
   const SCENARIOS = [
@@ -468,6 +522,79 @@ try {
         `P6 改過的 build-places.mjs 已 commit、工作區改回原樣 → 回 6、點名 build-places（實得 ${r.code}）`, r.out.slice(-300));
       untouched('P6');
     }],
+    // ---- F10：「取不到就停」的分支，用假 git 讓那個子指令真的失敗 ----
+    ['Q1', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      const r = gate(fakeEnv('log'));
+      yes(calls() >= 1, `Q1 前置：假 git 真的攔到了 log（${calls()} 次）`);
+      yes(r.code === 4 && /^擋下：檢查器壞了（動到的檔）/m.test(R(r.out)),
+        `Q1 列不出這次動到哪些檔（git log 失敗）→ 回 4、「動到的檔」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('Q1');
+    }],
+    ['Q2', () => {
+      // 遠端的 main 是別人推的、本機沒有，而且抓不下來（fetch 失敗）→ 決定不了範圍，要停
+      const w2 = path.join(base, 'work2');
+      sh(`git clone -q -b main "${bare}" "${w2}"`, base);
+      sh('git config user.email t@users.noreply.github.com', w2); sh('git config user.name t', w2);
+      fs.writeFileSync(path.join(w2, 'other.txt'), 'other\n'); sh('git add other.txt', w2); sh('git commit -q -m other', w2);
+      sh('git push -q origin main', w2);
+      const X = remoteHead();
+      fs.rmSync(w2, { recursive: true, force: true });
+      commit('d.txt', 'clean2\n', 'clean2');
+      yes(X !== BASE && spawnSync('git', ['cat-file', '-e', X + '^{commit}'], { cwd: work }).status !== 0,
+        'Q2 前置：遠端的 main 是本機沒有的 commit（情境成立）');
+      const r = gate(fakeEnv('fetch'));
+      yes(calls() >= 1 && r.code === 4 && /^擋下：檢查器壞了（範圍）/m.test(R(r.out)),
+        `Q2 遠端的 commit 本機沒有、也抓不下來 → 回 4、「範圍」（實得 ${r.code}、假 git 攔到 ${calls()} 次）`, r.out.slice(-300));
+      yes(remoteHead() === X, 'Q2 遠端沒被動到');
+    }],
+    ['Q4', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      const r = gate(fakeEnv('ls-remote', 2));
+      yes(calls() === 2 && remoteHead() === localHead(), `Q4 前置：推送前那次照常、推送真的推上去了、推完那次 ls-remote 被攔（${calls()} 次）`);
+      yes(r.code === 3 && /^✗ 推完了但讀不到遠端/m.test(R(r.out)),
+        `Q4 推完了讀不到遠端 → 回 3、「讀不到遠端」（不是「遠端不等於本機」）（實得 ${r.code}）`, r.out.slice(-300));
+    }],
+    ['Q5', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      const r = gate(fakeEnv('hash-object'));
+      yes(calls() >= 1 && r.code === 5 && /^✗ scripts\/safe-push\.sh 改過了（.*工作區是 工作區沒有）/m.test(R(r.out)),
+        `Q5 算不出閘門檔在工作區的雜湊 → 回 5、點名 safe-push.sh、寫明工作區取不到（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('Q5');
+    }],
+    ['Q6', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      const r = gate(fakeEnv('rev-parse'));
+      yes(calls() >= 1 && r.code === 5 && /^✗ scripts\/safe-push\.sh 改過了（.*HEAD 裡是 HEAD 裡沒有、/m.test(R(r.out)),
+        `Q6 取不到閘門檔在 HEAD 裡的雜湊 → 回 5、寫明 HEAD 取不到（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('Q6');
+    }],
+    ['Q7', () => {
+      // F8 那一關取不到 HEAD 裡的雜湊：前 4 次 rev-parse 是閘門檔（照常），第 5 次是 F8 的第一支
+      touch('build-places.mjs', 'q7');
+      f8Reg();
+      const r = gate(fakeEnv('rev-parse', 5));
+      yes(calls() >= 5, `Q7 前置：假 git 攔到第 5 次 rev-parse（${calls()} 次）`);
+      yes(r.code === 6 && WHO.f8File('build-places.mjs').test(R(r.out)) && /HEAD 裡是 HEAD 裡沒有）/.test(R(r.out)),
+        `Q7 F8 那一關取不到 HEAD 裡的雜湊 → 回 6、點名 build-places、寫明 HEAD 取不到（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('Q7');
+    }],
+    ['V5', () => {
+      // 驗法跑完登記怎麼辦（純函式）：失敗一律刪，只跑一部分時也一樣
+      const t = [[false, false, 'write'], [true, false, 'drop'], [false, true, 'keep'], [true, true, 'drop']];
+      const wrong = t.filter(([failed, partial, want]) => regAction({ failed, partial }) !== want);
+      yes(wrong.length === 0, 'V5 regAction：全過→寫、失敗→刪、只跑一部分→不動、只跑一部分又失敗→刪', JSON.stringify(wrong));
+    }],
+    ['V6', () => {
+      // 登記前的檢查，git 取不到時要停在「取不到」，不能被當成別的理由
+      const files = ['scripts/build-places.mjs'];
+      const failOn = (sub) => (root, args) => (args[0] === sub ? { ok: false, out: '', err: `假：${sub} 失敗` } : realGit(root, args));
+      const h = headProblems(work, files, failOn('hash-object'));
+      yes(h.length === 1 && /build-places\.mjs 算不出工作區的雜湊（假：hash-object 失敗）/.test(h[0]), 'V6 算不出工作區雜湊 → 不登記、寫明「算不出」', JSON.stringify(h));
+      const p = headProblems(work, files, failOn('rev-parse'));
+      yes(p.length === 1 && /build-places\.mjs 不在 HEAD 裡/.test(p[0]), 'V6 取不到 HEAD 裡的雜湊 → 不登記', JSON.stringify(p));
+      yes(headProblems(work, files).length === 0, 'V6 對照：同一個起點、git 照常 → 可登記');
+    }],
     ['V', () => {
       // 登記前的檢查（verified-reg.mjs）：工作區要跟 HEAD 一模一樣才登記；不符合就不寫、舊的一起刪
       const files = ['scripts/build-places.mjs', 'scripts/importshots.mjs'];
@@ -505,7 +632,7 @@ try {
   // 全部通過才登記被驗程式的雜湊（safe-push.sh 推送前比對，對不上就不推）。有 PUSHGATE_ORDER 時不登記：那是驗順序用的額外一跑。
   // 登記在不進版控的 .logs/：換一台機器 clone 下來就沒有登記，第一次推送前一定要先跑這支（新環境正是最需要重跑的時候）。
   // 登記的是 HEAD 裡的版本；工作區那幾支跟 HEAD 不一樣（有沒 commit 的改動）就不登記——驗到的是工作區那一份，推出去的是 HEAD（F9）。
-  if (!process.exitCode && !order) {
+  if (regAction({ failed: !!process.exitCode, partial: !!order }) === 'write') {
     const header = '# 推送閘的驗法（pushgatetest）全部通過時登記的雜湊（HEAD 裡的版本）。safe-push.sh 推送前比對，對不上就不推（共用慣例 v9 §5.15）。\n'
       + '# 不進版控。改了下面任何一支、或換了一台機器，就 commit 之後重跑 npm run pushgatetest；全部通過才會寫這個檔，有任何失敗就刪掉它。\n';
     const w = writeReg(ROOT, REG_REAL, GATE.map((f) => 'scripts/' + f), header);
@@ -519,7 +646,7 @@ try {
 } finally {
   fs.rmSync(base, { recursive: true, force: true });
 }
-// 有任何失敗（含例外）就刪掉登記，不只是「不更新」：閘門檔沒動、驗法卻失敗，最可能是執行環境變了——那正是該停下的時候
-if (process.exitCode && fs.existsSync(REG_REAL)) { fs.unlinkSync(REG_REAL); console.log('  有失敗：已刪掉 .logs/pushgate.verified（下次推送會被擋，直到驗法重新全過）'); }
-else if (process.exitCode) console.log('  有失敗：.logs/pushgate.verified 本來就不在');
+// 有任何失敗（含例外）就刪掉登記，不只是「不更新」：閘門檔沒動、驗法卻失敗，最可能是執行環境變了——那正是該停下的時候。
+// 判斷在 regAction（純函式，情境 V5 驗）；這一行只是照判斷執行（F10：已知限制，見證據檔的「常設／一次性」）
+if (regAction({ failed: !!process.exitCode, partial: !!order }) === 'drop') console.log(`  有失敗：.logs/pushgate.verified ${dropReg(REG_REAL)}（下次推送會被擋，直到驗法重新全過）`);
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

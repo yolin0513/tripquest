@@ -21,7 +21,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { headProblems, headHash, writeReg, dropReg } from './verified-reg.mjs';
+import { headProblems, headHash, writeReg, dropReg, regAction } from './verified-reg.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG = path.join(ROOT, '.logs', 'f8.verified');
@@ -117,11 +117,13 @@ try {
 // ---------- 結果與登記 ----------
 for (const s of summary) console.log(s);
 console.log(`耗時 ${Math.round((Date.now() - t0) / 1000)} 秒`);
-if (failed) {
+// 登記怎麼辦由 regAction（純函式，pushgatetest 的情境 V5 驗）決定；下面兩行只是照判斷執行（F10：已知限制，見證據檔）
+const act = regAction({ failed: failed > 0, partial: !!ONLY });
+if (act === 'drop') {
   console.log(`擋下：F8 驗法有 ${failed} 項沒過，不登記（.logs/f8.verified ${dropReg(REG)}）`);
   process.exit(1);
 }
-if (ONLY) { console.log(`全部擋下（只跑了 ${ONLY}，不登記；.logs/f8.verified 維持原樣）`); process.exit(0); }
+if (act === 'keep') { console.log(`全部擋下（只跑了 ${ONLY}，不登記；.logs/f8.verified 維持原樣）`); process.exit(0); }
 // 跑的途中 HEAD 或那三支有沒有變：變了就不登記（登記的要是剛剛驗的那一份）
 const nowHead = git(['rev-parse', 'HEAD']).stdout.trim();
 if (nowHead !== HEAD) give(`跑的途中 HEAD 變了（${HEAD.slice(0, 12)} → ${nowHead.slice(0, 12)}），不登記`);
