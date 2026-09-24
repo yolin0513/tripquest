@@ -99,6 +99,10 @@ if [ "$CHECK" -ne 0 ]; then
   if [ "$CHECK" -eq 1 ]; then echo "✗ 公開前自查有命中——不推"; exit 1; fi
   echo "✗ 公開前自查的檢查器壞了——不推"; exit 4
 fi
+# 回 0 還不夠：輸出裡要真的有「通過」那一行（自查一行都沒掃就結束、照樣回 0 時，擋在這裡）
+if ! grep -qx "通過" "$TMP/check"; then
+  echo "✗ 公開前自查回 0，卻沒有印出「通過」——它可能根本沒有跑"; echo "擋下：檢查器壞了（自查沒有跑）"; exit 4
+fi
 
 if ! git push origin main > "$TMP/push" 2>&1; then
   cat "$TMP/push"; echo "✗ git push 失敗——停"; exit 2

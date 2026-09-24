@@ -20,6 +20,9 @@
 //   D 遠端拒收（pre-receive hook 回 1）→ 2、push 那一關
 //   E 推了卻沒更新（post-receive hook 把 main 退回舊值）→ 3、比對遠端那一關
 //   G 抓不到遠端（origin 指到不存在的地方）→ 4、「抓不到遠端」
+//   （C2、I、K、K2、L 與 R 不經過閘門，直接呼叫 prepush-scan 的 scan()、傳壞掉的檢查表或 git 函式——2026-09-25 移除
+//    正式程式裡的 PREPUSH_SELFTEST_BREAK 開關，補充說明八）R 執行 git 丟例外 → 4「範圍」
+//   T 自查回 0 卻沒有印「通過」（一行都沒掃）→ 4「自查沒有跑」
 //   N 只刪不增的推送 → 0、推出去（「對不上就停」的檢查也要有正常情況放行的樣本，v9 §5.14）
 //   M／M2／M3／M5 四支閘門檔各自在工作區改過（沒 commit；推送時執行的就是這一份）、驗法還沒重跑 → 5、點名那一支、自查都還沒開始
 //   M0 沒有登記檔 → 5
@@ -53,6 +56,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { headProblems, writeReg, dropReg, regAction, realGit } from './verified-reg.mjs';
+import { scan, makeRun, makeChecks, realUser } from './prepush-scan.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
@@ -291,6 +295,13 @@ try {
       '對照（假 git）：不相干的子指令照常交給真的 git、輸出一樣', same.stderr);
     yes(n1 === 0 && n2 === 1, `對照（假 git）：FAKEGIT_NTH=2 → 第 1 次照常、第 2 次失敗（實得 ${n1}、${n2}）`);
   }
+  // 直接呼叫 prepush-scan 的 scan()（依賴注入）：wrap 包住真的 git 函式、改壞它的輸出；checks 傳壞掉的檢查表
+  const scanWith = ({ wrap, checks } = {}) => {
+    const lines = [];
+    const real = makeRun(work);
+    const code = scan({ range: `${BASE}..HEAD`, run: wrap ? wrap(real) : real, checks: checks || makeChecks(realUser()), log: (l) => lines.push(l) });
+    return { code, out: lines.join('\n') };
+  };
   const dropF8 = () => { if (fs.existsSync(F8REG)) fs.unlinkSync(F8REG); };
   // 在假 repo 裡跑真的 f8verify（S3、S4 用；兩條路都在開瀏覽器之前就停下）
   const runF8verify = (env = {}) => {
@@ -335,50 +346,77 @@ try {
       yes(WHO.broken('user').test(R(r.out)) && !WHO.hit.test(R(r.out)), 'C 擋下的是「檢查器壞了」的 user 那一類（不是命中）', r.out.slice(-300));
       untouched('C');
     }],
+    // C2、I、K、K2、L、R：檢查器自己壞掉。不再靠正式程式裡的開關（PREPUSH_SELFTEST_BREAK 已移除，補充說明八），
+    // 改成直接呼叫 prepush-scan 的 scan()、把壞掉的檢查表或 git 函式當參數傳進去
     ['C2', () => {
       commit('d.txt', 'clean2\n', 'clean2');
-      const r = gate({ PREPUSH_SELFTEST_BREAK: 'email' });
+      const checks = makeChecks(realUser());
+      checks.email.re = /(?!)/g;   // email 的搜尋式壞了：永遠不命中
+      const r = scanWith({ checks });
       yes(r.code === 4 && WHO.broken('email').test(R(r.out)) && /^email：對照組命中=false/m.test(r.out),
         `C2 email 的搜尋式壞了（對照組沒命中）→ 回 4、寫明是 email 那一類（實得 ${r.code}）`, r.out.slice(-300));
-      untouched('C2');
     }],
     ['I', () => {
       // 取訊息與作者欄的指令輸出是空的（模擬換環境後解析壞掉）：要停下，不能印「0 行」就放行
       commit('d.txt', 'clean2\n', 'clean2');
       yes(Number(sh(`git rev-list --count ${BASE}..HEAD`).trim()) > 0, 'I 前置：範圍裡確實有要推的 commit（不然「0 行」可能只是真的沒東西可掃）');
-      const r = gate({ PREPUSH_SELFTEST_BREAK: 'meta' });
+      const r = scanWith({ wrap: (real) => (cmd) => (cmd.startsWith('git log --format=%h') ? '' : real(cmd)) });
       yes(r.code === 4 && WHO.broken('訊息與作者欄').test(R(r.out)) && !WHO.hit.test(R(r.out)),
         `I 訊息與作者欄解析出 0 筆 → 回 4、寫明「訊息與作者欄」壞了（實得 ${r.code}）`, r.out.slice(-300));
-      untouched('I');
+    }],
+    ['R', () => {
+      // 執行 git 丟例外（例如 rev-list 失敗）：停在「範圍」，不能當成 0 個 commit
+      commit('d.txt', 'clean2\n', 'clean2');
+      const r = scanWith({ wrap: (real) => (cmd) => { if (cmd.startsWith('git rev-list')) throw new Error('假：rev-list 失敗'); return real(cmd); } });
+      yes(r.code === 4 && /^擋下：檢查器壞了（範圍）/m.test(R(r.out)) && /假：rev-list 失敗/.test(r.out),
+        `R 執行 git 丟例外 → 回 4、「範圍」、寫出原因（實得 ${r.code}）`, r.out.slice(-300));
+    }],
+    ['T', () => {
+      // 自查一行都沒掃就回 0（例如「直接執行還是被 import」的判斷失準）：閘門要因為沒有「通過」那一行而擋下。
+      // 換成空殼要動到閘門檔，所以閘門登記跟著重寫（比照 P7），讓擋下它的是這一道、不是回 5
+      fs.writeFileSync(path.join(work, 'scripts', 'prepush-scan.mjs'), '// 空殼：什麼都不掃、什麼都不印，回 0\n');
+      sh('git add scripts/prepush-scan.mjs'); sh('git commit -q -m t-empty-scan');
+      fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
+      const r = gate();
+      yes(r.code === 4 && /^擋下：檢查器壞了（自查沒有跑）/m.test(R(r.out)) && !WHO.unverified.test(R(r.out)),
+        `T 自查回 0 卻沒有「通過」→ 回 4、「自查沒有跑」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('T');
     }],
     ['K', () => {
       threeCommits();
-      const r = gate({ PREPUSH_SELFTEST_BREAK: 'metapartial' });
+      const r = scanWith({ wrap: (real) => (cmd) => (cmd.startsWith('git log --format=%h') ? real(cmd).split('\x1e')[0] + '\x1e' : real(cmd)) });
       const n = nums(r.out);
       yes(n.commits >= 2 && n.parsed >= 1 && n.parsed < n.commits && n.msg >= n.commits,
         `K 前置：範圍裡有 ${n.commits} 個 commit、只解出 ${n.parsed} 筆（部分失效、不是全空），訊息行數 ${n.msg} 不少於 commit 數`, r.out.slice(-300));
       yes(r.code === 4 && WHO.metaFault('筆數').test(R(r.out)) && !WHO.metaFault('訊息').test(R(r.out)),
         `K 只解出一部分 → 回 4、擋在「筆數」那一條（實得 ${r.code}）`, r.out.slice(-300));
-      untouched('K');
     }],
     ['K2', () => {
       threeCommits();
-      const r = gate({ PREPUSH_SELFTEST_BREAK: 'nobody' });
+      // 每一筆只留前 5 欄（簡碼、作者、信箱、提交者、信箱），訊息那一欄清空
+      const noBody = (out) => out.split('\x1e').map((rec) => { const f = rec.split('\x00'); return f.length >= 6 ? [...f.slice(0, 5), ''].join('\x00') : rec; }).join('\x1e');
+      const r = scanWith({ wrap: (real) => (cmd) => (cmd.startsWith('git log --format=%h') ? noBody(real(cmd)) : real(cmd)) });
       const n = nums(r.out);
       yes(n.commits >= 1 && n.parsed === n.commits && n.msg === 0,
         `K2 前置：${n.commits} 個 commit 都解析到了、訊息 ${n.msg} 行（只有訊息遺失）`, r.out.slice(-300));
       yes(r.code === 4 && WHO.metaFault('訊息').test(R(r.out)) && !WHO.metaFault('筆數').test(R(r.out)),
         `K2 訊息遺失 → 回 4、擋在「訊息」那一條（實得 ${r.code}）`, r.out.slice(-300));
-      untouched('K2');
     }],
     ['L', () => {
-      // 抽多了（同一行重複計入）：numstat 核對要用 !==，用 < 會放行
+      // 抽多了（同一行重複計入）：numstat 核對要用 !==，用 < 會放行。在 diff 輸出裡把第一個 hunk 的第一行新增行重複一次
       threeCommits();
-      const r = gate({ PREPUSH_SELFTEST_BREAK: 'dupline' });
+      const dup = (out) => {
+        const ls = out.split('\n');
+        const at = ls.findIndex((l) => l.startsWith('@@'));
+        const k = ls.findIndex((l, i) => i > at && l.startsWith('+'));
+        if (at < 0 || k < 0) return out;
+        ls.splice(k, 0, ls[k]);
+        return ls.join('\n');
+      };
+      const r = scanWith({ wrap: (real) => (cmd) => (cmd.startsWith('git log -p') ? dup(real(cmd)) : real(cmd)) });
       const ex = (r.out.match(/新增行核對：抽出 (\d+) 行，git 算 (\d+) 行/) || []).slice(1).map(Number);   // 每次都印的那一行
       yes(ex.length === 2 && ex[0] > ex[1] && ex[1] > 0, `L 前置：抽出的行數（${ex[0]}）確實比 git 算的（${ex[1]}）多`, r.out.slice(-300));
       yes(r.code === 4 && WHO.broken('新增行抽取').test(R(r.out)), `L 抽多了 → 回 4、擋在「新增行抽取」（實得 ${r.code}）`, r.out.slice(-300));
-      untouched('L');
     }],
     ['J', () => {
       // 內容本身以 ++ 開頭的命中行，加了又刪（只有逐 commit 掃新增行才抓得到；舊寫法把它當 diff 檔頭丟掉）
