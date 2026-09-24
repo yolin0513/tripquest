@@ -99,7 +99,7 @@ try {
   });
   yes(mapBtn && mapBtn.w >= 44 && mapBtn.h >= 44, `地圖小圖示 ${mapBtn && mapBtn.w}×${mapBtn && mapBtn.h}px，仍是可點的大小`);
   yes(mapBtn && /導航/.test(mapBtn.label), '地圖按鈕的說明是「導航」');
-  const mapTxt = await page.$eval('.qc-map', (e) => e.innerText.replace(/s+/g, ''));
+  const mapTxt = await page.$eval('.qc-map', (e) => e.innerText.replace(/\s+/g, ''));
   yes(/導航/.test(mapTxt), '地圖按鈕上看得到「導航」兩個字 —— 只有圖示很多人不知道那是什麼');
 
   // ---------- ② 名字看得完整 ----------

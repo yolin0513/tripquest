@@ -83,7 +83,7 @@ try {
   const pair = await page.evaluate(() => {
     const row = document.querySelector('.plan-row-actions');
     const bs = [...row.querySelectorAll('.plan-mini')];
-    return bs.map((b) => ({ w: Math.round(b.getBoundingClientRect().width), t: b.innerText.replace(/s+/g, '') }));
+    return bs.map((b) => ({ w: Math.round(b.getBoundingClientRect().width), t: b.innerText.replace(/\s+/g, '') }));
   });
   // v1.51 起多了 📌 釘住（排順序時當錨）—— 任務/設定兩顆仍要等寬
   // v1.51.5：📌 上移到名稱列，動作列回到兩顆（任務／設定）

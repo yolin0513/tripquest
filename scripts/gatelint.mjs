@@ -136,16 +136,9 @@ export function escLine(line, inTpl) {
   return out;
 }
 // 看過的：真的壞寫法（待授權修）或確定沒問題的；對不到任何一行＝過期，算檢查器壞了
+// 已知、還沒修的跳脫問題（每次掃描都印出來；登記了卻對不到任何一行＝過期，回 4）。
+// 2026-09-25：原本登記的 4 條（densitytest、plantest 的 /s+/g，layouttest 模板字串裡的單一反斜線）都修好了，清單清空。
 export const ESC_KNOWN = [
-  { file: 'scripts/densitytest.mjs', kind: 'lost', match: /e\.innerText\.replace\(\/s\+\/g, ''\)/, state: '待修',
-    why: '本意是 /\\s+/g（去掉空白），現在去掉的是字母 s；斷言剛好不受空白影響所以一直綠' },
-  { file: 'scripts/plantest.mjs', kind: 'lost', match: /b\.innerText\.replace\(\/s\+\/g, ''\)/, state: '待修',
-    why: '同上：本意是 /\\s+/g' },
-  // 下面兩條要找的正是原始碼裡的「反斜線＋s」，用 has（一般字串）比對，免得比對樣式自己又變成一個多跳脫的 regex
-  { file: 'scripts/layouttest.mjs', kind: 'lost-tpl', has: 'const endsNum = /[0-9][\\s\\u3000]*$/', state: '待修',
-    why: '在模板字串裡（送進瀏覽器執行），瀏覽器拿到的是 /[0-9][s　]*$/——一般空白認不得（應寫 \\\\s、\\\\u3000）' },
-  { file: 'scripts/layouttest.mjs', kind: 'lost-tpl', has: 'const startsUnit = /^[\\s\\u3000]*', state: '待修',
-    why: '同上：瀏覽器拿到的是 /^[s　]*…/' },
 ];
 // 逐字元標出每個位置在哪裡：c＝程式碼、t＝模板字串的文字部分、s＝一般字串、m＝註解、r＝程式碼裡的 regex 字面。
 // 只數反引號分不出來（反引號也會出現在註解、字串、regex 的字元類別裡，奇偶一亂後面整段都判錯——2026-09-24 實測）。

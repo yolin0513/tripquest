@@ -299,8 +299,10 @@ try {
           if (cur) lines.push(cur);
         }
         for (let i = 0; i + 1 < lines.length; i++) {
-          const endsNum = /[0-9][\s\u3000]*$/.test(lines[i]);
-          const startsUnit = /^[\s\u3000]*[天人張個次日年月分秒公里小時位%％]/.test(lines[i + 1]);
+          // 這一段在模板字串 CHECK 裡、以字串送進瀏覽器：反斜線要寫兩個，瀏覽器才拿得到「反斜線 s」（2026-09-25 修；原本寫一個，
+          // 瀏覽器拿到的是 [s　]，斷在一般空白的「3 天」抓不到）
+          const endsNum = /[0-9][\\s\\u3000]*$/.test(lines[i]);
+          const startsUnit = /^[\\s\\u3000]*[天人張個次日年月分秒公里小時位%％]/.test(lines[i + 1]);
           if (endsNum && startsUnit) {
             out.push({ kind: 'bad-wrap', where: label(el),
               detail: '「' + lines[i].slice(-12).trim() + '」換行「' + lines[i + 1].slice(0, 12).trim()
