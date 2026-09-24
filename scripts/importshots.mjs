@@ -2,17 +2,34 @@
 //
 // 素材用 scripts/fixtures/yilan.txt —— 使用者實際貼進來的那份 Google 地圖行程匯出。
 // 用真實資料截圖才看得到真的會發生的事（備案、分店後綴、HH時MM分、關鍵字堆疊）。
+//
+// 2026-09-24 起（盤點實測：素材空的時候等到逾時才停、理由不清楚；成功跑完舊截圖還在，跟新的混在一起）：
+//   · 開瀏覽器之前先確認素材在、不是空的、至少有一行帶時間——不齊就停，一張都不拍
+//   · 截圖先拍到 screenshots/_import.partial/，EXPECTED 張全部拍完才整個換上 screenshots/_import/（舊的一起換掉）；
+//     中途失敗就丟掉暫存的，screenshots/_import/ 維持上一次成功的完整內容，並明講沒有換上
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { mkdir } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { mkdir, rm, rename } from 'node:fs/promises';
+import { readFileSync, existsSync } from 'node:fs';
 import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const OUT = fileURLToPath(new URL('../screenshots/_import', import.meta.url));
-const RAW = readFileSync(fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url)), 'utf8');
+const FINAL = fileURLToPath(new URL('../screenshots/_import', import.meta.url));
+const OUT = FINAL + '.partial';
+const EXPECTED = 13;                      // 下面 shot() 的次數；少拍一張就不換上
+const FIXTURE = fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url));
+const stop = (why) => {
+  console.error(`✗ ${why}`);
+  console.error(`擋下：來源不齊，一張都沒拍（screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}）`);
+  process.exit(1);
+};
+if (!existsSync(FIXTURE)) stop('素材 scripts/fixtures/yilan.txt 不在');
+const RAW = readFileSync(FIXTURE, 'utf8');
+if (!RAW.trim()) stop('素材 scripts/fixtures/yilan.txt 是空的');
+if (!/\d{1,2}\s*[:：時]\s*\d{2}/.test(RAW)) stop('素材 scripts/fixtures/yilan.txt 裡沒有任何一行帶時間（看起來不是行程表）');
 const WEB = 5241;
+await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
 await sleep(1400);
@@ -140,8 +157,20 @@ try {
   });
   await page.waitForSelector('.imp-note');
   await shot('privacy-consent');
+} catch (e) {
+  console.error('✗ 截圖中斷：' + (e && e.message || e));
+  process.exitCode = 1;
 } finally {
   await browser.close();
   web.kill();
 }
-console.log(`\n共 ${n} 張，輸出到 screenshots/_import/`);
+if (!process.exitCode && n === EXPECTED) {
+  await rm(FINAL, { recursive: true, force: true });
+  await rename(OUT, FINAL);
+  console.log(`\n共 ${n} 張，換上 screenshots/_import/（舊的一起換掉）`);
+} else {
+  await rm(OUT, { recursive: true, force: true });
+  if (!process.exitCode) console.error(`✗ 只拍了 ${n} 張、應該 ${EXPECTED} 張`);
+  console.error(`擋下：沒有換上，screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}`);
+  process.exitCode = 1;
+}

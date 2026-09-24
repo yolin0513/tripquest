@@ -14,8 +14,8 @@
 //
 // 用法（實作後）：node scripts/build-places.mjs tw-taipei
 
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
+import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const DIR = fileURLToPath(new URL('../data/places/', import.meta.url));
@@ -24,6 +24,28 @@ const RAW = fileURLToPath(new URL('../data/_raw/', import.meta.url));   // gitig
 
 const cityId = process.argv[2];
 if (!cityId) { console.error('用法：node scripts/build-places.mjs <cityId>'); process.exit(1); }
+
+// ---------- 動手寫任何檔之前，先確認來源都在、都不是空的（2026-09-24 盤點實測）----------
+// 原本：不存在的城市當成「0 個地點」、照樣寫出 staging 檔、印 done 回 0；城市檔欄位改名／格式壞掉時當掉，
+// 錯誤沒講是哪個檔。缺任何一樣就停、一個檔都不寫——staging 維持上一次成功的輸出（App 或人讀到的仍是完整的那一份）。
+const stagingOut = STAGING + cityId + '.json';
+const stop = (why) => {
+  const prev = existsSync(stagingOut) ? `上一次的輸出還在（${new Date(statSync(stagingOut).mtimeMs).toISOString()}），沒有被換掉` : '沒有上一次的輸出';
+  console.error(`✗ ${why}`);
+  console.error(`擋下：來源不齊，一個檔都沒寫（${prev}）`);
+  process.exit(1);
+};
+let index;
+try { index = JSON.parse(await readFile(DIR + 'index.json', 'utf8')); } catch (e) { stop(`讀不到 data/places/index.json：${e.message}`); }
+const cities = new Map();
+for (const c of index.countries || []) for (const r of c.regions || []) for (const ci of r.cities || []) cities.set(ci.id, ci.file);
+if (!cities.size) stop('index.json 一個城市都沒有');
+if (!cities.has(cityId)) stop(`城市「${cityId}」不在 index.json 登記的 ${cities.size} 個城市裡`);
+const existingFile = DIR + cities.get(cityId);
+if (!existsSync(existingFile)) stop(`${cityId}：index.json 指到的 ${cities.get(cityId)} 不存在`);
+let existing;
+try { existing = JSON.parse(await readFile(existingFile, 'utf8')); } catch (e) { stop(`${cities.get(cityId)} 解析不了：${e.message}`); }
+if (!Array.isArray(existing.places) || !existing.places.length) stop(`${cities.get(cityId)} 沒有 places（不是陣列、是空的、或欄位名稱對不上）`);
 
 await mkdir(STAGING, { recursive: true });
 await mkdir(RAW, { recursive: true });
@@ -62,12 +84,9 @@ function haversine(la1, lo1, la2, lo2) {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-// --- 主流程 ---
-const existingFile = DIR + cityId + '.json';
-const existing = existsSync(existingFile) ? JSON.parse(await readFile(existingFile, 'utf8')) : { _meta: { schema: 1, city: cityId }, places: [] };
-
+// --- 主流程（來源已在最上面確認過：existing 是 index 登記的那個城市檔，places 是非空陣列）---
 console.log('（骨架）尚未實作各來源擷取。合併邏輯與 staging 流程已就緒。');
-console.log(`現有 ${existing.places.length} 個地點會被保留；機器候選會寫到 ${STAGING}${cityId}.json 供人工審閱。`);
+console.log(`現有 ${existing.places.length} 個地點會被保留；機器候選會寫到 data/places/_staging/${cityId}.json 供人工審閱。`);
 
 const candidates = [
   ...(await fromWikivoyage(cityId)),
@@ -75,5 +94,8 @@ const candidates = [
 ];
 void pageviewTrend; void commonsImageFor; void sameSpot; void mergeInto;
 
-await writeFile(STAGING + cityId + '.json', JSON.stringify({ _meta: { generated: Date.now(), city: cityId }, candidates }, null, 2));
-console.log('done（目前 candidates 為空——待實作來源擷取）');
+// 先寫暫存檔、寫完才換上：寫到一半失敗時，上一次成功的輸出不會被半份檔蓋掉
+const tmpOut = stagingOut + '.partial';
+await writeFile(tmpOut, JSON.stringify({ _meta: { generated: Date.now(), city: cityId }, candidates }, null, 2));
+await rename(tmpOut, stagingOut);
+console.log(`done：data/places/_staging/${cityId}.json（候選 ${candidates.length} 個——各來源擷取尚未實作，所以目前是 0）`);
