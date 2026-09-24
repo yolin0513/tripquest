@@ -281,8 +281,13 @@ try {
 
       // 6. 不該斷的地方斷行：行尾是孤零零的數字、下一行開頭是量詞
       //    （使用者實測：「… · 3」換行「天 · 4 人」）
+      //    只檢查**短片語**：元素全文 40 字以內、而且不含「。」「——」（2026-09-25，Dispatch 核准）。超過 40 字或含這兩個
+      //    符號的是一整段說明，讀的人是順著讀下去，斷在「約 7／天」不會卡；短按鈕、統計列斷在「第 1／天」才會卡。
+      //    兩個方向的對照組在主迴圈之前（短片語一定要抓、長說明不能抓）。
       const tops = [...new Set(rects.map((r) => Math.round(r.top)))];
-      if (tops.length > 1 && el.textContent.length <= 160) {
+      const fullText = (el.textContent || '').trim();
+      const shortPhrase = fullText.length <= 40 && !fullText.includes('。') && !fullText.includes('——');
+      if (tops.length > 1 && shortPhrase) {
         const lines = [];
         const node = el.firstChild;
         if (node && node.nodeType === 3) {
@@ -398,6 +403,41 @@ try {
     ['建立行程', '/new'],
     ['設定', '/settings'],
   ];
+
+  // ---------- 第 6 條（數字和量詞被拆開）的對照組：兩個方向，跑的是同一個 CHECK（2026-09-25）----------
+  // 在真的頁面上放兩個窄到一定會斷行的樣本：短片語「共 3 天」一定要抓；超過 40 字、含句號的長說明同樣斷在「7／天」不能抓。
+  // 前置先量出兩個樣本真的斷在數字與單位之間——不然「沒抓到」可能只是根本沒斷。
+  {
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/#/settings`, { waitUntil: 'networkidle0' }).catch(() => {});
+    await page.waitForSelector('.page, .hero', { timeout: 15000 }).catch(() => {});
+    const LONG = '約 7 天後資料會被清掉。這是一段很長的說明文字，用來湊滿四十個字以上的長度，好讓它算是一整段說明。';
+    const pre = await page.evaluate((longText) => {
+      const mk = (cls, text) => {
+        const d = document.createElement('div');
+        d.className = cls; d.textContent = text;
+        d.style.cssText = 'font-size:20px;width:2.2em;padding:0;margin:0;border:0;white-space:normal;';
+        document.body.prepend(d);
+        return d;
+      };
+      const s = mk('lt-ctl-short', '共 3 天');
+      const l = mk('lt-ctl-long', longText);
+      const splitAt = (el, a, b) => {
+        const t = el.firstChild;
+        const top = (i) => { const r = document.createRange(); r.setStart(t, i); r.setEnd(t, i + 1); return Math.round(r.getBoundingClientRect().top); };
+        const i = t.data.indexOf(a), j = t.data.indexOf(b);
+        return i >= 0 && j > i && top(i) !== top(j);
+      };
+      return { short: splitAt(s, '3', '天'), long: splitAt(l, '7', '天'), longLen: longText.length };
+    }, LONG);
+    yes(pre.short && pre.long && pre.longLen > 40,
+      `第 6 條對照組前置：短片語真的斷在「3／天」、長說明（${pre.longLen} 字、含句號）真的斷在「7／天」`, JSON.stringify(pre));
+    const ctl = await page.evaluate(CHECK);
+    const hit = (cls) => ctl.some((x) => x.kind === 'bad-wrap' && x.where === '.' + cls);
+    yes(hit('lt-ctl-short'), '第 6 條對照組：短片語斷在「3／天」一定要抓到');
+    yes(!hit('lt-ctl-long'), '第 6 條對照組：長說明（超過 40 字、含句號）裡斷在「7／天」不能抓');
+  }
 
   let combos = 0;
   console.log(`— 逐頁掃描（${ROUTES.length} 頁 × ${FONTS.length} 字級 × ${WIDTHS.length} 寬度 = ${ROUTES.length * FONTS.length * WIDTHS.length} 種組合）—`);

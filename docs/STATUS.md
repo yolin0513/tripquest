@@ -1,6 +1,6 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-09-23，線上版本 **v1.74.9**（每次上版請一併更新這一行）。
+> 最後更新：2026-09-25，線上版本 **v1.74.10**（每次上版請一併更新這一行）。
 > 給下一個工作階段快速接手用；架構細節見 `ARCHITECTURE_DECISION.md`，第三方平台實測見 `PLATFORM_NOTES.md`，配樂授權見根目錄 `MUSIC_LICENSES.md`。
 
 ## 目前進行中／交接（給下一個接手的 Session）

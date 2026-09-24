@@ -1,6 +1,6 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast } from '../ui.js';
+import { h, toast, qty } from '../ui.js';
 import { navigate } from '../router.js';
 import { renderPreview, renderPoster, presetList, warmPosterAi } from '../poster/index.js';
 import { downloadBlob, nativeShare } from '../share.js';
@@ -71,7 +71,7 @@ export default async function poster(tripId) {
       // 「第 1 天」＋「1 / 3 張」講的是同一件事 —— 一句就好。
       // 兩端用 visibility 藏（不是 disabled）：第一張根本沒有「前一張」可去，
       // 灰掉的按鈕還是會被按；用 visibility 而非移除，中間的字才不會左右跳。
-      pageLbl.textContent = `${info.label} / 共 ${info.pages} 天`;
+      pageLbl.textContent = `${info.label} / 共 ${qty(info.pages, '天')}`;
       pagePrev.style.visibility = info.page === 0 ? 'hidden' : 'visible';
       pageNext.style.visibility = info.page >= info.pages - 1 ? 'hidden' : 'visible';
       if (ghost) {

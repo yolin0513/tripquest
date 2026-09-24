@@ -3,7 +3,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast } from '../ui.js';
+import { h, toast, qty } from '../ui.js';
 import { navigate } from '../router.js';
 import { earnedBadges, BADGES, creditOf, shooterOf, subjectsOf, helpedOthers } from '../badges.js';
 import { avatar } from '../ui.js';
@@ -63,7 +63,7 @@ export default async function memories(tripId) {
 
     h('div', { class: 'section-label', style: 'margin-top:22px' }, '👣 大家的表現'),
     teamProgress(tripId, t),
-    bigCard('🏅', '成就徽章', me ? `你已解鎖 ${myBadges} / ${BADGES.length} 個` : '看看大家的徽章',
+    bigCard('🏅', '成就徽章', me ? `你已解鎖 ${myBadges} / ${qty(BADGES.length, '個')}` : '看看大家的徽章',
       () => navigate(`/trip/${tripId}/badges`), true),
   ));
 }
@@ -90,7 +90,7 @@ function teamProgress(tripId, t) {
       h('div', { class: 'pr-main' },
         h('div', { class: 'pr-name' }, m.displayName, bCount ? h('span', { class: 'pr-badges' }, `🏅${bCount}`) : null),
         h('div', { class: 'pr-count' },
-          `完成 ${credited.size} 個任務 · 拍 ${shot.length} 張`
+          `完成 ${qty(credited.size, '個任務')} · 拍 ${qty(shot.length, '張')}`
           + (forOthers ? ` · 幫拍 ${forOthers}` : '')
           + (inPhotos ? ` · 入鏡 ${inPhotos}` : '')),
         h('div', { class: 'pr-mini-track' }, h('i', { style: `width:${Math.round(ratio * 100)}%` })),

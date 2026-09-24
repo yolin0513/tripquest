@@ -271,3 +271,9 @@ export const KIND_META = {
   group: { icon: '👥', label: '合照' },
   custom: { icon: '✨', label: '自訂' },
 };
+
+// 數字跟它的單位黏在一起，不讓瀏覽器在中間斷行（2026-09-25）：「共 3／天」「完成 3／個以上」這種短片語被拆開，讀起來會卡。
+// 用不斷行空白（U+00A0）取代一般空白。不用 white-space: nowrap 套整個元素——窄螢幕加特大字時整行斷不了，會畫出框外。
+export const NBSP = String.fromCharCode(160);
+export const qty = (n, unit) => `${n}${NBSP}${unit}`;             // 3 張、14 個
+export const nth = (n, unit) => `第${NBSP}${n}${NBSP}${unit}`;     // 第 1 天

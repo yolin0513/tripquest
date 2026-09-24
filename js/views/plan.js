@@ -10,7 +10,7 @@ import { spotTimes, dayStartOf, DAY_START_DEFAULT } from '../spottime.js';
 import { travelMatrix, chainTimes, timeConflicts, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
 import { loadThemes } from '../theme.js';
 import * as store from '../store.js';
-import { h, mount, toast, promptDialog, confirmDialog, modal } from '../ui.js';
+import { h, mount, toast, promptDialog, confirmDialog, modal, nth } from '../ui.js';
 import { navigate } from '../router.js';
 import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
@@ -153,7 +153,7 @@ export default async function plan(tripId) {
       list.append(h('button', {
         class: 'plan-addspot', dataset: { day: String(d) },
         onclick: () => navigate(`/trip/${tripId}/findspot?day=${d}`),
-      }, `🔍 搜尋景點加入第 ${d} 天`));
+      }, `🔍 搜尋景點加入${nth(d, '天')}`));
     }
 
     annotateTravel().catch(() => {});

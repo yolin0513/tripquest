@@ -1,6 +1,6 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, ring, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META } from '../ui.js';
+import { h, ring, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty } from '../ui.js';
 import { navigate, back, navRestoredScroll } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
@@ -1007,7 +1007,7 @@ function questLine(q, spot, themeKey) {
       h('span', { class: 'qline-title' }, q.title,
         null),   // 「AI 出題」的 ✨ 標示已依使用者要求移除
       h('span', { class: 'qline-sub' },
-        done ? `✓ 已完成　${subs.length} 張` : '還沒拍',
+        done ? `✓ 已完成　${qty(subs.length, '張')}` : '還沒拍',
         likeCount ? `　❤️ ${likeCount}` : ''),
     ),
     h('span', { class: 'qline-chev' }, '▸'),

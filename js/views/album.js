@@ -1,6 +1,6 @@
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, confirmDialog, fmtBytes, modal } from '../ui.js';
+import { h, toast, confirmDialog, fmtBytes, modal, qty } from '../ui.js';
 import { navigate } from '../router.js';
 import {
   createPlayer, buildAlbumPage, recordVideo, videoSupported,
@@ -21,7 +21,7 @@ const SYNTH_OPTS = [
 
 const mmss = (sec) => {
   const s = Math.round(sec);
-  return `${Math.floor(s / 60)} 分 ${String(s % 60).padStart(2, '0')} 秒`;
+  return `${qty(Math.floor(s / 60), '分')} ${qty(String(s % 60).padStart(2, '0'), '秒')}`;
 };
 
 export default async function album(tripId) {
@@ -82,7 +82,7 @@ export default async function album(tripId) {
       },
     },
       h('span', { class: 'len-t' }, o.label),
-      h('span', { class: 'len-s' }, `${est[o.key].photos} 張 · ${mmss(est[o.key].seconds)}`),
+      h('span', { class: 'len-s' }, `${qty(est[o.key].photos, '張')} · ${mmss(est[o.key].seconds)}`),
     )));
     const e = est[length];
     lenNote.textContent = length === 'short'

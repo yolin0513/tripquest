@@ -3,6 +3,7 @@
 import * as store from './store.js';
 import * as db from './db.js';
 import { myDeviceId } from './identity.js';
+import { qty } from './ui.js';
 
 // 照片的歸屬一律走 store.photoTag()，事後標記改了這裡就跟著變（統計即時重算）。
 
@@ -115,14 +116,14 @@ export function tripsJoinedCount() {
 
 export const BADGES = [
   { id: 'first', emoji: '🎬', name: '初次登場', desc: '完成第一個拍照任務', check: (s) => s.doneCount >= 1 },
-  { id: 'daily3', emoji: '☀️', name: '一日三響', desc: '同一天完成 3 個以上的任務', check: (s) => s.maxInDay >= 3 },
+  { id: 'daily3', emoji: '☀️', name: '一日三響', desc: `同一天完成 ${qty(3, '個')}以上的任務`, check: (s) => s.maxInDay >= 3 },
   { id: 'foodie', emoji: '🍜', name: '美食獵人', desc: '完成這趟所有「美食」類任務', check: (s) => s.foodTotal >= 2 && s.foodDone >= s.foodTotal },
   { id: 'helper', emoji: '🎁', name: '神隊友', desc: '幫旅伴拍過照片（照片裡有別人）', check: (s) => s.forOthersCount >= 1 },
-  { id: 'helper5', emoji: '🤝', name: '最佳攝影師', desc: '幫旅伴拍過 5 張以上', check: (s) => s.forOthersCount >= 5 },
+  { id: 'helper5', emoji: '🤝', name: '最佳攝影師', desc: `幫旅伴拍過 ${qty(5, '張')}以上`, check: (s) => s.forOthersCount >= 5 },
   { id: 'earlybird', emoji: '🐓', name: '早鳥', desc: '出發第一天就完成任務', check: (s) => s.earlyBird },
   { id: 'nightowl', emoji: '🌙', name: '夜貓子', desc: '拍過晚上（19 點後）的照片', check: (s) => s.nightOwl },
-  { id: 'star', emoji: '🌟', name: '眾星拱月', desc: '被標記在 5 張以上的照片裡', check: (s) => s.inPhotosCount >= 5 },
-  { id: 'social', emoji: '💬', name: '應援團', desc: '幫旅伴按讚或留言 10 次以上', check: (s) => s.socialCount >= 10 },
+  { id: 'star', emoji: '🌟', name: '眾星拱月', desc: `被標記在 ${qty(5, '張')}以上的照片裡`, check: (s) => s.inPhotosCount >= 5 },
+  { id: 'social', emoji: '💬', name: '應援團', desc: `幫旅伴按讚或留言 ${qty(10, '次')}以上`, check: (s) => s.socialCount >= 10 },
   { id: 'everyone', emoji: '👨‍👩‍👧', name: '全家福', desc: '這趟每個人都有貢獻照片', check: (s) => s.everyoneIn },
   { id: 'clear', emoji: '🏆', name: '全員通關', desc: '這趟所有任務都完成了', check: (s) => s.tripComplete && s.contributed },
   { id: 'director', emoji: '🎞️', name: '大導演', desc: '做過這趟的回憶影片', check: (s) => s.albumMade },

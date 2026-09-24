@@ -2,7 +2,7 @@
 
 import { setTop, render } from '../app.js';
 import * as store from '../store.js';
-import { h, toast, avatar, spinnerBox } from '../ui.js';
+import { h, toast, avatar, spinnerBox, qty } from '../ui.js';
 import { navigate } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
@@ -61,18 +61,18 @@ export default async function recap(tripId) {
     out.append(h('div', { class: 'recap-line' },
       h('span', { class: 'recap-line-ic' }, '🌤️'),
       h('span', {}, (ai && ai.weather) || (`這幾天最高 ${r.weather.hi} 度、最低 ${r.weather.lo} 度` +
-        (r.weather.rainyDays ? `，有 ${r.weather.rainyDays} 天下雨` : '，天氣不錯'))),
+        (r.weather.rainyDays ? `，有 ${qty(r.weather.rainyDays, '天')}下雨` : '，天氣不錯'))),
     ));
   }
 
   // 待最久 / 最多回憶
   if (r.topSpot) {
     out.append(h('div', { class: 'recap-line' }, h('span', { class: 'recap-line-ic' }, '🏆'),
-      h('span', {}, (ai && ai.topSpot) || `最多回憶的地方是「${r.topSpot.name}」，拍了 ${r.topSpot.photos} 張`)));
+      h('span', {}, (ai && ai.topSpot) || `最多回憶的地方是「${r.topSpot.name}」，拍了 ${qty(r.topSpot.photos, '張')}`)));
   }
   if (r.longestSpot && r.longestSpot.mins >= 60) {
     out.append(h('div', { class: 'recap-line' }, h('span', { class: 'recap-line-ic' }, '⏳'),
-      h('span', {}, `待最久的是「${r.longestSpot.name}」，約 ${Math.round(r.longestSpot.mins / 30) / 2} 小時`)));
+      h('span', {}, `待最久的是「${r.longestSpot.name}」，約 ${qty(Math.round(r.longestSpot.mins / 30) / 2, '小時')}`)));
   }
 
   // 美食
@@ -96,7 +96,7 @@ export default async function recap(tripId) {
       h('div', { class: 'recap-person-main' },
         h('div', { style: 'font-weight:800' }, m.name, m.badges ? h('span', { class: 'pr-badges' }, ` 🏅${m.badges}`) : null),
         h('div', { class: 'muted sm' },
-          `完成 ${m.done} · 拍 ${m.shot} 張`
+          `完成 ${m.done} · 拍 ${qty(m.shot, '張')}`
           + (m.helped ? ` · 幫拍 ${m.helped}` : '')
           + (m.inPhotos ? ` · 入鏡 ${m.inPhotos}` : '')
           + (m.social ? ` · 互動 ${m.social}` : '')),
@@ -105,7 +105,7 @@ export default async function recap(tripId) {
 
   // 徽章
   if (r.tripBadges.length) {
-    out.append(h('div', { class: 'section-label' }, `這趟解鎖 ${r.tripBadges.length} 個徽章`));
+    out.append(h('div', { class: 'section-label' }, `這趟解鎖 ${qty(r.tripBadges.length, '個')}徽章`));
     out.append(h('div', { class: 'recap-badges' }, ...r.tripBadges.map((b) =>
       h('span', { class: 'recap-badge' }, `${b.emoji} ${b.name}`))));
   }

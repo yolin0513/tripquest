@@ -11,6 +11,7 @@ import { PRESETS, CJK_STACK, styleFor } from './presets.js';
 import * as deco from './deco.js';
 import { loadThemes, themeForSpot, themeForDay, themeForTrip, themeMeta } from '../theme.js';
 import { aiPayload } from '../aicontent.js';
+import { nth } from '../ui.js';
 
 const W = 1240;
 const MAXH = 8000;
@@ -477,7 +478,7 @@ export async function renderPreview(canvas, tripId, presetId, page = 0) {
   await drawPoster(canvas, model, groups[gi], preset, tripId + ':' + presetId + ':' + (groups.length > 1 ? gi : 'prev'));
   return {
     pages: groups.length, page: gi,
-    label: groups.length > 1 ? `第 ${groups[gi][0].day} 天` : '整趟',
+    label: groups.length > 1 ? nth(groups[gi][0].day, '天') : '整趟',
   };
 }
 

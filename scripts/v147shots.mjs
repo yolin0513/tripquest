@@ -215,7 +215,13 @@ try {
     lbl: document.querySelector('.pager-lbl').textContent,
     prevVis: getComputedStyle(document.querySelector('.pager-btn')).visibility,
   }));
-  yes(pgr.lbl === '第 1 天 / 共 3 天', `翻頁列文字一句講完：「${pgr.lbl}」`);
+  // 2026-09-25 起數字與單位之間是不斷行空白（窄螢幕不會斷成「共 3／天」）：比對文字時空白不論哪一種；
+  // 另一條斷言專門確認不斷行空白真的在（只看文字會看不出來）
+  const NB = String.fromCharCode(160);
+  const spaced = (s) => s.split(NB).join(' ');
+  yes(spaced(pgr.lbl) === '第 1 天 / 共 3 天', `翻頁列文字一句講完：「${spaced(pgr.lbl)}」`);
+  yes(pgr.lbl === `第${NB}1${NB}天 / 共 3${NB}天`, '翻頁列的「第 1 天」「3 天」數字與單位之間是不斷行空白（不會被拆到兩行）',
+    JSON.stringify(pgr.lbl.split('').map((c) => c.charCodeAt(0))));
   yes(pgr.prevVis === 'hidden', '第一張時「‹ 前一張」是藏起來的');
   // 翻頁時版面不可以跳：記下按鈕與預覽框的位置，翻兩次逐一比對
   const boxOf = async (sel) => { const b = await (await page.$(sel)).boundingBox(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; };
@@ -228,7 +234,7 @@ try {
   const frame0 = await boxOf('.poster-frame');
   yes(await canvasFits(), '第 1 天（7 個景點）：預覽縮在固定高度的框裡');
   await page.click('.pager-btn:last-of-type');
-  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent === '第 2 天 / 共 3 天', { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 2 天 / 共 3 天', { timeout: 20000 });
   await sleep(500);
   const btn1 = await boxOf('.pager-btn:last-of-type');
   const frame1 = await boxOf('.poster-frame');
@@ -238,7 +244,7 @@ try {
   await page.screenshot({ path: fileURLToPath(new URL('海報頁-翻頁-短的一天置中.png', OUT)) });
   console.log('  📸 海報頁-翻頁-短的一天置中');
   await page.click('.pager-btn:last-of-type');
-  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent === '第 3 天 / 共 3 天', { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 3 天 / 共 3 天', { timeout: 20000 });
   await sleep(500);
   const btn2 = await boxOf('.pager-btn:last-of-type');
   yes(JSON.stringify(btn2) === JSON.stringify(btn0), '翻到第 3 天按鈕位置還是一動不動');
