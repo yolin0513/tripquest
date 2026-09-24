@@ -21,10 +21,19 @@
 //   E 推了卻沒更新（post-receive hook 把 main 退回舊值）→ 3、比對遠端那一關
 //   G 抓不到遠端（origin 指到不存在的地方）→ 4、「抓不到遠端」
 //   N 只刪不增的推送 → 0、推出去（「對不上就停」的檢查也要有正常情況放行的樣本，v9 §5.14）
-//   M／M2／M3 三支閘門檔各自改過、驗法還沒重跑（跟 .logs/pushgate.verified 登記的雜湊對不上）→ 5、點名那一支、自查都還沒開始
+//   M／M2／M3／M5 四支閘門檔各自在工作區改過（沒 commit；推送時執行的就是這一份）、驗法還沒重跑 → 5、點名那一支、自查都還沒開始
 //   M0 沒有登記檔 → 5
+//   M4 改過的 safe-push.sh 已經 commit、工作區又改回登記時的樣子 → 5（比的是 HEAD 裡要推的那一份，不是工作區；F9）
+//   P1 動到 build-places.mjs、沒有 F8 登記 → 6、點名沒有登記檔、自查還沒開始
+//   P2 動到 build-places.mjs、F8 登記整組相符 → 0、推出去
+//   P3 F8 登記相符之後，又改了 importshots.mjs 並 commit → 6、點名 importshots（不是另外兩支）
+//   P4 沒動到 F8 那幾支、也沒有 F8 登記 → 0、推出去（沒動到就不看這一關，§5.14 正常情況要放行）
+//   P5 動到 f8verify.mjs 的是較早的 commit、最新的 commit 很乾淨 → 6（範圍裡每一個 commit 都算）
+//   V1–V4 登記前的檢查（verified-reg.mjs）：乾淨 → 可登記；工作區有沒 commit 的改動、還沒 commit、工作區沒有 → 不登記、
+//     點名那一支、舊的登記一起刪掉
 // 每個情境開始前 reset() 回到同一個起點；PUSHGATE_ORDER=reverse 或 shuffle:<種子> 換順序跑，結果要不變。
-// 全部通過（而且是預設順序）才把三支閘門檔的雜湊寫進 .logs/pushgate.verified（不進版控）——safe-push.sh 推送前拿它比對；有任何失敗就刪掉它。
+// 全部通過（而且是預設順序）才把四支閘門檔 HEAD 裡的雜湊寫進 .logs/pushgate.verified（不進版控）——safe-push.sh 推送前拿它比對；
+// 有任何失敗就刪掉它。登記前先確認這四支的工作區跟 HEAD 一模一樣，有改動就不登記（F9：驗到的要是推出去的那一份）。
 // 比對「是誰擋的」的樣式本身也先用已知的輸出驗過（§5.11 第二層）；印出實際執行的那份閘門的雜湊（第三層：
 // 突變時拿它確認跑到的真的是改壞的那一版）。
 import { execSync, spawnSync } from 'node:child_process';
@@ -32,6 +41,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { headProblems, writeReg, dropReg } from './verified-reg.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
@@ -71,6 +81,8 @@ const WHO = {
   pushFail: /^✗ git push 失敗/m,
   mismatch: /^✗ 推完了但遠端.*不等於本機/m,
   unverified: /^擋下：閘門沒有驗過（/m,
+  f8: /^擋下：F8 驗法沒有驗過（/m,
+  f8File: (f) => new RegExp(`^擋下：F8 驗法沒有驗過（scripts/${f.replace(/\./g, '\\.')} 改過`, 'm'),
 };
 
 try {
@@ -88,23 +100,29 @@ try {
       push: 'error: failed to push some refs\n✗ git push 失敗——停',
       mismatch: '✗ 推完了但遠端（a）不等於本機（b）——停',
       unverified: '✗ scripts/safe-push.sh 改過了（登記 a、現在 b）\n擋下：閘門沒有驗過（scripts/safe-push.sh 改過、驗法還沒重跑）',
+      f8: '✗ scripts/importshots.mjs 跟 .logs/f8.verified 登記的不一樣（登記 a、HEAD 裡是 b）\n擋下：F8 驗法沒有驗過（scripts/importshots.mjs 改過、驗法還沒重跑）',
     };
     {
       const NOISE = ['email：對照組命中=true，命中=0',
         '說明：遇到 擋下：有命中（email（1 行；來源：新增行）） 這種情況不會推',
-        '說明：擋下：檢查器壞了（email） 表示對照組沒命中；擋下：閘門沒有驗過（ 表示驗法沒重跑',
+        '說明：擋下：檢查器壞了（email） 表示對照組沒命中；擋下：閘門沒有驗過（ 表示驗法沒重跑；擋下：F8 驗法沒有驗過（scripts/importshots.mjs 改過 也是',
         '提醒：✗ git push 失敗 或 ✗ 推完了但遠端（a）不等於本機 時會停', '通過', '✓ 已推送，遠端 main ＝ 本機 HEAD（abc）',
         // 錯誤訊息那一行（R() 會留下），但那些字只在附註裡、不在行首——樣式沒鎖行首就會誤判
-        '✗ 另一件事失敗（附註：擋下：有命中（email（1 行；來源：新增行））、擋下：檢查器壞了（email）、擋下：閘門沒有驗過（、✗ git push 失敗、✗ 推完了但遠端（a）不等於本機 都是別的情況）'].join('\n');
-      const pats = { hit: WHO.hit, hitFrom: WHO.hitFrom('新增行'), broken: WHO.broken('email'), unverified: WHO.unverified, pushFail: WHO.pushFail, mismatch: WHO.mismatch };
+        '✗ 另一件事失敗（附註：擋下：有命中（email（1 行；來源：新增行））、擋下：檢查器壞了（email）、擋下：閘門沒有驗過（、✗ git push 失敗、✗ 推完了但遠端（a）不等於本機、擋下：F8 驗法沒有驗過（scripts/importshots.mjs 改過 都是別的情況）'].join('\n');
+      const pats = { hit: WHO.hit, hitFrom: WHO.hitFrom('新增行'), broken: WHO.broken('email'), unverified: WHO.unverified, pushFail: WHO.pushFail, mismatch: WHO.mismatch,
+        f8: WHO.f8, f8File: WHO.f8File('importshots.mjs') };
       const wrong = Object.entries(pats).filter(([, re]) => re.test(R(NOISE))).map(([k]) => k);
       yes(wrong.length === 0, `對照（位置）：那句話只出現在正常行時，${Object.keys(pats).length} 種樣式都判「不是理由」`, '誤判的：' + wrong.join('、'));
-      const inErr = [SAMPLE.hit, SAMPLE.broken, SAMPLE.unverified, SAMPLE.push, SAMPLE.mismatch].join('\n');
+      const inErr = [SAMPLE.hit, SAMPLE.broken, SAMPLE.unverified, SAMPLE.push, SAMPLE.mismatch, SAMPLE.f8].join('\n');
       const missed = Object.entries(pats).filter(([, re]) => !re.test(R(inErr))).map(([k]) => k);
       yes(missed.length === 0, `對照（位置）：同一句話出現在錯誤訊息那一行時，${Object.keys(pats).length} 種樣式都判「是理由」`, '沒抓到的：' + missed.join('、'));
     }
     yes(WHO.unverified.test(R(SAMPLE.unverified)) && !WHO.unverified.test(R(SAMPLE.broken)) && !WHO.unverified.test(R(SAMPLE.hit)),
       '對照（擷取樣式）：「閘門沒有驗過」抓得到、跟檢查器壞了與命中分得開');
+    yes(WHO.f8.test(R(SAMPLE.f8)) && !WHO.f8.test(R(SAMPLE.unverified)) && !WHO.unverified.test(R(SAMPLE.f8))
+      && WHO.f8File('importshots.mjs').test(R(SAMPLE.f8)) && !WHO.f8File('build-places.mjs').test(R(SAMPLE.f8))
+      && !WHO.f8File('importshots.mjs').test('擋下：F8 驗法沒有驗過（scripts/importshotsXmjs 改過'),
+      '對照（擷取樣式）：「F8 驗法沒有驗過」跟「閘門沒有驗過」分得開、分得出是哪一支（點不會被當成任意字元）');
     yes(WHO.hit.test(R(SAMPLE.hit)) && !WHO.hit.test(R(SAMPLE.broken)) && !WHO.hit.test(R(SAMPLE.unreachable)),
       '對照（擷取樣式）：「命中」只抓得到命中那一句，不會把檢查器壞了誤認成命中');
     yes(WHO.broken('email').test(R(SAMPLE.broken)) && !WHO.broken('email').test(R(SAMPLE.hit)) && !WHO.broken('user').test(R(SAMPLE.broken)),
@@ -144,7 +162,8 @@ try {
   }
 
   // ---------- 共用的起點：假遠端＋本機都有 base（含閘門三支檔與驗過的登記）----------
-  const GATE = ['safe-push.sh', 'prepush-scan.mjs', 'pushgatetest.mjs'];
+  const GATE = ['safe-push.sh', 'prepush-scan.mjs', 'pushgatetest.mjs', 'verified-reg.mjs'];
+  const F8 = ['build-places.mjs', 'importshots.mjs', 'f8verify.mjs'];   // safe-push.sh 的 F8_GUARD（假遠端裡放替身，內容不重要）
   const regText = (dir) => '# 測試用的登記（pushgatetest 自己造的）\n'
     + GATE.map((f) => `${sh(`git hash-object scripts/${f}`, dir).trim()} scripts/${f}`).join('\n') + '\n';
   sh(`git init -q --bare "${bare}"`, base);
@@ -154,6 +173,7 @@ try {
   sh('git config core.autocrlf false');
   fs.mkdirSync(path.join(work, 'scripts'));
   for (const f of GATE) fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(work, 'scripts', f));
+  for (const f of F8) fs.writeFileSync(path.join(work, 'scripts', f), `// ${f} 的替身（pushgatetest）\n`);
   // 登記放在不進版控的 .logs/（跟真的 repo 一樣）；.gitignore 擋掉它，reset() 的 git clean 才不會把它清掉
   fs.writeFileSync(path.join(work, '.gitignore'), '.logs/\n');
   fs.mkdirSync(path.join(work, '.logs'));
@@ -176,6 +196,9 @@ try {
     sh(`git reset -q --hard ${BASE}`);
     sh('git clean -qfd');
     sh('git fetch -q origin');
+    // 登記檔在被 .gitignore 擋掉的 .logs/，git clean 不會動它：每次都寫回起點的樣子（閘門登記相符、沒有 F8 登記）
+    fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
+    if (fs.existsSync(F8REG)) fs.unlinkSync(F8REG);
   };
   // 從每次都會印的「範圍：」那一行抓數字（擋下時才印的那一行，在判斷被拿掉時就不見了）
   const nums = (out) => {
@@ -194,6 +217,10 @@ try {
     sh('git commit -q -m k2-a -m k2-b -m k2-c');
   };
   const untouched = (id) => yes(remoteHead() === BASE, `${id} 遠端沒被動到`);
+  const F8REG = path.join(work, '.logs', 'f8.verified');
+  const f8Reg = () => fs.writeFileSync(F8REG, '# 測試用的 F8 登記\n'
+    + F8.map((f) => `${sh(`git rev-parse HEAD:scripts/${f}`).trim()} scripts/${f}`).join('\n') + '\n');
+  const touch = (f, id) => { fs.appendFileSync(path.join(work, 'scripts', f), `// ${id} 改一行\n`); sh(`git add scripts/${f}`); sh(`git commit -q -m ${id}-${f.replace('.', '-')}`); };
 
   const SCENARIOS = [
     ['A', () => {
@@ -346,7 +373,7 @@ try {
       untouched('G');
     }],
     // M／M2／M3：三支閘門檔各自改過、驗法還沒重跑，都要擋、而且點名改的是哪一支（共用慣例 v9 §5.15：能做成機器擋的就不要靠人記得）
-    ...[['M', 'safe-push.sh', '#'], ['M2', 'prepush-scan.mjs', '//'], ['M3', 'pushgatetest.mjs', '//']].map(([id, f, c]) => [id, () => {
+    ...[['M', 'safe-push.sh', '#'], ['M2', 'prepush-scan.mjs', '//'], ['M3', 'pushgatetest.mjs', '//'], ['M5', 'verified-reg.mjs', '//']].map(([id, f, c]) => [id, () => {
       fs.appendFileSync(path.join(work, 'scripts', f), `${c} 改過一行，還沒重跑 pushgatetest\n`);
       commit('d.txt', 'clean2\n', 'clean2');
       const reg = fs.readFileSync(path.join(work, '.logs', 'pushgate.verified'), 'utf8').split('\n').find((l) => l.endsWith(' scripts/' + f));
@@ -356,7 +383,7 @@ try {
       const others = GATE.filter((g) => g !== f);
       yes(r.code === 5 && WHO.unverified.test(R(r.out)) && new RegExp(`^擋下：閘門沒有驗過（scripts/${f.replace('.', '\\.')} 改過`, 'm').test(R(r.out)) && !/^新增行核對：/m.test(r.out)
         && !others.some((g) => R(r.out).includes(`scripts/${g} 改過`)),
-        `${id} 只改了 ${f}、驗法沒重跑 → 回 5、點名 ${f}（不是另外兩支）、自查都還沒開始（實得 ${r.code}）`, r.out.slice(-300));
+        `${id} 只改了 ${f}、驗法沒重跑 → 回 5、點名 ${f}（不是另外幾支）、自查都還沒開始（實得 ${r.code}）`, r.out.slice(-300));
       untouched(id);
     }]),
     ['M0', () => {
@@ -368,6 +395,82 @@ try {
       const r = gate();
       yes(r.code === 5 && WHO.unverified.test(R(r.out)), `M0 沒有登記檔 → 回 5（實得 ${r.code}）`, r.out.slice(-300));
       untouched('M0');
+    }],
+    ['M4', () => {
+      // 改過的 safe-push.sh 已經 commit，工作區又改回登記時的樣子：推出去的是改過的那一份，要擋（F9：比 HEAD，不比工作區）
+      const p = path.join(work, 'scripts', 'safe-push.sh');
+      const orig = fs.readFileSync(p);
+      fs.appendFileSync(p, '# 改過一行、commit 了\n');
+      sh('git add scripts/safe-push.sh'); sh('git commit -q -m m4');
+      fs.writeFileSync(p, orig);
+      const reg = fs.readFileSync(path.join(work, '.logs', 'pushgate.verified'), 'utf8').split('\n').find((l) => l.endsWith(' scripts/safe-push.sh'));
+      yes(!!reg && sh('git hash-object scripts/safe-push.sh').trim() === reg.split(' ')[0] && sh('git rev-parse HEAD:scripts/safe-push.sh').trim() !== reg.split(' ')[0],
+        'M4 前置：工作區的 safe-push.sh 跟登記相同、HEAD 裡的不同（情境成立）');
+      const r = gate();
+      yes(r.code === 5 && WHO.unverified.test(R(r.out)) && /^擋下：閘門沒有驗過（scripts\/safe-push\.sh 改過/m.test(R(r.out)),
+        `M4 改過的版本已 commit、工作區改回原樣 → 回 5、點名 safe-push.sh（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('M4');
+    }],
+    ['P1', () => {
+      touch('build-places.mjs', 'p1');
+      yes(!fs.existsSync(F8REG), 'P1 前置：沒有 F8 登記檔');
+      const r = gate();
+      yes(r.code === 6 && WHO.f8.test(R(r.out)) && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)) && !/^新增行核對：/m.test(r.out),
+        `P1 動到 build-places.mjs、沒有 F8 登記 → 回 6、「沒有登記檔」、自查還沒開始（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('P1');
+    }],
+    ['P2', () => {
+      touch('build-places.mjs', 'p2');
+      f8Reg();
+      const r = gate();
+      yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && /^F8 驗法：這次動到了 scripts\/build-places\.mjs，登記相符/m.test(r.out) && remoteHead() === localHead(),
+        `P2 動到 build-places.mjs、F8 登記整組相符 → 回 0、已推送（實得 ${r.code}）`, r.out.slice(-300));
+    }],
+    ['P3', () => {
+      touch('build-places.mjs', 'p3');
+      f8Reg();
+      touch('importshots.mjs', 'p3');
+      const r = gate();
+      yes(r.code === 6 && WHO.f8File('importshots.mjs').test(R(r.out)) && !WHO.f8File('build-places.mjs').test(R(r.out)) && !WHO.f8File('f8verify.mjs').test(R(r.out)),
+        `P3 登記之後又改了 importshots.mjs → 回 6、點名 importshots（不是另外兩支）（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('P3');
+    }],
+    ['P4', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      yes(!fs.existsSync(F8REG) && !sh(`git log --format= --name-only ${BASE}..HEAD`).split('\n').some((l) => F8.some((f) => l === 'scripts/' + f)),
+        'P4 前置：沒有 F8 登記、這次的 commit 沒動到 F8 那幾支');
+      const r = gate();
+      yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && !/^F8 驗法：/m.test(r.out) && remoteHead() === localHead(),
+        `P4 沒動到 F8 那幾支 → 不看這一關、回 0、已推送（實得 ${r.code}）`, r.out.slice(-300));
+    }],
+    ['P5', () => {
+      touch('f8verify.mjs', 'p5');
+      commit('d.txt', 'clean2\n', 'clean-after');
+      yes(!sh('git show --format= --name-only HEAD').split('\n').includes('scripts/f8verify.mjs'), 'P5 前置：最新的 commit 沒動到 f8verify.mjs（動到的是前一個）');
+      const r = gate();
+      yes(r.code === 6 && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)),
+        `P5 動到 F8 的是較早的 commit → 照樣回 6（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('P5');
+    }],
+    ['V', () => {
+      // 登記前的檢查（verified-reg.mjs）：工作區要跟 HEAD 一模一樣才登記；不符合就不寫、舊的一起刪
+      const files = ['scripts/build-places.mjs', 'scripts/importshots.mjs'];
+      const reg = path.join(work, '.logs', 'v-test.verified');
+      const w = writeReg(work, reg, files, '# t\n');
+      yes(w.ok && fs.readFileSync(reg, 'utf8').includes(`${sh('git rev-parse HEAD:scripts/importshots.mjs').trim()} scripts/importshots.mjs`),
+        'V1 工作區＝HEAD → 登記，內容是 HEAD 裡的雜湊', JSON.stringify(w));
+      fs.appendFileSync(path.join(work, 'scripts', 'importshots.mjs'), '// 還沒 commit\n');
+      const w2 = writeReg(work, reg, files, '# t\n');
+      yes(!w2.ok && /scripts\/importshots\.mjs 工作區跟 HEAD 不一樣/.test(w2.why) && !/build-places/.test(w2.why) && !fs.existsSync(reg),
+        'V2 工作區有沒 commit 的改動 → 不登記、點名 importshots、舊的登記刪掉', JSON.stringify(w2));
+      sh('git checkout -q -- scripts/importshots.mjs');
+      fs.writeFileSync(path.join(work, 'scripts', 'new.mjs'), '// 新檔\n');
+      const p3 = headProblems(work, ['scripts/new.mjs']);
+      yes(p3.length === 1 && /不在 HEAD 裡/.test(p3[0]), 'V3 還沒 commit 的新檔 → 不登記（不在 HEAD 裡）', JSON.stringify(p3));
+      fs.unlinkSync(path.join(work, 'scripts', 'build-places.mjs'));
+      const p4 = headProblems(work, files);
+      yes(p4.length === 1 && /build-places\.mjs 工作區裡沒有/.test(p4[0]), 'V4 工作區裡沒有 → 不登記', JSON.stringify(p4));
+      yes(dropReg(reg) === '本來就不在', 'V 刪登記：不在時照實說「本來就不在」');
     }],
   ];
 
@@ -385,13 +488,13 @@ try {
 
   // 全部通過才登記被驗程式的雜湊（safe-push.sh 推送前比對，對不上就不推）。有 PUSHGATE_ORDER 時不登記：那是驗順序用的額外一跑。
   // 登記在不進版控的 .logs/：換一台機器 clone 下來就沒有登記，第一次推送前一定要先跑這支（新環境正是最需要重跑的時候）。
+  // 登記的是 HEAD 裡的版本；工作區那幾支跟 HEAD 不一樣（有沒 commit 的改動）就不登記——驗到的是工作區那一份，推出去的是 HEAD（F9）。
   if (!process.exitCode && !order) {
-    const reg = '# 推送閘的驗法（pushgatetest）全部通過時登記的雜湊。safe-push.sh 推送前比對，對不上就不推（共用慣例 v9 §5.15）。\n'
-      + '# 不進版控。改了下面任何一支、或換了一台機器，就重跑 npm run pushgatetest；全部通過才會寫這個檔，有任何失敗就刪掉它。\n'
-      + GATE.map((f) => `${sh(`git hash-object scripts/${f}`, ROOT).trim()} scripts/${f}`).join('\n') + '\n';
-    fs.mkdirSync(path.join(ROOT, '.logs'), { recursive: true });
-    fs.writeFileSync(REG_REAL, reg);
-    console.log('  已登記驗過的閘門雜湊：.logs/pushgate.verified');
+    const header = '# 推送閘的驗法（pushgatetest）全部通過時登記的雜湊（HEAD 裡的版本）。safe-push.sh 推送前比對，對不上就不推（共用慣例 v9 §5.15）。\n'
+      + '# 不進版控。改了下面任何一支、或換了一台機器，就 commit 之後重跑 npm run pushgatetest；全部通過才會寫這個檔，有任何失敗就刪掉它。\n';
+    const w = writeReg(ROOT, REG_REAL, GATE.map((f) => 'scripts/' + f), header);
+    if (w.ok) console.log('  已登記驗過的閘門雜湊：.logs/pushgate.verified');
+    else fail(`沒有登記：${w.why}——先 commit 再跑（登記的要是推出去的那一份）；舊的登記${w.dropped}`);
   }
 
   console.log('\n推送閘測試結束');

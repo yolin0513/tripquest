@@ -29,6 +29,7 @@
     "formgrouptest": "node scripts/formgrouptest.mjs",
     "membergonetest": "node scripts/membergonetest.mjs",
     "pushgatetest": "node scripts/pushgatetest.mjs",
+    "f8verify": "node scripts/f8verify.mjs",
     "gatelint": "node scripts/gatelint.mjs",
     "safepush": "bash scripts/safe-push.sh",
     "curatedtest": "node scripts/curatedtest.mjs",

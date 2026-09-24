@@ -8,7 +8,10 @@
 #   4 自查的檢查器壞了（某一類的對照組沒命中、無法檢查、或讀不到範圍）——不推
 #   2 git push 失敗（被拒、連不上）——停
 #   3 推完了但遠端不等於本機（推了卻沒更新）——停
-#   5 閘門本身沒驗過：safe-push.sh／prepush-scan.mjs／pushgatetest.mjs 跟 .logs/pushgate.verified 登記的雜湊對不上（或沒有登記）——不推
+#   5 閘門本身沒驗過：safe-push.sh／prepush-scan.mjs／pushgatetest.mjs／verified-reg.mjs 在 HEAD 裡的版本
+#     跟 .logs/pushgate.verified 登記的雜湊對不上（或沒有登記）——不推。新 clone 一律要先跑 npm run pushgatetest
+#   6 F8 的驗法沒驗過：這次要推的 commit 動到 build-places.mjs／importshots.mjs／f8verify.mjs，而它們在 HEAD 裡的版本
+#     跟 .logs/f8.verified 登記的對不上（或沒有登記）——不推。先跑 npm run f8verify。沒動到就不看這一關
 #
 # 為什麼長這樣（2026-09-23 實測踩到的）：
 # - 不接管線。管線的回傳值是最後一個指令的：`git push ... | tail -1` 在 push 失敗時照樣回 0，後面的線上確認
@@ -29,11 +32,15 @@ if [ ! -f "$REG" ]; then
   echo "✗ 沒有 $REG（閘門從沒驗過、或登記檔不見了）——先跑 npm run pushgatetest"
   echo "擋下：閘門沒有驗過（沒有登記檔）"; exit 5
 fi
-for f in scripts/safe-push.sh scripts/prepush-scan.mjs scripts/pushgatetest.mjs; do
-  if LINE="$(grep -F " $f" "$REG")"; then WANT="${LINE%% *}"; else WANT=""; fi
-  HAVE="$(git hash-object "$f")"
-  if [ "$WANT" != "$HAVE" ]; then
-    echo "✗ $f 改過了（登記 ${WANT:-沒有}、現在 $HAVE）——先跑 npm run pushgatetest，全過之後會重寫 $REG"
+# 兩邊都要等於登記：工作區那一份（現在正在執行的就是它）、HEAD 裡那一份（推出去的是它；F9：改過的版本已經 commit、
+# 工作區又改回原樣，照樣要擋）。登記檔一行一支「雜湊 路徑」，路徑要整欄相等才算（不用子字串比對：說明行或別的路徑剛好含有它時會對錯行）。
+reg_want() { local h p; WANT=""; while read -r h p; do if [ "$p" = "$2" ]; then WANT="$h"; fi; done < "$1"; }
+head_hash() { if HAVE="$(git rev-parse -q --verify "HEAD:$1" 2>/dev/null)"; then :; else HAVE="HEAD 裡沒有"; fi; }
+for f in scripts/safe-push.sh scripts/prepush-scan.mjs scripts/pushgatetest.mjs scripts/verified-reg.mjs; do
+  reg_want "$REG" "$f"; head_hash "$f"
+  if WORK="$(git hash-object -- "$f" 2>/dev/null)"; then :; else WORK="工作區沒有"; fi
+  if [ "$WANT" != "$HAVE" ] || [ "$WANT" != "$WORK" ]; then
+    echo "✗ $f 改過了（登記 ${WANT:-沒有}、HEAD 裡是 $HAVE、工作區是 $WORK）——commit 之後跑 npm run pushgatetest，全過之後會重寫 $REG"
     echo "擋下：閘門沒有驗過（$f 改過、驗法還沒重跑）"; exit 5
   fi
 done
@@ -53,6 +60,35 @@ if [ -n "$REMOTE" ] && ! git cat-file -e "$REMOTE^{commit}" 2>/dev/null; then
 fi
 RANGE="${REMOTE:+$REMOTE..}HEAD"
 [ -z "$REMOTE" ] && RANGE="HEAD"
+
+# F8 的建置腳本與它的驗法（F9）：這次要推的 commit（每一個，不只兩端）動到其中任何一支，才看 .logs/f8.verified；
+# 看的時候整組都要對得上 HEAD 裡的版本。驗法要跑二十幾分鐘，沒動到就不擋。
+F8_GUARD="scripts/build-places.mjs scripts/importshots.mjs scripts/f8verify.mjs"
+F8REG=".logs/f8.verified"
+if ! git log --format= --name-only "$RANGE" > "$TMP/touched" 2> "$TMP/touched.err"; then
+  cat "$TMP/touched.err"; echo "✗ 列不出這次要推的 commit 動到哪些檔"; echo "擋下：檢查器壞了（動到的檔）"; exit 4
+fi
+TOUCHED=""
+# 逐行整行比對（不用 grep：grep 自己出錯時回 2，在 if 裡會跟「沒動到」長得一樣，這一關就默默不看了）
+while read -r t; do
+  for f in $F8_GUARD; do
+    if [ "$t" = "$f" ]; then case " $TOUCHED " in *" $f "*) ;; *) TOUCHED="$TOUCHED $f" ;; esac; fi
+  done
+done < "$TMP/touched"
+if [ -n "$TOUCHED" ]; then
+  if [ ! -f "$F8REG" ]; then
+    echo "✗ 這次要推的 commit 動到了$TOUCHED，但沒有 $F8REG——commit 之後跑 npm run f8verify"
+    echo "擋下：F8 驗法沒有驗過（沒有登記檔）"; exit 6
+  fi
+  for f in $F8_GUARD; do
+    reg_want "$F8REG" "$f"; head_hash "$f"
+    if [ "$WANT" != "$HAVE" ]; then
+      echo "✗ $f 跟 $F8REG 登記的不一樣（登記 ${WANT:-沒有}、HEAD 裡是 $HAVE）——commit 之後跑 npm run f8verify"
+      echo "擋下：F8 驗法沒有驗過（$f 改過、驗法還沒重跑）"; exit 6
+    fi
+  done
+  echo "F8 驗法：這次動到了$TOUCHED，登記相符"
+fi
 
 set +e
 node scripts/prepush-scan.mjs "$RANGE" > "$TMP/check" 2>&1

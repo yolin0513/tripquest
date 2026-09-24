@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-export const FILES = ['scripts/safe-push.sh', 'scripts/prepush-scan.mjs', 'scripts/pushgatetest.mjs'];
+export const FILES = ['scripts/safe-push.sh', 'scripts/prepush-scan.mjs', 'scripts/pushgatetest.mjs', 'scripts/verified-reg.mjs', 'scripts/f8verify.mjs'];
 
 const isComment = (line, file) => (file.endsWith('.sh') ? /^\s*#/ : /^\s*\/\//).test(line);
 const GITCMD = /(git\s+(push|ls-remote|log|diff|show|fetch|rev-parse|rev-list)\b|prepush-scan|safe-push\.sh)/;
@@ -82,6 +82,26 @@ export const EXCEPTIONS = [
     why: '邊界對照組「不能被湊到」那一半；下一行用同樣的樣式證明清單中的每一項都認得出來（兩個方向成對）' },
   { file: 'scripts/safe-push.sh', kind: 'absent', match: /^echo "✗ 沒有 \$REG（閘門從沒驗過、或登記檔不見了）/,
     why: '給人看的錯誤訊息裡剛好有「不見了」三個字，不是斷言' },
+  // ---- F9（2026-09-24）----
+  { file: 'scripts/safe-push.sh', kind: 'formatnometa', match: /git log --format= --name-only "\$RANGE" > "\$TMP\/touched"/,
+    why: '這一行只列「動到哪些檔」決定要不要看 F8 登記，不是掃內容；commit 訊息與作者欄由 prepush-scan.mjs 另外掃（它有自己的 %B／%ae）' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.f8File\('importshots\.mjs'\)\.test\('擋下：F8 驗法沒有驗過（scripts\/importshotsXmjs 改過'\)/,
+    why: '擷取樣式的邊界對照組：同一條斷言前半先證明 f8File 抓得到真的 importshots.mjs，這一半證明點不會被當成任意字元' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(!fs\.existsSync\(F8REG\)(, 'P1 前置| && !sh\(`git log --format= --name-only)/,
+    why: 'P1／P4 的前置是「沒有 F8 登記」這個起點狀態（reset() 刪掉的），不是在驗某個東西被刪掉' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(!w2\.ok && \/scripts\\\/importshots\\\.mjs 工作區跟 HEAD 不一樣\//,
+    why: 'V2 驗「舊的登記被刪掉」：V1 剛寫了它、並讀出內容比對過（原本在），所以這裡的不在是被刪的' },
+  { file: 'scripts/verified-reg.mjs', kind: 'absent', match: /if \(!fs\.existsSync\((path\.join\(root, f\)|regPath)\)\) /,
+    why: '流程判斷（工作區沒有就記一筆問題；登記本來就不在就照實說），不是斷言' },
+  { file: 'scripts/f8verify.mjs', kind: 'absent', match: /if \(!fs\.existsSync\((WT|ST)\)\) return|if \(!xl\.includes\(why\)\) miss\.push/,
+    why: '流程判斷（沒有複本就不用刪；沒有輸出資料夾時雜湊記成「無」；理由不對就記一筆），不是斷言某個東西不見了' },
+  { file: 'scripts/f8verify.mjs', kind: 'absent', match: /fs\.unlinkSync\(p\); must\(!fs\.existsSync\(p\), '城市檔不在'\)|r0\.code !== 0 \|\| !fs\.existsSync\(LAST\)/,
+    why: '造情境的前置：刪城市檔時 unlinkSync 在檔不存在時會丟例外（原本在）；資料變少的前置是斷言 LAST「在」' },
+  { file: 'scripts/f8verify.mjs', kind: 'absent', match: /r\.err\.includes\('暫存檔已清掉'\) && !fs\.existsSync|r\.shots === NAMES\.length\], \['(暫存 \.partial 沒清掉|\.old 沒改回來)'/,
+    why: '「清掉了」前面先證明建過：build-places 只有建過暫存檔、清成功才印「暫存檔已清掉」；importshots 要數到 13 張拍進 .partial。'
+      + '.old 在第二步那格是「換上第一步把舊的改名成 .old」建出來的（拿掉還原的突變實測：_import 只剩 .old 裡的 13 張）' },
+  { file: 'scripts/f8verify.mjs', kind: 'absent', match: /\['暫存 \.partial 沒清掉、也沒點名清不掉', !fs\.existsSync\(PART\) \|\|/,
+    why: '同一格前一行已要求拍滿 13 張進 .partial（原本在）' },
 ];
 
 // 第二道對照組：本 App 歷史上真的出過事的原文（逐字照抄，出處是那一版的檔；§5.3：真實資料只當第二道）。
