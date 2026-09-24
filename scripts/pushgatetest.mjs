@@ -31,6 +31,10 @@
 //   P5 動到 f8verify.mjs 的是較早的 commit、最新的 commit 很乾淨 → 6（範圍裡每一個 commit 都算）
 //   P6 比照 M4：改過的 build-places.mjs 已 commit、工作區又改回登記時的樣子 → 6（F8 那一關也比 HEAD）
 //   P7 只改共用模組 verified-reg.mjs（它也在 F8 守護清單裡）、閘門登記已重驗 → 6
+//   S3 在假 repo 裡真的跑 f8verify、讓它失敗（GIT_DIR 指到不存在的地方）→ 先放的舊登記跑完不在 → 接著推送回 6
+//   S4 被守的檔工作區有改動時真的跑 f8verify → 不跑、沒有寫入新的登記
+//   F9 六條（統籌者原文）對照：1＝P3、2＝P2、3＝S3、4＝S4（函式層另有 V2）、5＝P4、6＝P5。起點是「F8 登記有效」，
+//   沒登記的情境自己刪——「不管有沒有動到都要登記」這種突變才會只紅 P4。
 //   F10「取不到就停」的分支，用 PATH 最前面的假 git 讓那個子指令真的失敗（假 git 自己先跑對照組）：
 //   Q1 git log 失敗（列不出動到的檔）→ 4「動到的檔」；Q2 遠端的 commit 本機沒有、fetch 又失敗 → 4「範圍」；
 //   Q4 推完那次 ls-remote 失敗 → 3「讀不到遠端」；Q5 hash-object 失敗 → 5、工作區取不到；Q6 rev-parse 失敗 → 5、HEAD 取不到；
@@ -185,7 +189,11 @@ try {
   sh('git config core.autocrlf false');
   fs.mkdirSync(path.join(work, 'scripts'));
   for (const f of GATE) fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(work, 'scripts', f));
-  for (const f of F8) fs.writeFileSync(path.join(work, 'scripts', f), `// ${f} 的替身（pushgatetest）\n`);
+  // 建置腳本放替身（內容不重要）；f8verify 用真的那一支——S3、S4 要在這個假 repo 裡真的跑它（它不開瀏覽器就能走到那兩條路）
+  for (const f of F8) {
+    if (f === 'f8verify.mjs') fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(work, 'scripts', f));
+    else fs.writeFileSync(path.join(work, 'scripts', f), `// ${f} 的替身（pushgatetest）\n`);
+  }
   // 登記放在不進版控的 .logs/（跟真的 repo 一樣）；.gitignore 擋掉它，reset() 的 git clean 才不會把它清掉
   fs.writeFileSync(path.join(work, '.gitignore'), '.logs/\n');
   fs.mkdirSync(path.join(work, '.logs'));
@@ -210,7 +218,9 @@ try {
     sh('git fetch -q origin');
     // 登記檔在被 .gitignore 擋掉的 .logs/，git clean 不會動它：每次都寫回起點的樣子（閘門登記相符、沒有 F8 登記）
     fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
-    if (fs.existsSync(F8REG)) fs.unlinkSync(F8REG);
+    // 起點：F8 登記有效（跟 base 相符）。沒登記的情境（P1、P4、P5、P7）自己刪——這樣「不管有沒有動到都要登記」這種突變
+    // 只會紅 P4（第 5 條），不會讓所有沒動到 F8 的情境一起紅
+    f8Reg();
   };
   // 從每次都會印的「範圍：」那一行抓數字（擋下時才印的那一行，在判斷被拿掉時就不見了）
   const nums = (out) => {
@@ -281,6 +291,12 @@ try {
       '對照（假 git）：不相干的子指令照常交給真的 git、輸出一樣', same.stderr);
     yes(n1 === 0 && n2 === 1, `對照（假 git）：FAKEGIT_NTH=2 → 第 1 次照常、第 2 次失敗（實得 ${n1}、${n2}）`);
   }
+  const dropF8 = () => { if (fs.existsSync(F8REG)) fs.unlinkSync(F8REG); };
+  // 在假 repo 裡跑真的 f8verify（S3、S4 用；兩條路都在開瀏覽器之前就停下）
+  const runF8verify = (env = {}) => {
+    const r = spawnSync(process.execPath, ['scripts/f8verify.mjs'], { cwd: work, encoding: 'utf8', env: { ...process.env, ...env } });
+    return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+  };
   const touch = (f, id) => { fs.appendFileSync(path.join(work, 'scripts', f), `// ${id} 改一行\n`); sh(`git add scripts/${f}`); sh(`git commit -q -m ${id}-${f.replace('.', '-')}`); };
 
   const SCENARIOS = [
@@ -474,6 +490,7 @@ try {
     }],
     ['P1', () => {
       touch('build-places.mjs', 'p1');
+      dropF8();
       yes(!fs.existsSync(F8REG), 'P1 前置：沒有 F8 登記檔');
       const r = gate();
       yes(r.code === 6 && WHO.f8.test(R(r.out)) && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)) && !/^新增行核對：/m.test(r.out),
@@ -481,22 +498,29 @@ try {
       untouched('P1');
     }],
     ['P2', () => {
+      // F9 第 2 條：跑過驗法（全過）之後同一個改動 → 推得出去。登記用驗法全過時實際呼叫的 writeReg 寫（不是手寫的登記）
       touch('build-places.mjs', 'p2');
-      f8Reg();
+      const w = writeReg(work, F8REG, F8ALL.map((f) => 'scripts/' + f), '# P2：驗法全過時寫的登記\n');
+      yes(w.ok, 'P2 前置：writeReg 寫得進去（工作區＝HEAD）', JSON.stringify(w));
       const r = gate();
       yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && /^F8 驗法：這次動到了 scripts\/build-places\.mjs，登記相符/m.test(r.out) && remoteHead() === localHead(),
         `P2 動到 build-places.mjs、F8 登記整組相符 → 回 0、已推送（實得 ${r.code}）`, r.out.slice(-300));
     }],
     ['P3', () => {
+      // F9 第 1 條：改一支被守的檔、commit、沒跑驗法就推 → 擋在第零關（自查還沒開始）、點名驗法
       touch('build-places.mjs', 'p3');
       f8Reg();
       touch('importshots.mjs', 'p3');
       const r = gate();
       yes(r.code === 6 && WHO.f8File('importshots.mjs').test(R(r.out)) && !WHO.f8File('build-places.mjs').test(R(r.out)) && !WHO.f8File('f8verify.mjs').test(R(r.out)),
         `P3 登記之後又改了 importshots.mjs → 回 6、點名 importshots（不是另外兩支）（實得 ${r.code}）`, r.out.slice(-300));
+      yes(/^✗ scripts\/importshots\.mjs 跟 \.logs\/f8\.verified 登記的不一樣.*跑 npm run f8verify$/m.test(R(r.out)) && !/^新增行核對：/m.test(r.out),
+        'P3 擋在第零關（自查還沒開始）、✗ 那一行點名要跑的驗法（npm run f8verify）', r.out.slice(-300));
       untouched('P3');
     }],
     ['P4', () => {
+      // F9 第 5 條：沒動到被守的檔、也沒有登記 → 照常推得出去（專用情境）
+      dropF8();
       commit('d.txt', 'clean2\n', 'clean2');
       yes(!fs.existsSync(F8REG) && !sh(`git log --format= --name-only ${BASE}..HEAD`).split('\n').some((l) => F8ALL.some((f) => l === 'scripts/' + f)),
         'P4 前置：沒有 F8 登記、這次的 commit 沒動到 F8 那幾支');
@@ -505,6 +529,8 @@ try {
         `P4 沒動到 F8 那幾支 → 不看這一關、回 0、已推送（實得 ${r.code}）`, r.out.slice(-300));
     }],
     ['P5', () => {
+      // F9 第 6 條：前一個 commit 動到被守的檔、最後一個 commit 乾淨 → 仍要擋（範圍是這次要推的每一個 commit）
+      dropF8();
       touch('f8verify.mjs', 'p5');
       commit('d.txt', 'clean2\n', 'clean-after');
       yes(!sh('git show --format= --name-only HEAD').split('\n').includes('scripts/f8verify.mjs'), 'P5 前置：最新的 commit 沒動到 f8verify.mjs（動到的是前一個）');
@@ -532,6 +558,7 @@ try {
       // 共用模組 verified-reg.mjs 也在 F8 守護清單裡（補充說明五第 4 點）：只改它、閘門登記已經重驗過（回 5 那一關過得去），
       // 沒有 F8 登記 → F8 那一關照樣要擋
       touch('verified-reg.mjs', 'p7');
+      dropF8();
       fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
       yes(!fs.existsSync(F8REG) && sh('git show --format= --name-only HEAD').split('\n').includes('scripts/verified-reg.mjs'),
         'P7 前置：這次的 commit 只動到 verified-reg.mjs、閘門登記已跟著更新、沒有 F8 登記');
@@ -539,6 +566,33 @@ try {
       yes(r.code === 6 && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)) && !WHO.unverified.test(R(r.out)),
         `P7 只改共用模組 verified-reg.mjs → 回 6（不是 5）（實得 ${r.code}）`, r.out.slice(-300));
       untouched('P7');
+    }],
+    ['S3', () => {
+      // F9 第 3 條：驗法沒全過 → 登記被刪（先放一份舊登記再跑、跑完它不在）→ 動到被守的檔就推不出去。
+      // 讓真的 f8verify 失敗：GIT_DIR 指到不存在的地方，它取不到 HEAD 裡的雜湊、停下（F10 第 1b 點：用 git 自己認得的環境變數，
+      // 正式程式裡沒有為測試開的分支）
+      touch('build-places.mjs', 's3');
+      f8Reg();
+      yes(fs.existsSync(F8REG) && fs.readFileSync(F8REG, 'utf8').includes(sh('git rev-parse HEAD:scripts/build-places.mjs').trim()),
+        'S3 前置：跑驗法之前有一份跟 HEAD 相符的登記');
+      const v = runF8verify({ GIT_DIR: path.join(base, 'no-such-git-dir') });
+      yes(v.code !== 0 && /^擋下：F8 驗法沒有跑完，不登記/m.test(v.out) && !fs.existsSync(F8REG),
+        `S3 驗法沒全過（git 取不到）→ 回非 0、登記已不在（實得 ${v.code}）`, v.out.slice(-300));
+      const r = gate();
+      yes(r.code === 6 && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)),
+        `S3 接著推送（動到 build-places）→ 回 6、沒有登記檔（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('S3');
+    }],
+    ['S4', () => {
+      // F9 第 4 條：被守的檔工作區有改動時跑驗法 → 不登記（舊登記刪或不動都可以，但不能寫入新的）
+      f8Reg();
+      const old = fs.readFileSync(F8REG, 'utf8');
+      fs.appendFileSync(path.join(work, 'scripts', 'build-places.mjs'), '// 還沒 commit 的改動\n');
+      yes(sh('git status --porcelain scripts/build-places.mjs').trim().startsWith('M'), 'S4 前置：build-places.mjs 在工作區有沒 commit 的改動');
+      const v = runF8verify();
+      const now = fs.existsSync(F8REG) ? fs.readFileSync(F8REG, 'utf8') : null;
+      yes(v.code !== 0 && /^✗ 不跑：scripts\/build-places\.mjs 工作區跟 HEAD 不一樣/m.test(v.out) && (now === null || now === old),
+        `S4 工作區有改動時跑驗法 → 不跑、沒有寫入新的登記（登記${now === null ? '已刪' : now === old ? '沒動' : '被改寫了'}）（實得 ${v.code}）`, v.out.slice(-300));
     }],
     // ---- F10：「取不到就停」的分支，用假 git 讓那個子指令真的失敗 ----
     ['Q1', () => {

@@ -90,6 +90,8 @@ export const EXCEPTIONS = [
     why: 'P1／P4／P7 的前置是「沒有 F8 登記」這個起點狀態（reset() 刪掉的），不是在驗某個東西被刪掉' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(!w2\.ok && \/scripts\\\/importshots\\\.mjs 工作區跟 HEAD 不一樣\//,
     why: 'V2 驗「舊的登記被刪掉」：V1 剛寫了它、並讀出內容比對過（原本在），所以這裡的不在是被刪的' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(v\.code !== 0 && \/\^擋下：F8 驗法沒有跑完，不登記\/m\.test\(v\.out\) && !fs\.existsSync\(F8REG\)/,
+    why: 'S3（F9 第 3 條）驗「登記被刪」：前一條斷言「S3 前置」已確認跑驗法之前登記在、而且跟 HEAD 相符' },
   { file: 'scripts/verified-reg.mjs', kind: 'absent', match: /if \(!fs\.existsSync\((path\.join\(root, f\)|regPath)\)\) /,
     why: '流程判斷（工作區沒有就記一筆問題；登記本來就不在就照實說），不是斷言' },
   { file: 'scripts/f8verify.mjs', kind: 'absent', match: /if \(!fs\.existsSync\((WT|ST)\)\) return|if \(!xl\.includes\(why\)\) miss\.push/,
