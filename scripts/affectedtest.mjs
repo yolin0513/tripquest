@@ -169,7 +169,7 @@ console.log('\n[T13] 改測試腳本本身');
 console.log('\n[T14] 輸出口徑');
 {
   const out = formatReport(pick(['docs/x.md']));
-  yes(out.includes(`這不是全綠：本次跑 ${BASELINE.length}/${chain.length} 支`), `部分測試時印「這不是全綠：本次跑 ${BASELINE.length}/${chain.length} 支」`, out.split('\n')[0]);
+  yes(new RegExp(`^這不是全綠：本次跑 ${BASELINE.length}/${chain.length} 支`, 'm').test(out), `部分測試時印「這不是全綠：本次跑 ${BASELINE.length}/${chain.length} 支」`, out.split('\n')[0]);
   // 對照組：長度不同的假鏈 —— M 要從鏈數出來，不能寫死
   const fakeChain = BASELINE.concat(['x1']).map((n) => ({ name: n, file: `scripts/${n}.mjs` }));
   const fo = formatReport(select({ changed: ['docs/x.md'], chain: fakeChain, refs: {}, graph: new Map() }));
@@ -179,7 +179,7 @@ console.log('\n[T14] 輸出口徑');
     '命中 C 時印「放大到全套」與 M/M，不印「這不是全綠」', co.split('\n')[0]);
   // 從真實入口跑一次（npm run affected 用的就是這支）
   const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', 'docs/x.md', '--dry'], { cwd: ROOT, encoding: 'utf8' });
-  yes(p.status === 0 && p.stdout.includes(`這不是全綠：本次跑 ${BASELINE.length}/${chain.length} 支`) && p.stdout.includes('距上次全面檢測'),
+  yes(p.status === 0 && new RegExp(`^這不是全綠：本次跑 ${BASELINE.length}/${chain.length} 支`, 'm').test(p.stdout) && /^距上次全面檢測/m.test(p.stdout),
     '真實入口 run-affected.mjs --files … --dry：印出 N/M 與「距上次全面檢測」', (p.stderr || p.stdout).slice(0, 400));
 }
 

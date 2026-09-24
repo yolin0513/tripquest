@@ -276,7 +276,8 @@ if (!LOCAL) {
   const r = spawnSync(process.execPath, [new URL('./livecheck-import.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], { encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
   for (const l of out.split('\n').filter((x) => /^✗|項通過/.test(x))) console.log('  ' + l);
-  if (r.status === 0 && /項通過/.test(out)) pass++;
+  // 只認最後那一行「N 項通過」且沒有「有失敗」（失敗時最後一行也印「N 項通過，有失敗」——出現過不等於是結論）
+  if (r.status === 0 && /^\d+ 項通過$/m.test(out)) pass++;
   else bad(`線上匯入流程驗證（livecheck-import）沒過（回傳 ${r.status}）`);
 }
 

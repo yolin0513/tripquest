@@ -68,14 +68,16 @@ export const EXCEPTIONS = [
     why: 'fetch 失敗不在這一行停，是因為下一段緊接著查「本機有沒有遠端那個 commit」，沒有就回 4（擋下：檢查器壞了（範圍））。'
       + '（2026-09-24 一次性實測：假遠端 main 指向不存在的 commit，ls-remote 讀得到、fetch 回 128 → 閘門回 4、假遠端沒動；'
       + 'pushgatetest 還沒有這一種情境）' },
-  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.\w+(\([^)]*\))?\.test\(SAMPLE\.\w+\)/,
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.\w+(\([^)]*\))?\.test\(R\(SAMPLE\.\w+\)\)/,
     why: '擷取樣式本身的對照組：同一條斷言先證明這個樣式抓得到它該抓的樣本，再證明它不會誤抓別的樣本' },
-  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.\w+(\([^)]*\))?\.test\(r\.out\)/,
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /!WHO\.\w+(\([^)]*\))?\.test\(R\(r\.out\)\)/,
     why: '斷言閘門的輸出裡「沒有別的擋下理由」；用到的每一個樣式都先在 SAMPLE 對照組上證明抓得到' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /includes\(fakeMail\(\)\) && !sh\('git show HEAD --format='\)\.includes\(fakeMail\(\)\)/,
     why: 'H 的前置：同一條斷言先確認假信箱真的在 commit 訊息裡，再確認它不在新增行裡' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(had && !fs\.existsSync\(regPath\)/,
     why: 'M0 的前置：同一條斷言先確認登記檔原本在（had），刪掉之後才確認它不在' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /const missed = Object\.entries\(pats\)\.filter\(\(\[, re\]\) => !re\.test\(R\(inErr\)\)\)/,
+    why: '位置對照組的正向那一半：收集「出現在錯誤訊息裡卻沒被抓到」的樣式，下一行斷言這個清單是空的——不是在斷言不存在' },
   { file: 'scripts/safe-push.sh', kind: 'absent', match: /^echo "✗ 沒有 \$REG（閘門從沒驗過、或登記檔不見了）/,
     why: '給人看的錯誤訊息裡剛好有「不見了」三個字，不是斷言' },
 ];

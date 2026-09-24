@@ -55,17 +55,19 @@ const fakeMail = () => ['zz', 'fake'].join('.') + '@' + 'example-test' + '.org';
 const hook = (name, body) => { const p = path.join(bare, 'hooks', name); fs.writeFileSync(p, '#!/bin/sh\n' + body + '\n'); fs.chmodSync(p, 0o755); return p; };
 
 // 比對「是誰擋的」用的樣式（§5.11 第二層：擷取程式本身也要有對照組）
+// 只看錯誤訊息的位置（補充說明四第 1 點）：整份輸出裡「出現過」不等於「是理由」——正常輸出的某一行也可能剛好含有同一段字
+const R = (out) => out.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('擋下：') || l.startsWith('✗')).join('\n');
 const WHO = {
-  hit: /擋下：有命中（email/,
+  hit: /^擋下：有命中（email/m,
   // 命中的來源（新增行／commit 訊息／作者欄）；來源清單在「來源：」到第一個全形右括號之間
-  hitFrom: (src) => new RegExp(`擋下：有命中（email（\\d+ 行；來源：[^）]*${src}`),
-  broken: (k) => new RegExp(`擋下：檢查器壞了（${k}`),
+  hitFrom: (src) => new RegExp(`^擋下：有命中（email（\\d+ 行；來源：[^）]*${src}`, 'm'),
+  broken: (k) => new RegExp(`^擋下：檢查器壞了（${k}`, 'm'),
   // 訊息與作者欄壞了的是哪一條（範圍／筆數／訊息）；清單在冒號到第一個全形右括號之間
-  metaFault: (k) => new RegExp(`擋下：檢查器壞了（訊息與作者欄：[^）]*${k}`),
-  unreachable: /擋下：檢查器壞了（抓不到遠端）/,
-  pushFail: /git push 失敗/,
-  mismatch: /不等於本機/,
-  unverified: /擋下：閘門沒有驗過（/,
+  metaFault: (k) => new RegExp(`^擋下：檢查器壞了（訊息與作者欄：[^）]*${k}`, 'm'),
+  unreachable: /^擋下：檢查器壞了（抓不到遠端）/m,
+  pushFail: /^✗ git push 失敗/m,
+  mismatch: /^✗ 推完了但遠端.*不等於本機/m,
+  unverified: /^擋下：閘門沒有驗過（/m,
 };
 
 try {
@@ -84,30 +86,44 @@ try {
       mismatch: '✗ 推完了但遠端（a）不等於本機（b）——停',
       unverified: '✗ scripts/safe-push.sh 改過了（登記 a、現在 b）\n擋下：閘門沒有驗過（scripts/safe-push.sh 改過、驗法還沒重跑）',
     };
-    yes(WHO.unverified.test(SAMPLE.unverified) && !WHO.unverified.test(SAMPLE.broken) && !WHO.unverified.test(SAMPLE.hit),
+    {
+      const NOISE = ['email：對照組命中=true，命中=0',
+        '說明：遇到 擋下：有命中（email（1 行；來源：新增行）） 這種情況不會推',
+        '說明：擋下：檢查器壞了（email） 表示對照組沒命中；擋下：閘門沒有驗過（ 表示驗法沒重跑',
+        '提醒：✗ git push 失敗 或 ✗ 推完了但遠端（a）不等於本機 時會停', '通過', '✓ 已推送，遠端 main ＝ 本機 HEAD（abc）',
+        // 錯誤訊息那一行（R() 會留下），但那些字只在附註裡、不在行首——樣式沒鎖行首就會誤判
+        '✗ 另一件事失敗（附註：擋下：有命中（email（1 行；來源：新增行））、擋下：檢查器壞了（email）、擋下：閘門沒有驗過（、✗ git push 失敗、✗ 推完了但遠端（a）不等於本機 都是別的情況）'].join('\n');
+      const pats = { hit: WHO.hit, hitFrom: WHO.hitFrom('新增行'), broken: WHO.broken('email'), unverified: WHO.unverified, pushFail: WHO.pushFail, mismatch: WHO.mismatch };
+      const wrong = Object.entries(pats).filter(([, re]) => re.test(R(NOISE))).map(([k]) => k);
+      yes(wrong.length === 0, `對照（位置）：那句話只出現在正常行時，${Object.keys(pats).length} 種樣式都判「不是理由」`, '誤判的：' + wrong.join('、'));
+      const inErr = [SAMPLE.hit, SAMPLE.broken, SAMPLE.unverified, SAMPLE.push, SAMPLE.mismatch].join('\n');
+      const missed = Object.entries(pats).filter(([, re]) => !re.test(R(inErr))).map(([k]) => k);
+      yes(missed.length === 0, `對照（位置）：同一句話出現在錯誤訊息那一行時，${Object.keys(pats).length} 種樣式都判「是理由」`, '沒抓到的：' + missed.join('、'));
+    }
+    yes(WHO.unverified.test(R(SAMPLE.unverified)) && !WHO.unverified.test(R(SAMPLE.broken)) && !WHO.unverified.test(R(SAMPLE.hit)),
       '對照（擷取樣式）：「閘門沒有驗過」抓得到、跟檢查器壞了與命中分得開');
-    yes(WHO.hit.test(SAMPLE.hit) && !WHO.hit.test(SAMPLE.broken) && !WHO.hit.test(SAMPLE.unreachable),
+    yes(WHO.hit.test(R(SAMPLE.hit)) && !WHO.hit.test(R(SAMPLE.broken)) && !WHO.hit.test(R(SAMPLE.unreachable)),
       '對照（擷取樣式）：「命中」只抓得到命中那一句，不會把檢查器壞了誤認成命中');
-    yes(WHO.broken('email').test(SAMPLE.broken) && !WHO.broken('email').test(SAMPLE.hit) && !WHO.broken('user').test(SAMPLE.broken),
+    yes(WHO.broken('email').test(R(SAMPLE.broken)) && !WHO.broken('email').test(R(SAMPLE.hit)) && !WHO.broken('user').test(R(SAMPLE.broken)),
       '對照（擷取樣式）：「檢查器壞了」抓得到、而且分得出是哪一類');
-    yes(WHO.unreachable.test(SAMPLE.unreachable) && !WHO.unreachable.test(SAMPLE.broken),
+    yes(WHO.unreachable.test(R(SAMPLE.unreachable)) && !WHO.unreachable.test(R(SAMPLE.broken)),
       '對照（擷取樣式）：「抓不到遠端」跟一般的檢查器壞了分得開');
-    yes(WHO.broken('訊息與作者欄').test(SAMPLE.metaBroken) && !WHO.broken('訊息與作者欄').test(SAMPLE.broken)
-      && !WHO.hit.test(SAMPLE.metaBroken),
+    yes(WHO.broken('訊息與作者欄').test(R(SAMPLE.metaBroken)) && !WHO.broken('訊息與作者欄').test(R(SAMPLE.broken))
+      && !WHO.hit.test(R(SAMPLE.metaBroken)),
       '對照（擷取樣式）：「訊息與作者欄解析壞了」抓得到、跟別類的檢查器壞了分得開');
-    yes(WHO.metaFault('筆數').test(SAMPLE.metaCount) && !WHO.metaFault('訊息').test(SAMPLE.metaCount)
-      && WHO.metaFault('訊息').test(SAMPLE.metaMsg) && !WHO.metaFault('筆數').test(SAMPLE.metaMsg)
-      && WHO.metaFault('筆數').test(SAMPLE.metaBroken) && WHO.metaFault('訊息').test(SAMPLE.metaBroken)
-      && !WHO.metaFault('筆數').test(SAMPLE.extractBroken),
+    yes(WHO.metaFault('筆數').test(R(SAMPLE.metaCount)) && !WHO.metaFault('訊息').test(R(SAMPLE.metaCount))
+      && WHO.metaFault('訊息').test(R(SAMPLE.metaMsg)) && !WHO.metaFault('筆數').test(R(SAMPLE.metaMsg))
+      && WHO.metaFault('筆數').test(R(SAMPLE.metaBroken)) && WHO.metaFault('訊息').test(R(SAMPLE.metaBroken))
+      && !WHO.metaFault('筆數').test(R(SAMPLE.extractBroken)),
       '對照（擷取樣式）：訊息與作者欄壞的是「筆數」還是「訊息」分得開');
-    yes(WHO.broken('新增行抽取').test(SAMPLE.extractBroken) && !WHO.broken('新增行抽取').test(SAMPLE.metaBroken)
-      && !WHO.hit.test(SAMPLE.extractBroken),
+    yes(WHO.broken('新增行抽取').test(R(SAMPLE.extractBroken)) && !WHO.broken('新增行抽取').test(R(SAMPLE.metaBroken))
+      && !WHO.hit.test(R(SAMPLE.extractBroken)),
       '對照（擷取樣式）：「新增行抽取壞了」抓得到、跟別類的檢查器壞了分得開');
-    yes(WHO.pushFail.test(SAMPLE.push) && !WHO.pushFail.test(SAMPLE.mismatch) && WHO.mismatch.test(SAMPLE.mismatch) && !WHO.mismatch.test(SAMPLE.push),
+    yes(WHO.pushFail.test(R(SAMPLE.push)) && !WHO.pushFail.test(R(SAMPLE.mismatch)) && WHO.mismatch.test(R(SAMPLE.mismatch)) && !WHO.mismatch.test(R(SAMPLE.push)),
       '對照（擷取樣式）：「推送失敗」與「遠端不等於本機」分得開');
-    yes(WHO.hitFrom('commit 訊息').test(SAMPLE.hitMsg) && !WHO.hitFrom('新增行').test(SAMPLE.hitMsg)
-      && WHO.hitFrom('新增行').test(SAMPLE.hit) && !WHO.hitFrom('commit 訊息').test(SAMPLE.hit)
-      && WHO.hitFrom('作者欄').test(SAMPLE.hitMix) && !WHO.hitFrom('commit 訊息').test(SAMPLE.hitMix),
+    yes(WHO.hitFrom('commit 訊息').test(R(SAMPLE.hitMsg)) && !WHO.hitFrom('新增行').test(R(SAMPLE.hitMsg))
+      && WHO.hitFrom('新增行').test(R(SAMPLE.hit)) && !WHO.hitFrom('commit 訊息').test(R(SAMPLE.hit))
+      && WHO.hitFrom('作者欄').test(R(SAMPLE.hitMix)) && !WHO.hitFrom('commit 訊息').test(R(SAMPLE.hitMix)),
       '對照（擷取樣式）：命中的來源分得出新增行、commit 訊息、作者欄（別類的來源不會被算到 email 頭上）');
   }
 
@@ -167,7 +183,7 @@ try {
     ['A', () => {
       commit('c.txt', 'clean\n', 'clean');
       const r = gate();
-      yes(r.code === 0 && /已推送/.test(r.out) && remoteHead() === localHead(), 'A 乾淨 → 回 0、已推送、遠端＝本機', r.out.slice(-300));
+      yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && remoteHead() === localHead(), 'A 乾淨 → 回 0、已推送、遠端＝本機', r.out.slice(-300));
     }],
     ['N', () => {
       // 只刪不增的推送要放行（共用慣例 v9 §5.14：「對不上就停」的檢查要有一種正常情況放行的樣本）
@@ -176,33 +192,33 @@ try {
       const st = sh('git log --numstat --format= -1').trim().split('\t');
       yes(st[0] === '0' && Number(st[1]) > 0, `N 前置：這個 commit 新增 ${st[0]} 行、刪除 ${st[1]} 行（只刪不增）`);
       const r = gate();
-      yes(r.code === 0 && /已推送/.test(r.out) && remoteHead() === localHead(), `N 只刪不增的推送 → 回 0、已推送、遠端＝本機（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && remoteHead() === localHead(), `N 只刪不增的推送 → 回 0、已推送、遠端＝本機（實得 ${r.code}）`, r.out.slice(-300));
     }],
     ['B', () => {
       commit('b.txt', `contact: ${fakeMail()}\n`, 'leak');
       const r = gate();
       yes(r.code === 1, `B 新增行帶合成假信箱 → 回 1（實得 ${r.code}）`, r.out.slice(-300));
-      yes(WHO.hitFrom('新增行').test(r.out) && !WHO.broken('').test(r.out), 'B 擋下的是自查的 email 那一類、來源是新增行（不是別關、也不是檢查器壞了）', r.out.slice(-300));
+      yes(WHO.hitFrom('新增行').test(R(r.out)) && !WHO.broken('').test(R(r.out)), 'B 擋下的是自查的 email 那一類、來源是新增行（不是別關、也不是檢查器壞了）', r.out.slice(-300));
       untouched('B');
     }],
     ['B2', () => {
       commit('b.txt', `contact: ${fakeMail()}\n`, 'leak');
       commit('b.txt', 'cleaned\n', 'cleanup');
       const r = gate();
-      yes(r.code === 1 && WHO.hit.test(r.out), 'B2 兩個 commit、只有前一個帶假信箱 → 仍被 email 那一類擋下（掃的是每一個 commit，不是只看 HEAD）', r.out.slice(-300));
+      yes(r.code === 1 && WHO.hit.test(R(r.out)), 'B2 兩個 commit、只有前一個帶假信箱 → 仍被 email 那一類擋下（掃的是每一個 commit，不是只看 HEAD）', r.out.slice(-300));
       untouched('B2');
     }],
     ['C', () => {
       commit('d.txt', 'clean2\n', 'clean2');
       const r = gate({ USERNAME: '', USER: '' });
       yes(r.code === 4, `C 讀不到使用者名稱（檢查器壞了）→ 回 4（實得 ${r.code}）`, r.out.slice(-300));
-      yes(WHO.broken('user').test(r.out) && !WHO.hit.test(r.out), 'C 擋下的是「檢查器壞了」的 user 那一類（不是命中）', r.out.slice(-300));
+      yes(WHO.broken('user').test(R(r.out)) && !WHO.hit.test(R(r.out)), 'C 擋下的是「檢查器壞了」的 user 那一類（不是命中）', r.out.slice(-300));
       untouched('C');
     }],
     ['C2', () => {
       commit('d.txt', 'clean2\n', 'clean2');
       const r = gate({ PREPUSH_SELFTEST_BREAK: 'email' });
-      yes(r.code === 4 && WHO.broken('email').test(r.out) && /email：對照組命中=false/.test(r.out),
+      yes(r.code === 4 && WHO.broken('email').test(R(r.out)) && /^email：對照組命中=false/m.test(r.out),
         `C2 email 的搜尋式壞了（對照組沒命中）→ 回 4、寫明是 email 那一類（實得 ${r.code}）`, r.out.slice(-300));
       untouched('C2');
     }],
@@ -211,7 +227,7 @@ try {
       commit('d.txt', 'clean2\n', 'clean2');
       yes(Number(sh(`git rev-list --count ${BASE}..HEAD`).trim()) > 0, 'I 前置：範圍裡確實有要推的 commit（不然「0 行」可能只是真的沒東西可掃）');
       const r = gate({ PREPUSH_SELFTEST_BREAK: 'meta' });
-      yes(r.code === 4 && WHO.broken('訊息與作者欄').test(r.out) && !WHO.hit.test(r.out),
+      yes(r.code === 4 && WHO.broken('訊息與作者欄').test(R(r.out)) && !WHO.hit.test(R(r.out)),
         `I 訊息與作者欄解析出 0 筆 → 回 4、寫明「訊息與作者欄」壞了（實得 ${r.code}）`, r.out.slice(-300));
       untouched('I');
     }],
@@ -221,7 +237,7 @@ try {
       const n = nums(r.out);
       yes(n.commits >= 2 && n.parsed >= 1 && n.parsed < n.commits && n.msg >= n.commits,
         `K 前置：範圍裡有 ${n.commits} 個 commit、只解出 ${n.parsed} 筆（部分失效、不是全空），訊息行數 ${n.msg} 不少於 commit 數`, r.out.slice(-300));
-      yes(r.code === 4 && WHO.metaFault('筆數').test(r.out) && !WHO.metaFault('訊息').test(r.out),
+      yes(r.code === 4 && WHO.metaFault('筆數').test(R(r.out)) && !WHO.metaFault('訊息').test(R(r.out)),
         `K 只解出一部分 → 回 4、擋在「筆數」那一條（實得 ${r.code}）`, r.out.slice(-300));
       untouched('K');
     }],
@@ -231,7 +247,7 @@ try {
       const n = nums(r.out);
       yes(n.commits >= 1 && n.parsed === n.commits && n.msg === 0,
         `K2 前置：${n.commits} 個 commit 都解析到了、訊息 ${n.msg} 行（只有訊息遺失）`, r.out.slice(-300));
-      yes(r.code === 4 && WHO.metaFault('訊息').test(r.out) && !WHO.metaFault('筆數').test(r.out),
+      yes(r.code === 4 && WHO.metaFault('訊息').test(R(r.out)) && !WHO.metaFault('筆數').test(R(r.out)),
         `K2 訊息遺失 → 回 4、擋在「訊息」那一條（實得 ${r.code}）`, r.out.slice(-300));
       untouched('K2');
     }],
@@ -241,7 +257,7 @@ try {
       const r = gate({ PREPUSH_SELFTEST_BREAK: 'dupline' });
       const ex = (r.out.match(/新增行核對：抽出 (\d+) 行，git 算 (\d+) 行/) || []).slice(1).map(Number);   // 每次都印的那一行
       yes(ex.length === 2 && ex[0] > ex[1] && ex[1] > 0, `L 前置：抽出的行數（${ex[0]}）確實比 git 算的（${ex[1]}）多`, r.out.slice(-300));
-      yes(r.code === 4 && WHO.broken('新增行抽取').test(r.out), `L 抽多了 → 回 4、擋在「新增行抽取」（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 4 && WHO.broken('新增行抽取').test(R(r.out)), `L 抽多了 → 回 4、擋在「新增行抽取」（實得 ${r.code}）`, r.out.slice(-300));
       untouched('L');
     }],
     ['J', () => {
@@ -252,7 +268,7 @@ try {
         && !fs.readFileSync(path.join(work, 'j.txt'), 'utf8').includes(fakeMail()),
         'J 前置：命中行在 diff 裡長得像 +++ 檔頭、而且最新版已經刪掉（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hitFrom('新增行').test(r.out) && !WHO.broken('').test(r.out),
+      yes(r.code === 1 && WHO.hitFrom('新增行').test(R(r.out)) && !WHO.broken('').test(R(r.out)),
         `J ++ 開頭的命中行、加了又刪 → 回 1、email 那一類、來源是新增行（實得 ${r.code}）`, r.out.slice(-300));
       untouched('J');
     }],
@@ -263,7 +279,7 @@ try {
       yes(sh('git log -1 --format=%B').includes(fakeMail()) && !sh('git show HEAD --format=').includes(fakeMail()),
         'H 前置：假信箱只在 commit 訊息裡、不在新增行裡（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hitFrom('commit 訊息').test(r.out) && !WHO.hitFrom('新增行').test(r.out),
+      yes(r.code === 1 && WHO.hitFrom('commit 訊息').test(R(r.out)) && !WHO.hitFrom('新增行').test(R(r.out)),
         `H 命中寫在 commit 訊息裡 → 回 1、email 那一類、來源是 commit 訊息（實得 ${r.code}）`, r.out.slice(-300));
       untouched('H');
     }],
@@ -273,7 +289,7 @@ try {
       sh(`git -c user.email=${fakeMail()} commit -q -m clean-h2`);
       yes(sh('git log -1 --format=%ae').trim() === fakeMail(), 'H2 前置：這個 commit 的作者信箱是合成假信箱（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hitFrom('作者欄').test(r.out) && !WHO.hitFrom('新增行').test(r.out),
+      yes(r.code === 1 && WHO.hitFrom('作者欄').test(R(r.out)) && !WHO.hitFrom('新增行').test(R(r.out)),
         `H2 作者欄是假信箱 → 回 1、email 那一類、來源是作者欄（實得 ${r.code}）`, r.out.slice(-300));
       untouched('H2');
     }],
@@ -288,7 +304,7 @@ try {
       yes(sh('git rev-parse origin/main').trim() === leaked && remoteHead() === BASE,
         'F 前置：本機的追蹤分支停在帶命中的那個 commit，遠端實際上沒有它（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hit.test(r.out) && !WHO.broken('').test(r.out),
+      yes(r.code === 1 && WHO.hit.test(R(r.out)) && !WHO.broken('').test(R(r.out)),
         `F 本機以為已推、遠端其實沒有 → 回 1、擋在自查的 email 那一類（實得 ${r.code}）`, r.out.slice(-300));
       untouched('F');
     }],
@@ -296,21 +312,21 @@ try {
       commit('d.txt', 'clean2\n', 'clean2');
       hook('pre-receive', 'echo "拒收（測試）" >&2; exit 1');
       const r = gate();
-      yes(r.code === 2 && WHO.pushFail.test(r.out) && /通過/.test(r.out), `D 遠端拒收 → 回 2、擋在 push 那一關（自查已通過）（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 2 && WHO.pushFail.test(R(r.out)) && /^通過$/m.test(r.out), `D 遠端拒收 → 回 2、擋在 push 那一關（自查已通過）（實得 ${r.code}）`, r.out.slice(-300));
       untouched('D');
     }],
     ['E', () => {
       commit('d.txt', 'clean2\n', 'clean2');
       hook('post-receive', 'while read old new ref; do git update-ref "$ref" "$old"; done');
       const r = gate();
-      yes(r.code === 3 && WHO.mismatch.test(r.out), `E 推了卻沒更新 → 回 3、擋在比對遠端那一關（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 3 && WHO.mismatch.test(R(r.out)), `E 推了卻沒更新 → 回 3、擋在比對遠端那一關（實得 ${r.code}）`, r.out.slice(-300));
       yes(remoteHead() === BASE, 'E 前置：遠端 main 確實被 hook 退回舊值（情境成立）');
     }],
     ['G', () => {
       commit('d.txt', 'clean2\n', 'clean2');
       sh(`git remote set-url origin "${path.join(base, 'nowhere.git')}"`);
       const r = gate();
-      yes(r.code === 4 && WHO.unreachable.test(r.out), `G 抓不到遠端 → 回 4、寫明「抓不到遠端」（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 4 && WHO.unreachable.test(R(r.out)), `G 抓不到遠端 → 回 4、寫明「抓不到遠端」（實得 ${r.code}）`, r.out.slice(-300));
       untouched('G');
     }],
     // M／M2／M3：三支閘門檔各自改過、驗法還沒重跑，都要擋、而且點名改的是哪一支（共用慣例 v9 §5.15：能做成機器擋的就不要靠人記得）
@@ -322,8 +338,8 @@ try {
         `${id} 前置：${f} 現在的雜湊跟登記的不一樣（情境成立）`);
       const r = gate();
       const others = GATE.filter((g) => g !== f);
-      yes(r.code === 5 && WHO.unverified.test(r.out) && new RegExp(`閘門沒有驗過（scripts/${f.replace('.', '\\.')} 改過`).test(r.out) && !/新增行核對/.test(r.out)
-        && !others.some((g) => r.out.includes(`scripts/${g} 改過`)),
+      yes(r.code === 5 && WHO.unverified.test(R(r.out)) && new RegExp(`^擋下：閘門沒有驗過（scripts/${f.replace('.', '\\.')} 改過`, 'm').test(R(r.out)) && !/^新增行核對：/m.test(r.out)
+        && !others.some((g) => R(r.out).includes(`scripts/${g} 改過`)),
         `${id} 只改了 ${f}、驗法沒重跑 → 回 5、點名 ${f}（不是另外兩支）、自查都還沒開始（實得 ${r.code}）`, r.out.slice(-300));
       untouched(id);
     }]),
@@ -334,7 +350,7 @@ try {
       commit('d.txt', 'clean2\n', 'clean2');
       yes(had && !fs.existsSync(regPath), 'M0 前置：登記檔原本在、現在不在了（情境成立）');
       const r = gate();
-      yes(r.code === 5 && WHO.unverified.test(r.out), `M0 沒有登記檔 → 回 5（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 5 && WHO.unverified.test(R(r.out)), `M0 沒有登記檔 → 回 5（實得 ${r.code}）`, r.out.slice(-300));
       untouched('M0');
     }],
   ];
