@@ -1,5 +1,7 @@
 # SPEC_共用慣例導入 — TripQuest（第 1 批）
 
+> **本檔的推送指令已作廢**（2026-09-24 加註）：這是推送閘出現前的結案工單，裡面寫的 `git push`／「用平常的方式推」都不要照做；現在一律 `bash scripts/safe-push.sh`（見 `docs/STATUS.md`「環境與帳號注意事項」的「推送閘」）。本檔其餘內容保留原樣。
+
 > 狀態：**已執行**（2026-09-19，與本檔同一個 commit：`docs(conventions): 導入共用慣例 v1（副本＋CLAUDE.md 指向）`；commit 無法在自身內容寫進自己的 hash，請以 `git log -- docs/CONVENTIONS.md` 查）。
 > 〔2026-09-24 註：本檔寫的推送做法已作廢，推送一律用本 App 的推送閘門（見 `CLAUDE.md`）。〕
 > 撰寫：Fable 統籌 Session，2026-09-19。依據：統籌工作區的 `SPEC_共用慣例.md` v2（Yolin 2026-09-19 拍板，七項全數照案；三代理投票 5 題 3:0）。

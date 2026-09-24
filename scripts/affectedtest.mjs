@@ -335,6 +335,9 @@ console.log('\n[T17] 孤兒檢查');
   yes(syn.orphans.includes('zzbrandnewtest'), '對照組：合成的新測試 zzbrandnewtest 沒登記進鏈 → 被報成孤兒', JSON.stringify(syn.orphans));
   const synStale = findOrphans(scriptNames, names, { ...ORPHAN_OK, zzgonetest: '這支檔不存在' });
   yes(synStale.stale.includes('zzgonetest'), '對照組：例外清單裡的檔不存在 → 被報成過期的例外', JSON.stringify(synStale.stale));
+  const synPlain = findOrphans([...scriptNames, 'zzplain'], names, { ...ORPHAN_OK, zzplain: '名字不像檢查' });
+  yes(synPlain.stale.includes('zzplain') && !synPlain.orphans.includes('zzplain'),
+    '對照組：例外的名字樣式認不得（不像檢查）→ 被報成過期的例外（樣式漏了一種寫法時會在這裡現形）', JSON.stringify(synPlain));
   const real = findOrphans(scriptNames, names);
   yes(real.orphans.length === 0, `真實的 scripts/：沒有孤兒（像檢查卻沒進鏈、也沒登記理由的）`, '孤兒：' + real.orphans.join('、'));
   yes(real.stale.length === 0, `登記的例外 ${Object.keys(ORPHAN_OK).length} 條都還有效（檔在、而且真的不在鏈裡）`, '過期：' + real.stale.join('、'));

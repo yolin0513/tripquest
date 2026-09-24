@@ -106,8 +106,9 @@ export function parseChain(pkg, exists) {
 // 鏈是登記制：沒登記進 package.json test 的測試，挑選器和完整的鏈都**永遠不會跑它、也沒有任何警告**（盤點實測）。
 // 所以反過來查：scripts/ 底下名字看起來是檢查的（test／lint／check／validate／scan），不在鏈裡就報出來，
 // 除非列在 ORPHAN_OK 並寫理由。例外過期（檔不在了、或已經進鏈）也報，免得例外清單變成默默的豁免。
-export const ORPHAN_RE = /(test|lint|check|validate|scan)/i;
+export const ORPHAN_RE = /(test|lint|check|validate|scan|verify)/i;   // verify：2026-09-24 加 f8verify 時補（原本會漏掉它）
 export const ORPHAN_OK = {
+  f8verify: 'F8 的驗法，約 4.5 分鐘、要 PowerShell 鎖檔；推送閘在推送動到它守的三支時要求登記相符（回 6），不靠鏈',
   livetest: '打正式站（共用慣例 §5.6：打真網路的不進 npm test）；手動跑',
   'livecheck-import': '打正式站；接在 npm run sweep 後面，每版推送後跑',
   'prepush-scan': '推送閘自己呼叫的公開前自查；行為由 pushgatetest 驗',
@@ -116,7 +117,8 @@ export const ORPHAN_OK = {
 export function findOrphans(scriptNames, chainNames, ok = ORPHAN_OK) {
   const inChain = new Set(chainNames), have = new Set(scriptNames);
   const orphans = scriptNames.filter((n) => ORPHAN_RE.test(n) && !inChain.has(n) && !(n in ok)).sort();
-  const stale = Object.keys(ok).filter((n) => !have.has(n) || inChain.has(n)).sort();
+  // 過期：檔不在、已經進鏈、或名字根本不像檢查（樣式認不得它，這條例外就沒在豁免任何東西——多半是樣式漏了一種寫法）
+  const stale = Object.keys(ok).filter((n) => !have.has(n) || inChain.has(n) || !ORPHAN_RE.test(n)).sort();
   return { orphans, stale };
 }
 
