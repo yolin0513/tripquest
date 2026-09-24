@@ -11,13 +11,21 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdir, rm, rename } from 'node:fs/promises';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const FINAL = fileURLToPath(new URL('../screenshots/_import', import.meta.url));
 const OUT = FINAL + '.partial';
-const EXPECTED = 13;                      // 下面 shot() 的次數；少拍一張就不換上
+// 每一張截圖是一個單位（F8）：照順序登記，拍的名字對不上、少拍一張、中途中斷，都不換上，並點名是哪一張
+const EXPECTED_NAMES = ['advanced', 'source', 'paste-text', 'confirm-top', 'confirm-stay', 'confirm-middle', 'confirm-day3',
+  'confirm-bottom', 'title-filled', 'trip-result', 'trip-times', 'no-key-help', 'privacy-consent'];
+const EXPECTED = EXPECTED_NAMES.length;
+// 資料變少也要停：上一次成功時確認頁解析出幾列，記在不進版控的 .logs/；這次比它少就停（素材改短確定要變少，先刪那個檔）
+const LAST = fileURLToPath(new URL('../.logs/importshots.last.json', import.meta.url));
+// 測試用：IMPORTSHOTS_FAIL_AT=k 讓它在第 k 張之前中斷（驗「每一張都是一個單位」用；只會讓結果更嚴，不會放行任何東西）
+const FAIL_AT = Number(process.env.IMPORTSHOTS_FAIL_AT || 0);
 const FIXTURE = fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url));
 const stop = (why) => {
   console.error(`✗ ${why}`);
@@ -38,7 +46,10 @@ const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox']
 const page = await browser.newPage();
 await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
 let n = 0;
+let rows = 0;                              // 確認頁解析出的列數（資料變少的比對用）
 const shot = async (name) => {
+  if (FAIL_AT === n + 1) throw new Error(`盤點樣本：在第 ${n + 1} 張之前中斷`);
+  if (name !== EXPECTED_NAMES[n]) throw new Error(`第 ${n + 1} 張應該是「${EXPECTED_NAMES[n]}」，實際要拍「${name}」——截圖順序對不上`);
   await sleep(320);
   const f = `${OUT}/v1.38-${String(++n).padStart(2, '0')}-${name}.png`;
   await page.screenshot({ path: f });
@@ -79,6 +90,10 @@ try {
   await clickText('.modal-actions .btn', '讀讀看');
   await page.waitForSelector('.imp-row');
   await sleep(1600);                      // 等策展地點庫比對完，「✓」才會出現
+  rows = await page.evaluate(() => document.querySelectorAll('.imp-row').length);
+  let lastRows = null;
+  if (existsSync(LAST)) lastRows = JSON.parse(readFileSync(LAST, 'utf8')).rows;
+  if (Number.isInteger(lastRows) && rows < lastRows) throw new Error(`資料變少：確認頁上一次解析出 ${lastRows} 列、這次 ${rows} 列`);
   await shot('confirm-top');
 
   await scrollBody(0.16);
@@ -158,7 +173,8 @@ try {
   await page.waitForSelector('.imp-note');
   await shot('privacy-consent');
 } catch (e) {
-  console.error('✗ 截圖中斷：' + (e && e.message || e));
+  const at = n < EXPECTED ? `第 ${n + 1}/${EXPECTED} 張「${EXPECTED_NAMES[n]}」之前` : '拍完之後';
+  console.error(`✗ 截圖中斷在${at}：` + (e && e.message || e));
   process.exitCode = 1;
 } finally {
   await browser.close();
@@ -167,7 +183,9 @@ try {
 if (!process.exitCode && n === EXPECTED) {
   await rm(FINAL, { recursive: true, force: true });
   await rename(OUT, FINAL);
-  console.log(`\n共 ${n} 張，換上 screenshots/_import/（舊的一起換掉）`);
+  await mkdir(dirname(LAST), { recursive: true });
+  writeFileSync(LAST, JSON.stringify({ rows, at: new Date().toISOString() }));
+  console.log(`\n共 ${n} 張，換上 screenshots/_import/（舊的一起換掉）；確認頁 ${rows} 列記進 .logs/importshots.last.json`);
 } else {
   await rm(OUT, { recursive: true, force: true });
   if (!process.exitCode) console.error(`✗ 只拍了 ${n} 張、應該 ${EXPECTED} 張`);

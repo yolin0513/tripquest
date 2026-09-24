@@ -44,8 +44,21 @@ if (!cities.has(cityId)) stop(`城市「${cityId}」不在 index.json 登記的 
 const existingFile = DIR + cities.get(cityId);
 if (!existsSync(existingFile)) stop(`${cityId}：index.json 指到的 ${cities.get(cityId)} 不存在`);
 let existing;
-try { existing = JSON.parse(await readFile(existingFile, 'utf8')); } catch (e) { stop(`${cities.get(cityId)} 解析不了：${e.message}`); }
-if (!Array.isArray(existing.places) || !existing.places.length) stop(`${cities.get(cityId)} 沒有 places（不是陣列、是空的、或欄位名稱對不上）`);
+const F = cities.get(cityId);
+try { existing = JSON.parse(await readFile(existingFile, 'utf8')); } catch (e) { stop(`${cityId}（${F}）解析不了：${e.message}`); }
+// 每一種狀況各自講明（F8：停下的理由要點名是哪個單位、哪一種狀況）
+if (!('places' in existing)) stop(`${cityId}（${F}）沒有 places 這個欄位——欄位名稱對不上？檔裡的欄位：${Object.keys(existing).join('、')}`);
+if (!Array.isArray(existing.places)) stop(`${cityId}（${F}）的 places 不是陣列`);
+if (!existing.places.length) stop(`${cityId}（${F}）的 places 是空的`);
+// 有效筆數：每個地點都要有 id、name、非空的 tags——有一筆無效就停，並點名是哪幾筆
+const invalid = existing.places.map((p, i) => [i, p]).filter(([, p]) => !p || !p.id || !p.name || !Array.isArray(p.tags) || !p.tags.length);
+if (invalid.length) stop(`${cityId}（${F}）有 ${invalid.length} 個地點無效（缺 id／name／tags）：第 ${invalid.map(([i, p]) => `${i + 1} 個（${(p && p.id) || '沒有 id'}）`).join('、')}`);
+// 資料變少也要停：上一次成功的輸出記著當時讀到幾個地點，這次比它少就停（改過資料確定要變少，先刪掉那份 staging 再跑）
+if (existsSync(stagingOut)) {
+  let prev = null;
+  try { prev = JSON.parse(await readFile(stagingOut, 'utf8'))?._meta?.existingCount; } catch (e) { stop(`${cityId} 上一次的輸出 _staging/${cityId}.json 讀不了：${e.message}`); }
+  if (Number.isInteger(prev) && existing.places.length < prev) stop(`${cityId}（${F}）資料變少：上一次 ${prev} 個地點、這次 ${existing.places.length} 個`);
+}
 
 await mkdir(STAGING, { recursive: true });
 await mkdir(RAW, { recursive: true });
@@ -96,6 +109,6 @@ void pageviewTrend; void commonsImageFor; void sameSpot; void mergeInto;
 
 // 先寫暫存檔、寫完才換上：寫到一半失敗時，上一次成功的輸出不會被半份檔蓋掉
 const tmpOut = stagingOut + '.partial';
-await writeFile(tmpOut, JSON.stringify({ _meta: { generated: Date.now(), city: cityId }, candidates }, null, 2));
+await writeFile(tmpOut, JSON.stringify({ _meta: { generated: Date.now(), city: cityId, existingCount: existing.places.length }, candidates }, null, 2));
 await rename(tmpOut, stagingOut);
 console.log(`done：data/places/_staging/${cityId}.json（候選 ${candidates.length} 個——各來源擷取尚未實作，所以目前是 0）`);
