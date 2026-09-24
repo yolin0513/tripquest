@@ -16,7 +16,7 @@
 import path from 'node:path';
 
 // ---------- 底線（R2）：不論改了什麼，每版都跑 ----------
-export const BASELINE = ['affectedtest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest'];
+export const BASELINE = ['affectedtest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest', 'gatelint'];   // gatelint：推送閘的壞寫法掃描（共用慣例 v9 §5.16），不論改了什麼每版都跑
 
 // ---------- 放大器（R4） ----------
 // imgtest：案例 ②（v1.41）就是 trip.js 的畫面結構改動讓它紅的（修訂 1-C）
