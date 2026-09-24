@@ -54,6 +54,27 @@ yes(hit.length >= 2, `使用者回報的那句抓得到（${hit.length} 條紅�
 yes(!flagsFor('泡完湯再喝碗熱雞湯，這天過得很慢。').length, '正常的句子不會被誤判');
 yes(!flagsFor('走一圈羅東夜市，邊走邊吃最過癮。').length, '兩段式的正常句子不會被誤判');
 yes(flagsFor('向溫暖的宜蘭說再見').length === 0, '「向 X 說再見」是對的，不該被抓');
+// 每一條紅旗都要有自己的樣本（2026-09-24 盤點實測：原本只有上面那一句，碰得到 8 條裡的 3 條；
+// 把「連續標點」那條弄壞，塞進句型庫的連續標點就放行了）。新增紅旗卻沒給樣本 → 這一條紅。
+const FLAG_SAMPLES = {
+  '「說再見」前面缺介詞（要「向／跟 X 說再見」）': '溫暖的宜蘭說再見',
+  '「道別」前面缺介詞': '在宜蘭道別',
+  '「說不再見」語序不通': '宜蘭說不再見',
+  '地點直接接動詞，像新聞標題（缺「在／去」）': '夜市漫步',
+  '四段以上用逗號硬串，是清單不是句子': '泡湯，喝湯，看海，散步',
+  '括號/引號是空的（替換失敗）': '這裡（）很好',
+  '連續標點': '好吃，，再來',
+  '句子開頭或結尾是標點': '，好吃',
+};
+yes(FLAGS.length > 0 && FLAGS.every((f) => f.why in FLAG_SAMPLES),
+  `前置：${FLAGS.length} 條紅旗每一條都有樣本`, '沒有樣本的：' + FLAGS.filter((f) => !(f.why in FLAG_SAMPLES)).map((f) => f.why).join('；'));
+const brokenFlags = [];
+for (const f of FLAGS) {
+  const s = FLAG_SAMPLES[f.why];
+  const got = s !== undefined && flagsFor(s).includes(f);
+  if (!got) brokenFlags.push(f.why);
+  yes(got, `對照組：「${s}」抓得到紅旗「${f.why}」`);
+}
 
 // ---------- 靜態句型庫全部展開 ----------
 console.log('\n— 靜態句型庫（全部展開，不抽樣）—');
@@ -88,7 +109,15 @@ for (const [k, v] of Object.entries(ph.mustQuest)) {
     }
   }
 }
-yes(!bad.length, `${total} 句全部展開、零紅旗`, bad.slice(0, 5).join('\n   '));
+// 母體不能是空的，而且要等於從句型庫算出來的句數（2026-09-24 盤點實測：句型庫清空時，
+// 原本「0 句全部展開、零紅旗」照樣打勾）。應有句數另外從資料算，不從上面的迴圈數。
+const themeLines = Object.values(ph.themes || {}).reduce((n, v) => n + ['blurb', 'questTitles', 'questHints'].reduce((m, k) => m + (v[k] || []).length, 0), 0);
+const expectTotal = themeLines * NAMES.length + Object.keys(ph.mustQuest || {}).length * 2 * NAMES.length;
+yes(Object.keys(ph.themes || {}).length > 0 && Object.keys(ph.mustQuest || {}).length > 0 && total > 0 && total === expectTotal,
+  `前置：句型庫不是空的（主題 ${Object.keys(ph.themes || {}).length} 個、必吃 ${Object.keys(ph.mustQuest || {}).length} 個），展開了 ${total} 句＝應有 ${expectTotal} 句`);
+// 有紅旗壞了，「零紅旗」這個結論就不成立：不印肯定句
+if (brokenFlags.length) yes(false, `有 ${brokenFlags.length} 條紅旗的對照組沒過（${brokenFlags.join('；')}）——不下「零紅旗」的結論`);
+else if (total > 0 && total === expectTotal) yes(!bad.length, `${total} 句全部展開、零紅旗`, bad.slice(0, 5).join('\n   '));
 
 // ---------- composeBlurb：沒有必吃項時不能吐出半截句子 ----------
 console.log('\n— 沒有必吃項的食物景點 —');
