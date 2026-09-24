@@ -2,6 +2,8 @@
 // 本機全過不代表線上正確 —— SW 快取、CSP、檔案有沒有真的上去都只在這裡才看得到。
 // 什麼時候跑：**手動**，改了匯入行程表的流程、推上去之後跑一次（sweep 不涵蓋這條流程）。打正式站，不進 npm test。
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import puppeteer from 'puppeteer';
 
 const BASE = 'https://yolin0513.github.io/tripquest/';
@@ -37,6 +39,15 @@ try {
   yes(await clickText('button', '匯入行程表'), '線上：進階區有匯入按鈕，按得下去');
   await page.waitForSelector('.imp-src', { timeout: 15000 });
   ok('線上：來源選單開得起來（新模組真的部署上去了）');
+  // 來源的登記＋孤兒檢查（2026-09-24：原本只驗「直接打字」，線上其實有 3 種）：線上出現的每一種來源都要在
+  // SOURCES 裡、而且下面真的有驗；多出一種沒登記的就紅（以後新增來源不會默默沒人驗）
+  const SOURCES = ['直接打字', '拍照片', '選 PDF'];
+  const onPage = await page.evaluate(() => [...document.querySelectorAll('.imp-src .imp-src-t')].map((e) => e.textContent.trim()));
+  const unregistered = onPage.filter((t) => !SOURCES.some((s) => t.includes(s)));
+  const missing = SOURCES.filter((s) => !onPage.some((t) => t.includes(s)));
+  yes(onPage.length > 0 && !unregistered.length && !missing.length,
+    `線上：匯入來源 ${onPage.length} 種都登記、都有驗（${onPage.join('、')}）`,
+    `沒登記的：${unregistered.join('、') || '無'}；登記了但線上沒有的：${missing.join('、') || '無'}`);
 
   yes(await clickText('.imp-src', '直接打字'), '線上：選「直接打字」');
   await page.waitForSelector('textarea.mono', { timeout: 15000 });
@@ -99,6 +110,36 @@ try {
 
   // 純文字流程不該碰到任何 AI 服務
   yes(!outbound.some((u) => /api.anthropic.com|texttospeech.googleapis.com/.test(u)), '線上：純文字流程沒有連到 AI 服務', outbound.filter((u) => /api.anthropic.com|texttospeech.googleapis.com/.test(u)).join(' '));
+
+  // 照片、PDF 兩條路：沒有 AI 金鑰的瀏覽器裡，選了檔案之後要走到「照片需要文字辨識」的說明，而且不連 AI 服務。
+  // （真正的辨識要金鑰，線上驗不到——這裡驗的是「兩個入口都接得上、沒金鑰時會講清楚、不會偷偷送出去」。）
+  const TINY = {
+    '拍照片': ['tq-probe.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')],
+    '選 PDF': ['tq-probe.pdf', Buffer.from('%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n')],
+  };
+  for (const src of ['拍照片', '選 PDF']) {
+    const [name, bytes] = TINY[src];
+    const file = path.join(os.tmpdir(), name);
+    fs.writeFileSync(file, bytes);
+    await page.goto(BASE + '#/new', { waitUntil: 'networkidle0', timeout: 60000 });
+    await page.waitForSelector('.page.form', { timeout: 30000 });
+    await page.evaluate(() => { document.querySelector('details').open = true; });
+    await clickText('button', '匯入行程表');
+    await page.waitForSelector('.imp-src', { timeout: 15000 });
+    const before = outbound.length;
+    const [chooser] = await Promise.all([
+      page.waitForFileChooser({ timeout: 15000 }).catch((e) => ({ err: e.message })),
+      clickText('.imp-src', src),
+    ]);
+    // 前置：選檔視窗真的開了（情境造出來了），才驗後面
+    yes(chooser && !chooser.err, `線上：選「${src}」→ 選檔視窗真的打開了（前置）`, chooser && chooser.err);
+    if (!chooser || chooser.err) continue;
+    await chooser.accept([file]);
+    const helped = await page.waitForFunction(() => document.body.textContent.includes('照片需要文字辨識'), { timeout: 15000 }).then(() => true, () => false);
+    yes(helped, `線上：「${src}」選了檔案、這台沒有 AI 金鑰 → 出現「照片需要文字辨識」的說明`);
+    yes(!outbound.slice(before).some((u) => /api\.anthropic\.com/.test(u)), `線上：「${src}」沒有把檔案送去 AI 服務`);
+    fs.unlinkSync(file);
+  }
 
   const realErrs = errs.filter((e) => !/favicon|net::ERR_(INTERNET|NAME)/.test(e));
   yes(realErrs.length === 0, '線上：沒有 JS 例外或主控台錯誤', realErrs.join(' | '));
