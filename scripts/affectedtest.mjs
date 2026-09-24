@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges } from './affected.mjs';
+import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges, ORPHAN_RE, ORPHAN_OK, findOrphans } from './affected.mjs';
 import { loadRepo } from './run-affected.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -322,6 +322,22 @@ console.log('\n[T16] 改推送閘 → 挑中 pushgatetest');
     const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', f, '--dry'], { cwd: ROOT, encoding: 'utf8' });
     yes(p.status === 0 && /^ {2}pushgatetest\s+←/m.test(p.stdout), `真實入口 run-affected --files ${f}：挑中 pushgatetest`, p.stdout.split('\n').filter((l) => /←/.test(l)).join(' | '));
   }
+}
+
+// ---------- 孤兒檢查：像檢查的腳本沒登記進鏈（2026-09-24 盤點實測：沒登記的新測試永遠不會跑、也沒有警告）----------
+console.log('\n[T17] 孤兒檢查');
+{
+  const scriptNames = fs.readdirSync(path.join(ROOT, 'scripts')).filter((f) => /\.m?js$/.test(f)).map((f) => f.replace(/\.m?js$/, ''));
+  const looks = scriptNames.filter((n) => ORPHAN_RE.test(n));
+  yes(looks.length >= 40 && names.length >= 40, `前置：scripts/ 底下像檢查的 ${looks.length} 支、鏈上 ${names.length} 支（母體不是空的）`);
+  // 對照組：一支合成的新測試沒登記 → 必須被報出來；一條過期的例外 → 必須被報出來（同一個函式）
+  const syn = findOrphans([...scriptNames, 'zzbrandnewtest'], names);
+  yes(syn.orphans.includes('zzbrandnewtest'), '對照組：合成的新測試 zzbrandnewtest 沒登記進鏈 → 被報成孤兒', JSON.stringify(syn.orphans));
+  const synStale = findOrphans(scriptNames, names, { ...ORPHAN_OK, zzgonetest: '這支檔不存在' });
+  yes(synStale.stale.includes('zzgonetest'), '對照組：例外清單裡的檔不存在 → 被報成過期的例外', JSON.stringify(synStale.stale));
+  const real = findOrphans(scriptNames, names);
+  yes(real.orphans.length === 0, `真實的 scripts/：沒有孤兒（像檢查卻沒進鏈、也沒登記理由的）`, '孤兒：' + real.orphans.join('、'));
+  yes(real.stale.length === 0, `登記的例外 ${Object.keys(ORPHAN_OK).length} 條都還有效（檔在、而且真的不在鏈裡）`, '過期：' + real.stale.join('、'));
 }
 
 console.log(`\n${process.exitCode ? '✗ 有失敗' : '✓ 全部通過'}（${pass} 項）`);

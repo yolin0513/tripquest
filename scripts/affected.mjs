@@ -102,6 +102,24 @@ export function parseChain(pkg, exists) {
   });
 }
 
+// ---------- 孤兒檢查（2026-09-24，共用慣例 v9 §5.2 登記制的另一半）----------
+// 鏈是登記制：沒登記進 package.json test 的測試，挑選器和完整的鏈都**永遠不會跑它、也沒有任何警告**（盤點實測）。
+// 所以反過來查：scripts/ 底下名字看起來是檢查的（test／lint／check／validate／scan），不在鏈裡就報出來，
+// 除非列在 ORPHAN_OK 並寫理由。例外過期（檔不在了、或已經進鏈）也報，免得例外清單變成默默的豁免。
+export const ORPHAN_RE = /(test|lint|check|validate|scan)/i;
+export const ORPHAN_OK = {
+  livetest: '打正式站（共用慣例 §5.6：打真網路的不進 npm test）；手動跑',
+  'livecheck-import': '打正式站；接在 npm run sweep 後面，每版推送後跑',
+  'prepush-scan': '推送閘自己呼叫的公開前自查；行為由 pushgatetest 驗',
+};
+// scriptNames：scripts/ 底下 .mjs／.js 的檔名（不含副檔名）；chainNames：鏈上的名字
+export function findOrphans(scriptNames, chainNames, ok = ORPHAN_OK) {
+  const inChain = new Set(chainNames), have = new Set(scriptNames);
+  const orphans = scriptNames.filter((n) => ORPHAN_RE.test(n) && !inChain.has(n) && !(n in ok)).sort();
+  const stale = Object.keys(ok).filter((n) => !have.has(n) || inChain.has(n)).sort();
+  return { orphans, stale };
+}
+
 // ---------- 直接引用 ----------
 // 從測試腳本的文字裡撈出 repo 內的路徑：'/js/store.js'（page.evaluate 裡的動態 import）、
 // '../js/merge.js'、'server/index.mjs'（spawn 的伺服器）、'js/views'（整個目錄）、
