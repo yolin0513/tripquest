@@ -129,6 +129,20 @@ try {
     await mk('羅東夜市', 2, 1, { stayMin: 90 });
     return { tid, lunch, after };
   });
+  // 前置（F3，2026-09-24）：情境真的造出來了——直接讀回存進去的資料，不經過 App 的檢查器。
+  // 原本沒有這一條：把「重疊」那組行程改成不重疊時，要等到後面畫面等 20 秒逾時才紅、而且講不出原因。
+  const seeded = await page.evaluate(async (o) => {
+    const s = await import('./js/store.js');
+    const L = s.get(o.lunch), A = s.get(o.after);
+    const d2 = s.spotsOf(o.tid).filter((x) => x.day === 2);
+    return { lunchEnd: L && L.startMin + L.stayMin, afterStart: A && A.startMin, sameDay: !!(L && A && L.day === 1 && A.day === 1), d2: d2.length, d2NoTime: d2.every((x) => x.startMin == null) };
+  }, ids);
+  const seededOk = seeded.sameDay && seeded.lunchEnd > seeded.afterStart && seeded.d2 === 2 && seeded.d2NoTime;
+  yes(seededOk,
+    `前置：第 1 天真的重疊（午餐到 ${seeded.lunchEnd / 60} 點、下一站 ${seeded.afterStart / 60} 點開始），第 2 天 ${seeded.d2} 站都沒填時間`,
+    JSON.stringify(seeded));
+  // yes() 只記紅、不會停；情境沒造出來時後面的畫面斷言都沒有意義，在這裡停下
+  if (!seededOk) throw new Error('前置不成立，停下：UI 那一段的情境沒造出來');
 
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/plan`, { waitUntil: 'networkidle0' });
