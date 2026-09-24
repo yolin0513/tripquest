@@ -20,18 +20,26 @@ let pass = 0;
 const ok = (m) => { pass++; console.log('✓ ' + m); };
 const fail = (m, x) => { console.error('✗ ' + m + (x ? '\n   ' + x : '')); process.exitCode = 1; };
 const yes = (c, m, x) => (c ? ok(m) : fail(m, x));
+// 硬的前置：情境沒造出來就記一條紅、並停下——後面「讀不到／不是 HTML」這種斷言在情境不存在時恆真，
+// 不准讓它們接著印出肯定句（2026-09-24 盤點實測：建立情境那一步被吞錯時，這兩段在真的有漏洞時照樣全綠）。
+const must = (c, m, x) => { if (c) { ok(m); return; } fail(m, x); throw new Error('前置不成立，停下：' + m); };
+const waitFor = async (fn, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await fn()) return true; await sleep(100); } return !!(await fn()); };
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 
 try {
   // ---------- 1. LAN server 靜態檔白名單（本輪最嚴重的漏洞）----------
   console.log('\n— LAN server 不能被拿去讀祕鑰檔 —');
-  // 先讓伺服器產生 state.json（有群組祕鑰）
-  await fetch(`http://localhost:${API}/push?g=aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee`, {
+  // 先讓伺服器產生 state.json（有群組祕鑰）。失敗不能吞：沒有這個檔，「讀不到祕鑰檔」就恆真。
+  const setup = await fetch(`http://localhost:${API}/push?g=aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee`, {
     method: 'POST', headers: { authorization: 'Bearer ' + 'a'.repeat(32), 'content-type': 'application/json' },
     body: JSON.stringify({ records: [{ id: 'x1', type: 'trip', title: '祕密行程', updatedAt: Date.now() }] }),
-  }).catch(() => {});
-  await sleep(400);
+  });
+  const STATE = ROOT + 'server/data/state.json';
+  const stateText = async () => { try { return await readFile(STATE, 'utf8'); } catch { return ''; } };
+  // 前置要驗到「萬一被讀到，下面的判斷認得出來」：檔在，而且內容帶著判斷用的祕鑰標記
+  const hasSecret = await waitFor(async () => /syncSecret|"secret"/.test(await stateText()));
+  must(setup.ok && hasSecret, `前置：伺服器真的寫出了帶祕鑰的 state.json（建立回 ${setup.status}、祕鑰標記在檔裡：${hasSecret}）`);
   const probes = [
     ['/server/data/state.json', '小寫路徑'],
     ['/SERVER/data/state.json', '大寫路徑（Windows/macOS 檔案系統不分大小寫）'],
@@ -59,11 +67,15 @@ try {
   // ---------- 2. blob 型別不能是 HTML ----------
   console.log('\n— 上傳的「照片」只能是圖片 —');
   const g2 = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff', sec2 = 'b'.repeat(32);
-  await fetch(`http://localhost:${API}/blob/deadbeef12345678?g=${g2}`, {
+  // 上傳失敗不能吞：沒傳上去的話拿回來的是 404，「型別不是 HTML」就恆真
+  const put = await fetch(`http://localhost:${API}/blob/deadbeef12345678?g=${g2}`, {
     method: 'PUT', headers: { authorization: 'Bearer ' + sec2, 'x-content-type': 'text/html' },
     body: new Blob(['<script>alert(1)</script>']),
-  }).catch(() => {});
+  });
   const got = await fetch(`http://localhost:${API}/blob/deadbeef12345678?g=${g2}`, { headers: { authorization: 'Bearer ' + sec2 } });
+  const body2 = await got.text();
+  must(put.ok && got.status === 200 && body2.includes('<script>alert(1)</script>'),
+    `前置：那份「宣稱是 HTML」的內容真的傳上去、也拿得回來（上傳回 ${put.status}、取回 ${got.status}）`);
   const ct = got.headers.get('content-type') || '';
   yes(!/text\/html/i.test(ct), `拿回來的型別不是 HTML（${ct}）—— 不然公開相簿的照片網址會變成可執行的頁面`);
 

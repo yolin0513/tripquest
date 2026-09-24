@@ -64,19 +64,25 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
 
   // 各匯出路徑
   const hits = {};
+  // 每一條匯出路徑都要真的跑到：丟錯＝這條路沒掃到，要記下來、算失敗，不能當成「無金鑰」
+  // （2026-09-24 盤點實測：原本兩個空 catch，shareURL 丟錯時照樣印「shareURL 皆無金鑰」）
+  const scanned = [], skipped = {};
   const scan = (label, str) => {
     const s = String(str);
+    if (!s) { skipped[label] = '取到空的'; return; }
+    scanned.push(label);
     if (s.includes('sk-ant-') || s.includes('AIza') || s.includes(fakeA) || s.includes(fakeG)) hits[label] = true;
   };
+  const tryScan = async (label, get) => { try { scan(label, await get()); } catch (e) { skipped[label] = String(e).slice(0, 120); } };
 
-  scan('exportRecords', JSON.stringify(store.exportRecords()));
-  scan('exportGroup', JSON.stringify(store.exportGroup(gid)));
-  try { scan('exportBundle', await blobText(await share.exportBundle(tid))); } catch (e) { hits['exportBundle_err'] = String(e); }
-  try { scan('exportCard', JSON.stringify(await identity.exportCard())); } catch (e) { hits['exportCard_err'] = String(e); }
-  try { scan('encodeCard', identity.encodeCard(await identity.exportCard())); } catch { /* */ }
+  await tryScan('exportRecords', () => JSON.stringify(store.exportRecords()));
+  await tryScan('exportGroup', () => JSON.stringify(store.exportGroup(gid)));
+  await tryScan('exportBundle', async () => blobText(await share.exportBundle(tid)));
+  await tryScan('exportCard', async () => JSON.stringify(await identity.exportCard()));
+  await tryScan('encodeCard', async () => identity.encodeCard(await identity.exportCard()));
 
   // 邀請連結
-  try { scan('shareURL', await share.shareURL(tid)); } catch { /* */ }
+  await tryScan('shareURL', () => share.shareURL(tid));
 
   // SW 快取的 key（不該有 api 主機）
   let swBad = [];
@@ -89,7 +95,7 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
     }
   }
 
-  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite };
+  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite, scanned, skipped };
 
   async function blobText(b) { return await b.text(); }
 }, FAKE_ANTHROPIC, FAKE_GOOGLE);
@@ -104,8 +110,20 @@ if (!result.adopted) { console.log('✗ adoptDeviceKey 沒有把金鑰與上限�
 if (!result.isolated) { console.log('✗ 新旅程的花費算到預設金鑰頭上了（應該各自獨立）'); ok = false; } else console.log('✓ 每趟各自記帳，不共用額度');
 if (!result.noOverwrite) { console.log('✗ 已有金鑰的旅程被預設金鑰覆蓋'); ok = false; } else console.log('✓ 已有自己金鑰的旅程不會被覆蓋');
 const leakKeys = Object.keys(result.hits);
+const skippedKeys = Object.keys(result.skipped);
+const EXPECTED = ['exportRecords', 'exportGroup', 'exportBundle', 'exportCard', 'encodeCard', 'shareURL'];
+if (skippedKeys.length) {
+  // 情境壞了：沒掃到的路徑不准被算進「無金鑰」
+  for (const k of skippedKeys) console.log(`✗ ${k} 沒有掃到（${result.skipped[k]}）——這一條路徑有沒有金鑰不知道`);
+  ok = false;
+}
 if (leakKeys.length) { console.log('✗ 金鑰洩漏於：', leakKeys.join(', ')); ok = false; }
-else console.log('✓ exportRecords / exportGroup / exportBundle / exportCard / encodeCard / shareURL 皆無金鑰');
+// 肯定句只在每一條路徑都真的掃到、而且都沒命中時才印，而且只列真的掃到的
+if (!leakKeys.length && !skippedKeys.length && EXPECTED.every((k) => result.scanned.includes(k))) {
+  console.log(`✓ ${result.scanned.join(' / ')} 皆無金鑰（${result.scanned.length} 條路徑都真的掃到）`);
+} else if (!leakKeys.length && !skippedKeys.length) {
+  console.log('✗ 掃到的路徑少於預期：' + EXPECTED.filter((k) => !result.scanned.includes(k)).join(', ')); ok = false;
+}
 if (result.swBad.length) { console.log('✗ SW 快取到 API 主機：', result.swBad); ok = false; }
 else console.log('✓ SW 快取無 anthropic / googleapis 主機');
 if (errs.length) { console.log('✗ pageerror：', errs); ok = false; }

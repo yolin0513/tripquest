@@ -27,10 +27,16 @@ const files = (await readdir(DIR)).filter((f) => f.endsWith('.json') && f !== 'i
 const allIds = new Set();
 let placeCount = 0;
 
+// 反方向也要查：index 指到的每一個城市檔都要在（2026-09-24 盤點實測：16 個城市檔全刪、只留 index，
+// 原本印「總計 0 個地點，0 個錯誤」照樣通過——任務只對得上這份資料才出題，資料沒了卻說通過）
+for (const [id, f] of cityFiles) if (f && !files.includes(f)) err(`${id}：index.json 指到的 ${f} 不存在`);
+
 for (const file of files) {
   const data = JSON.parse(await readFile(DIR + file, 'utf8'));
   if (data._meta?.schema !== 1) err(`${file}：_meta.schema 應為 1`);
   if (![...cityFiles.values()].includes(file)) err(`${file}：index.json 沒有指到這個檔`);
+  // places 必須是非空陣列（實測：欄位改名，那個城市的 12 個地點默默消失、照樣通過）
+  if (!Array.isArray(data.places) || !data.places.length) err(`${file}：沒有 places（不是陣列或是空的）——這個城市的地點讀不到`);
 
   for (const p of data.places || []) {
     placeCount++;
@@ -51,5 +57,8 @@ for (const file of files) {
   ok(`${file}：${(data.places || []).length} 個地點`);
 }
 
-console.log(`\n總計 ${placeCount} 個地點，${errs} 個錯誤`);
+// 「0 個地點」本身就是紅的：讀到的東西是空的，不能當成「沒有錯誤」
+if (!cityFiles.size) err('index.json 一個城市都沒有');
+if (!placeCount) err('總共讀到 0 個地點——資料不見了或讀不到');
+console.log(`\n總計 ${placeCount} 個地點（${files.length} 個城市檔、index 指到 ${cityFiles.size} 個），${errs} 個錯誤`);
 process.exit(errs ? 1 : 0);
