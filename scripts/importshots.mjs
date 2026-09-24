@@ -27,18 +27,25 @@ const LAST = fileURLToPath(new URL('../.logs/importshots.last.json', import.meta
 // 測試用：IMPORTSHOTS_FAIL_AT=k 讓它在第 k 張之前中斷（驗「每一張都是一個單位」用；只會讓結果更嚴，不會放行任何東西）
 const FAIL_AT = Number(process.env.IMPORTSHOTS_FAIL_AT || 0);
 const FIXTURE = fileURLToPath(new URL('./fixtures/yilan.txt', import.meta.url));
-const stop = (why) => {
+const stop = (why, kind = '來源不齊') => {
   console.error(`✗ ${why}`);
-  console.error(`擋下：來源不齊，一張都沒拍（screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}）`);
+  console.error(`擋下：${kind}，一張都沒換上（screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}）`);
   process.exit(1);
 };
+const OLD = FINAL + '.old';
+// 清理也要能失敗、不能中斷（2026-09-24 F8；JLPT、MealMate 都中過：暫存位置先放一個同名資料夾，清理去刪它、刪不掉、
+// 再丟一次例外吐堆疊）：只清這次自己建出來的東西；清不掉也點名，不再丟例外。
+const tryRm = async (p, label) => { try { await rm(p, { recursive: true, force: true }); return ''; } catch (e) { return `；${label} 清不掉（${e.code || e.message}），請自己刪`; } };
 if (!existsSync(FIXTURE)) stop('素材 scripts/fixtures/yilan.txt 不在');
 const RAW = readFileSync(FIXTURE, 'utf8');
 if (!RAW.trim()) stop('素材 scripts/fixtures/yilan.txt 是空的');
 if (!/\d{1,2}\s*[:：時]\s*\d{2}/.test(RAW)) stop('素材 scripts/fixtures/yilan.txt 裡沒有任何一行帶時間（看起來不是行程表）');
 const WEB = 5241;
-await rm(OUT, { recursive: true, force: true });
-await mkdir(OUT, { recursive: true });
+// 暫存位置、換上時用的 .old 位置一開始就有東西：不是這次建的，不動它、停下點名
+for (const [p, rel] of [[OUT, 'screenshots/_import.partial'], [OLD, 'screenshots/_import.old']]) {
+  if (existsSync(p)) stop(`暫存位置 ${rel} 已經有東西（不是這次建的，不動它）——確認後自己移掉再跑`, '暫存位置被占用');
+}
+try { await mkdir(OUT); } catch (e) { stop(`建不了暫存位置 screenshots/_import.partial（${e.code || e.message}）`, '寫檔失敗'); }
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
 await sleep(1400);
 
@@ -181,14 +188,30 @@ try {
   web.kill();
 }
 if (!process.exitCode && n === EXPECTED) {
-  await rm(FINAL, { recursive: true, force: true });
-  await rename(OUT, FINAL);
-  await mkdir(dirname(LAST), { recursive: true });
-  writeFileSync(LAST, JSON.stringify({ rows, at: new Date().toISOString() }));
-  console.log(`\n共 ${n} 張，換上 screenshots/_import/（舊的一起換掉）；確認頁 ${rows} 列記進 .logs/importshots.last.json`);
+  // 換上分三步，每一步失敗都能還原：舊的先改名成 .old（改名失敗 → 什麼都沒動）→ 新的換上（失敗 → 把 .old 改回來）→ 最後才刪 .old
+  let movedOld = false, note = '';
+  try {
+    if (existsSync(FINAL)) { await rename(FINAL, OLD); movedOld = true; }
+    await rename(OUT, FINAL);
+  } catch (e) {
+    if (movedOld) { try { await rename(OLD, FINAL); } catch (e2) { note += `；舊的 screenshots/_import.old 改不回來（${e2.code || e2.message}），請手動改回 screenshots/_import`; } }
+    note += await tryRm(OUT, '暫存位置 screenshots/_import.partial');
+    console.error(`✗ 換不上 screenshots/_import/（${e.code || e.message}）${note}`);
+    console.error(`擋下：寫檔失敗，沒有換上（screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}）`);
+    process.exit(1);
+  }
+  if (movedOld) note += await tryRm(OLD, '舊的 screenshots/_import.old');
+  try {
+    await mkdir(dirname(LAST), { recursive: true });
+    writeFileSync(LAST, JSON.stringify({ rows, at: new Date().toISOString() }));
+  } catch (e) {
+    console.error(`✗ 截圖已換上，但確認頁的列數寫不進 .logs/importshots.last.json（${e.code || e.message}）——下次「資料變少」會用舊的紀錄比`);
+    process.exitCode = 1;
+  }
+  console.log(`\n共 ${n} 張，換上 screenshots/_import/（舊的一起換掉）；確認頁 ${rows} 列${process.exitCode ? '沒有' : ''}記進 .logs/importshots.last.json${note}`);
 } else {
-  await rm(OUT, { recursive: true, force: true });
+  const note = await tryRm(OUT, '暫存位置 screenshots/_import.partial');
   if (!process.exitCode) console.error(`✗ 只拍了 ${n} 張、應該 ${EXPECTED} 張`);
-  console.error(`擋下：沒有換上，screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}`);
+  console.error(`擋下：沒有換上，screenshots/_import/ ${existsSync(FINAL) ? '維持上一次成功的內容' : '本來就沒有'}${note}`);
   process.exitCode = 1;
 }

@@ -14,7 +14,7 @@
 //
 // 用法（實作後）：node scripts/build-places.mjs tw-taipei
 
-import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
+import { mkdir, readFile, rename, open, unlink } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -29,10 +29,11 @@ if (!cityId) { console.error('用法：node scripts/build-places.mjs <cityId>');
 // 原本：不存在的城市當成「0 個地點」、照樣寫出 staging 檔、印 done 回 0；城市檔欄位改名／格式壞掉時當掉，
 // 錯誤沒講是哪個檔。缺任何一樣就停、一個檔都不寫——staging 維持上一次成功的輸出（App 或人讀到的仍是完整的那一份）。
 const stagingOut = STAGING + cityId + '.json';
-const stop = (why) => {
-  const prev = existsSync(stagingOut) ? `上一次的輸出還在（${new Date(statSync(stagingOut).mtimeMs).toISOString()}），沒有被換掉` : '沒有上一次的輸出';
+const stop = (why, kind = '來源不齊') => {
+  let prev = '沒有上一次的輸出';
+  try { if (existsSync(stagingOut)) prev = `上一次的輸出還在（${new Date(statSync(stagingOut).mtimeMs).toISOString()}），沒有被換掉`; } catch (e) { prev = `上一次的輸出讀不了狀態（${e.code || e.message}）`; }
   console.error(`✗ ${why}`);
-  console.error(`擋下：來源不齊，一個檔都沒寫（${prev}）`);
+  console.error(`擋下：${kind}，一個檔都沒寫（${prev}）`);
   process.exit(1);
 };
 let index;
@@ -60,8 +61,8 @@ if (existsSync(stagingOut)) {
   if (Number.isInteger(prev) && existing.places.length < prev) stop(`${cityId}（${F}）資料變少：上一次 ${prev} 個地點、這次 ${existing.places.length} 個`);
 }
 
-await mkdir(STAGING, { recursive: true });
-await mkdir(RAW, { recursive: true });
+try { await mkdir(STAGING, { recursive: true }); await mkdir(RAW, { recursive: true }); }
+catch (e) { stop(`${cityId}：建不了輸出資料夾（${e.code || e.message}：${e.path || ''}）——data/places/_staging 或 data/_raw 被同名的檔案佔住？`, '寫檔失敗'); }
 
 // --- 各來源（TODO：實作）---
 async function fromWikivoyage(cityName) { void cityName; return []; }        // See/Eat/Do listings
@@ -107,8 +108,26 @@ const candidates = [
 ];
 void pageviewTrend; void commonsImageFor; void sameSpot; void mergeInto;
 
-// 先寫暫存檔、寫完才換上：寫到一半失敗時，上一次成功的輸出不會被半份檔蓋掉
+// 先寫暫存檔、寫完才換上：寫到一半失敗時，上一次成功的輸出不會被半份檔蓋掉。
+// 清理也要能失敗、不能中斷（2026-09-24 F8；JLPT、MealMate 都中過同一個錯：暫存位置先放一個同名資料夾，清理程式去刪它、
+// 刪不掉、再丟一次例外，吐堆疊而不是設計好的訊息）：只清這次自己建出來的暫存檔；清不掉也點名，不再丟例外。
 const tmpOut = stagingOut + '.partial';
-await writeFile(tmpOut, JSON.stringify({ _meta: { generated: Date.now(), city: cityId, existingCount: existing.places.length }, candidates }, null, 2));
-await rename(tmpOut, stagingOut);
+const tmpRel = `data/places/_staging/${cityId}.json.partial`;
+if (existsSync(tmpOut)) stop(`${cityId}：暫存位置 ${tmpRel} 已經有東西（${statSync(tmpOut).isDirectory() ? '資料夾' : '檔案'}，不是這次寫的，不動它）——確認後自己移掉再跑`, '暫存位置被占用');
+let created = false;
+const cleanup = async () => {
+  if (!created) return '';
+  try { await unlink(tmpOut); return '，暫存檔已清掉'; } catch (e) { return `，暫存檔 ${tmpRel} 清不掉（${e.code || e.message}），請自己刪`; }
+};
+try {
+  const fh = await open(tmpOut, 'wx');       // wx：只能新建——建成功了才算自己的
+  created = true;
+  try { await fh.writeFile(JSON.stringify({ _meta: { generated: Date.now(), city: cityId, existingCount: existing.places.length }, candidates }, null, 2)); }
+  finally { await fh.close(); }
+} catch (e) {
+  stop(`${cityId}：寫不進暫存檔 ${tmpRel}（${e.code || e.message}）${await cleanup()}`, '寫檔失敗');
+}
+try { await rename(tmpOut, stagingOut); } catch (e) {
+  stop(`${cityId}：換不上 data/places/_staging/${cityId}.json（${e.code || e.message}）${await cleanup()}`, '寫檔失敗');
+}
 console.log(`done：data/places/_staging/${cityId}.json（候選 ${candidates.length} 個——各來源擷取尚未實作，所以目前是 0）`);
