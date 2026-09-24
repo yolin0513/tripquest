@@ -21,10 +21,10 @@
 //   E 推了卻沒更新（post-receive hook 把 main 退回舊值）→ 3、比對遠端那一關
 //   G 抓不到遠端（origin 指到不存在的地方）→ 4、「抓不到遠端」
 //   N 只刪不增的推送 → 0、推出去（「對不上就停」的檢查也要有正常情況放行的樣本，v9 §5.14）
-//   M 閘門改過、驗法還沒重跑（跟 scripts/pushgate.verified 登記的雜湊對不上）→ 5、自查都還沒開始（v9 §5.15 機器擋）
+//   M／M2／M3 三支閘門檔各自改過、驗法還沒重跑（跟 .logs/pushgate.verified 登記的雜湊對不上）→ 5、點名那一支、自查都還沒開始
 //   M0 沒有登記檔 → 5
 // 每個情境開始前 reset() 回到同一個起點；PUSHGATE_ORDER=reverse 或 shuffle:<種子> 換順序跑，結果要不變。
-// 全部通過（而且是預設順序）才把三支閘門檔的雜湊寫進 scripts/pushgate.verified——safe-push.sh 推送前拿它比對。
+// 全部通過（而且是預設順序）才把三支閘門檔的雜湊寫進 .logs/pushgate.verified（不進版控）——safe-push.sh 推送前拿它比對；有任何失敗就刪掉它。
 // 比對「是誰擋的」的樣式本身也先用已知的輸出驗過（§5.11 第二層）；印出實際執行的那份閘門的雜湊（第三層：
 // 突變時拿它確認跑到的真的是改壞的那一版）。
 import { execSync, spawnSync } from 'node:child_process';
@@ -34,6 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
 let pass = 0;
 const ok = (m) => { pass++; console.log('✓ ' + m); };
 const fail = (m, x) => { console.log('✗ ' + m + (x ? '\n   ' + x : '')); process.exitCode = 1; };
@@ -121,8 +122,11 @@ try {
   sh('git config core.autocrlf false');
   fs.mkdirSync(path.join(work, 'scripts'));
   for (const f of GATE) fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(work, 'scripts', f));
-  fs.writeFileSync(path.join(work, 'scripts', 'pushgate.verified'), regText(work));
-  sh('git add scripts');
+  // 登記放在不進版控的 .logs/（跟真的 repo 一樣）；.gitignore 擋掉它，reset() 的 git clean 才不會把它清掉
+  fs.writeFileSync(path.join(work, '.gitignore'), '.logs/\n');
+  fs.mkdirSync(path.join(work, '.logs'));
+  fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
+  sh('git add scripts .gitignore');
   commit('a.txt', 'base\nline2\nline3\n', 'base');
   sh(`git remote add origin "${bare}"`);
   sh('git push -q origin main');
@@ -309,19 +313,22 @@ try {
       yes(r.code === 4 && WHO.unreachable.test(r.out), `G 抓不到遠端 → 回 4、寫明「抓不到遠端」（實得 ${r.code}）`, r.out.slice(-300));
       untouched('G');
     }],
-    ['M', () => {
-      // 閘門改過、驗法還沒重跑（共用慣例 v9 §5.15：能做成機器擋的就不要靠人記得）
-      fs.appendFileSync(path.join(work, 'scripts', 'safe-push.sh'), '# 改過一行，還沒重跑 pushgatetest\n');
+    // M／M2／M3：三支閘門檔各自改過、驗法還沒重跑，都要擋、而且點名改的是哪一支（共用慣例 v9 §5.15：能做成機器擋的就不要靠人記得）
+    ...[['M', 'safe-push.sh', '#'], ['M2', 'prepush-scan.mjs', '//'], ['M3', 'pushgatetest.mjs', '//']].map(([id, f, c]) => [id, () => {
+      fs.appendFileSync(path.join(work, 'scripts', f), `${c} 改過一行，還沒重跑 pushgatetest\n`);
       commit('d.txt', 'clean2\n', 'clean2');
-      yes(sh('git hash-object scripts/safe-push.sh').trim() !== fs.readFileSync(path.join(work, 'scripts', 'pushgate.verified'), 'utf8').split('\n').find((l) => l.endsWith(' scripts/safe-push.sh')).split(' ')[0],
-        'M 前置：safe-push.sh 現在的雜湊跟登記的不一樣（情境成立）');
+      const reg = fs.readFileSync(path.join(work, '.logs', 'pushgate.verified'), 'utf8').split('\n').find((l) => l.endsWith(' scripts/' + f));
+      yes(!!reg && sh(`git hash-object scripts/${f}`).trim() !== reg.split(' ')[0],
+        `${id} 前置：${f} 現在的雜湊跟登記的不一樣（情境成立）`);
       const r = gate();
-      yes(r.code === 5 && WHO.unverified.test(r.out) && /scripts\/safe-push\.sh/.test(r.out) && !/新增行核對/.test(r.out),
-        `M 閘門改過、驗法沒重跑 → 回 5、點名 safe-push.sh、自查都還沒開始（實得 ${r.code}）`, r.out.slice(-300));
-      untouched('M');
-    }],
+      const others = GATE.filter((g) => g !== f);
+      yes(r.code === 5 && WHO.unverified.test(r.out) && new RegExp(`閘門沒有驗過（scripts/${f.replace('.', '\\.')} 改過`).test(r.out) && !/新增行核對/.test(r.out)
+        && !others.some((g) => r.out.includes(`scripts/${g} 改過`)),
+        `${id} 只改了 ${f}、驗法沒重跑 → 回 5、點名 ${f}（不是另外兩支）、自查都還沒開始（實得 ${r.code}）`, r.out.slice(-300));
+      untouched(id);
+    }]),
     ['M0', () => {
-      const regPath = path.join(work, 'scripts', 'pushgate.verified');
+      const regPath = path.join(work, '.logs', 'pushgate.verified');
       const had = fs.existsSync(regPath);
       fs.unlinkSync(regPath);
       commit('d.txt', 'clean2\n', 'clean2');
@@ -345,13 +352,15 @@ try {
   for (const [id, fn] of list) { reset(); fn(); }
 
   // 全部通過才登記被驗程式的雜湊（safe-push.sh 推送前比對，對不上就不推）。有 PUSHGATE_ORDER 時不登記：那是驗順序用的額外一跑。
+  // 登記在不進版控的 .logs/：換一台機器 clone 下來就沒有登記，第一次推送前一定要先跑這支（新環境正是最需要重跑的時候）。
   if (!process.exitCode && !order) {
     const reg = '# 推送閘的驗法（pushgatetest）全部通過時登記的雜湊。safe-push.sh 推送前比對，對不上就不推（共用慣例 v9 §5.15）。\n'
-      + '# 改了下面任何一支，就重跑 npm run pushgatetest；它全部通過才會更新這個檔，然後把這個檔一起 commit。\n'
+      + '# 不進版控。改了下面任何一支、或換了一台機器，就重跑 npm run pushgatetest；全部通過才會寫這個檔，有任何失敗就刪掉它。\n'
       + GATE.map((f) => `${sh(`git hash-object scripts/${f}`, ROOT).trim()} scripts/${f}`).join('\n') + '\n';
-    fs.writeFileSync(path.join(ROOT, 'scripts', 'pushgate.verified'), reg);
-    console.log('  已登記驗過的閘門雜湊：scripts/pushgate.verified');
-  } else if (process.exitCode) console.log('  有失敗：不更新 scripts/pushgate.verified');
+    fs.mkdirSync(path.join(ROOT, '.logs'), { recursive: true });
+    fs.writeFileSync(REG_REAL, reg);
+    console.log('  已登記驗過的閘門雜湊：.logs/pushgate.verified');
+  }
 
   console.log('\n推送閘測試結束');
 } catch (e) {
@@ -359,4 +368,7 @@ try {
 } finally {
   fs.rmSync(base, { recursive: true, force: true });
 }
+// 有任何失敗（含例外）就刪掉登記，不只是「不更新」：閘門檔沒動、驗法卻失敗，最可能是執行環境變了——那正是該停下的時候
+if (process.exitCode && fs.existsSync(REG_REAL)) { fs.unlinkSync(REG_REAL); console.log('  有失敗：已刪掉 .logs/pushgate.verified（下次推送會被擋，直到驗法重新全過）'); }
+else if (process.exitCode) console.log('  有失敗：.logs/pushgate.verified 本來就不在');
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

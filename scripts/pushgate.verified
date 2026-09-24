@@ -1,5 +1,0 @@
-# 推送閘的驗法（pushgatetest）全部通過時登記的雜湊。safe-push.sh 推送前比對，對不上就不推（共用慣例 v9 §5.15）。
-# 改了下面任何一支，就重跑 npm run pushgatetest；它全部通過才會更新這個檔，然後把這個檔一起 commit。
-73826c566ca6395eda746643e603ce3d6ca1485f scripts/safe-push.sh
-f5c7314d385d5be49429d8a6af845d9a8e5acdbf scripts/prepush-scan.mjs
-684f1ace13444359553a4114bc5034bb2b138392 scripts/pushgatetest.mjs
