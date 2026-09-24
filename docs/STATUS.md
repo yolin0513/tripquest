@@ -270,11 +270,13 @@ pushgatetest」那件待議的有了證據）。
   就不下「零紅旗」的結論。
 - **T7 孤兒檢查**（`affectedtest` [T17]，每版都跑）：`scripts/` 底下名字像檢查的（test／lint／check／validate／scan）不在鏈裡、
   也沒登記理由就紅；登記的例外 3 條（`livetest`、`livecheck-import`、`prepush-scan`，各附理由），例外過期也紅。
-- **T10 推送閘第二批**：`pushgatetest` 全過時把三支閘門檔的雜湊寫進 `scripts/pushgate.verified`（進版控），`safe-push.sh`
-  推送前比對，**沒登記或對不上回 5**（自查都還沒開始）。**改了 `safe-push.sh`／`prepush-scan.mjs`／`pushgatetest.mjs` 任何一支，
-  要先跑 `npm run pushgatetest`（全過才會更新登記），再把 `scripts/pushgate.verified` 一起 commit**，不然推不出去。
-  `pushgatetest` 改成每個情境從同一個起點 `reset()` 開始（59 項）；加 N（只刪不增 → 0）、M（閘門改過 → 5）、M0（沒登記 → 5）；
-  `PUSHGATE_ORDER=reverse`／`shuffle:<種子>` 換順序跑結果不變（倒序、兩組種子都 59 項、0 紅；拿掉 `reset()` 就紅）。
+- **T10 推送閘第二批**：`pushgatetest` 全過時把三支閘門檔的雜湊寫進 **`.logs/pushgate.verified`（不進版控）**，有任何失敗
+  （含例外）就**刪掉**它；`safe-push.sh` 推送前比對，**沒登記或對不上回 5**（自查都還沒開始）。**改了 `safe-push.sh`／
+  `prepush-scan.mjs`／`pushgatetest.mjs` 任何一支、或換了一台機器（新 clone 沒有 `.logs/`），推送前都要先跑
+  `npm run pushgatetest`**，不然推不出去。（2026-09-24 統籌者驗收要求改的：原本登記檔放 `scripts/` 進版控、失敗只是不更新——
+  新 clone 不跑驗法也推得出去、換環境驗法失敗時登記還在；四家與統籌者都放 `.logs/`。）
+  `pushgatetest` 改成每個情境從同一個起點 `reset()` 開始（65 項）；加 N（只刪不增 → 0）、M／M2／M3（三支閘門檔各自改過 → 5、
+  只點名改的那一支）、M0（沒登記 → 5）；`PUSHGATE_ORDER=reverse`／`shuffle:<種子>` 換順序跑結果不變。
 - **T13 盤點表補的格子**（都在暫存複本實測）：
   - 成對驗第二半：`validate-places` 壞樣本造不出來 → 回 4、點名每個城市檔；`zhtest` 句型庫清空 → 前置紅、不印「零紅旗」；
     `secret-leak-test` 金鑰沒存進去 → 前置紅（見 T4 那條補的）；挑選器把 `pushgatetest` 放進底線 → [T16] 前置紅；
@@ -307,6 +309,65 @@ pushgatetest」那件待議的有了證據）。
   - 踩到的（我自己的驗法）：`importshots` 的實驗腳本每格開頭把 `scripts/` 整個還原，突變的 patch 被還原掉、「改壞的那一份」
     根本沒跑——每格印出實際在跑的雜湊之後才發現；`node -e` 裡的 `/\?.*/` 反斜線被吃掉（§5.5 又一次）；清理時對 `data/_raw`
     下了 `rm -rf` 沒先看內容（推論原本不存在、是那次執行才建的，證明不了）。
+#### 三段證據（2026-09-24；對話回報會丟，這裡是進 repo 的紀錄）
+
+**做法**：一律在 git worktree 暫存複本切到**明確的 commit**，外殼先印被改檔的雜湊、patch 沒套上就不跑、一開始先刪舊輸出；
+突變在暫存複本裡改壞後跑，並印出實際在跑的那份的雜湊。「舊版是舊的」＝下表：舊版裡確實還有舊寫法（或還沒有新寫法）、
+新舊雜湊不同。① 修正前放行 ② 修正後擋、理由指到造的情境 ③ 拿掉修上去的判斷 → 只有那一種回到放行。
+
+| 件 | 舊版 → 新版（雜湊） | 證明是舊版（標記在舊／新出現幾次） |
+|---|---|---|
+| T1 audittest | cb94ae3 → a025a4f（45603229→d4918ebe） | `}).catch(() => {});` 2／0 |
+| T2 secret-leak | cb94ae3 → a025a4f（f0913150→8a813e9d） | `catch { /* */ }` 2／0 |
+| T3 validate-places | cb94ae3 → a025a4f（2f1f0a67→6cb4e900） | 「不存在」0／1 |
+| T4 secret-leak | bb0848e → 329860c（8a813e9d→459cc337） | `const ctrl = {` 0／1 |
+| T5 validate-places | bb0848e → 68e038d（6cb4e900→c1e9676d） | `function controlFor` 0／1 |
+| T6 zhtest | bb0848e → db4da9b（4ae897b0→163dad51） | `FLAG_SAMPLES` 0／4 |
+| T7 affected | 7ac9e9c → 125e644（08a5e39f→951df14d） | `findOrphans` 0／1 |
+| T8 affected | 865cc9b → 61e4957（5159bace→08a5e39f） | `scripts\/…\.(?:sh\|mjs)` 0／1 |
+| T9 livecheck／sweep | 865cc9b → 61e4957（版號）、61e4957 → 7ac9e9c（sweep 掛鉤） | `tripquest-v1.36.0` 1／0；`livecheck-import.mjs` 在 sweep 0／2 |
+| T10 safe-push | 125e644 → ed165d6（c3d75dd2→73826c56） | `pushgate.verified` 0／3 |
+| T10 修 | 71c2251 → 8e1876c（73826c56→df515c00） | `.logs/pushgate.verified` 0／3；`scripts/pushgate.verified` 進版控 1／0 |
+| build-places | 8c70807 → d621e63（ca85c9cd→00000452） | 「來源不齊」0／1 |
+| importshots | 8c70807 → d621e63（8f8754be→2199cc4b） | 「一張都沒拍」0／1 |
+| audittest 母體 | 8c70807 → 10b0c37（d4918ebe→a07d9f13） | `ALLOWED_TOP` 0／2 |
+| livecheck 來源 | 10b0c37 → 3afb28c（fbef54ce→7d7ca593） | `const SOURCES` 0／1 |
+| checktest 前置 | 1ec8450 → 74f4e62（ad3df67a→88de825b） | 「前置：第 1 天真的重疊」0／1 |
+
+- **T1**：樣本＝伺服器白名單漏開 `server/`＋建祕鑰檔那一步弄壞；① 全綠（前置查過祕鑰檔不在）② 紅在前置、停下，「讀不到」沒印
+  ③ 舊版就是拿掉防線的版本。照片型別那段同形：上傳弄壞 ① 全綠 ② 紅在前置。
+- **T2**：`shareURL` 丟錯；① 全綠、還印「shareURL 皆無金鑰」② 紅、「沒有掃到」、肯定句 0 次。
+- **T3**：16 個城市檔全刪（前置：剩 0、index 指到 16）；① 回 0「0 個地點 0 個錯誤」② 17 個錯。`places` 改名 ① 回 0 少 12 個 ② 紅。
+- **T4**：真的洩漏（前置：匯出字串帶金鑰字首）＋掃描式弄壞；① 回 0、印「皆無金鑰」② 回 1、四種金鑰形狀的對照組沒過
+  ③（8e1876c 上重跑）拿掉對照組判斷 → 回 0、印「皆無金鑰」。T13 第二半：金鑰沒存進去 → 原本前置紅了還印「皆無金鑰」→ 補
+  `ed990da` 後 0 次；拿掉補的判斷 → 又印 1 次。
+- **T5**：樣本 A＝tag 檢查弄壞＋錯誤 tag：① 回 0 ② 回 4、16 個城市檔點名 tagUnknown ③ 只拿對照組 → 被次數核對接住；只拿次數
+  核對 → 被對照組接住；兩個一起 → 回 0。樣本 B＝`hot`→`hott`：① 回 0 ② 回 1 點名 jp-nara/nara-park 的 hott ③ 回 0。
+  12 條規則各自單獨拿掉：每次只紅自己那一條、16 個城市全紅。
+- **T6**：A＝連續標點那條弄壞＋句型庫塞連續標點：① 回 0 ② 紅在那條紅旗的樣本、不印「零紅旗」③（8e1876c）回 0、印「924 句零紅旗」。
+  B＝句型庫清空：① 印「✓ 0 句…零紅旗」② 前置紅、那句 0 次 ③（8e1876c）又打勾。
+- **T7**：新增沒登記的 `zzbrandnewtest.mjs`；① 回 0 ② 回 1、點名 zzbrandnewtest ③（8e1876c）回 0。
+- **T8**：`run-affected --dry --files scripts/safe-push.sh`；① 挑中 pushgatetest 0 次 ② 1 次 ③ 樣式改回舊的 → [T16] 兩條紅。
+  另：新舊兩版對 167 個檔各算一次，挑法有變的只有推送閘兩個檔、都是多挑。
+- **T9**：① 舊版原樣必紅在寫死的版號 ② 19 項綠；本機版號跟線上不同 → sweep 回 1 點名 livecheck-import ③（8e1876c）拿掉 sweep
+  的掛鉤 → sweep 回 0、沒提到 livecheck。
+- **T10**：閘門改一行沒重跑：① 推得出去 ② 回 5 點名 safe-push.sh、假遠端沒動 ③ 拿掉比對 → 推得出去。只刪不增：過度嚴格的
+  自查 ① 舊版 pushgatetest 50 項全綠 ② 紅在 N ③ 拿掉 N → 全綠。換順序：倒序／shuffle:7／shuffle:1234 都 0 紅；拿掉 reset → 紅。
+- **T10 修**：新 clone 不跑驗法直接推：① 舊版推得出去（登記在 repo 裡）② 回 5「沒有登記檔」。換環境（git 作者信箱換掉、三支
+  閘門檔沒動）驗法失敗：① 舊版登記還在、推得出去 ② 登記被刪、回 5 ③ 拿掉「失敗就刪」→ 登記還在、推得出去。
+  M2／M3：閘門只比對 safe-push.sh 一支 → 只紅 M2、M3。
+- **build-places**（16 個城市 × 4 種）：① 城市檔被刪、places 空陣列 16/16 回 0 並把 staging 換成空結果 ② 三種壞法 16/16 回 1、
+  舊輸出留著、✗ 行點名城市檔 ③ 拿掉「places 非空」→ 空陣列那一種 16/16 回到放行。
+- **importshots**：① 素材空／沒時間／跑到一半失敗都已經蓋掉一部分舊截圖；成功時舊截圖留著 ② 三種失敗 `_import/` 不變、成功剛好
+  13 張 ③ 失敗也換上 → 跑到一半失敗時 `_import/` 被換成 8 張。
+- **audittest 母體**：伺服器多開放 `.logs/`（前置：真的吐得出合成祕鑰檔）① 全綠 ② 點名 `/.logs/leak.json` ③ 母體縮回固定清單
+  → 被「至少 10 條」前置接住；兩道一起拿掉 → 全綠。判斷式弄壞＋漏開 node_modules：① 全綠 ② 紅在對照組 ③ 拿掉對照組 → 全綠。
+- **livecheck 來源**（攔截 App 的 `import.js`）：選檔入口壞了 ① 全綠 ② 紅在兩個前置 ③ 拿掉照片／PDF 那段 → 全綠；多一種沒登記
+  的來源 ① 全綠 ② 點名「語音輸入」③ 拿掉孤兒檢查 → 全綠。`/pull` 404 放行：強制 `/pull` 404 → 放行並印出；強制
+  `manifest.webmanifest` 404 → 紅；拿掉放行 → 紅。
+- **checktest 前置**：行程改成不重疊 ① 等 20 秒逾時、講不出原因 ② 紅在前置（「午餐到 13.5 點、下一站 14 點開始」）並停下
+  ③ 拿掉前置 → 回到逾時。真的漏洞（檢查一律回 0 個問題）照樣紅。
+
 - **另外看到的**：`npm run sweep`（正式站）今天 4 次裡有 1 次紅在「分帳：畫面幾乎空白（0 字）」，其餘 3 次同一項 197 字——偶發，
   跟這一批的改動無關（那一次改的是 `sweep` 最後接 `livecheck-import` 的段落，重跑同一個版本就綠）。
 
@@ -1793,7 +1854,7 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
   它依序做：① `scripts/prepush-scan.mjs` 掃**遠端還沒有的每一個 commit** 的新增行、commit 訊息、作者與提交者的名字信箱（2026-09-24 起；範圍照
   `ls-remote` 問到的遠端實際狀態算，不照本機追蹤分支）（金鑰或 token、email、本機使用者名稱、
   磁碟機或家目錄路徑；每一類先在合成樣本上命中）→ ② `git push` → ③ 比對遠端 main ＝ 本機 HEAD。回傳值：0 已推送；
-  1 自查有命中；4 自查的檢查器壞了；2 push 失敗；3 推了卻沒更新；5 閘門改過、驗法還沒重跑（跟 `scripts/pushgate.verified` 對不上，T10）——一看就知道是哪一關。它抓不到個資，**新增的文件行
+  1 自查有命中；4 自查的檢查器壞了；2 push 失敗；3 推了卻沒更新；5 閘門改過、驗法還沒重跑（跟 `.logs/pushgate.verified`（不進版控；新 clone 要先跑 `npm run pushgatetest`）對不上，T10）——一看就知道是哪一關。它抓不到個資，**新增的文件行
   還是要自己看一遍**（共用慣例附錄 A）。新 Session 不需要準備任何東西：使用者名稱是執行當下從環境變數讀的，
   email 的對照組是當場組的合成字串，腳本裡沒有不能公開的樣式或黑名單。
   **為什麼長這樣**（今天四個 App 各踩一次的同一類坑）：推送流程原本是「跑自查、看輸出、另外推」，擋的是人眼；
