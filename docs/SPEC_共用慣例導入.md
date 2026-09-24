@@ -1,6 +1,7 @@
 # SPEC_共用慣例導入 — TripQuest（第 1 批）
 
 > 狀態：**已執行**（2026-09-19，與本檔同一個 commit：`docs(conventions): 導入共用慣例 v1（副本＋CLAUDE.md 指向）`；commit 無法在自身內容寫進自己的 hash，請以 `git log -- docs/CONVENTIONS.md` 查）。
+> 〔2026-09-24 註：本檔寫的推送做法已作廢，推送一律用本 App 的推送閘門（見 `CLAUDE.md`）。〕
 > 撰寫：Fable 統籌 Session，2026-09-19。依據：統籌工作區的 `SPEC_共用慣例.md` v2（Yolin 2026-09-19 拍板，七項全數照案；三代理投票 5 題 3:0）。
 > 這是 docs-only 的工作：**不 bump `sw.js` VERSION、不部署 Worker、不算一版。**
 
