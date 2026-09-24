@@ -67,11 +67,21 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
   // 每一條匯出路徑都要真的跑到：丟錯＝這條路沒掃到，要記下來、算失敗，不能當成「無金鑰」
   // （2026-09-24 盤點實測：原本兩個空 catch，shareURL 丟錯時照樣印「shareURL 皆無金鑰」）
   const scanned = [], skipped = {};
+  const detect = (s) => s.includes('sk-ant-') || s.includes('AIza') || s.includes(fakeA) || s.includes(fakeG);
+  // 掃描式自己的對照組：四種金鑰形狀各一段合成樣本必須抓到、乾淨的字串必須不抓到（同一個 detect）。
+  // 2026-09-24 盤點實測：原本把掃描式弄壞，真的洩漏也照樣全綠——沒有任何東西會發現掃描式壞了。
+  const ctrl = {
+    'sk-ant- 字首': detect('{"k":"sk-ant-' + 'x'.repeat(20) + '"}'),
+    'AIza 字首': detect('key=AIza' + 'y'.repeat(35)),
+    '假 Anthropic 金鑰全文': detect(JSON.stringify({ v: fakeA.slice(0) })),
+    '假 Google 金鑰全文': detect(JSON.stringify({ v: fakeG.slice(0) })),
+    '乾淨的字串不算': !detect('{"title":"祕鑰測試","region":"台北"}'),
+  };
   const scan = (label, str) => {
     const s = String(str);
     if (!s) { skipped[label] = '取到空的'; return; }
     scanned.push(label);
-    if (s.includes('sk-ant-') || s.includes('AIza') || s.includes(fakeA) || s.includes(fakeG)) hits[label] = true;
+    if (detect(s)) hits[label] = true;
   };
   const tryScan = async (label, get) => { try { scan(label, await get()); } catch (e) { skipped[label] = String(e).slice(0, 120); } };
 
@@ -95,7 +105,7 @@ const result = await page.evaluate(async (fakeA, fakeG) => {
     }
   }
 
-  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite, scanned, skipped };
+  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite, scanned, skipped, ctrl };
 
   async function blobText(b) { return await b.text(); }
 }, FAKE_ANTHROPIC, FAKE_GOOGLE);
@@ -109,6 +119,10 @@ if (!result.deviceStored) { console.log('✗ 裝置預設金鑰沒有正確存�
 if (!result.adopted) { console.log('✗ adoptDeviceKey 沒有把金鑰與上限複製給新旅程'); ok = false; } else console.log('✓ 新旅程複製到預設金鑰與花費上限');
 if (!result.isolated) { console.log('✗ 新旅程的花費算到預設金鑰頭上了（應該各自獨立）'); ok = false; } else console.log('✓ 每趟各自記帳，不共用額度');
 if (!result.noOverwrite) { console.log('✗ 已有金鑰的旅程被預設金鑰覆蓋'); ok = false; } else console.log('✓ 已有自己金鑰的旅程不會被覆蓋');
+const ctrlBad = Object.entries(result.ctrl || {}).filter(([, v]) => !v).map(([k]) => k);
+if (!result.ctrl || Object.keys(result.ctrl).length !== 5) { console.log('✗ 掃描式的對照組沒有跑（檢查器壞了）'); ok = false; }
+else if (ctrlBad.length) { console.log('✗ 掃描式的對照組沒過：' + ctrlBad.join('、') + '——掃描式壞了，下面「無金鑰」的結論不算數'); ok = false; }
+else console.log('✓ 掃描式的對照組：四種金鑰形狀都抓得到、乾淨的字串不會被誤抓');
 const leakKeys = Object.keys(result.hits);
 const skippedKeys = Object.keys(result.skipped);
 const EXPECTED = ['exportRecords', 'exportGroup', 'exportBundle', 'exportCard', 'encodeCard', 'shareURL'];
@@ -119,10 +133,10 @@ if (skippedKeys.length) {
 }
 if (leakKeys.length) { console.log('✗ 金鑰洩漏於：', leakKeys.join(', ')); ok = false; }
 // 肯定句只在每一條路徑都真的掃到、而且都沒命中時才印，而且只列真的掃到的
-if (!leakKeys.length && !skippedKeys.length && EXPECTED.every((k) => result.scanned.includes(k))) {
+const missing = EXPECTED.filter((k) => !result.scanned.includes(k) && !(k in result.skipped));
+if (missing.length) { console.log('✗ 掃到的路徑少於預期（沒丟錯、也沒掃到）：' + missing.join(', ')); ok = false; }
+if (!ctrlBad.length && result.ctrl && !leakKeys.length && !skippedKeys.length && !missing.length) {
   console.log(`✓ ${result.scanned.join(' / ')} 皆無金鑰（${result.scanned.length} 條路徑都真的掃到）`);
-} else if (!leakKeys.length && !skippedKeys.length) {
-  console.log('✗ 掃到的路徑少於預期：' + EXPECTED.filter((k) => !result.scanned.includes(k)).join(', ')); ok = false;
 }
 if (result.swBad.length) { console.log('✗ SW 快取到 API 主機：', result.swBad); ok = false; }
 else console.log('✓ SW 快取無 anthropic / googleapis 主機');
