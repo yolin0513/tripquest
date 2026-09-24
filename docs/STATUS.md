@@ -246,6 +246,16 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 `pushgatetest`**，只有底線的 `gatelint` 會跑——它只掃壞寫法、不驗閘門行為（`--files` 實測；之前「讓挑選器挑中
 pushgatetest」那件待議的有了證據）。
 
+**統籌者裁決後已修（2026-09-24）**：
+- **#9 挑選器**：原因是撈引用的樣式 `REF_RE` 不認 `scripts/` 底下的檔，`pushgatetest` 檔頭的「涵蓋的程式：scripts/safe-push.sh…」
+  撈不到。樣式加認 `scripts/<名稱>.sh|.mjs`。新舊兩版對 repo 裡 167 個 js／server／workers／scripts 檔各算一次，挑法有變的
+  **只有這兩個檔**（多挑 `pushgatetest`、沒有少挑任何一支）。`affectedtest` 加 [T16]：從真實入口 `run-affected --files` 改這兩個檔
+  都要挑中 `pushgatetest`（前置：它在鏈裡、不在底線）；樣式改回舊的 → 兩條紅。
+- **#7 `livecheck-import`**：選「修到能用」（`sweep` 不涵蓋線上的匯入流程）。版號不再寫死，改成「線上＝本機 `sw.js` 的
+  VERSION」；對正式站實跑 19 項綠，把本機版號改成跟線上不同 → 紅在版本那一條。什麼時候跑：**手動**，改了匯入流程、推上去
+  之後（寫在檔頭）。
+- `SPEC_個資普查.md` 補加註（統籌者裁定，v9 清單漏列）。
+
 ## 部署
 
 | 項目 | 位置 |
