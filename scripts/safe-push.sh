@@ -10,7 +10,7 @@
 #   3 推完了但遠端不等於本機（推了卻沒更新）——停
 #   5 閘門本身沒驗過：safe-push.sh／prepush-scan.mjs／pushgatetest.mjs／verified-reg.mjs 在 HEAD 裡的版本
 #     跟 .logs/pushgate.verified 登記的雜湊對不上（或沒有登記）——不推。新 clone 一律要先跑 npm run pushgatetest
-#   6 F8 的驗法沒驗過：這次要推的 commit 動到 build-places.mjs／importshots.mjs／f8verify.mjs，而它們在 HEAD 裡的版本
+#   6 F8 的驗法沒驗過：這次要推的 commit 動到 build-places.mjs／importshots.mjs／f8verify.mjs／verified-reg.mjs，而它們在 HEAD 裡的版本
 #     跟 .logs/f8.verified 登記的對不上（或沒有登記）——不推。先跑 npm run f8verify。沒動到就不看這一關
 #
 # 為什麼長這樣（2026-09-23 實測踩到的）：
@@ -26,7 +26,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 # 閘門本身驗過了沒（共用慣例 v9 §5.15：「改過就要重跑」能做成機器擋的就不要靠人記得）：
-# pushgatetest 全部通過時把這三支的雜湊寫進 .logs/pushgate.verified（不進版控、驗法失敗就刪）；沒有或對不上 → 回 5，不推。
+# pushgatetest 全部通過時把下面四支的雜湊寫進 .logs/pushgate.verified（不進版控、驗法失敗就刪）；沒有或對不上 → 回 5，不推。
 REG=".logs/pushgate.verified"   # 不進版控：換一台機器 clone 下來就沒有，第一次推送前一定要先跑 pushgatetest
 if [ ! -f "$REG" ]; then
   echo "✗ 沒有 $REG（閘門從沒驗過、或登記檔不見了）——先跑 npm run pushgatetest"
@@ -63,7 +63,7 @@ RANGE="${REMOTE:+$REMOTE..}HEAD"
 
 # F8 的建置腳本與它的驗法（F9）：這次要推的 commit（每一個，不只兩端）動到其中任何一支，才看 .logs/f8.verified；
 # 看的時候整組都要對得上 HEAD 裡的版本。驗法要跑四五分鐘、還會開瀏覽器，沒動到就不擋。
-F8_GUARD="scripts/build-places.mjs scripts/importshots.mjs scripts/f8verify.mjs"
+F8_GUARD="scripts/build-places.mjs scripts/importshots.mjs scripts/f8verify.mjs scripts/verified-reg.mjs"
 F8REG=".logs/f8.verified"
 if ! git log --format= --name-only "$RANGE" > "$TMP/touched" 2> "$TMP/touched.err"; then
   cat "$TMP/touched.err"; echo "✗ 列不出這次要推的 commit 動到哪些檔"; echo "擋下：檢查器壞了（動到的檔）"; exit 4

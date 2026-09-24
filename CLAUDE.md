@@ -28,7 +28,7 @@ STATUS.md 開頭有「目前進行中／交接」一節，先看那節掌握現�
    `sweep`）由 Yolin 指定；回報不准把部分測試寫成全綠。**動到 `js/merge.js` 或 `workers/` 時：Worker
    先部署、客戶端後推**（反過來會造成永久分歧，v1.73.2 實測）。**動到推送閘（`safe-push.sh`／`prepush-scan.mjs`／
    `pushgatetest.mjs`／`verified-reg.mjs`）或新 clone：commit 之後先跑 `npm run pushgatetest`；動到 `build-places.mjs`／
-   `importshots.mjs`／`f8verify.mjs`：commit 之後先跑 `npm run f8verify`**——不然推送閘回 5／6（F9）。
+   `importshots.mjs`／`f8verify.mjs`／`verified-reg.mjs`：commit 之後先跑 `npm run f8verify`**——不然推送閘回 5／6（F9）。
 
 ## 授權邊界
 

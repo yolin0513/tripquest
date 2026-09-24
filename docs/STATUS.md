@@ -282,7 +282,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 不要自己 `git push`；見下面「推送閘」）→ curl 確認線上 VERSION → `npm run sweep` → 截圖放
 （推送之後那幾步**用 `&&` 接在推送閘後面**、不接管線：`bash scripts/safe-push.sh && <curl 確認線上 VERSION> && npm run sweep`——
 推送閘任何一關失敗，後面的線上確認就不會跑，免得對著沒推上去的舊版驗、看起來還是綠的；共用慣例 v7 §2.5）
-（F9，2026-09-24：動到 `scripts/build-places.mjs`、`scripts/importshots.mjs`、`scripts/f8verify.mjs` 的版本，**commit 之後、推送之前
+（F9，2026-09-24：動到 `scripts/build-places.mjs`、`scripts/importshots.mjs`、`scripts/f8verify.mjs`、`scripts/verified-reg.mjs` 的版本，**commit 之後、推送之前
 先跑 `npm run f8verify`**（約 4.5 分鐘），不然推送閘回 6；動到推送閘那四支，同樣先 commit 再跑 `npm run pushgatetest`，不然回 5）
 `screenshots/features/` ＋鏡像資料夾。**全面檢測（完整 `npm test`＋`sweep`）由 Yolin 指定才跑**
 （2026-09-19 裁示）；回報與 commit 訊息**不准把部分測試寫成「全綠」**，要寫「底線＋受影響 N/M 支綠」，
@@ -371,7 +371,8 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
   突變「範圍改讀本機追蹤分支」只紅那一種。2026-09-24 再加兩種：假信箱只在 commit 訊息裡→1（來源是 commit 訊息）；
   作者信箱是假信箱→1（來源是作者欄）；訊息與作者欄解析出 0 筆→4（故障時不放行）；`++` 開頭的命中行加了又刪→1；只解出一部分、訊息遺失、新增行抽多了→4；T10 起每個情境從同一個起點重設、可換順序，加只刪不增→0、閘門改過或沒登記→5。F9 起再加：改過的閘門已 commit、工作區改回原樣→5；
   動到 F8 那幾支而沒登記、登記後又改、較早的 commit 動到、改過的已 commit 工作區改回原樣→6，沒動到→不看這一關；登記前的檢查
-  （工作區≠HEAD、沒 commit、工作區沒有→不登記）。現在 95 項。以下是 v7 時的七種。
+  （工作區≠HEAD、沒 commit、工作區沒有→不登記）。F10 起再加：假 git 讓「取不到就停」真的觸發（Q1、Q2、Q4–Q7，假 git 自帶對照組）、
+  只改共用模組→6（P7）、regAction 與登記前遇到 git 取不到（V5、V6）。現在 121 項。以下是 v7 時的七種。
   用本機 bare repo 當遠端（不碰 GitHub），七種情況都比對**回傳值、擋下的是哪一關哪一類、遠端有沒有被動到**：乾淨→0；
   新增行命中→1（email 那一類）；兩個 commit 只有前一個有問題→1（掃每一個 commit）；讀不到使用者名稱→4；某一類的
   搜尋式壞了（對照組沒命中）→4；遠端拒收（`pre-receive` hook）→2；推了卻沒更新（`post-receive` hook 退回舊值）→3。
@@ -1737,7 +1738,7 @@ Q1 一致選 **(B) 推算出來的時刻不寫進資料**。
   它依序做：① `scripts/prepush-scan.mjs` 掃**遠端還沒有的每一個 commit** 的新增行、commit 訊息、作者與提交者的名字信箱（2026-09-24 起；範圍照
   `ls-remote` 問到的遠端實際狀態算，不照本機追蹤分支）（金鑰或 token、email、本機使用者名稱、
   磁碟機或家目錄路徑；每一類先在合成樣本上命中）→ ② `git push` → ③ 比對遠端 main ＝ 本機 HEAD。回傳值：0 已推送；
-  1 自查有命中；4 自查的檢查器壞了；2 push 失敗；3 推了卻沒更新；5 閘門改過、驗法還沒重跑（閘門四支的工作區或 HEAD 跟 `.logs/pushgate.verified`（不進版控；新 clone 要先跑 `npm run pushgatetest`）對不上，T10、F9）；6 這次要推的 commit 動到 F8 那三支，而 HEAD 裡的版本跟 `.logs/f8.verified` 對不上（先 commit 再跑 `npm run f8verify`，F9）——一看就知道是哪一關。登記一律是「驗法全過、而且工作區＝HEAD」時才寫（`scripts/verified-reg.mjs`）。它抓不到個資，**新增的文件行
+  1 自查有命中；4 自查的檢查器壞了；2 push 失敗；3 推了卻沒更新；5 閘門改過、驗法還沒重跑（閘門四支的工作區或 HEAD 跟 `.logs/pushgate.verified`（不進版控；新 clone 要先跑 `npm run pushgatetest`）對不上，T10、F9）；6 這次要推的 commit 動到 F8 那四支（build-places、importshots、f8verify、共用模組 verified-reg），而 HEAD 裡的版本跟 `.logs/f8.verified` 對不上（先 commit 再跑 `npm run f8verify`，F9）——一看就知道是哪一關。登記一律是「驗法全過、而且工作區＝HEAD」時才寫（`scripts/verified-reg.mjs`）。它抓不到個資，**新增的文件行
   還是要自己看一遍**（共用慣例附錄 A）。新 Session 不需要準備任何東西：使用者名稱是執行當下從環境變數讀的，
   email 的對照組是當場組的合成字串，腳本裡沒有不能公開的樣式或黑名單。
   **為什麼長這樣**（今天四個 App 各踩一次的同一類坑）：推送流程原本是「跑自查、看輸出、另外推」，擋的是人眼；

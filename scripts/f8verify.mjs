@@ -25,7 +25,7 @@ import { headProblems, headHash, writeReg, dropReg, regAction } from './verified
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG = path.join(ROOT, '.logs', 'f8.verified');
-export const F8_FILES = ['scripts/build-places.mjs', 'scripts/importshots.mjs', 'scripts/f8verify.mjs'];
+export const F8_FILES = ['scripts/build-places.mjs', 'scripts/importshots.mjs', 'scripts/f8verify.mjs', 'scripts/verified-reg.mjs'];   // verified-reg：f8verify 靠它決定登記（共用模組也要守，補充說明五第 4 點）
 const ONLY = process.env.F8VERIFY_ONLY || '';
 const WT = path.join(ROOT, '.logs', 'f8-wt');
 const t0 = Date.now();

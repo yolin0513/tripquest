@@ -30,6 +30,7 @@
 //   P4 沒動到 F8 那幾支、也沒有 F8 登記 → 0、推出去（沒動到就不看這一關，§5.14 正常情況要放行）
 //   P5 動到 f8verify.mjs 的是較早的 commit、最新的 commit 很乾淨 → 6（範圍裡每一個 commit 都算）
 //   P6 比照 M4：改過的 build-places.mjs 已 commit、工作區又改回登記時的樣子 → 6（F8 那一關也比 HEAD）
+//   P7 只改共用模組 verified-reg.mjs（它也在 F8 守護清單裡）、閘門登記已重驗 → 6
 //   F10「取不到就停」的分支，用 PATH 最前面的假 git 讓那個子指令真的失敗（假 git 自己先跑對照組）：
 //   Q1 git log 失敗（列不出動到的檔）→ 4「動到的檔」；Q2 遠端的 commit 本機沒有、fetch 又失敗 → 4「範圍」；
 //   Q4 推完那次 ls-remote 失敗 → 3「讀不到遠端」；Q5 hash-object 失敗 → 5、工作區取不到；Q6 rev-parse 失敗 → 5、HEAD 取不到；
@@ -173,7 +174,8 @@ try {
 
   // ---------- 共用的起點：假遠端＋本機都有 base（含閘門三支檔與驗過的登記）----------
   const GATE = ['safe-push.sh', 'prepush-scan.mjs', 'pushgatetest.mjs', 'verified-reg.mjs'];
-  const F8 = ['build-places.mjs', 'importshots.mjs', 'f8verify.mjs'];   // safe-push.sh 的 F8_GUARD（假遠端裡放替身，內容不重要）
+  const F8 = ['build-places.mjs', 'importshots.mjs', 'f8verify.mjs'];   // F8 的建置腳本與驗法（假遠端裡放替身，內容不重要）
+  const F8ALL = [...F8, 'verified-reg.mjs'];   // safe-push.sh 的 F8_GUARD：共用模組 verified-reg 也守（用真的那一份，它同時是閘門檔）
   const regText = (dir) => '# 測試用的登記（pushgatetest 自己造的）\n'
     + GATE.map((f) => `${sh(`git hash-object scripts/${f}`, dir).trim()} scripts/${f}`).join('\n') + '\n';
   sh(`git init -q --bare "${bare}"`, base);
@@ -229,7 +231,7 @@ try {
   const untouched = (id) => yes(remoteHead() === BASE, `${id} 遠端沒被動到`);
   const F8REG = path.join(work, '.logs', 'f8.verified');
   const f8Reg = () => fs.writeFileSync(F8REG, '# 測試用的 F8 登記\n'
-    + F8.map((f) => `${sh(`git rev-parse HEAD:scripts/${f}`).trim()} scripts/${f}`).join('\n') + '\n');
+    + F8ALL.map((f) => `${sh(`git rev-parse HEAD:scripts/${f}`).trim()} scripts/${f}`).join('\n') + '\n');
   // ---------- F10：假 git（只讓指定的子指令失敗、其他照常交給真的 git）----------
   // 放在 PATH 最前面，只在測試時用；正式的 safe-push.sh 裡沒有任何「設了某個變數就故意失敗」的後門。
   // FAKEGIT_NTH=n：那個子指令第 n 次（含）以後才失敗（例如「推送前的 ls-remote 照常、推完之後那一次失敗」）。
@@ -496,7 +498,7 @@ try {
     }],
     ['P4', () => {
       commit('d.txt', 'clean2\n', 'clean2');
-      yes(!fs.existsSync(F8REG) && !sh(`git log --format= --name-only ${BASE}..HEAD`).split('\n').some((l) => F8.some((f) => l === 'scripts/' + f)),
+      yes(!fs.existsSync(F8REG) && !sh(`git log --format= --name-only ${BASE}..HEAD`).split('\n').some((l) => F8ALL.some((f) => l === 'scripts/' + f)),
         'P4 前置：沒有 F8 登記、這次的 commit 沒動到 F8 那幾支');
       const r = gate();
       yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && !/^F8 驗法：/m.test(r.out) && remoteHead() === localHead(),
@@ -525,6 +527,18 @@ try {
       yes(r.code === 6 && WHO.f8File('build-places.mjs').test(R(r.out)),
         `P6 改過的 build-places.mjs 已 commit、工作區改回原樣 → 回 6、點名 build-places（實得 ${r.code}）`, r.out.slice(-300));
       untouched('P6');
+    }],
+    ['P7', () => {
+      // 共用模組 verified-reg.mjs 也在 F8 守護清單裡（補充說明五第 4 點）：只改它、閘門登記已經重驗過（回 5 那一關過得去），
+      // 沒有 F8 登記 → F8 那一關照樣要擋
+      touch('verified-reg.mjs', 'p7');
+      fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
+      yes(!fs.existsSync(F8REG) && sh('git show --format= --name-only HEAD').split('\n').includes('scripts/verified-reg.mjs'),
+        'P7 前置：這次的 commit 只動到 verified-reg.mjs、閘門登記已跟著更新、沒有 F8 登記');
+      const r = gate();
+      yes(r.code === 6 && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)) && !WHO.unverified.test(R(r.out)),
+        `P7 只改共用模組 verified-reg.mjs → 回 6（不是 5）（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('P7');
     }],
     // ---- F10：「取不到就停」的分支，用假 git 讓那個子指令真的失敗 ----
     ['Q1', () => {
