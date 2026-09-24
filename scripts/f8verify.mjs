@@ -15,7 +15,7 @@
 // - 鎖檔的情境要 Windows 的 PowerShell（Node 開檔不會擋改名）；鎖檔的程序自己等哨兵檔消失才放開、正常結束，這裡從不殺程序。
 //
 // 環境變數：F8VERIFY_ONLY=bp 或 is 只跑其中一個矩陣（給突變用；只跑一半時一律不登記）。
-// 耗時：約 25 分鐘（build-places 約 5 分鐘、importshots 約 20 分鐘；2026-09-24 實測）。
+// 耗時：272 秒（2026-09-24 在 1b55171 實測，181 格）。
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

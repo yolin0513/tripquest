@@ -29,6 +29,7 @@
 //   P3 F8 登記相符之後，又改了 importshots.mjs 並 commit → 6、點名 importshots（不是另外兩支）
 //   P4 沒動到 F8 那幾支、也沒有 F8 登記 → 0、推出去（沒動到就不看這一關，§5.14 正常情況要放行）
 //   P5 動到 f8verify.mjs 的是較早的 commit、最新的 commit 很乾淨 → 6（範圍裡每一個 commit 都算）
+//   P6 比照 M4：改過的 build-places.mjs 已 commit、工作區又改回登記時的樣子 → 6（F8 那一關也比 HEAD）
 //   V1–V4 登記前的檢查（verified-reg.mjs）：乾淨 → 可登記；工作區有沒 commit 的改動、還沒 commit、工作區沒有 → 不登記、
 //     點名那一支、舊的登記一起刪掉
 // 每個情境開始前 reset() 回到同一個起點；PUSHGATE_ORDER=reverse 或 shuffle:<種子> 換順序跑，結果要不變。
@@ -451,6 +452,21 @@ try {
       yes(r.code === 6 && /^擋下：F8 驗法沒有驗過（沒有登記檔）/m.test(R(r.out)),
         `P5 動到 F8 的是較早的 commit → 照樣回 6（實得 ${r.code}）`, r.out.slice(-300));
       untouched('P5');
+    }],
+    ['P6', () => {
+      // 比照 M4：F8 登記之後，改過的 build-places.mjs 已經 commit、工作區又改回登記時的樣子 → 推出去的是改過的，要擋
+      f8Reg();
+      const p = path.join(work, 'scripts', 'build-places.mjs');
+      const orig = fs.readFileSync(p);
+      touch('build-places.mjs', 'p6');
+      fs.writeFileSync(p, orig);
+      const reg = fs.readFileSync(F8REG, 'utf8').split('\n').find((l) => l.endsWith(' scripts/build-places.mjs'));
+      yes(!!reg && sh('git hash-object scripts/build-places.mjs').trim() === reg.split(' ')[0] && sh('git rev-parse HEAD:scripts/build-places.mjs').trim() !== reg.split(' ')[0],
+        'P6 前置：工作區的 build-places.mjs 跟 F8 登記相同、HEAD 裡的不同（情境成立）');
+      const r = gate();
+      yes(r.code === 6 && WHO.f8File('build-places.mjs').test(R(r.out)),
+        `P6 改過的 build-places.mjs 已 commit、工作區改回原樣 → 回 6、點名 build-places（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('P6');
     }],
     ['V', () => {
       // 登記前的檢查（verified-reg.mjs）：工作區要跟 HEAD 一模一樣才登記；不符合就不寫、舊的一起刪

@@ -62,7 +62,7 @@ RANGE="${REMOTE:+$REMOTE..}HEAD"
 [ -z "$REMOTE" ] && RANGE="HEAD"
 
 # F8 的建置腳本與它的驗法（F9）：這次要推的 commit（每一個，不只兩端）動到其中任何一支，才看 .logs/f8.verified；
-# 看的時候整組都要對得上 HEAD 裡的版本。驗法要跑二十幾分鐘，沒動到就不擋。
+# 看的時候整組都要對得上 HEAD 裡的版本。驗法要跑四五分鐘、還會開瀏覽器，沒動到就不擋。
 F8_GUARD="scripts/build-places.mjs scripts/importshots.mjs scripts/f8verify.mjs"
 F8REG=".logs/f8.verified"
 if ! git log --format= --name-only "$RANGE" > "$TMP/touched" 2> "$TMP/touched.err"; then
