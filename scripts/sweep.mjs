@@ -268,4 +268,16 @@ try {
   if (web) web.kill();
 }
 
+// 線上的匯入行程表流程（sweep 本身不涵蓋）：跑正式站時接著跑 livecheck-import，沒過就算巡檢的一項問題。
+// 2026-09-24 接進來：它原本不在任何固定流程裡，寫死的版號過期後永遠紅、也沒人發現。
+if (!LOCAL) {
+  const { spawnSync } = await import('node:child_process');
+  console.log('\n— 線上匯入流程（scripts/livecheck-import.mjs）—');
+  const r = spawnSync(process.execPath, [new URL('./livecheck-import.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], { encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  for (const l of out.split('\n').filter((x) => /^✗|項通過/.test(x))) console.log('  ' + l);
+  if (r.status === 0 && /項通過/.test(out)) pass++;
+  else bad(`線上匯入流程驗證（livecheck-import）沒過（回傳 ${r.status}）`);
+}
+
 console.log(`\n${pass} 項通過` + (problems.length ? `，${problems.length} 項有問題：\n` + problems.map((p) => '  · ' + p).join('\n') : ''));
