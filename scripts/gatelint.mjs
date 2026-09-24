@@ -74,6 +74,10 @@ export const EXCEPTIONS = [
     why: '斷言閘門的輸出裡「沒有別的擋下理由」；用到的每一個樣式都先在 SAMPLE 對照組上證明抓得到' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /includes\(fakeMail\(\)\) && !sh\('git show HEAD --format='\)\.includes\(fakeMail\(\)\)/,
     why: 'H 的前置：同一條斷言先確認假信箱真的在 commit 訊息裡，再確認它不在新增行裡' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(had && !fs\.existsSync\(regPath\)/,
+    why: 'M0 的前置：同一條斷言先確認登記檔原本在（had），刪掉之後才確認它不在' },
+  { file: 'scripts/safe-push.sh', kind: 'absent', match: /^echo "✗ 沒有 \$REG（閘門從沒驗過、或登記檔不見了）/,
+    why: '給人看的錯誤訊息裡剛好有「不見了」三個字，不是斷言' },
 ];
 
 // 第二道對照組：本 App 歷史上真的出過事的原文（逐字照抄，出處是那一版的檔；§5.3：真實資料只當第二道）。

@@ -8,6 +8,7 @@
 #   4 自查的檢查器壞了（某一類的對照組沒命中、無法檢查、或讀不到範圍）——不推
 #   2 git push 失敗（被拒、連不上）——停
 #   3 推完了但遠端不等於本機（推了卻沒更新）——停
+#   5 閘門本身沒驗過：safe-push.sh／prepush-scan.mjs／pushgatetest.mjs 跟 scripts/pushgate.verified 登記的雜湊對不上——不推
 #
 # 為什麼長這樣（2026-09-23 實測踩到的）：
 # - 不接管線。管線的回傳值是最後一個指令的：`git push ... | tail -1` 在 push 失敗時照樣回 0，後面的線上確認
@@ -20,6 +21,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+# 閘門本身驗過了沒（共用慣例 v9 §5.15：「改過就要重跑」能做成機器擋的就不要靠人記得）：
+# pushgatetest 全部通過時把這三支的雜湊寫進 scripts/pushgate.verified；現在的雜湊對不上 → 回 5，不推。
+REG="scripts/pushgate.verified"
+if [ ! -f "$REG" ]; then
+  echo "✗ 沒有 $REG（閘門從沒驗過、或登記檔不見了）——先跑 npm run pushgatetest"
+  echo "擋下：閘門沒有驗過（沒有登記檔）"; exit 5
+fi
+for f in scripts/safe-push.sh scripts/prepush-scan.mjs scripts/pushgatetest.mjs; do
+  if LINE="$(grep -F " $f" "$REG")"; then WANT="${LINE%% *}"; else WANT=""; fi
+  HAVE="$(git hash-object "$f")"
+  if [ "$WANT" != "$HAVE" ]; then
+    echo "✗ $f 改過了（登記 ${WANT:-沒有}、現在 $HAVE）——先跑 npm run pushgatetest，全過之後把 $REG 一起 commit"
+    echo "擋下：閘門沒有驗過（$f 改過、驗法還沒重跑）"; exit 5
+  fi
+done
 
 # 遠端現在的 main——**問遠端的實際狀態，不讀本機的追蹤分支**（共用慣例 v8 §2.5）：上一次「推了卻沒更新」之後，
 # 本機的追蹤分支會跑在遠端前面；照它算範圍，那個 commit 會落在範圍外，下一次就不經檢查被帶出去。
