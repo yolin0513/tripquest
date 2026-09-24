@@ -7,6 +7,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { rm, readFile } from 'node:fs/promises';
+import fs from 'node:fs';
+import path from 'node:path';
 import puppeteer from 'puppeteer';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -40,27 +42,49 @@ try {
   // 前置要驗到「萬一被讀到，下面的判斷認得出來」：檔在，而且內容帶著判斷用的祕鑰標記
   const hasSecret = await waitFor(async () => /syncSecret|"secret"/.test(await stateText()));
   must(setup.ok && hasSecret, `前置：伺服器真的寫出了帶祕鑰的 state.json（建立回 ${setup.status}、祕鑰標記在檔裡：${hasSecret}）`);
-  const probes = [
-    ['/server/data/state.json', '小寫路徑'],
-    ['/SERVER/data/state.json', '大寫路徑（Windows/macOS 檔案系統不分大小寫）'],
-    ['/Server/Data/State.json', '混合大小寫'],
-    ['/.git/config', 'git 設定'],
-    ['/.GIT/config', 'git 設定（大寫）'],
-    ['/workers/wrangler.toml', 'Worker 設定'],
-    ['/WORKERS/wrangler.toml', 'Worker 設定（大寫）'],
-    ['/node_modules/puppeteer/package.json', 'node_modules'],
-    ['/docs/STATUS.md', '文件'],
-  ];
-  let leaked = [];
-  for (const [path, label] of probes) {
-    const r = await fetch(`http://localhost:${API}${path}`);
-    const body = await r.text();
-    // 白名單外的路徑：要嘛 403，要嘛回 SPA 的 index.html（絕不能是真檔案內容）
-    const isRealFile = body.includes('syncSecret') || body.includes('"secret"') || body.includes('[core]')
-      || body.includes('database_id') || body.includes('"name": "puppeteer"') || body.includes('# TripQuest 專案狀態');
-    if (isRealFile) leaked.push(`${label} (${path})`);
+  // 母體（2026-09-24 改）：原本是寫死的 9 條路徑——伺服器多開放一個新資料夾（例如放著祕鑰備份的 .logs/）
+  // 照樣全綠。改成孤兒檢查的形狀：repo 根目錄底下**不在下面這份允許清單裡的每一項**，都自動挑一個真的檔去探測。
+  // 允許清單是這支測試自己的登記，**不讀伺服器的白名單**——伺服器白名單被改寬時，測試的標準才不會跟著變寬。
+  const ALLOWED_TOP = new Set(['css', 'js', 'data', 'icons', 'media', 'fonts', 'index.html', 'manifest.webmanifest', 'sw.js', 'favicon.ico']);
+  const TEXT = /\.(json|md|toml|mjs|js|txt|sh|yml|yaml|html|css|webmanifest|py|sql)$|^(config|HEAD|\.gitignore)$/i;
+  const pickFile = (rel, depth = 0) => {          // 在這一項底下挑一個讀得出文字、不太小的檔
+    const abs = path.join(ROOT, rel);
+    let st; try { st = fs.statSync(abs); } catch (e) { return null; }
+    if (st.isFile()) return (TEXT.test(path.basename(rel)) || st.size < 4096) && st.size >= 16 && st.size < 2e6 ? rel : null;
+    if (!st.isDirectory() || depth > 4) return null;
+    const kids = fs.readdirSync(abs).sort((a, b) => (TEXT.test(b) ? 1 : 0) - (TEXT.test(a) ? 1 : 0) || a.localeCompare(b));
+    for (const k of kids.slice(0, 40)) { const f = pickFile(rel + '/' + k, depth + 1); if (f) return f; }
+    return null;
+  };
+  const tops = fs.readdirSync(ROOT).filter((n) => !ALLOWED_TOP.has(n));
+  const probes = [];   // [網址路徑, 磁碟上的相對路徑, 說明]
+  for (const t of tops) { const f = pickFile(t); if (f) probes.push(['/' + f, f, `根目錄的 ${t}`]); }
+  // 大小寫變化（Windows／macOS 檔案系統不分大小寫；v1.64 的漏洞就是這一類）
+  probes.push(['/SERVER/data/state.json', 'server/data/state.json', '大寫路徑'], ['/Server/Data/State.json', 'server/data/state.json', '混合大小寫']);
+  const gitCfg = pickFile('.git');
+  if (gitCfg) probes.push(['/' + gitCfg.replace(/^\.git/, '.GIT'), gitCfg, 'git（大寫）']);
+  // 前置：母體不是空的，而且一定涵蓋幾個高風險的（祕鑰檔、git、Worker 設定、文件）
+  const topsProbed = new Set(probes.map(([, f]) => f.split('/')[0]));
+  must(probes.length >= 10 && ['server', '.git', 'workers', 'docs'].every((t) => topsProbed.has(t)),
+    `前置：探測 ${probes.length} 條路徑，涵蓋根目錄 ${topsProbed.size} 項（含 server、.git、workers、docs）`,
+    '沒涵蓋到的：' + ['server', '.git', 'workers', 'docs'].filter((t) => !topsProbed.has(t)).join('、'));
+  // 判斷：回應內容裡有沒有那個檔在磁碟上的真實開頭（不靠幾個字面標記——標記漂了不會有人發現）
+  const diskHead = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8').slice(0, 64);
+  const leaks = (body, head) => head.length >= 16 && body.includes(head);
+  // 對照組：真實內容一定要判得出來；App 首頁（白名單外的路徑會回的那一頁）一定不能被判成外洩
+  const spa = await fetch(`http://localhost:${API}/`).then((r) => r.text());
+  const ctrlBad = probes.filter(([, f]) => !leaks(fs.readFileSync(path.join(ROOT, f), 'utf8'), diskHead(f))).map(([, f]) => f);
+  const ctrlFalse = probes.filter(([, f]) => leaks(spa, diskHead(f))).map(([, f]) => f);
+  must(!ctrlBad.length && !ctrlFalse.length && spa.length > 0,
+    `對照組：${probes.length} 個檔的真實內容都判得出來、App 首頁不會被誤判成外洩`,
+    `判不出來的：${ctrlBad.join('、') || '無'}；首頁被誤判的：${ctrlFalse.join('、') || '無'}`);
+  const leaked = [];
+  for (const [url, f, label] of probes) {
+    const body = await fetch(`http://localhost:${API}${url}`).then((r) => r.text());
+    // 白名單外的路徑：要嘛 403，要嘛回 SPA 的 index.html（絕不能是真檔案內容）。外洩時只印路徑、不印內容
+    if (leaks(body, diskHead(f))) leaked.push(`${label}（${url}）`);
   }
-  yes(leaked.length === 0, `專案檔案都讀不到（試了 ${probes.length} 種路徑，含大小寫變化）`, leaked.join('；'));
+  yes(leaked.length === 0, `專案檔案都讀不到（試了 ${probes.length} 條路徑：根目錄允許清單以外的每一項＋大小寫變化）`, leaked.join('；'));
   const okStatic = await fetch(`http://localhost:${API}/js/store.js`).then((r) => r.text());
   yes(okStatic.includes('export'), '該給的靜態檔照樣給得出來（js/store.js）');
 
