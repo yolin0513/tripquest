@@ -88,6 +88,9 @@ export const judge = ({ code, err, name, nameRe, why, before, after, extras = []
   if (wrong.length) { console.log('擋下：F8 驗法的判定程式壞了（對照組沒過），不跑矩陣'); dropReg(REG); process.exit(4); }
 }
 
+// 完整跑的時候，一開始就先刪登記、全過才在最後寫：中途不管哪裡當掉，都不會留下舊的登記
+if (!ONLY) console.log(`開始前：.logs/f8.verified ${dropReg(REG)}（全過才會重寫）`);
+
 // ---------- 先確認：工作區＝HEAD、開 HEAD 的暫存複本 ----------
 const pre = headProblems(ROOT, F8_FILES);
 if (pre.length) give(`不跑：${pre.join('；')}——先 commit 再跑（驗到的要是推出去的那一份）`);

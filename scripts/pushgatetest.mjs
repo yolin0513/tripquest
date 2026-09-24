@@ -51,6 +51,10 @@ import { headProblems, writeReg, dropReg, regAction, realGit } from './verified-
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
+// 情境順序（見檔尾）。放最上層：檔尾「有失敗就刪登記」那一行也要讀它（2026-09-24 放在 try 裡面時，那一行當掉、登記留著）
+const order = process.env.PUSHGATE_ORDER || '';
+// 完整跑的時候，一開始就先刪登記、全過才在最後寫：中途不管哪裡當掉（包括檔尾那幾行自己），都不會留下舊的登記
+if (!order) console.log(`  開始前：.logs/pushgate.verified ${dropReg(REG_REAL)}（全過才會重寫）`);
 let pass = 0;
 const ok = (m) => { pass++; console.log('✓ ' + m); };
 const fail = (m, x) => { console.log('✗ ' + m + (x ? '\n   ' + x : '')); process.exitCode = 1; };
@@ -618,7 +622,6 @@ try {
   ];
 
   // 順序：預設照上面；PUSHGATE_ORDER=reverse 反過來；PUSHGATE_ORDER=shuffle:<種子> 打亂（F5-5：換順序結果要不變）
-  const order = process.env.PUSHGATE_ORDER || '';
   let list = SCENARIOS.slice();
   if (order === 'reverse') list.reverse();
   else if (order.startsWith('shuffle:')) {
