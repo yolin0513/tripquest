@@ -14,7 +14,8 @@
 //   L 新增行抽多了（同一行重複計入）→ 4、「新增行抽取」（numstat 核對是 !==，不是 <）
 //   J 內容本身以 ++ 開頭的命中行、加了又刪 → 1、來源是新增行（抽新增行要照 diff 結構，並用 --numstat 的行數核對）
 //   H 假信箱只寫在 commit 訊息裡 → 1、email 那一類、來源是 commit 訊息（v8 §2.5：訊息一樣會公開）
-//   H2 作者信箱是假信箱 → 1、email 那一類、來源是作者欄
+//   H2 只有作者信箱是假信箱 → 1、來源是作者欄（不是提交者欄）；H3 只有提交者信箱是假信箱 → 1、來源是提交者欄
+//   Z 對照樣本打到每一個分支：逐一拿掉金鑰／路徑的每一個分支、email 的每一條放行規則 → 都判「檢查器壞了」
 //   F 本機以為已經推上去、遠端其實沒有（帶命中的 commit 繞過閘門推上去、抓回來，再把遠端倒退）→ 1、email 那一類
 //     （共用慣例 v8 §2.5：自查範圍要照遠端的實際狀態算；把「問遠端」換成讀本機追蹤分支時，只有這一種會報不符）
 //   D 遠端拒收（pre-receive hook 回 1）→ 2、push 那一關
@@ -441,15 +442,58 @@ try {
         `H 命中寫在 commit 訊息裡 → 回 1、email 那一類、來源是 commit 訊息（實得 ${r.code}）`, r.out.slice(-300));
       untouched('H');
     }],
+    // H2／H3：作者信箱、提交者信箱**各自**是假信箱（補充說明十一：原本 H2 一次把兩邊都換掉，只拿掉其中一邊的檢查也照樣紅）
     ['H2', () => {
       fs.writeFileSync(path.join(work, 'h2.txt'), 'clean-h2\n');
       sh('git add h2.txt');
-      sh(`git -c user.email=${fakeMail()} commit -q -m clean-h2`);
-      yes(sh('git log -1 --format=%ae').trim() === fakeMail(), 'H2 前置：這個 commit 的作者信箱是合成假信箱（情境成立）');
+      sh('git commit -q -m clean-h2', work, { GIT_AUTHOR_EMAIL: fakeMail() });
+      yes(sh('git log -1 --format=%ae').trim() === fakeMail() && sh('git log -1 --format=%ce').trim() !== fakeMail(),
+        'H2 前置：只有作者信箱是合成假信箱、提交者信箱是正常的（情境成立）');
       const r = gate();
-      yes(r.code === 1 && WHO.hitFrom('作者欄').test(R(r.out)) && !WHO.hitFrom('新增行').test(R(r.out)),
-        `H2 作者欄是假信箱 → 回 1、email 那一類、來源是作者欄（實得 ${r.code}）`, r.out.slice(-300));
+      yes(r.code === 1 && WHO.hitFrom('作者欄').test(R(r.out)) && !WHO.hitFrom('提交者欄').test(R(r.out)) && !WHO.hitFrom('新增行').test(R(r.out)),
+        `H2 只有作者信箱是假的 → 回 1、email 那一類、來源是作者欄（不是提交者欄）（實得 ${r.code}）`, r.out.slice(-300));
       untouched('H2');
+    }],
+    ['H3', () => {
+      fs.writeFileSync(path.join(work, 'h3.txt'), 'clean-h3\n');
+      sh('git add h3.txt');
+      sh('git commit -q -m clean-h3', work, { GIT_COMMITTER_EMAIL: fakeMail() });
+      yes(sh('git log -1 --format=%ce').trim() === fakeMail() && sh('git log -1 --format=%ae').trim() !== fakeMail(),
+        'H3 前置：只有提交者信箱是合成假信箱、作者信箱是正常的（情境成立）');
+      const r = gate();
+      yes(r.code === 1 && WHO.hitFrom('提交者欄').test(R(r.out)) && !WHO.hitFrom('作者欄').test(R(r.out)) && !WHO.hitFrom('新增行').test(R(r.out)),
+        `H3 只有提交者信箱是假的 → 回 1、email 那一類、來源是提交者欄（不是作者欄）（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('H3');
+    }],
+    ['Z', () => {
+      // 對照樣本要打到每一個分支（補充說明十一）：逐一拿掉金鑰、路徑的每一個分支，以及 email 的每一條放行規則，
+      // 自查都必須判「檢查器壞了」而且點名那一類——拿掉哪一個都擋得下，才證明每一個分支都有自己的樣本
+      commit('d.txt', 'clean2\n', 'clean2');
+      const base = makeChecks(realUser());
+      const cases = [];
+      for (const cls of ['secret', 'path']) {
+        yes(base[cls].parts.length === base[cls].ctrl.length && base[cls].parts.length >= 2,
+          `Z 前置：${cls} 有 ${base[cls].parts.length} 個分支、${base[cls].ctrl.length} 個樣本（一一對應）`);
+        base[cls].parts.forEach((_, i) => cases.push([`${cls} 第 ${i + 1} 個分支`, cls, (c) => {
+          c[cls].re = new RegExp(c[cls].parts.filter((__, k) => k !== i).map((p) => p.source).join('|'), c[cls].flags);
+        }]));
+      }
+      yes(base.email.allowRes.length === base.email.ctrlNot.length && base.email.allowRes.length >= 2,
+        `Z 前置：email 有 ${base.email.allowRes.length} 條放行規則、${base.email.ctrlNot.length} 個放行樣本`);
+      base.email.allowRes.forEach((_, i) => cases.push([`email 第 ${i + 1} 條放行規則`, 'email', (c) => {
+        const keep = c.email.allowRes.filter((__, k) => k !== i);
+        c.email.allow = (m) => keep.some((r) => r.test(m));
+      }]));
+      const bad = [];
+      for (const [label, cls, breakIt] of cases) {
+        const c = makeChecks(realUser());
+        breakIt(c);
+        const r = scanWith({ checks: c });
+        if (!(r.code === 4 && WHO.broken(cls).test(R(r.out)))) bad.push(`${label}（回 ${r.code}）`);
+      }
+      yes(cases.length >= 12 && bad.length === 0, `Z 逐一拿掉 ${cases.length} 個分支／放行規則，每一個都被判成「檢查器壞了」並點名那一類`, '沒擋下的：' + bad.join('、'));
+      const ok0 = scanWith();
+      yes(ok0.code === 0, `Z 對照：同一個起點、什麼都不拿掉 → 通過（實得 ${ok0.code}）`, ok0.out.slice(-300));
     }],
     ['F', () => {
       // 本機以為已經推上去、遠端其實沒有：帶命中的 commit 繞過閘門推上去（本機追蹤分支跟著前進），

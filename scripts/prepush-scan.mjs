@@ -25,26 +25,42 @@ export const makeRun = (cwd) => (cmd) => execSync(cmd, { cwd, encoding: 'utf8', 
 export const realUser = () => process.env.USERNAME || process.env.USER || '';
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// 檢查表：四類，各帶一個當場組出的合成樣本（對照組）
-export const makeChecks = (user) => ({
-  secret: {
-    re: /(sk-ant-[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{30,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(api[_-]?key|token|secret)\s*[:=]\s*['"][A-Za-z0-9_\-]{16,}['"])/i,
-    ctrl: 'const k = "AIza' + 'X'.repeat(35) + '";',
-  },
-  email: {
-    re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
-    allow: (m) => /@users\.noreply\.github\.com$/i.test(m) || /^noreply@anthropic\.com$/i.test(m),
-    ctrl: 'contact ' + ['zz', 'test'].join('.') + '@' + 'example-fake' + '.org',
-  },
-  user: { re: user ? new RegExp(esc(user), 'i') : null, ctrl: 'path/' + user + '/x', hide: true },
+// 檢查表：四類。搜尋式由「分支」組成，**每一個分支配一個當場組出的合成樣本**（ctrl 的第 i 個樣本對應 parts 的第 i 個分支；
+// 補充說明十一：對照樣本要打到每一個分支——原本金鑰 6 個分支、路徑 4 個分支都只有 1 個樣本，其他分支壞了也看不出來）。
+// 放行規則（email 的 noreply）也有自己的樣本（ctrlNot）：這些**不能**被判成命中，放行規則壞了一樣算檢查器壞了。
+// pushgatetest 的 Z 情境逐一拿掉每一個分支、每一條放行規則，自查都必須判「檢查器壞了」。
+// 樣本一律在執行時才組出來，不把像金鑰、像路徑的字面寫進原始碼（這支檔案自己也會被自查掃到）。
+const join = (parts, flags) => new RegExp(parts.map((p) => p.source).join('|'), flags);
+export const makeChecks = (user) => {
+  const secretParts = [
+    /sk-ant-[A-Za-z0-9_-]{10,}/, /AIza[0-9A-Za-z_-]{30,}/, /ghp_[A-Za-z0-9]{30,}/, /github_pat_[A-Za-z0-9_]{20,}/,
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----/, /(api[_-]?key|token|secret)\s*[:=]\s*['"][A-Za-z0-9_\-]{16,}['"]/,
+  ];
   // 磁碟機代號前面不能是英文字母（不然網址協定的冒號斜線會誤中），也不能是反斜線（不然 regex 字面裡的
   // 數字跳脫、冒號、數字跳脫會誤中）。這幾行註解與下面的字面都刻意寫成不會命中自己——2026-09-23 這支檔案
   // 第一次推送就被自己的搜尋式擋下過；修法是改寫，不是把這支檔案排除在掃描之外。
-  path: {
-    re: /((?<![A-Za-z\\])[A-Za-z]:[\\/][^\s`'"]*|\/[a-z]\/Users\/|\/home\/[A-Za-z]|~\/)/,
-    ctrl: 'at ' + 'Q' + ':\\foo\\bar',
-  },
-});
+  const pathParts = [/(?<![A-Za-z\\])[A-Za-z]:[\\/][^\s`'"]*/, /\/[a-z]\/Users\//, /\/home\/[A-Za-z]/, /~\//];
+  const allowRes = [/@users\.noreply\.github\.com$/i, /^noreply@anthropic\.com$/i];
+  return {
+    secret: {
+      parts: secretParts, flags: 'i', re: join(secretParts, 'i'),
+      ctrl: ['sk-' + 'ant-' + 'x'.repeat(12), 'const k = "AIza' + 'X'.repeat(35) + '";', 'gh' + 'p_' + 'A'.repeat(32),
+        'github' + '_pat_' + 'B'.repeat(22), '-----BEGIN ' + 'RSA PRIVATE' + ' KEY-----',
+        'api' + '_key = "' + 'C'.repeat(20) + '"'],
+    },
+    email: {
+      re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+      allowRes, allow: (m) => allowRes.some((r) => r.test(m)),
+      ctrl: ['contact ' + ['zz', 'test'].join('.') + '@' + 'example-fake' + '.org'],
+      ctrlNot: ['by ' + 'zz' + '@' + 'users.noreply.github.com', 'by ' + 'noreply' + '@' + 'anthropic.com'],
+    },
+    user: { re: user ? new RegExp(esc(user), 'i') : null, ctrl: ['path/' + user + '/x'], hide: true },
+    path: {
+      parts: pathParts, flags: '', re: join(pathParts, ''),
+      ctrl: ['at ' + 'Q' + ':\\foo\\bar', 'at ' + '/' + 'c' + '/Users' + '/x', 'at ' + '/home' + '/zz', 'at ' + '~' + '/notes'],
+    },
+  };
+};
 
 // 掃一個範圍，回傳回傳值（0／1／4）；每一行輸出交給 log
 export function scan({ range = '', run = makeRun(process.cwd()), checks = makeChecks(realUser()), log = console.log } = {}) {
@@ -80,7 +96,9 @@ export function scan({ range = '', run = makeRun(process.cwd()), checks = makeCh
       if (f.length < 6) continue;
       parsed++;
       const [h, an, ae, cn, ce, body] = f;
-      for (const t of [an, ae, cn, ce]) added.push({ src: '作者欄', text: t, at: h });
+      // 作者與提交者分開標來源（補充說明十一：兩邊各要有自己的情境；混成一個來源時，只拿掉其中一邊的檢查也看不出來）
+      for (const t of [an, ae]) added.push({ src: '作者欄', text: t, at: h });
+      for (const t of [cn, ce]) added.push({ src: '提交者欄', text: t, at: h });
       for (const t of body.split('\n')) if (t) added.push({ src: 'commit 訊息', text: t, at: h });
     }
   } catch (e) {
@@ -97,15 +115,20 @@ export function scan({ range = '', run = makeRun(process.cwd()), checks = makeCh
       if (c.allow) return (line.match(c.re) || []).filter((m) => !c.allow(m)).length > 0;
       return c.re.test(line);
     };
-    const ctrlHit = test(c.ctrl);
+    // 每一個分支的樣本都要命中、每一個放行樣本都不能命中，才算這一類有在檢查
+    const missed = c.ctrl.map((s, i) => (test(s) ? -1 : i)).filter((i) => i >= 0);
+    const leaked = (c.ctrlNot || []).map((s, i) => (test(s) ? i : -1)).filter((i) => i >= 0);
+    const ctrlHit = missed.length === 0 && leaked.length === 0;
     const hits = added.filter((l) => test(l.text));
-    log(`${name}：對照組命中=${ctrlHit}，命中=${hits.length}`);
+    log(`${name}：對照組命中=${ctrlHit}，命中=${hits.length}`
+      + (missed.length ? `（第 ${missed.map((i) => i + 1).join('、')} 個分支的樣本沒命中）` : '')
+      + (leaked.length ? `（第 ${leaked.map((i) => i + 1).join('、')} 個放行樣本被判成命中）` : ''));
     if (!ctrlHit) broken.push(name);
     if (hits.length) hit.push(`${name}（${hits.length} 行；來源：${[...new Set(hits.map((l) => l.src))].join('、')}）`);
     for (const h of hits) log('    ' + `[${h.src}${h.at ? ' ' + h.at : ''}] ` + (c.hide ? '（不印出）' : h.text.slice(0, 160)));
   }
   const count = (s) => added.filter((l) => l.src === s).length;
-  log(`範圍： ${range || 'HEAD'} ；commit 數： ${commits} ；解析出訊息與作者欄： ${parsed} 筆；新增行數： ${count('新增行')} ；commit 訊息行數： ${count('commit 訊息')} ；作者欄： ${count('作者欄')}`);
+  log(`範圍： ${range || 'HEAD'} ；commit 數： ${commits} ；解析出訊息與作者欄： ${parsed} 筆；新增行數： ${count('新增行')} ；commit 訊息行數： ${count('commit 訊息')} ；作者欄： ${count('作者欄')} ；提交者欄： ${count('提交者欄')}`);
   // 故障時不放行：每個 commit 一定有一筆作者欄與訊息；數不起來只可能是解析壞了，不是「沒東西可掃」。
   // （2026-09-24 統籌者探測：解析整個壞掉時印出「0 行」照樣通過。換個環境就會發生，不需要任何人改壞程式。）
   // 每一條守一種壞法（pushgatetest 各有一種情境、拿掉那一條只紅它自己）。不另查「作者欄＝4×commit 數」：
