@@ -1,0 +1,6 @@
+[
+ {
+  "from": "out.push({ rule: 'id',",
+  "to": "void ({ rule: 'id',"
+ }
+]

@@ -1,0 +1,1 @@
+[{"from": "  if (!seededOk) throw new Error(", "to": "  if (false) throw new Error("}, {"from": "  yes(seededOk,", "to": "  void (seededOk,"}]

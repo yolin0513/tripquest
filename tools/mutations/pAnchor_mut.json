@@ -1,0 +1,6 @@
+[{"from": "hit: /^擋下：有命中（email/m,", "to": "hit: /擋下：有命中（email/m,"},
+ {"from": "new RegExp(`^擋下：有命中（email（", "to": "new RegExp(`擋下：有命中（email（"},
+ {"from": "broken: (k) => new RegExp(`^擋下：檢查器壞了（${k}`", "to": "broken: (k) => new RegExp(`擋下：檢查器壞了（${k}`"},
+ {"from": "unverified: /^擋下：閘門沒有驗過（/m,", "to": "unverified: /擋下：閘門沒有驗過（/m,"},
+ {"from": "pushFail: /^✗ git push 失敗/m,", "to": "pushFail: /✗ git push 失敗/m,"},
+ {"from": "mismatch: /^✗ 推完了但遠端.*不等於本機/m,", "to": "mismatch: /✗ 推完了但遠端.*不等於本機/m,"}]

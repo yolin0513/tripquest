@@ -1,0 +1,1 @@
+[{"from": "if (!LOCAL) {\n  const { spawnSync } = await import('node:child_process');", "to": "if (false) {\n  const { spawnSync } = await import('node:child_process');"}]

@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  tagUnknown: (p) => ({ ...p, tags: ['zz-not-a-tag'] }),",
+  "to": "  tagUnknown: (p) => ({ ...p, tags: ['sight'] }),   // 盤點實測：壞樣本造不出來"
+ }
+]

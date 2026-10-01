@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  for (const src of ['拍照片', '選 PDF']) {",
+  "to": "  for (const src of []) {"
+ }
+]

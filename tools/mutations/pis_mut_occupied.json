@@ -1,0 +1,1 @@
+[{"from": "  if (existsSync(p)) stop(`暫存位置 ${rel}", "to": "  if (false) stop(`暫存位置 ${rel}"}]

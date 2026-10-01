@@ -1,0 +1,1 @@
+[{"from":"    log(`✗ 讀不到要檢查的範圍（${range || 'HEAD'}）：${String(e.message).split('\\n')[0]}`);\n    log('擋下：檢查器壞了（範圍）');\n    return 4;","to":"    void e;"}]

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "T4：拿掉「份數全 0 退回平均分」",
+    "file": "js/expenses.js",
+    "find": "if (e.shares && Object.keys(e.shares).length && !sharesFallback(e)) {\n    const total = parts.reduce((s, m) => s + weightOf(e, m), 0);",
+    "replace": "if (e.shares && Object.keys(e.shares).length) {\n    const total = parts.reduce((s, m) => s + weightOf(e, m), 0) || 1;",
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T4：負數份數不夾成 0",
+    "file": "js/expenses.js",
+    "find": "const weightOf = (e, m) => Math.max(0, Number(e.shares[m]) || 0);",
+    "replace": "const weightOf = (e, m) => Number(e.shares[m]) || 0;",
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T7（R3）：參與者空改回回傳 {}",
+    "file": "js/expenses.js",
+    "find": "if (!parts.length) return e.payerId ? { [e.payerId]: e.amount } : {};",
+    "replace": "if (!parts.length) return {};",
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T7（R4）：改回只保護入帳那一半",
+    "file": "js/expenses.js",
+    "edits": [
+      { "find": "if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }\n    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;\n    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase;", "replace": "if (e.payerId) {\n    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;\n    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase; }" }
+    ],
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T7（R4）：不檢查付款人在不在成員裡",
+    "file": "js/expenses.js",
+    "find": "if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }",
+    "replace": "if (!e.payerId) { noPayer++; continue; }",
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T5：拿掉表單的「份數全 0」檢查",
+    "file": "js/views/expenses.js",
+    "find": "  if (st.shares && st.participants.reduce((s, m) => s + Math.max(0, Number(st.shares[m]) || 0), 0) <= 0) {\n    toast('份數至少要有一個人大於 0'); return;\n  }",
+    "replace": "",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "T5：輸入框不夾負數",
+    "file": "js/views/expenses.js",
+    "find": "if (v < 0) ev.target.value = '0';",
+    "replace": "",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "T6：明細副標不加「先照平均分」",
+    "file": "js/views/expenses.js",
+    "find": "+ (sharesFallback(e) ? ' · 份數都是 0，先照平均分' : '')",
+    "replace": "+ ''",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "R4 畫面：不講「沒有付款人」",
+    "file": "js/views/expenses.js",
+    "find": "if (s.noPayer) noteLines.push(",
+    "replace": "if (false) noteLines.push(",
+    "cmd": "node scripts/settletest.mjs"
+  }
+]

@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  controlFor(file, data.places[0]);\n",
+  "to": ""
+ }
+]

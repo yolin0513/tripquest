@@ -1,0 +1,1 @@
+[{"from":"if (commits > 0 && parsed !== commits) metaFaults.push('筆數');","to":"if (false) metaFaults.push('筆數');"}]

@@ -1,0 +1,1 @@
+[{"from": "const shot = async (name) => {\n  await sleep(320);", "to": "const shot = async (name) => {\n  if (Number(process.env.IMPORTSHOTS_FAIL_AT || 0) === n + 1) throw new Error('造情境：在第 ' + (n + 1) + ' 張之前中斷');\n  await sleep(320);"}]

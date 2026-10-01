@@ -1,0 +1,1 @@
+[{"from": "  const detect = (s) => s.includes('sk-ant-') || s.includes('AIza') || s.includes(fakeA) || s.includes(fakeG);", "to": "  const detect = (s) => s.includes('#never#');"}]

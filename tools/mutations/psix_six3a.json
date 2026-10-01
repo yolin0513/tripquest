@@ -1,0 +1,1 @@
+[{"from":"if (!ONLY) console.log(`開始前：","to":"if (false) console.log(`開始前："}]

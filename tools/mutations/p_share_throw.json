@@ -1,0 +1,1 @@
+[{"from": "export async function shareURL(tripId) {\n  const base = inviteBase();", "to": "export async function shareURL(tripId) {\n  throw new Error('盤點實測：shareURL 在這個環境丟錯');\n  const base = inviteBase();"}]

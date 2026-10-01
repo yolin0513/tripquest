@@ -1,0 +1,1 @@
+[{"from": "          if (!existsSync(file)) return send(res, 404, { error: 'not found' });\n          cors(res);\n          res.writeHead(200, { 'content-type': 'image/jpeg'", "to": "          if (!existsSync(file)) return send(res, 404, { error: 'not found' });\n          cors(res);\n          res.writeHead(200, { 'content-type': 'text/html'"}]

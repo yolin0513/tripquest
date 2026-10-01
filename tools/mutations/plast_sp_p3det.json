@@ -1,0 +1,1 @@
+[{"from":"  for f in $F8_GUARD; do\n    reg_want \"$F8REG\" \"$f\"; head_hash \"$f\"","to":"  for f in ${F8_GUARD%% *}; do\n    reg_want \"$F8REG\" \"$f\"; head_hash \"$f\""}]

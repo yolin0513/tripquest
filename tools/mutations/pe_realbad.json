@@ -1,0 +1,6 @@
+[
+ {
+  "from": "import fs from 'node:fs';",
+  "to": "import fs from 'node:fs';\nconst __zz = 'a b'.replace(/d+/g, '');   // 盤點樣本：反斜線被吃掉"
+ }
+]

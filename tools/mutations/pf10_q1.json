@@ -1,0 +1,1 @@
+[{"from":"  cat \"$TMP/touched.err\"; echo \"✗ 列不出這次要推的 commit 動到哪些檔\"; echo \"擋下：檢查器壞了（動到的檔）\"; exit 4","to":"  :"}]

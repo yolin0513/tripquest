@@ -1,0 +1,1 @@
+[{"from":"for (const t of [an, ae]) added.push({ src: '作者欄'","to":"for (const t of [an]) added.push({ src: '作者欄'"}]

@@ -1,0 +1,1 @@
+[{"from":"reg_want \"$F8REG\" \"$f\"; head_hash \"$f\"","to":"reg_want \"$F8REG\" \"$f\"; HAVE=\"$(git hash-object -- \"$f\")\""}]

@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  for (const tg of Array.isArray(p.tags) ? p.tags : []) if (!TAGS.has(tg)) e('tagUnknown'",
+  "to": "  for (const tg of []) if (!TAGS.has(tg)) e('tagUnknown'"
+ }
+]

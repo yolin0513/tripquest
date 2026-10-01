@@ -1,0 +1,1 @@
+[{"from":"const shortPhrase = fullText.length <= 40 && !fullText.includes('。') && !fullText.includes('——');","to":"const shortPhrase = false;"}]

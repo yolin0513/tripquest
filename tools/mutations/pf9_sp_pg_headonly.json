@@ -1,0 +1,1 @@
+[{"from":"if [ \"$WANT\" != \"$HAVE\" ] || [ \"$WANT\" != \"$WORK\" ]; then","to":"if [ \"$WANT\" != \"$HAVE\" ]; then"}]

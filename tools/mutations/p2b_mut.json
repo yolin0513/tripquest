@@ -1,0 +1,1 @@
+[{"from": "if (situationOk && !ctrlBad.length", "to": "if (!ctrlBad.length"}]

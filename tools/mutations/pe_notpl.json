@@ -1,0 +1,6 @@
+[
+ {
+  "from": "    if (inTpl) { if (ESC_LOST_TPL.test(lit)) out.push({ kind: 'lost-tpl', lit }); }",
+  "to": "    if (inTpl) { }"
+ }
+]

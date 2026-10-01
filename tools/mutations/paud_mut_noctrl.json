@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  must(!ctrlBad.length && !ctrlFalse.length && spa.length > 0,",
+  "to": "  void (!ctrlBad.length && !ctrlFalse.length && spa.length > 0,"
+ }
+]

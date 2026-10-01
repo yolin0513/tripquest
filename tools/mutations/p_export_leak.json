@@ -1,0 +1,1 @@
+[{"from": "  return all ? list() : list().filter((r) => !SENSITIVE_TYPES.has(r.type));", "to": "  return [...(all ? list() : list().filter((r) => !SENSITIVE_TYPES.has(r.type))), { id: 'leak', type: 'note', text: 'sk-ant-' + 'api03-' + 'Z'.repeat(40) }];"}]

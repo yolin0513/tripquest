@@ -1,0 +1,1 @@
+[{"from": "F8_GUARD=\"scripts/build-places.mjs scripts/importshots.mjs scripts/f8verify.mjs scripts/verified-reg.mjs\"", "to": "F8_GUARD=\"scripts/build-places.mjs scripts/importshots.mjs scripts/f8verify.mjs\""}]

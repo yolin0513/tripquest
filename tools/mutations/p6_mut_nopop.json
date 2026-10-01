@@ -1,0 +1,2 @@
+[{"from": "yes(Object.keys(ph.themes || {}).length > 0 && Object.keys(ph.mustQuest || {}).length > 0 && total > 0 && total === expectTotal,", "to": "void (Object.keys(ph.themes || {}).length > 0 && Object.keys(ph.mustQuest || {}).length > 0 && total > 0 && total === expectTotal,"},
+ {"from": "if (total > 0 && total === expectTotal) yes(!bad.length,", "to": "yes(!bad.length,"}]

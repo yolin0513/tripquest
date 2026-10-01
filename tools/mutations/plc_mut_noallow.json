@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  const onlyPull = pull404.length > 0 && other404.length === 0;",
+  "to": "  const onlyPull = false;"
+ }
+]

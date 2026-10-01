@@ -1,0 +1,1 @@
+[{"from": "    if (s.includes('sk-ant-') || s.includes('AIza') || s.includes(fakeA) || s.includes(fakeG)) hits[label] = true;", "to": "    if (s.includes('#never#')) hits[label] = true;"}]

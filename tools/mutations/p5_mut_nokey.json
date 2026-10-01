@@ -1,0 +1,10 @@
+[
+ {
+  "from": "  for (const k of Object.keys(p)) if (!PLACE_KEYS.has(k)) e('unknownKey',",
+  "to": "  for (const k of []) if (!PLACE_KEYS.has(k)) e('unknownKey',"
+ },
+ {
+  "from": "  unknownKey: (p) => ({ ...p, zzUnlisted: 1 }),\n",
+  "to": ""
+ }
+]

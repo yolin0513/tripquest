@@ -1,0 +1,1 @@
+[{"from": "if (existsSync(tmpOut)) stop(", "to": "if (false) stop("}]

@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  yes(onPage.length > 0 && !unregistered.length && !missing.length,",
+  "to": "  void (onPage.length > 0 && !unregistered.length && !missing.length,"
+ }
+]

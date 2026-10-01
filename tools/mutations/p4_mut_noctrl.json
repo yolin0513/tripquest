@@ -1,0 +1,2 @@
+[{"from": "else if (ctrlBad.length) {", "to": "else if (false) {"},
+ {"from": "if (situationOk && !ctrlBad.length && result.ctrl && !leakKeys.length", "to": "if (situationOk && !leakKeys.length"}]

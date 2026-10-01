@@ -1,0 +1,2 @@
+[{"from": "  let leaked = [];", "to": "  console.log('PROBE state.json 在=' + (await import('node:fs')).existsSync(ROOT + 'server/data/state.json'));\n  let leaked = [];"},
+ {"from": "  await fetch(`http://localhost:${API}/push?g=aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee`, {", "to": "  await fetch(`http://localhost:${API}/pushX?g=aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee`, {"}]

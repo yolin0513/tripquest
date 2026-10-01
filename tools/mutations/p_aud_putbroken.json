@@ -1,0 +1,1 @@
+[{"from": "  await fetch(`http://localhost:${API}/blob/deadbeef12345678?g=${g2}`, {\n    method: 'PUT'", "to": "  console.log('PROBE 上傳那一步被弄壞');\n  await fetch(`http://localhost:${API}/blobX/deadbeef12345678?g=${g2}`, {\n    method: 'PUT'"}]

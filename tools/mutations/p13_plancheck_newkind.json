@@ -1,0 +1,6 @@
+[
+ {
+  "from": "export function dayIssues(spots, chain, conflicts) {\n  const idxOf = new Map(spots.map((s, i) => [s.id, i]));\n  const out = [];",
+  "to": "export function dayIssues(spots, chain, conflicts) {\n  const idxOf = new Map(spots.map((s, i) => [s.id, i]));\n  const out = [];\n  if (spots.length > 999) out.push({ kind: 'zzTooMany', sig: 'zz', advice: '盤點實測：新增的一種問題' });"
+ }
+]

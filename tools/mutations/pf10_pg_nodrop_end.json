@@ -1,0 +1,1 @@
+[{"from":"if (regAction({ failed: !!process.exitCode, partial: !!order }) === 'drop')","to":"if (false)"}]

@@ -1,0 +1,1 @@
+[{"from": "  for (const [id, fn] of list) { reset(); fn(); }", "to": "  for (const [id, fn] of list) { fn(); }"}]

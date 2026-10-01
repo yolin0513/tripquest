@@ -1,0 +1,1 @@
+[{"from":"label: groups.length > 1 ? nth(groups[gi][0].day, '天') : '整趟',","to":"label: groups.length > 1 ? `第 ${groups[gi][0].day} 天` : '整趟',"}]

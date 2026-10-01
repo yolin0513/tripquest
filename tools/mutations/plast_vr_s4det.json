@@ -1,0 +1,1 @@
+[{"from":"    if (have.out !== want) bad.push(","to":"    if (false) bad.push("}]

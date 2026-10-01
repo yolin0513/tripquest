@@ -1,0 +1,1 @@
+[{"from":"if (!ONLY) console.log(`開始前：","to":"if (false) console.log(`開始前："},{"from":"  console.log(`擋下：F8 驗法沒有跑完，不登記（.logs/f8.verified ${dropReg(REG)}）`);","to":"  console.log(`擋下：F8 驗法沒有跑完，不登記（.logs/f8.verified 沒動）`);"}]

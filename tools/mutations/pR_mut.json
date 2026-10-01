@@ -1,0 +1,1 @@
+[{"from": "const R = (out) => out.split('\\n').map((l) => l.trim()).filter((l) => l.startsWith('擋下：') || l.startsWith('✗')).join('\\n');", "to": "const R = (out) => out;"}]

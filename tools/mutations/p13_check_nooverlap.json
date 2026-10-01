@@ -1,0 +1,6 @@
+[
+ {
+  "from": "const lunch = await mk('龍記餐廳', 1, 0, { startMin: 13 * 60, stayMin: 120 });",
+  "to": "const lunch = await mk('龍記餐廳', 1, 0, { startMin: 13 * 60, stayMin: 30 });"
+ }
+]

@@ -1,0 +1,1 @@
+[{"from": "if (!Array.isArray(existing.places) || !existing.places.length) stop(", "to": "if (false) stop("}]

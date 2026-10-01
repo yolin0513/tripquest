@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Worker 的 push 上限調到 999（限流形同失效）",
+    "file": "workers/worker.mjs",
+    "find": "push:  { limit: 30,  period: 60 },",
+    "replace": "push:  { limit: 999,  period: 60 },",
+    "cmd": "node scripts/workertest.mjs"
+  },
+  {
+    "name": "前置：視窗改成 1 秒（每一輪一定跨視窗，情境不成立）",
+    "file": "scripts/workertest.mjs",
+    "find": "const PUSH_PERIOD_MS = 60 * 1000;",
+    "replace": "const PUSH_PERIOD_MS = 1 * 1000;",
+    "cmd": "node scripts/workertest.mjs"
+  }
+]

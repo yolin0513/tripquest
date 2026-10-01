@@ -1,0 +1,3 @@
+[{"from": "  scan('exportRecords', JSON.stringify(store.exportRecords()));", "to": "  console.log('PRE');\n  scan('exportRecords', JSON.stringify(store.exportRecords()));"},
+ {"from": "  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite };", "to": "  return { stored, hits, swBad, deviceStored, adopted, isolated, noOverwrite, probe: { leakInExport: JSON.stringify(store.exportRecords()).includes('sk-ant-') } };"},
+ {"from": "await browser.close();\nserver.kill();", "to": "console.log('PROBE ' + JSON.stringify(result.probe));\nawait browser.close();\nserver.kill();"}]

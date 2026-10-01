@@ -1,0 +1,6 @@
+[
+ {
+  "from": "const leaks = (body, head) => head.length >= 16 && body.includes(head);",
+  "to": "const leaks = (body, head) => head.length >= 16 && body.includes(head + '#ZZ#');"
+ }
+]

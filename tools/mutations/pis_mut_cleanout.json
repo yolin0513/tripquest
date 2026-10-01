@@ -1,0 +1,1 @@
+[{"from": "    note += await tryRm(OUT, '暫存位置 screenshots/_import.partial');\n    console.error(`✗ 換不上", "to": "    note += '';\n    console.error(`✗ 換不上"}]

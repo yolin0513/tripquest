@@ -1,0 +1,1 @@
+[{"from": "  console.log(`新增行核對：抽出 ${added.length} 行，git 算 ${expected} 行`);", "to": "  console.log(`新增行核對：抽出 ${added.length} 行，git 算 ${expected} 行`);\n  if (expected === 0) { console.log('擋下：檢查器壞了（新增行抽取）'); process.exit(4); }"}]

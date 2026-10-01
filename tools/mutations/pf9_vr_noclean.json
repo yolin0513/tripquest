@@ -1,0 +1,1 @@
+[{"from":"if (bad.length) return { ok: false","to":"if (false) return { ok: false"}]

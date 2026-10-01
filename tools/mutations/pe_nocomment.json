@@ -1,0 +1,6 @@
+[
+ {
+  "from": "    if (ch === '/' && nx === '/') { while (i < src.length && src[i] !== '\\n') ctx[i++] = 'm'; continue; }",
+  "to": ""
+ }
+]

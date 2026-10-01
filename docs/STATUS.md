@@ -492,7 +492,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **54 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest → worktreeguardtest → mutatetest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **55 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest → worktreeguardtest → mutatetest → mutlint），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

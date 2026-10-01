@@ -1,0 +1,25 @@
+[
+  {
+    "name": "T1：改回 v1.74.2 的行為（不整筆排除、toBase 查不到就回原值）",
+    "file": "js/expenses.js",
+    "edits": [
+      { "find": "if (e.currency !== baseCurrency && convert(e.amount, e.currency, baseCurrency, ratesObj) == null) {", "replace": "if (false) {" },
+      { "find": "  const toBase = (amt, cur) => (cur === baseCurrency ? amt : convert(amt, cur, baseCurrency, ratesObj));", "replace": "  const toBase = (amt, cur) => { if (cur === baseCurrency) return amt; const v = convert(amt, cur, baseCurrency, ratesObj); if (v == null) { missingRate = true; return amt; } return v; };" }
+    ],
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T2：畫面不顯示 unconverted",
+    "file": "js/views/expenses.js",
+    "find": "const unconvLines = (s.unconverted || []).map((u) =>",
+    "replace": "const unconvLines = [].map((u) =>",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "T3：拿掉「全部查不到」的分支",
+    "file": "js/views/expenses.js",
+    "find": "const nothingCounted = s.counted === 0;",
+    "replace": "const nothingCounted = false;",
+    "cmd": "node scripts/settletest.mjs"
+  }
+]

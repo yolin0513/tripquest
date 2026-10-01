@@ -1,0 +1,2 @@
+[{"from": "  if [ \"$WANT\" != \"$HAVE\" ]; then", "to": "  if false; then"},
+ {"from": "if [ ! -f \"$REG\" ]; then", "to": "if false; then"}]

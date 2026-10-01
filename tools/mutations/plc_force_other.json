@@ -1,0 +1,6 @@
+[
+ {
+  "from": "const page = await browser.newPage();",
+  "to": "const page = await browser.newPage();\nawait page.setRequestInterception(true);\nconsole.log('前置：盤點樣本 一定讓 manifest.webmanifest 回 404');\nconst __cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type,x-content-type', 'access-control-allow-methods': 'GET,POST,PUT,HEAD,OPTIONS' };\npage.on('request', (r) => (/manifest\\.webmanifest/.test(r.url()) ? (r.method() === 'OPTIONS' ? r.respond({ status: 204, headers: __cors, body: '' }) : r.respond({ status: 404, headers: __cors, contentType: 'application/json', body: '{}' })) : r.continue()));"
+ }
+]

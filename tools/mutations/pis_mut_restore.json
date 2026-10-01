@@ -1,0 +1,1 @@
+[{"from": "    if (movedOld) { try { await rename(OLD, FINAL); }", "to": "    if (false) { try { await rename(OLD, FINAL); }"}]

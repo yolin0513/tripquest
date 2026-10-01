@@ -1,0 +1,6 @@
+[
+ {
+  "from": "      const ALLOW_DIR = ['css/', 'js/', 'data/', 'icons/', 'media/', 'fonts/'];",
+  "to": "      const ALLOW_DIR = ['css/', 'js/', 'data/', 'icons/', 'media/', 'fonts/', '.logs/'];"
+ }
+]

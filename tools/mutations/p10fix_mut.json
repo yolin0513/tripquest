@@ -1,0 +1,1 @@
+[{"from": "if (process.exitCode && fs.existsSync(REG_REAL)) { fs.unlinkSync(REG_REAL);", "to": "if (false) { fs.unlinkSync(REG_REAL);"}]

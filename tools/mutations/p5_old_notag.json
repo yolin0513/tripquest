@@ -1,0 +1,6 @@
+[
+ {
+  "from": "    for (const tg of p.tags || []) if (!TAGS.has(tg)) err(",
+  "to": "    for (const tg of []) if (!TAGS.has(tg)) err("
+ }
+]

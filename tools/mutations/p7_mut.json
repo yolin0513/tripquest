@@ -1,0 +1,1 @@
+[{"from": "  yes(real.orphans.length === 0, `真實的 scripts/：沒有孤兒", "to": "  void (real.orphans.length === 0, `真實的 scripts/：沒有孤兒"}]

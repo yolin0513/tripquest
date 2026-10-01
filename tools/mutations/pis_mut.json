@@ -1,0 +1,1 @@
+[{"from": "if (!process.exitCode && n === EXPECTED) {", "to": "if (true) {"}]

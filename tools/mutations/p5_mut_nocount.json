@@ -1,0 +1,1 @@
+[{"from": "if (controlsRun !== files.length * Object.keys(BAD).length && !errs) broken.push(", "to": "if (false) broken.push("}]

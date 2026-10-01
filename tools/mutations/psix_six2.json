@@ -1,0 +1,1 @@
+[{"from":"  echo \"F8 驗法：這次動到了$TOUCHED，登記相符\"","to":"  echo \"F8 驗法：這次動到了$TOUCHED，登記相符\"; exit 6"}]

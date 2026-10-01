@@ -1,0 +1,30 @@
+[
+  {
+    "name": "T9：拿掉殘差分配那一步",
+    "file": "js/expenses.js",
+    "find": "  if (diff !== 0) {\n    const order",
+    "replace": "  if (false) {\n    const order",
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T9：轉帳改回用未捨入的淨額算",
+    "file": "js/expenses.js",
+    "find": "const transfers = minTransfers(units).map(",
+    "replace": "const transfers = minTransfers(Object.fromEntries(Object.entries(balances).map(([m, v]) => [m, v * unit]))).map(",
+    "cmd": "node scripts/moneytest.mjs"
+  },
+  {
+    "name": "T10：「打平」的門檻改回 0.5",
+    "file": "js/views/expenses.js",
+    "find": "bal === 0 ? '打平'",
+    "replace": "Math.abs(bal) < 0.5 ? '打平'",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "T10：settleTrip 不看零小數，一律兩位",
+    "file": "js/expenses.js",
+    "find": "const decimals = currencyInfo(baseCurrency).zero ? 0 : 2;",
+    "replace": "const decimals = 2;",
+    "cmd": "node scripts/settletest.mjs"
+  }
+]

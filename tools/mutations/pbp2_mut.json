@@ -1,0 +1,1 @@
+[{"from": "  if (!created) return '';\n  try { await unlink(tmpOut); return '，暫存檔已清掉'; }", "to": "  if (true) return '';\n  try { await unlink(tmpOut); return '，暫存檔已清掉'; }"}]

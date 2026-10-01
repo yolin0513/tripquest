@@ -1,0 +1,1 @@
+[{"from": "for f in scripts/safe-push.sh scripts/prepush-scan.mjs scripts/pushgatetest.mjs; do", "to": "for f in scripts/safe-push.sh; do"}]

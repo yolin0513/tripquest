@@ -1,0 +1,6 @@
+[
+ {
+  "from": "  const tops = fs.readdirSync(ROOT).filter((n) => !ALLOWED_TOP.has(n));",
+  "to": "  const tops = ['server', '.git', 'workers', 'node_modules', 'docs'];"
+ }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "X3：settleTrip 不帶墓碑",
+    "file": "js/expenses.js",
+    "find": "[...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)].map((m) => m.id)",
+    "replace": "[...store.membersOf(trip.groupId)].map((m) => m.id)",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X4：帳只看這一趟（改回舊的範圍）",
+    "file": "js/views/trip.js",
+    "find": "const { paid, shared } = memberExpenseCounts(groupId, m.id);",
+    "replace": "const { tripExpenses } = await import('../expenses.js'); const es0 = tripExpenses(tripId); const paid = es0.filter((e) => e.payerId === m.id).length, shared = es0.filter((e) => (e.participants || []).includes(m.id)).length;",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X5：確認裡不講照片",
+    "file": "js/views/trip.js",
+    "find": "if (photos) lines.push(",
+    "replace": "if (false) lines.push(",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X2：已移除的人叫不出名字（寫成未指定）",
+    "file": "js/views/expenses.js",
+    "find": ": gone.has(id) ? `${gone.get(id) || '旅伴'}（已移除）`",
+    "replace": ": false ? ''",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X2：「每個人」不列已移除的人",
+    "file": "js/views/expenses.js",
+    "find": "...former.filter((m) => (s.totals.byMember[m.id] || 0) !== 0",
+    "replace": "...[].filter((m) => (s.totals.byMember[m.id] || 0) !== 0",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X2：「每個人」連沒帳的已移除者也列",
+    "file": "js/views/expenses.js",
+    "find": "...former.filter((m) => (s.totals.byMember[m.id] || 0) !== 0 || (s.balances[m.id] || 0) !== 0),",
+    "replace": "...former,",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X6：記帳表單用上含墓碑的名單",
+    "file": "js/views/expenses.js",
+    "find": "async function openEdit(tripId, existing) {\n  const trip = store.get(tripId);\n  const members = store.membersOf(trip.groupId);",
+    "replace": "async function openEdit(tripId, existing) {\n  const trip = store.get(tripId);\n  const members = [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)];",
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X6：挑成員用上含墓碑的名單",
+    "file": "js/claim.js",
+    "edits": [
+      { "find": "  const members = store.membersOf(trip.groupId);\r\n  const picked = await pick(", "replace": "  const members = [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)];\r\n  const picked = await pick(" }
+    ],
+    "cmd": "node scripts/membergonetest.mjs"
+  },
+  {
+    "name": "X1：有帳也不提醒（只看照片）",
+    "file": "js/views/trip.js",
+    "find": "if (paid || shared || photos) {",
+    "replace": "if (photos) {",
+    "cmd": "node scripts/membergonetest.mjs"
+  }
+]

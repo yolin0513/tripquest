@@ -1,0 +1,1 @@
+[{"from":"git log --format= --name-only \"$RANGE\" >","to":"git log -1 --format= --name-only HEAD >"}]

@@ -1,0 +1,6 @@
+[
+ {
+  "from": "body.includes('\"name\": \"puppeteer\"')",
+  "to": "body.includes('\"name\": \"puppeteerZZ\"')"
+ }
+]

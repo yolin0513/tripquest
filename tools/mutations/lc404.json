@@ -1,0 +1,1 @@
+[{"from": "const page = await browser.newPage();", "to": "const page = await browser.newPage();\npage.on('response', (r) => { if (r.status() === 404) console.log('PROBE 404：' + r.url().split('?')[0]); });"}]

@@ -1,0 +1,1 @@
+[{"from": "if (invalid.length) stop(", "to": "if (false) stop("}]

@@ -1,0 +1,1 @@
+[{"from": "|scripts\\/[A-Za-z0-9_-]+\\.(?:sh|mjs)|sw\\.js", "to": "|sw\\.js"}]

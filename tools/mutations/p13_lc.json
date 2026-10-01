@@ -1,0 +1,2 @@
+[{"from": "  ok('線上：來源選單開得起來（新模組真的部署上去了）');", "to": "  ok('線上：來源選單開得起來（新模組真的部署上去了）');\n  console.log('PROBE 來源選項：' + (await page.evaluate(() => [...document.querySelectorAll('.imp-src')].map((e) => e.textContent.trim().split('\\n')[0].slice(0, 12)).join('｜'))));"},
+ {"from": "12:00 午餐：鼎泰豐\\n", "to": ""}]

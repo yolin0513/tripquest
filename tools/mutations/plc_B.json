@@ -1,0 +1,6 @@
+[
+ {
+  "from": "const page = await browser.newPage();",
+  "to": "const page = await browser.newPage();\nawait page.setBypassServiceWorker(true);\nawait page.setRequestInterception(true);\nconst __orig = await (await fetch(BASE + 'js/views/import.js')).text();\nconst __from = \"big('📄', '選 PDF 檔', '需要 AI 辨識文字，會先問過你', 'pdf'),\", __to = \"big('📄', '選 PDF 檔', '需要 AI 辨識文字，會先問過你', 'pdf'), big('🎤', '語音輸入', '盤點樣本', 'voice'),\";\nif (__orig.split(__from).length !== 2) { console.log('✗ 盤點樣本沒套上（import.js 裡找不到要換的那一段）'); process.exit(9); }\nconsole.log('前置：盤點樣本 B 多一種來源：import.js 已換成動過手腳的版本');\npage.on('request', (r) => (r.url().includes('/js/views/import.js') ? r.respond({ status: 200, contentType: 'application/javascript; charset=utf-8', body: __orig.replace(__from, __to) }) : r.continue()));\npage.on('response', (r) => { if (r.status() === 404) console.log('PROBE 404：' + r.url().split('?')[0]); });"
+ }
+]
