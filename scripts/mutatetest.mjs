@@ -1,11 +1,19 @@
-// mutate.mjs 的兩道護欄（npm run mutatetest；2026-10-02）。
+// mutate.mjs 的護欄（npm run mutatetest；2026-10-02，照 MealMate docs/HOWTO_範圍化突變與帳本.md 第七節的驗法）。
 //
-// 1. 工作區有進版控的檔跟 HEAD 不一樣 → 拒絕跑（回 2）、點名那個檔、目標檔沒被動。
-// 2. 跑到一半**真的把程序殺掉**（Windows 用 taskkill /T /F，不用模擬的旗標——旗標走的不是同一條路）→
-//    改壞的檔留著（finally 沒跑，先確認這件事真的發生了）→ 再啟動要偵測到未完成、點名該還原的檔（回 5）
-//    → --recover 照紀錄還原成原檔、紀錄清掉、工作區＝HEAD。
-// 3. 正常跑完（反向）：突變紅了、檔還原、沒有留下進度紀錄、工作區＝HEAD。
 // 全部在 repo 的暫存 clone（.logs/mut-clone）裡跑（共用慣例 v11.3 §5.20），跑完刪掉並確認主工作區沒被動。
+// **判定不信 mutate.mjs 自己印的數字**：還原看被改那支檔的內容雜湊；測試有沒有跑、跑到的是原樣還是改壞的，
+// 看探針測試自己寫進標記檔（.logs/zz-marker.txt）的行。輸出只用來比對「點名的是哪一次、哪支檔」。
+//
+// 情境（每一道護欄都有會擋的一面與要放行的一面）：
+//   A  嚴格模式、工作區有不一致的檔 → 回 2、點名那個檔；目標檔雜湊沒變、探針沒跑
+//   A' --only、工作區有不相干的改動 → 照跑：探針跑到改壞版一次、目標檔還原
+//   A" --only、目標檔已含「改壞後」字串（HEAD 沒有）→ 回 2、點名；探針沒跑
+//   B  跑到一半**真的殺程序**（taskkill /T /F；不用旗標模擬——旗標那條路上 finally 照樣會跑）→ 先確認壞檔留著、
+//      兩處紀錄都在 → 重啟：自動還原（目標檔雜湊＝原檔）、還原紀錄不見、帳本記這一次已還原，接著照跑
+//   C  殺掉之後把還原紀錄刪掉、帳本留著未收尾 → 回 5、指出第幾次與哪支檔；目標檔不被動（仍是壞的）
+//   C' 同上，但人工把目標檔還原成原樣 → 照跑（不是永遠關著的閘）
+//   D  還原紀錄在、帳本沒有對應的未收尾 → 回 6；目標檔不被動
+//   E  正常跑完：探針跑到改壞版一次、目標檔＝原檔、沒有還原紀錄、帳本那一次有開跑也有完成
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,73 +41,139 @@ cgit('config', 'user.name', 'mut');
 cgit('config', 'user.email', 'mut@users.noreply.github.com');
 cgit('config', 'core.autocrlf', 'false');
 for (const f of ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', '.gitignore']) fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
-const W = (rel, s) => fs.writeFileSync(path.join(CLONE, rel), s);
-W('zz-target.txt', 'alpha\n');
-W('scripts/zz-check.mjs', "import fs from 'node:fs'; if (fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN')) { console.log('✗ 目標被改壞了'); process.exit(1); }\n");
-W('scripts/zz-sleep.mjs', 'setTimeout(() => {}, 120000);\n');
+const P = (r) => path.join(CLONE, r);
+fs.writeFileSync(P('zz-target.txt'), 'alpha\n');
+// 探針：每跑一次在標記檔寫一行（看到的是原樣還是改壞的）；看到 BROKEN 就紅
+fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了'); process.exit(1); }\n");
+fs.writeFileSync(P('scripts/zz-sleep.mjs'), "import fs from 'node:fs'; fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', 'sleep\\n'); setTimeout(() => {}, 120000);\n");
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'mut 起點');
 const START = cgit('rev-parse', 'HEAD').trim();
-const ORIG = sha1(path.join(CLONE, 'zz-target.txt'));
-// 突變清單放在 .logs（被擋掉，不算工作區改動）
-fs.mkdirSync(path.join(CLONE, '.logs'), { recursive: true });
-const LIST = path.join(CLONE, '.logs', 'zz-muts.json');
-fs.writeFileSync(LIST, JSON.stringify([
-  { name: '會紅的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-check.mjs' },
-  { name: '會睡很久的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-sleep.mjs' },
-]));
-const JOURNAL = path.join(CLONE, '.logs', 'mutate-journal.json');
-console.log(`暫存 clone：${path.relative(ROOT, CLONE)}，起點 ${START.slice(0, 7)}；被驗的 mutate ${sha1(path.join(CLONE, 'scripts/mutate.mjs')).slice(0, 12)}`);
+const ORIG = sha1(P('zz-target.txt'));
+const LIST = P('.logs/zz-muts.json');
+const LEDGER = P('.logs/mutate-ledger.jsonl');
+const PENDING = P('.logs/mutate-pending.json');
+const MARKER = P('.logs/zz-marker.txt');
+console.log(`暫存 clone：${path.relative(ROOT, CLONE)}，起點 ${START.slice(0, 7)}；被驗的 mutate ${sha1(P('scripts/mutate.mjs')).slice(0, 12)}`);
 
 const reset = () => {
   cgit('reset', '-q', '--hard', START);
-  fs.rmSync(JOURNAL, { force: true });
-  return cgit('status', '--porcelain=v1', '--untracked-files=no') === '';
+  for (const f of [LEDGER, PENDING, MARKER]) fs.rmSync(f, { force: true });
+  fs.mkdirSync(P('.logs'), { recursive: true });
+  fs.writeFileSync(LIST, JSON.stringify([
+    { name: '會紅的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-check.mjs' },
+    { name: '會睡很久的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-sleep.mjs' },
+  ]));
+  return cgit('status', '--porcelain=v1', '--untracked-files=no') === '' && sha1(P('zz-target.txt')) === ORIG;
 };
 const run = (...a) => {
   const r = spawnSync(process.execPath, ['scripts/mutate.mjs', ...a], { cwd: CLONE, encoding: 'utf8' });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 };
+const marks = () => (fs.existsSync(MARKER) ? fs.readFileSync(MARKER, 'utf8').split('\n').filter(Boolean) : []);
+const ledger = () => (fs.existsSync(LEDGER) ? fs.readFileSync(LEDGER, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+const targetBroken = () => fs.readFileSync(P('zz-target.txt'), 'utf8').includes('BROKEN');
 
-console.log('\n— 護欄 1：工作區不等於 HEAD 就拒絕 —');
-{
-  yes(reset(), '前置：clone 在起點、工作區乾淨');
-  fs.appendFileSync(path.join(CLONE, 'README.md'), '\n留下來的改動\n');
-  const r = run(LIST, '會紅的');
-  yes(r.code === 2 && /拒絕跑突變：README\.md$/m.test(r.out), `README.md 跟 HEAD 不一樣 → 回 2、點名 README.md（實得 ${r.code}）`, r.out.slice(-300));
-  yes(sha1(path.join(CLONE, 'zz-target.txt')) === ORIG && !fs.existsSync(JOURNAL), '拒絕時目標檔沒被動、沒有留下進度紀錄');
-}
-
-console.log('\n— 護欄 2：跑到一半真的殺掉程序 —');
-{
-  yes(reset(), '前置：clone 在起點、工作區乾淨');
+// 真的殺程序：開跑「會睡很久的」，等兩處紀錄都在、目標檔改壞、探針開始睡，再整棵殺掉
+async function killMidway() {
   const child = spawn(process.execPath, ['scripts/mutate.mjs', LIST, '會睡很久的'], { cwd: CLONE, stdio: 'ignore' });
-  let seen = false;
-  for (let i = 0; i < 100 && !seen; i++) { await sleep(200); seen = fs.existsSync(JOURNAL) && fs.readFileSync(path.join(CLONE, 'zz-target.txt'), 'utf8').includes('BROKEN'); }
-  yes(seen, '前置：進度紀錄已寫到磁碟、目標檔已被改壞（突變正在跑）');
+  let ready = false;
+  for (let i = 0; i < 100 && !ready; i++) { await sleep(200); ready = fs.existsSync(PENDING) && targetBroken() && marks().includes('sleep'); }
   if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
   else process.kill(child.pid, 'SIGKILL');
   await new Promise((r) => (child.exitCode !== null || child.signalCode !== null ? r() : child.on('exit', r)));
   await sleep(300);
-  const after = fs.readFileSync(path.join(CLONE, 'zz-target.txt'), 'utf8');
-  yes(after.includes('BROKEN') && fs.existsSync(JOURNAL), '前置：殺掉之後改壞的檔留著、finally 沒跑（這就是要防的那種情況）');
-
-  const r = run(LIST, '會紅的');
-  yes(r.code === 5 && /上一次的突變沒有做完/.test(r.out) && /zz-target\.txt：應還原成 [0-9a-f]{12}，現在 [0-9a-f]{12}（不是原檔）/.test(r.out),
-    `再啟動 → 回 5、偵測到未完成並點名 zz-target.txt 與該還原的雜湊（實得 ${r.code}）`, r.out.slice(-400));
-  yes(r.out.includes(`應還原成 ${ORIG.slice(0, 12)}`), `點名的雜湊＝原檔的雜湊（${ORIG.slice(0, 12)}）`);
-  const rc = run('--recover');
-  yes(rc.code === 0 && sha1(path.join(CLONE, 'zz-target.txt')) === ORIG && !fs.existsSync(JOURNAL)
-    && cgit('status', '--porcelain=v1', '--untracked-files=no') === '',
-  `--recover → 回 0、目標檔＝原檔、紀錄清掉、工作區＝HEAD（實得 ${rc.code}）`, rc.out.slice(-300));
+  const open = ledger().filter((e) => e.event === 'started').pop();
+  return ready && targetBroken() && fs.existsSync(PENDING) && open && !ledger().some((e) => e.seq === open.seq && e.event !== 'started') ? open : null;
 }
 
-console.log('\n— 反向：正常跑完 —');
+console.log('\n— A 護欄一：工作區 —');
 {
-  yes(reset(), '前置：clone 在起點、工作區乾淨');
+  yes(reset(), '前置：clone 在起點、工作區乾淨、目標檔＝原檔');
+  fs.appendFileSync(P('README.md'), '\n留下來的改動\n');
   const r = run(LIST, '會紅的');
-  yes(r.code === 0 && /✓ 會紅的：紅了/.test(r.out) && /跑完工作區＝HEAD/.test(r.out), `突變紅了 → 回 0、印出跑完工作區＝HEAD（實得 ${r.code}）`, r.out.slice(-300));
-  yes(sha1(path.join(CLONE, 'zz-target.txt')) === ORIG && !fs.existsSync(JOURNAL), '正常跑完：目標檔還原、沒有留下進度紀錄');
+  yes(r.code === 2 && /拒絕跑突變：README\.md$/m.test(r.out), `A 嚴格模式、README.md 不一致 → 回 2、點名 README.md（實得 ${r.code}）`, r.out.slice(-300));
+  yes(sha1(P('zz-target.txt')) === ORIG && marks().length === 0, `A 目標檔雜湊沒變、探針沒跑（標記 ${marks().length} 行）`);
+}
+{
+  yes(reset(), '前置：clone 在起點');
+  fs.appendFileSync(P('README.md'), '\n不相干的改動\n');
+  const r = run('--only', LIST, '會紅的');
+  yes(r.code === 0 && marks().join(',') === 'broken' && sha1(P('zz-target.txt')) === ORIG,
+    `A' --only、不相干的改動 → 照跑：探針看到改壞版一次（標記 ${marks().join(',') || '無'}）、目標檔還原（實得 ${r.code}）`, r.out.slice(-300));
+}
+{
+  yes(reset(), '前置：clone 在起點');
+  fs.writeFileSync(P('zz-target.txt'), 'alpha BROKEN\n');
+  const r = run('--only', LIST, '會紅的');
+  yes(r.code === 2 && /--only：zz-target\.txt 已經含突變「會紅的」改壞後的字串/.test(r.out) && marks().length === 0,
+    `A" --only、目標檔已含改壞後的字串 → 回 2、點名、探針沒跑（實得 ${r.code}）`, r.out.slice(-300));
+}
+
+console.log('\n— B 真的殺程序之後重啟 —');
+{
+  yes(reset(), '前置：clone 在起點');
+  const open = await killMidway();
+  yes(!!open, '前置：殺掉之後壞檔留著、還原紀錄在、帳本那一次只有開跑沒有收尾（造不出來就不往下驗）');
+  if (open) {
+    const r = run(LIST, '會紅的');
+    yes(new RegExp(`上一次被中斷（第 ${open.seq} 次，突變「會睡很久的」），已還原 zz-target\\.txt`).test(r.out),
+      `B 重啟 → 點名第 ${open.seq} 次與 zz-target.txt`, r.out.slice(-400));
+    yes(sha1(P('zz-target.txt')) === ORIG && !fs.existsSync(PENDING), 'B 還原後目標檔雜湊＝原檔、還原紀錄不在');
+    yes(ledger().some((e) => e.seq === open.seq && e.event === 'recovered'), `B 帳本記第 ${open.seq} 次已還原`);
+    yes(r.code === 0 && marks().filter((x) => x === 'broken').length === 1, `B 還原後照跑：探針看到改壞版一次（實得 ${r.code}、標記 ${marks().join(',')}）`);
+  }
+}
+
+console.log('\n— C 還原紀錄被移掉 —');
+{
+  yes(reset(), '前置：clone 在起點');
+  const open = await killMidway();
+  yes(!!open, '前置：殺掉之後兩處紀錄都在、壞檔留著');
+  if (open) {
+    fs.rmSync(PENDING);
+    const before = marks().length;
+    const r = run(LIST, '會紅的');
+    yes(r.code === 5 && new RegExp(`第 ${open.seq} 次開跑（突變「會睡很久的」）沒有收尾，還原紀錄卻不在；zz-target\\.txt`).test(r.out),
+      `C 刪掉還原紀錄 → 回 5、指出第 ${open.seq} 次與 zz-target.txt（實得 ${r.code}）`, r.out.slice(-400));
+    yes(targetBroken() && marks().length === before, 'C 拒絕時目標檔不被動（仍是壞的）、探針沒跑');
+  }
+}
+{
+  yes(reset(), '前置：clone 在起點');
+  const open = await killMidway();
+  yes(!!open, '前置：殺掉之後兩處紀錄都在、壞檔留著');
+  if (open) {
+    fs.rmSync(PENDING);
+    cgit('checkout', '--', 'zz-target.txt');            // 人工還原
+    const r = run(LIST, '會紅的');
+    yes(r.code === 0 && new RegExp(`註：第 ${open.seq} 次開跑沒有收尾、還原紀錄不在，但 zz-target\\.txt 的雜湊等於原檔——照跑`).test(r.out)
+      && marks().filter((x) => x === 'broken').length === 1 && sha1(P('zz-target.txt')) === ORIG,
+    `C' 人工還原後 → 照跑、註明、探針看到改壞版一次、目標檔＝原檔（實得 ${r.code}）`, r.out.slice(-400));
+  }
+}
+
+console.log('\n— D 兩處紀錄不一致 —');
+{
+  yes(reset(), '前置：clone 在起點');
+  const open = await killMidway();
+  yes(!!open, '前置：殺掉之後兩處紀錄都在、壞檔留著');
+  if (open) {
+    fs.writeFileSync(LEDGER, ledger().filter((e) => e.seq !== open.seq).map((e) => JSON.stringify(e)).join('\n'));   // 帳本少了那一次
+    const r = run(LIST, '會紅的');
+    yes(r.code === 6 && new RegExp(`兩處紀錄不一致：還原紀錄是第 ${open.seq} 次（zz-target\\.txt）`).test(r.out) && targetBroken(),
+      `D 還原紀錄在、帳本沒有對應的 → 回 6、目標檔不被動（實得 ${r.code}）`, r.out.slice(-400));
+  }
+}
+
+console.log('\n— E 正常跑完（反向） —');
+{
+  yes(reset(), '前置：clone 在起點');
+  const r = run(LIST, '會紅的');
+  const L = ledger();
+  yes(r.code === 0 && marks().join(',') === 'broken' && sha1(P('zz-target.txt')) === ORIG && !fs.existsSync(PENDING)
+    && L.some((e) => e.seq === 1 && e.event === 'started') && L.some((e) => e.seq === 1 && e.event === 'done'),
+  `E 正常跑完：探針看到改壞版一次、目標檔＝原檔、沒有還原紀錄、帳本第 1 次有開跑也有完成（實得 ${r.code}）`, r.out.slice(-300));
 }
 
 fs.rmSync(CLONE, { recursive: true, force: true });
