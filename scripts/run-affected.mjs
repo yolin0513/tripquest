@@ -8,7 +8,8 @@
 //   node scripts/run-affected.mjs --commit <sha>  改動＝那一個 commit（回放歷史用）
 //   node scripts/run-affected.mjs --files a,b     直接指定改動清單（示範／試算，不讀 git）
 //   node scripts/run-affected.mjs --only a,b      只跑鏈上這幾支（不經挑選器；名字不在鏈上就停）
-//   加 --dry 只印不跑。
+//   node scripts/run-affected.mjs --all           完整的鏈（npm test 走這裡）
+//   加 --dry 只印不跑（含耗時預測）；重負載要加 --approved 才跑（沒加回 8）。
 //
 // 每一支測試前後各拍一次工作區（scripts/worktree-guard.mjs）：測試改了進版控的檔、或丟下沒被
 // .gitignore 擋掉的新檔 → 回 3 並點名哪一支、哪幾個檔；拍不到（git 讀不到）→ 回 4，不當成沒改動。
@@ -20,6 +21,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseChain, extractRefs, buildImportGraph, select, formatReport, classifyChanges } from './affected.mjs';
 import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
 import { runWithTimeout } from './run-timeout.mjs';
+import { predict, classify, loadTimes, saveTimes, loadHistory, appendHistory } from './predict.mjs';
 
 // 單支測試的時限（秒）。最慢的 layouttest 實測 516～580 秒；20 分鐘留了兩倍餘裕。--timeout-sec 可改。
 // 超過就整棵程序樹殺掉、回 7：**沒有結果**——不是通過，也不是紅。
@@ -108,12 +110,19 @@ function arg(name) {
 
 async function main() {
   const dry = process.argv.includes('--dry');
+  const approved = process.argv.includes('--approved');
   const timeoutSec = arg('--timeout-sec') ? Number(arg('--timeout-sec')) : DEFAULT_TIMEOUT_SEC;
   if (!(timeoutSec > 0)) { console.log(`✗ --timeout-sec 要是正數（拿到 ${arg('--timeout-sec')}）`); process.exit(2); }
   const repo = loadRepo();
   const onlyArg = arg('--only');
-  let r;
-  if (onlyArg) {
+  let r, mode;
+  if (process.argv.includes('--all')) {
+    // npm test：完整的鏈也走這裡（工作區守衛、單支逾時、按次預測都蓋得到）
+    const names = repo.chain.map((t) => t.name);
+    r = { selected: names, n: names.length, m: names.length, full: true };
+    mode = 'all';
+    console.log(`完整的鏈 ${names.length} 支（npm test）`);
+  } else if (onlyArg) {
     const want = onlyArg.split(',').map((s) => s.trim()).filter(Boolean);
     const missing = want.filter((n) => !repo.chain.some((t) => t.name === n));
     if (!want.length || missing.length) {
@@ -121,6 +130,7 @@ async function main() {
       process.exit(2);
     }
     r = { selected: want, n: want.length, m: repo.chain.length, full: false };
+    mode = 'only';
     console.log(`只跑指定的 ${want.length} 支：${want.join('、')}（不經挑選器）`);
   } else {
     const filesArg = arg('--files');
@@ -128,6 +138,7 @@ async function main() {
       ? filesArg.split(',').map((s) => s.trim()).filter(Boolean)
       : changedFiles({ base: arg('--base') || 'HEAD', commit: arg('--commit') });
     r = select({ changed, ...repo });
+    mode = r.full ? 'affected-full' : 'affected';
 
     const shown = changed.map((c) => (typeof c === 'string' ? c : `${c.status} ${c.path}`));
     console.log(`改動 ${shown.length} 個檔：`);
@@ -138,12 +149,33 @@ async function main() {
     console.log('');
     console.log(sinceFullRun());
   }
-  if (dry) return;
 
+  // 按次預測（v11.3 §5.19）：依這次實際要跑的那幾支預測，不按指令名稱
+  let tbl, hist;
+  try { tbl = loadTimes(ROOT); hist = loadHistory(ROOT); }
+  catch (e) { console.log(`✗ 讀不到耗時紀錄（${e.message}）——預測不出，不當成 0 秒`); process.exit(4); }
+  const pred = predict(r.selected, tbl);
+  const cls = classify({ pred, history: hist });
+  console.log(`\n耗時預測：${pred.sec === null ? '預測不出' : `${pred.sec.toFixed(0)} 秒`}（${pred.known}/${r.selected.length} 支量過）→ ${cls.heavy ? '重負載' : '常規'}：${cls.reason}`);
+  if (dry) return;
+  if (cls.heavy && !approved) {
+    console.log('✗ 重負載：開跑前要先向 Dispatch 要許可；拿到之後加 --approved 再跑（npm test -- --approved）');
+    process.exit(8);
+  }
+
+  const t00 = Date.now();
+  const record = (end, extra = {}) => {
+    try {
+      appendHistory(ROOT, { mode, n: r.selected.length, predictedSec: pred.sec, unknown: pred.unknown.length, heavy: cls.heavy, approved,
+        actualSec: Math.round((Date.now() - t00) / 100) / 10, end, ...extra });
+    } catch (e) { console.log(`✗ 寫不進 run-history（${e.message}）`); }
+    console.log(`預估與實際：預估 ${pred.sec === null ? '預測不出' : pred.sec.toFixed(0) + ' 秒'}、實際 ${((Date.now() - t00) / 1000).toFixed(0)} 秒（記進 .logs/run-history.jsonl）`);
+  };
   const shot = (when) => {
     try { return snapshot({ root: ROOT }); }
     catch (e) {
       console.log(`\n✗ 工作區守衛壞了：${when}拍不到工作區（${String(e.message).split('\n')[0]}）—— 不當成沒有改動，停在這裡`);
+      record('守衛壞了');
       process.exit(4);
     }
   };
@@ -156,20 +188,25 @@ async function main() {
     const res = await runWithTimeout(process.execPath, [t.file], { cwd: ROOT, inherit: true, timeoutMs: timeoutSec * 1000 });
     const sec = (Date.now() - t0) / 1000;
     times.push([name, sec]);
+    // 這支的實測秒數只在「算數的結束」（跑完、不論紅綠）時更新；逾時被殺的不算量過
+    if (!res.timedOut) { tbl[name] = Math.round(sec * 10) / 10; try { saveTimes(ROOT, tbl); } catch (e) { console.log(`✗ 寫不進 test-times（${e.message}）`); } }
     const touched = changesBetween(before, shot(`${name} 跑完後`));
     console.log(`工作區守衛：${name} 開跑前不一樣的檔 ${before.size} 個，跑完多出或變了 ${touched.length} 個`);
     // 逾時先講（它決定這一支「沒有結果」）；同時動到工作區的話也一起點名，兩件都不吞掉
     if (res.timedOut) {
       console.log(`\n✗ ${name} 逾時（${timeoutSec} 秒）被殺——沒有結果，不是通過也不是紅；停在這裡，後面的沒跑`);
       if (touched.length) console.log(`✗ ${name} 被殺之前動到工作區的檔：${describe(touched)}`);
+      record('逾時', { at_test: name });
       process.exit(7);
     }
     if (touched.length) {
       console.log(`\n✗ ${name} 動到工作區的檔：${describe(touched)} —— 測試的輸出要寫到 .gitignore 擋掉的目錄；停在這裡，後面的沒跑`);
+      record('動到工作區', { at_test: name });
       process.exit(3);
     }
     if (res.status !== 0) {
       console.log(`\n✗ ${name} 紅了（exit ${res.status}，${sec.toFixed(1)} 秒）—— 停在這裡，後面的沒跑`);
+      record('紅', { at_test: name });
       process.exit(res.status || 1);
     }
   }
@@ -179,6 +216,7 @@ async function main() {
     ? `完整的鏈 ${r.n}/${r.m} 支全綠（${total.toFixed(0)} 秒）`
     : `底線＋受影響 ${r.n}/${r.m} 支綠（${total.toFixed(0)} 秒）—— 這不是全綠`);
   for (const [name, sec] of times.slice().sort((a, b) => b[1] - a[1]).slice(0, 5)) console.log(`  ${name} ${sec.toFixed(1)} 秒`);
+  record('綠');
   console.log(sinceFullRun());
 }
 

@@ -92,8 +92,8 @@ function isDocLike(f, chainFiles) {
 // 回傳 [{ name, file }]，依鏈的順序。任何一段對不上格式、或對不到實際存在的檔，就丟錯 ——
 // 靜默略過的話，少掉的那一支永遠不會被挑、也永遠不會有人發現。
 export function parseChain(pkg, exists) {
-  const s = pkg && pkg.scripts && pkg.scripts.test;
-  if (typeof s !== 'string' || !s.trim()) throw new Error('package.json 沒有 test script');
+  const s = pkg && pkg.scripts && pkg.scripts['test:chain'];   // 2026-10-02 起鏈的定義在 test:chain；npm test 走 run-affected --all
+  if (typeof s !== 'string' || !s.trim()) throw new Error('package.json 沒有 test:chain script');
   return s.split('&&').map((seg) => {
     const m = seg.trim().match(/^node\s+(scripts\/([A-Za-z0-9_-]+)\.mjs)$/);
     if (!m) throw new Error(`鏈裡有一段看不懂：「${seg.trim()}」`);

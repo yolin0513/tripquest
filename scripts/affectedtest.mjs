@@ -36,12 +36,12 @@ yes(new Set(names).size === names.length, '鏈裡沒有重複的測試');
   // 對照組：故意寫錯檔名的假鏈 —— 解析器必須丟錯，不能跳過那一支。
   // 檔名要是格式合法的 ASCII：用中文的話會先在「格式看不懂」那一關被擋掉，
   // 「檔案不存在」這一關就從來沒被測到（2026-09-19 突變實測踩過）。
-  const fake = { scripts: { test: 'node scripts/zhtest.mjs && node scripts/nosuchtest.mjs && node scripts/emptytest.mjs' } };
+  const fake = { scripts: { 'test:chain': 'node scripts/zhtest.mjs && node scripts/nosuchtest.mjs && node scripts/emptytest.mjs' } };
   let err = null;
   try { parseChain(fake, (p) => fs.existsSync(path.join(ROOT, p))); } catch (e) { err = e; }
   yes(err && /nosuchtest\.mjs 不存在/.test(err.message), '對照組：假鏈裡寫錯的檔名會讓解析器報「不存在」（不是靜默略過）', err ? err.message : '沒有丟錯');
   let err2 = null;
-  try { parseChain({ scripts: { test: 'node scripts/zhtest.mjs && npm run sweep' } }, () => true); } catch (e) { err2 = e; }
+  try { parseChain({ scripts: { 'test:chain': 'node scripts/zhtest.mjs && npm run sweep' } }, () => true); } catch (e) { err2 = e; }
   yes(!!err2, '對照組：鏈裡有看不懂的一段（npm run …）也會報錯');
 }
 

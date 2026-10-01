@@ -3,6 +3,7 @@
 // 起因：imgtest 每次跑都改寫 screenshots/features 裡三張進版控的截圖，v1.74.4、v1.74.5、2026-09-25 都是
 // 事後手動 git checkout 還原——沒有任何東西擋，下一次可能不是截圖、也可能沒人注意到。
 //
+// （假測試都沒量過、會被按次預測判成重負載，所以在 clone 裡一律帶 --approved；預測本身由 predicttest 驗）
 // 做法（共用慣例 v11.3 §5.20：從命令列入口跑的對照組，在 repo 的暫存 clone 裡跑，不在工作區裡跑）：
 //   1. 把 repo clone 到 .logs/wtg-clone（被 .gitignore 擋掉），再把「這一份」的 run-affected.mjs、worktree-guard.mjs、
 //      affected.mjs 蓋進去（突變時被驗的就是改壞的那一份），加幾支假測試進鏈，commit 成乾淨的起點。
@@ -47,13 +48,13 @@ execFileSync('git', ['clone', '-q', ROOT, CLONE]);
 cgit('config', 'user.name', 'wtg');
 cgit('config', 'user.email', 'wtg@users.noreply.github.com');
 cgit('config', 'core.autocrlf', 'false');
-for (const f of ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/affected.mjs', '.gitignore']) {
+for (const f of ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/predict.mjs', 'scripts/affected.mjs', '.gitignore', 'package.json']) {
   fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
 }
 for (const [n, src] of Object.entries(FAKE)) fs.writeFileSync(path.join(CLONE, 'scripts', n + '.mjs'), src + '\n');
 const pkgPath = path.join(CLONE, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-pkg.scripts.test += Object.keys(FAKE).map((n) => ` && node scripts/${n}.mjs`).join('');
+pkg.scripts['test:chain'] += Object.keys(FAKE).map((n) => ` && node scripts/${n}.mjs`).join('');
 fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'wtg 起點');
@@ -66,7 +67,7 @@ const reset = () => {
   return cgit('status', '--porcelain=v1', '--untracked-files=all') === '';
 };
 const run = (names, env = {}) => {
-  const r = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--only', names], { cwd: CLONE, encoding: 'utf8', env: { ...process.env, ...env } });
+  const r = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--only', names, '--approved'], { cwd: CLONE, encoding: 'utf8', env: { ...process.env, ...env } });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 };
 // 擷取「點名」的那一行；擷取本身先用已知輸出驗過（§5.11 第二層）
@@ -111,7 +112,7 @@ console.log('\n— 單支逾時 —');
   reset();
   const pidFile = path.join(CLONE, '.logs', 'hang-pids.txt');
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--only', 'zz-wtg-hang', '--timeout-sec', '3'], { cwd: CLONE, encoding: 'utf8', timeout: 60000 });
+  const r = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--only', 'zz-wtg-hang', '--timeout-sec', '3', '--approved'], { cwd: CLONE, encoding: 'utf8', timeout: 60000 });
   const out = (r.stdout || '') + (r.stderr || '');
   const sec = (Date.now() - t0) / 1000;
   const pids = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8').trim().split(' ').map(Number) : [];
