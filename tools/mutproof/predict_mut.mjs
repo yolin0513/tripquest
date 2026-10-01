@@ -9,12 +9,12 @@ const REPO = process.argv[2];
 const COPY = path.join(REPO, '.logs', 'pm-mut');
 const MUTS = [
   { name: 'M0 不改（基準）', expect: [] },
-  { name: 'M1 沒量過當成 0 秒', file: 'scripts/predict.mjs', find: 'return { sec: unknown.length ? null : sec,', repl: 'return { sec,', expect: ['P1 有一支沒量過', 'C2 '] }   // C1、C6 不紅是對的：「沒量過」另有一條判斷，不靠秒數,
+  { name: 'M1 沒量過當成 0 秒', file: 'scripts/predict.mjs', find: 'return { sec: unknown.length ? null : sec,', repl: 'return { sec,', expect: ['P1 有一支沒量過', 'C2 '] },   // C1、C6 不紅是對的：「沒量過」另有一條判斷，不靠秒數
   { name: 'M2 超過 600 秒也不算重負載', file: 'scripts/predict.mjs', find: 'if (pred.sec > LIMIT_SEC) return', repl: 'if (false) return', expect: ['P4 601', 'C4 '] },
   { name: 'M3 拿掉「連續 3 次超過預估」', file: 'scripts/predict.mjs', find: 'if (last3.length === 3 && last3.every', repl: 'if (false && last3.every', expect: ['P5 連續 3 次', 'P5 預測法要改時', 'C5 '] },
   { name: 'M4 拿掉「常規卻超過 600 秒沒拿許可」', file: 'scripts/predict.mjs', find: '  if (crossed) return', repl: '  if (false) return', expect: ['P6 預估常規'] },
   { name: 'M5 不分預測法版本', file: 'scripts/predict.mjs', find: "history.filter((e) => e.version === version && typeof e.actualSec === 'number')", repl: "history.filter((e) => typeof e.actualSec === 'number')", expect: ['P7 舊版'] },
-  { name: 'M6 一律當重負載', file: 'scripts/predict.mjs', find: "return { heavy: false, reason: `預估", repl: "return { heavy: true, reason: `預估", expect: ['P2 ', 'P4 反向', 'C3 ', '重負載：開跑前'] }   // 最後一項是 C3 附帶印出的證據行,
+  { name: 'M6 一律當重負載', file: 'scripts/predict.mjs', find: "return { heavy: false, reason: `預估", repl: "return { heavy: true, reason: `預估", expect: ['P2 ', 'P4 反向', 'C3 ', '重負載：開跑前'] },   // 最後一項是 C3 附帶印出的證據行
   { name: 'M7 run-affected 判成重負載也照跑', file: 'scripts/run-affected.mjs', find: 'if (cls.heavy && !approved) {', repl: 'if (false) {', expect: ['C1 ', 'C4 ', 'C5 '] },
 ];
 let bad = 0;
