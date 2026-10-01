@@ -50,6 +50,19 @@
   一律報有問題 → 連「齊全」也 false；原樣 → 全過、回 0。三支突變驅動腳本（`wtg_mut`、`mut_guard_mut`、`mutlint_mut`）也搬進
   `tools/mutproof/`。**還在暫存區、沒入庫的**：驗閘門的證據外殼 `ev2.sh` 與它的 `*.shell` 情境檔（`tools/mutations/` 的 `from/to`
   補丁是給它們用的）——排進計畫。
+- **第二批：單支逾時、帳本「沒有結果」（2026-10-02，`419484c`）**：`scripts/run-timeout.mjs` 超過時限就 `taskkill /T /F` 整棵程序樹
+  （`spawnSync` 的 timeout 在 Windows 只殺得到 shell）。`run-affected` 單支時限預設 1200 秒（最慢的 layouttest 實測 516～580 秒），
+  `--timeout-sec` 可改；逾時回 7、寫「沒有結果，不是通過也不是紅」。`mutate` 帳本收尾那一筆加 `result`：red／not-red／**no-result**
+  （逾時被殺、被中斷後還原、還原紀錄不見但檔案沒事都算 no-result——原本逾時照樣記成 done）；`node scripts/mutate.mjs --no-result`
+  列出最近一次沒有結果的。**🔴 這個欄位目前不影響任何選擇**：本 App 還沒有依帳本挑選突變的機制，no-result 只是紀錄、
+  下次不會自動被跑；帳本第一行與 `--no-result` 的輸出都寫明這一句。等有了選擇機制再拿掉這段、補「會被挑進來」的對照組。
+  對照組：`worktreeguardtest` 17 項（卡住的假測試開孫程序、`--timeout-sec 3` → 3.5 秒回 7、兩個 pid 都不在）；`mutatetest` 47 項
+  （G：卡住 → 3 秒結束、探針 pid 不在、帳本 no-result、`--no-result` 列出；反向：正常紅了的不列、手動標 no-result 會列、再正常跑
+  一次就不列；B：被中斷那次也列出）。突變（`tools/mutproof/timeout_mut.mjs`）：T3 逾時照樣記成沒紅 → G 四條紅；T4 清單永遠空
+  → B、G 四條紅；T1 不殺程序樹、T2 不設時限 → 「3 秒內回 7」紅（被外層 60 秒逾時收掉）。**T1x 只殺直接子程序（不加 `/T`）是等價
+  突變**（實測全綠）：這台 Windows 上子程序結束時孫程序跟著被收掉，「整棵樹被殺」那條分不出有沒有 `/T`——`/T` 留著當保險，不補斷言。
+  資源：mutatetest 20.6 秒峰值 3、worktreeguardtest 14.8 秒峰值 4；突變整批 240.5 秒，取樣器數到 5（含啟動它的那一支主程式，
+  照 §5.19 主程式不算＝4），可用最低 4,832 MB。
 - **那三張進版控的圖（`screenshots/features/v1.26-任務卡示意圖／美食示意圖／查不到圖佔位.png`）沒有任何文件引用**（搜 `.md`、
   `.html`；同一個搜尋式在 `.md` 上抓得到已知的一行當對照）：沒人看、也沒有測試檢查內容的死檔。**要不要刪由 Yolin 決定**，不動。
 - **還沒做／待許可**：mutate 護欄的突變（拿掉開跑前檢查、拿掉進度紀錄、拿掉啟動時讀紀錄）；`test:affected`（這次挑到 10/54 支）；
