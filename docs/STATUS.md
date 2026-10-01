@@ -65,6 +65,16 @@
   照 §5.19 主程式不算＝4），可用最低 4,832 MB。
 - **🔴 給別台機器的下一個人：repo 裡 `mutlint` 看到的「非突變 0 份」不是漏算。** Session 暫存區原本有 155 份 JSON＝突變 148＋
   非突變 7；那 7 份是 D1 查詢輸出（行程名稱、群組名、建立時間——個資），**只存在原本那台機器的本機、刻意不入庫**。
+- **`npm test` 改走 `run-affected --all`＋按次預測耗時（2026-10-02，v11.3 §5.19）**：鏈的定義從 `scripts.test` 搬到
+  `scripts["test:chain"]`（`parseChain` 改讀它），`npm test`＝`node scripts/run-affected.mjs --all`——完整的鏈也蓋得到工作區守衛、
+  單支逾時。**歸類按次、不按指令名稱**（`scripts/predict.mjs`）：開跑前依這次實際要跑的那幾支、各自在 `.logs/test-times.json`
+  的上次實測秒數加總預測；有一支沒量過＝預測不出＝重負載；超過 600 秒＝重負載；同一版預測法最近連續 3 次實際超過預估 50%
+  以上、或有一次預估常規卻跑超過 600 秒沒拿許可＝預測法要改，改好（`PREDICTOR_VERSION` 加 1）之前一律重負載。重負載沒加
+  `--approved` 回 8、不跑。**預估與實際每次都記進 `.logs/run-history.jsonl`**（含結束方式：綠／紅／逾時／動到工作區）。
+  **🔴 這台機器目前每一支都沒量過**：第一次 `npm test`、`npm run test:affected` 都會被判成重負載、要先拿許可，跑完才有秒數。
+  對照組 `predicttest` 26 項（純函式每條規則正反兩向；真入口 C1–C7 在暫存 clone 跑，判定看 run-history 與 test-times 的內容）；
+  突變 7 條（`tools/mutproof/predict_mut.mjs`）各自只紅它的那幾條。踩到的：C2、C3 原本吃 C1 留下的狀態，M7（重負載也照跑）
+  讓 C1 真的跑了、C2 跟著紅——改成每個情境自己準備狀態。
 - **`ev2.sh` 那一族入庫（2026-10-02）**：搬進 `tools/ev/`——證據外殼 `ev2.sh`、它用的 `inv_patch.mjs`、6 支驅動腳本（`six_mut`、
   `f9_mut`、`f9_mut2`、`f10_mut`、`di_mut`、`last_mut`）、6 支補丁產生器（`mk_*_patches.mjs`，含 `mk_nb`）。暫存區那 73 份 `.shell`
   是 `ev2.sh` 跑完的**輸出**（證據紀錄），不是情境定義，不入庫；證據的結論早已寫在 `docs/EVIDENCE_檢查器修補.md`。改了三處路徑：
