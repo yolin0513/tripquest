@@ -138,7 +138,9 @@ try {
   else fail('沒有佔位圖：' + JSON.stringify(phCard));
 
   // ---------- 三種情況各拍一張（要轉給使用者看的）----------
-  const OUT = path.join(ROOT, 'screenshots/features');
+  // 只產生圖、不比對（2026-10-02 查明）：寫到 .gitignore 擋掉的目錄。原本寫進 screenshots/features，
+  // 每次跑都改寫那三張進版控的截圖；那三張留在版控當文件圖，目前沒有任何測試在檢查它們的內容。
+  const OUT = path.join(ROOT, 'screenshots/_out/imgtest');
   await mkdir(OUT, { recursive: true });
   await page.evaluate(() => document.querySelectorAll('.daycollapse .dc-head').forEach((b) => {
     if (!b.closest('.daycollapse').classList.contains('open')) b.click();

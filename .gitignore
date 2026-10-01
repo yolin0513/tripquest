@@ -19,6 +19,8 @@ screenshots/_layout/
 screenshots/_layout-report.txt
 screenshots/_v147/
 screenshots/_recapcard/
+# 鏈上測試的截圖輸出（只產生、不比對；run-affected 的工作區守衛不准測試寫進版控的檔）
+screenshots/_out/
 
 # 本機開發設定（不影響部署）
 .claude/settings.local.json

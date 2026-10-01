@@ -7,13 +7,18 @@
 //   node scripts/run-affected.mjs --base <ref>    改動＝<ref> 到工作樹（一版分好幾個 commit 時用）
 //   node scripts/run-affected.mjs --commit <sha>  改動＝那一個 commit（回放歷史用）
 //   node scripts/run-affected.mjs --files a,b     直接指定改動清單（示範／試算，不讀 git）
+//   node scripts/run-affected.mjs --only a,b      只跑鏈上這幾支（不經挑選器；名字不在鏈上就停）
 //   加 --dry 只印不跑。
+//
+// 每一支測試前後各拍一次工作區（scripts/worktree-guard.mjs）：測試改了進版控的檔、或丟下沒被
+// .gitignore 擋掉的新檔 → 回 3 並點名哪一支、哪幾個檔；拍不到（git 讀不到）→ 回 4，不當成沒改動。
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseChain, extractRefs, buildImportGraph, select, formatReport, classifyChanges } from './affected.mjs';
+import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -98,31 +103,58 @@ function arg(name) {
 
 function main() {
   const dry = process.argv.includes('--dry');
-  const filesArg = arg('--files');
-  const changed = filesArg
-    ? filesArg.split(',').map((s) => s.trim()).filter(Boolean)
-    : changedFiles({ base: arg('--base') || 'HEAD', commit: arg('--commit') });
   const repo = loadRepo();
-  const r = select({ changed, ...repo });
+  const onlyArg = arg('--only');
+  let r;
+  if (onlyArg) {
+    const want = onlyArg.split(',').map((s) => s.trim()).filter(Boolean);
+    const missing = want.filter((n) => !repo.chain.some((t) => t.name === n));
+    if (!want.length || missing.length) {
+      console.log(`✗ --only 指定的測試不在鏈上：${missing.join('、') || '（沒有指定任何一支）'}`);
+      process.exit(2);
+    }
+    r = { selected: want, n: want.length, m: repo.chain.length, full: false };
+    console.log(`只跑指定的 ${want.length} 支：${want.join('、')}（不經挑選器）`);
+  } else {
+    const filesArg = arg('--files');
+    const changed = filesArg
+      ? filesArg.split(',').map((s) => s.trim()).filter(Boolean)
+      : changedFiles({ base: arg('--base') || 'HEAD', commit: arg('--commit') });
+    r = select({ changed, ...repo });
 
-  const shown = changed.map((c) => (typeof c === 'string' ? c : `${c.status} ${c.path}`));
-  console.log(`改動 ${shown.length} 個檔：`);
-  for (const s of shown.slice(0, 40)) console.log('  ' + s);
-  if (shown.length > 40) console.log(`  …另 ${shown.length - 40} 個`);
-  console.log('');
-  console.log(formatReport(r));
-  console.log('');
-  console.log(sinceFullRun());
+    const shown = changed.map((c) => (typeof c === 'string' ? c : `${c.status} ${c.path}`));
+    console.log(`改動 ${shown.length} 個檔：`);
+    for (const s of shown.slice(0, 40)) console.log('  ' + s);
+    if (shown.length > 40) console.log(`  …另 ${shown.length - 40} 個`);
+    console.log('');
+    console.log(formatReport(r));
+    console.log('');
+    console.log(sinceFullRun());
+  }
   if (dry) return;
 
+  const shot = (when) => {
+    try { return snapshot({ root: ROOT }); }
+    catch (e) {
+      console.log(`\n✗ 工作區守衛壞了：${when}拍不到工作區（${String(e.message).split('\n')[0]}）—— 不當成沒有改動，停在這裡`);
+      process.exit(4);
+    }
+  };
   const times = [];
   for (const name of r.selected) {
     const t = repo.chain.find((x) => x.name === name);
     console.log(`\n━━━━ ${name}（${times.length + 1}/${r.n}）━━━━`);
+    const before = shot(`${name} 開跑前`);
     const t0 = Date.now();
     const res = spawnSync(process.execPath, [t.file], { cwd: ROOT, stdio: 'inherit' });
     const sec = (Date.now() - t0) / 1000;
     times.push([name, sec]);
+    const touched = changesBetween(before, shot(`${name} 跑完後`));
+    console.log(`工作區守衛：${name} 開跑前不一樣的檔 ${before.size} 個，跑完多出或變了 ${touched.length} 個`);
+    if (touched.length) {
+      console.log(`\n✗ ${name} 動到工作區的檔：${describe(touched)} —— 測試的輸出要寫到 .gitignore 擋掉的目錄；停在這裡，後面的沒跑`);
+      process.exit(3);
+    }
     if (res.status !== 0) {
       console.log(`\n✗ ${name} 紅了（exit ${res.status}，${sec.toFixed(1)} 秒）—— 停在這裡，後面的沒跑`);
       process.exit(res.status || 1);

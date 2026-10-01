@@ -5,6 +5,25 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+**2026-10-02 進行中（Dispatch 排的順序：v11.3 工單之前先擋「測試寫進進版控的檔」與 mutate 直接改工作區）**
+- **查明**：會動到主工作區的有兩類——(1) 測試／截圖腳本：`imgtest` 每次跑都改寫 `screenshots/features/v1.26-*.png`
+  三張（v1.74.4、v1.74.5、09-25 都是事後手動還原）；`imgtest` **只產生、不比對**（`scripts/imgtest.mjs` 截圖後無條件
+  `ok('截圖：…')`，全 repo 沒有任何地方讀回那三張）——**那三張進版控的圖目前沒有任何測試在檢查內容**；(2) App 程式突變
+  （原本在 Session 暫存區的 `mutate.mjs`）直接改主工作區的 `js/*.js`、只靠 `finally` 寫回，被殺掉或當機時不會還原。
+  驗閘門的突變（`ev2.sh`）在暫存複本裡做，不碰工作區。
+- **做了（未推送前請看下一條）**：`scripts/worktree-guard.mjs`（拍工作區、比對）；`run-affected.mjs` 每支測試前後各拍一次，
+  多出改動回 3 並點名「哪一支、哪幾個檔」，拍不到回 4；加 `--only`。`imgtest` 輸出改到 `screenshots/_out/imgtest`
+  （`.gitignore` 擋掉，只改路徑）。`scripts/mutate.mjs` 搬進 repo、加兩道護欄：開跑前工作區（進版控的檔）要等於 HEAD，
+  否則回 2 點名；改檔前把備份與雜湊寫進 `.logs/mutate-journal.json`（fsync），被殺掉之後再啟動回 5 並點名該還原成哪個雜湊，
+  `--recover` 照紀錄還原。對照組 `worktreeguardtest`（14 項）、`mutatetest`（14 項，**真的用 taskkill 殺程序**），都在
+  `.logs/` 底下的暫存 clone 裡跑、跑完確認主工作區沒被動；兩支進鏈（54 支）。守衛 6 條突變（在暫存複本裡、印出被驗那份的雜湊）
+  各自只紅預期的那幾條。
+- **還沒做／待許可**：mutate 護欄的突變（拿掉開跑前檢查、拿掉進度紀錄、拿掉啟動時讀紀錄）；`test:affected`（這次挑到 10/54 支）；
+  `imgtest` 改路徑後沒實跑；**`npm test`（完整的鏈）不經過 `run-affected`，守衛蓋不到它**——要改成走 `run-affected` 另排；
+  鏈上還有哪幾支會寫進版控的檔，要等守衛第一次跑完整條鏈才知道（重負載）。整個改成在暫存複本裡突變，列進計畫。
+- **違規照實記**：`worktreeguardtest`、它的 6 條突變、`mutatetest` 每次同時開 2～4 個程序，照 v11.1 屬於重負載、要先拿許可；
+  我沒拿就跑了，當時 PwaGame 正開著 5 個 node。之後這三支一律先要許可。
+
 **收尾快照（2026-09-25）：這個 Session 已收尾，Yolin 說手邊任務告一段落之後不再派新任務。** 沒有進行中的工作。
 
 **這一輪做完、已推送的**：v1.74.10 上線（數字跟單位不再被拆到兩行；`layouttest` 零版面問題）；檢查器修補工單 P0、P1、F8、F9、F10、
@@ -448,7 +467,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **52 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **54 支**（affectedtest → validate-places → … → zhtest → layouttest → workertest → worktreeguardtest → mutatetest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——
