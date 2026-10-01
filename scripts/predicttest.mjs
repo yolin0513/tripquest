@@ -74,6 +74,7 @@ const times = () => (fs.existsSync(TIMES) ? JSON.parse(fs.readFileSync(TIMES, 'u
     `C1 沒量過 → 回 8、寫明預測不出與要許可、沒有跑（沒記紀錄、沒量秒數）（實得 ${r.code}）`, r.out.slice(-300));
 }
 {
+  clear();   // 每個情境自己準備狀態，不吃上一個情境留下的（C1 若被放行而真的跑了，會留下秒數——2026-10-02 突變實測踩到）
   const r = run('--only', 'zz-p-a', '--approved');
   const h = hist().pop();
   yes(r.code === 0 && h && h.approved === true && h.heavy === true && h.predictedSec === null && typeof h.actualSec === 'number' && h.end === '綠' && h.version === PREDICTOR_VERSION,
@@ -81,6 +82,9 @@ const times = () => (fs.existsSync(TIMES) ? JSON.parse(fs.readFileSync(TIMES, 'u
   yes(typeof times()['zz-p-a'] === 'number', `C2 跑完記下這支的實測秒數（${times()['zz-p-a']}）`);
 }
 {
+  clear();
+  fs.mkdirSync(path.dirname(TIMES), { recursive: true });
+  fs.writeFileSync(TIMES, JSON.stringify({ 'zz-p-a': 0.1 }));
   const r = run('--only', 'zz-p-a');
   const h = hist().pop();
   yes(r.code === 0 && h && h.heavy === false && typeof h.predictedSec === 'number' && /→ 常規/.test(r.out),
