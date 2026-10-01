@@ -63,6 +63,13 @@
   突變**（實測全綠）：這台 Windows 上子程序結束時孫程序跟著被收掉，「整棵樹被殺」那條分不出有沒有 `/T`——`/T` 留著當保險，不補斷言。
   資源：mutatetest 20.6 秒峰值 3、worktreeguardtest 14.8 秒峰值 4；突變整批 240.5 秒，取樣器數到 5（含啟動它的那一支主程式，
   照 §5.19 主程式不算＝4），可用最低 4,832 MB。
+- **證據 log 的位置（2026-10-02，JLPT 29 條證據因 log 留在 Session 暫存區而降級之後）**：這一輪所有對照組與突變的完整輸出都寫在
+  `.logs/`（例：`mutatetest-unformed-all.txt`＝48 項整批、`mt-solo-*.txt`＝各組單獨跑、`mutguard-*`、`timeout-mut.txt`、
+  `unformed-mut.txt`、`predict-mut-2.txt`、`mutlint-mut.txt`）。Session 暫存區原本還有 347 份更早的證據輸出（`ev_*.log`、
+  `ev2-*.shell`、`*.out`、`*.txt`，F8–F10、補充說明八與十一那幾輪），已複製到 `.logs/scratch-evidence-2026-09-24_10-02/`。
+  `.logs/` 照共用慣例 §5.7 被 `.gitignore` 擋掉（完整 log 可能帶本機路徑），**不進版控**——它在原本那台機器的 repo 目錄裡、
+  不會跟著 Session 消失，但換機器就沒有；結論與數字寫在本檔與 `docs/EVIDENCE_檢查器修補.md`。log 分得出三種結果：`✓`、
+  `✗`（附實得的回傳值與點名內容）、`⊘ 情境未成立`。
 - **🔴 給別台機器的下一個人：repo 裡 `mutlint` 看到的「非突變 0 份」不是漏算。** Session 暫存區原本有 155 份 JSON＝突變 148＋
   非突變 7；那 7 份是 D1 查詢輸出（行程名稱、群組名、建立時間——個資），**只存在原本那台機器的本機、刻意不入庫**。
 - **`npm test` 改走 `run-affected --all`＋按次預測耗時（2026-10-02，v11.3 §5.19）**：鏈的定義從 `scripts.test` 搬到
