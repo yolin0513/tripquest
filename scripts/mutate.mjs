@@ -23,7 +23,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { runWithTimeout } from './run-timeout.mjs';
 import { fileURLToPath } from 'node:url';
 import { snapshot } from './worktree-guard.mjs';
 
@@ -54,7 +55,21 @@ function fsyncWrite(file, data, flag = 'w') {
   const fd = fs.openSync(file, flag);
   try { fs.writeSync(fd, data); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
 }
-const ledgerAdd = (e) => { fs.mkdirSync(LOGS, { recursive: true }); fsyncWrite(LEDGER, JSON.stringify({ ...e, at: new Date().toISOString() }) + '\n', 'a'); };
+// 帳本第一行的說明（新建時寫入，--no-result 也會印）。等本 App 有了「依帳本挑選要跑哪些突變」的機制，
+// 再把這段拿掉，並補「沒有結果的會被挑進來」的對照組。
+export const LEDGER_NOTE = '注意：result＝no-result（逾時被殺、中斷後還原）目前**不影響任何選擇**——本 App 還沒有依帳本挑選突變的機制，'
+  + '這個欄位只是紀錄。不要以為標了 no-result 的突變下次會自動被跑；要跑請自己指定。';
+const ledgerAdd = (e) => {
+  fs.mkdirSync(LOGS, { recursive: true });
+  if (!fs.existsSync(LEDGER)) fsyncWrite(LEDGER, JSON.stringify({ note: LEDGER_NOTE }) + '\n', 'a');
+  fsyncWrite(LEDGER, JSON.stringify({ ...e, at: new Date().toISOString() }) + '\n', 'a');
+};
+// 每條突變「最近一次收尾」是沒有結果的（逾時被殺、被中斷後還原、還原紀錄不見但檔案沒事）
+export function noResult(entries) {
+  const last = new Map();
+  for (const e of entries) if (e.event && e.event !== 'started' && e.name) last.set(e.name, e);
+  return [...last.values()].filter((e) => e.result === 'no-result');
+}
 
 function readLedger() {
   if (!fs.existsSync(LEDGER)) return [];
@@ -94,7 +109,7 @@ function startupCheck() {
     if (fileSha(pending.file) !== pending.sha) { console.log(`✗ ${pending.file} 還原後雜湊仍不對——還原紀錄保留`); return 4; }
     fs.rmSync(PENDING);
     if (fs.existsSync(PENDING)) { console.log('✗ 還原完成，但還原紀錄刪不掉——停下'); return 4; }
-    ledgerAdd({ seq: pending.seq, event: 'recovered', file: pending.file });
+    ledgerAdd({ seq: pending.seq, event: 'recovered', name: pending.name, file: pending.file, result: 'no-result', reason: '被中斷、啟動時還原' });
     console.log(`上一次被中斷（第 ${pending.seq} 次，突變「${pending.name}」），已還原 ${pending.file} → ${short(pending.sha)}`);
     return 0;
   }
@@ -106,17 +121,26 @@ function startupCheck() {
       console.log(`✗ 第 ${open.seq} 次開跑（突變「${open.name}」）沒有收尾，還原紀錄卻不在；${open.file} 現在是 ${short(now)}，原檔應為 ${short(want)}（統一行尾後比）——上次中斷過、紀錄被移掉，請人工確認工作區（git diff ${open.file}）`);
       return 5;
     }
-    ledgerAdd({ seq: open.seq, event: 'closed-file-ok', file: open.file });
+    ledgerAdd({ seq: open.seq, event: 'closed-file-ok', name: open.name, file: open.file, result: 'no-result', reason: '被中斷、還原紀錄不在但檔案是原樣' });
     console.log(`註：第 ${open.seq} 次開跑沒有收尾、還原紀錄不在，但 ${open.file} 統一行尾後的雜湊等於原檔——照跑`);
   }
   return 0;
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const rc0 = startupCheck();
   if (rc0) return rc0;
   if (args[0] === '--recover') return 0;
+  if (args[0] === '--no-result') {
+    let entries;
+    try { entries = readLedger(); } catch (e) { console.log(`✗ ${e.message}`); return 4; }
+    console.log(LEDGER_NOTE);
+    const list = noResult(entries);
+    console.log(`帳本 ${entries.filter((e) => e.event).length} 筆、涉及 ${new Set(entries.filter((e) => e.name).map((e) => e.name)).size} 條突變；最近一次沒有結果的 ${list.length} 條：`);
+    for (const e of list) console.log(`   ${e.name}（第 ${e.seq} 次，${e.reason || e.event}，${e.at}）`);
+    return 0;
+  }
 
   const onlyMode = args[0] === '--only';
   const [listFile, ...names] = onlyMode ? args.slice(1) : args;
@@ -172,18 +196,19 @@ function main() {
     fs.writeFileSync(f, text);
     let r;
     try {
-      r = spawnSync(m.cmd, { cwd: ROOT, shell: true, encoding: 'utf8', timeout: m.timeoutMs || 400000 });
+      // 逾時整棵程序樹殺掉（spawnSync 的 timeout 在 Windows 只殺得到 shell，真正的測試會留著）
+      r = await runWithTimeout(m.cmd, [], { cwd: ROOT, shell: true, timeoutMs: m.timeoutMs || 400000 });
     } finally {
       fs.writeFileSync(f, orig);
     }
     if (sha1(fs.readFileSync(f)) !== sha) { console.log(`✗ ${m.file} 還原後雜湊不對——還原紀錄保留，下次啟動會照它還原`); return 4; }
     fs.rmSync(PENDING);
-    ledgerAdd({ seq, event: 'done', file: m.file });
-    const out = (r.stdout || '') + (r.stderr || '');
-    const reds = out.split('\n').filter((l) => l.startsWith('✗')).slice(0, 4);
-    const timedOut = r.error && r.error.code === 'ETIMEDOUT';
-    if (r.status !== 0 && !timedOut) console.log(`✓ ${m.name}：紅了（exit ${r.status}）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
-    else { bad++; console.log(`✗ ${m.name}：${timedOut ? '逾時（不算紅）' : '沒紅（照樣全綠）'}`); }
+    // 結果分三種：紅了／沒紅／沒有結果（逾時被殺）。**沒有結果不是通過**——記成跑過了，下一次就會被當成「跑過了」而跳過
+    const result = r.timedOut ? 'no-result' : r.status !== 0 ? 'red' : 'not-red';
+    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, ...(r.timedOut ? { reason: `逾時 ${(m.timeoutMs || 400000) / 1000} 秒被殺` } : {}) });
+    const reds = (r.out || '').split('\n').filter((l) => l.startsWith('✗')).slice(0, 4);
+    if (result === 'red') console.log(`✓ ${m.name}：紅了（exit ${r.status}）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
+    else { bad++; console.log(`✗ ${m.name}：${result === 'no-result' ? '逾時被殺——沒有結果（不算紅、也不算跑過）' : '沒紅（照樣全綠）'}`); }
   }
   if (!onlyMode) {
     let after;
@@ -196,4 +221,6 @@ function main() {
 }
 
 // 直接執行才跑（讓 lintMutations 可以被別支 import 去掃既有的突變清單）
-if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) process.exitCode = main();
+if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) {
+  main().then((c) => { process.exitCode = c; });
+}

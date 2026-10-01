@@ -15,10 +15,15 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseChain, extractRefs, buildImportGraph, select, formatReport, classifyChanges } from './affected.mjs';
 import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
+import { runWithTimeout } from './run-timeout.mjs';
+
+// 單支測試的時限（秒）。最慢的 layouttest 實測 516～580 秒；20 分鐘留了兩倍餘裕。--timeout-sec 可改。
+// 超過就整棵程序樹殺掉、回 7：**沒有結果**——不是通過，也不是紅。
+export const DEFAULT_TIMEOUT_SEC = 1200;
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -101,8 +106,10 @@ function arg(name) {
   return i > 0 ? process.argv[i + 1] : null;
 }
 
-function main() {
+async function main() {
   const dry = process.argv.includes('--dry');
+  const timeoutSec = arg('--timeout-sec') ? Number(arg('--timeout-sec')) : DEFAULT_TIMEOUT_SEC;
+  if (!(timeoutSec > 0)) { console.log(`✗ --timeout-sec 要是正數（拿到 ${arg('--timeout-sec')}）`); process.exit(2); }
   const repo = loadRepo();
   const onlyArg = arg('--only');
   let r;
@@ -146,11 +153,17 @@ function main() {
     console.log(`\n━━━━ ${name}（${times.length + 1}/${r.n}）━━━━`);
     const before = shot(`${name} 開跑前`);
     const t0 = Date.now();
-    const res = spawnSync(process.execPath, [t.file], { cwd: ROOT, stdio: 'inherit' });
+    const res = await runWithTimeout(process.execPath, [t.file], { cwd: ROOT, inherit: true, timeoutMs: timeoutSec * 1000 });
     const sec = (Date.now() - t0) / 1000;
     times.push([name, sec]);
     const touched = changesBetween(before, shot(`${name} 跑完後`));
     console.log(`工作區守衛：${name} 開跑前不一樣的檔 ${before.size} 個，跑完多出或變了 ${touched.length} 個`);
+    // 逾時先講（它決定這一支「沒有結果」）；同時動到工作區的話也一起點名，兩件都不吞掉
+    if (res.timedOut) {
+      console.log(`\n✗ ${name} 逾時（${timeoutSec} 秒）被殺——沒有結果，不是通過也不是紅；停在這裡，後面的沒跑`);
+      if (touched.length) console.log(`✗ ${name} 被殺之前動到工作區的檔：${describe(touched)}`);
+      process.exit(7);
+    }
     if (touched.length) {
       console.log(`\n✗ ${name} 動到工作區的檔：${describe(touched)} —— 測試的輸出要寫到 .gitignore 擋掉的目錄；停在這裡，後面的沒跑`);
       process.exit(3);

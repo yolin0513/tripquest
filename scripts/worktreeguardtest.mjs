@@ -37,14 +37,17 @@ const FAKE = {
   'zz-wtg-clean': "console.log('什麼都不做');",
   'zz-wtg-touchdirty': "import fs from 'node:fs'; fs.appendFileSync('CLAUDE.md', '\\n又改了一次\\n');",
   'zz-wtg-red': "console.log('✗ 故意紅'); process.exit(1);",
+  // 卡住：自己睡、再開一個也在睡的孫程序，兩個 pid 寫進 .logs（看整棵樹有沒有真的被殺，不信執行器自己印的字）
+  'zz-wtg-hang': "import fs from 'node:fs'; import { spawn } from 'node:child_process'; fs.mkdirSync('.logs', { recursive: true }); const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'ignore' }); fs.writeFileSync('.logs/hang-pids.txt', process.pid + ' ' + g.pid); setTimeout(() => {}, 120000);",
 };
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 
 fs.rmSync(CLONE, { recursive: true, force: true });
 execFileSync('git', ['clone', '-q', ROOT, CLONE]);
 cgit('config', 'user.name', 'wtg');
 cgit('config', 'user.email', 'wtg@users.noreply.github.com');
 cgit('config', 'core.autocrlf', 'false');
-for (const f of ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/affected.mjs', '.gitignore']) {
+for (const f of ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/affected.mjs', '.gitignore']) {
   fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
 }
 for (const [n, src] of Object.entries(FAKE)) fs.writeFileSync(path.join(CLONE, 'scripts', n + '.mjs'), src + '\n');
@@ -101,6 +104,22 @@ console.log('\n— 會擋的情境 —');
   const r = run('zz-wtg-writer', { GIT_DIR: path.join(CLONE, 'no-such-git-dir') });
   yes(r.code === 4 && /工作區守衛壞了：zz-wtg-writer 開跑前拍不到工作區/.test(r.out),
     `git 讀不到 → 回 4、寫明守衛壞了，不當成沒改動（實得 ${r.code}）`, r.out.slice(-400));
+}
+
+console.log('\n— 單支逾時 —');
+{
+  reset();
+  const pidFile = path.join(CLONE, '.logs', 'hang-pids.txt');
+  const t0 = Date.now();
+  const r = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--only', 'zz-wtg-hang', '--timeout-sec', '3'], { cwd: CLONE, encoding: 'utf8', timeout: 60000 });
+  const out = (r.stdout || '') + (r.stderr || '');
+  const sec = (Date.now() - t0) / 1000;
+  const pids = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8').trim().split(' ').map(Number) : [];
+  yes(pids.length === 2 && pids.every((p) => p > 0), `前置：卡住的測試真的跑起來、開了孫程序（pid ${pids.join('、') || '無'}）`);
+  await new Promise((res) => setTimeout(res, 500));
+  yes(r.status === 7 && /✗ zz-wtg-hang 逾時（3 秒）被殺——沒有結果，不是通過也不是紅/.test(out) && sec < 30,
+    `卡住的測試 → 回 7、寫明「沒有結果」、${sec.toFixed(1)} 秒內結束（實得 ${r.status}）`, out.slice(-300));
+  yes(pids.length === 2 && pids.every((p) => !alive(p)), `整棵程序樹都被殺掉：${pids.map((p) => `${p}＝${alive(p) ? '還在' : '不在'}`).join('、')}`);
 }
 
 console.log('\n— 要放行的情境 —');

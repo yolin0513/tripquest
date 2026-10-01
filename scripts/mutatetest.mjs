@@ -40,12 +40,12 @@ execFileSync('git', ['clone', '-q', ROOT, CLONE]);
 cgit('config', 'user.name', 'mut');
 cgit('config', 'user.email', 'mut@users.noreply.github.com');
 cgit('config', 'core.autocrlf', 'false');
-for (const f of ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', '.gitignore']) fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
+for (const f of ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', '.gitignore']) fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
 const P = (r) => path.join(CLONE, r);
 fs.writeFileSync(P('zz-target.txt'), 'alpha\n');
 // 探針：每跑一次在標記檔寫一行（看到的是原樣還是改壞的）；看到 BROKEN 就紅
 fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了'); process.exit(1); }\n");
-fs.writeFileSync(P('scripts/zz-sleep.mjs'), "import fs from 'node:fs'; fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', 'sleep\\n'); setTimeout(() => {}, 120000);\n");
+fs.writeFileSync(P('scripts/zz-sleep.mjs'), "import fs from 'node:fs'; fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', 'sleep\\n'); fs.writeFileSync('.logs/zz-sleep.pid', String(process.pid)); setTimeout(() => {}, 120000);\n");
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'mut 起點');
 const START = cgit('rev-parse', 'HEAD').trim();
@@ -124,6 +124,8 @@ console.log('\n— B 真的殺程序之後重啟 —');
     yes(sha1(P('zz-target.txt')) === ORIG && !fs.existsSync(PENDING), 'B 還原後目標檔雜湊＝原檔、還原紀錄不在');
     yes(ledger().some((e) => e.seq === open.seq && e.event === 'recovered'), `B 帳本記第 ${open.seq} 次已還原`);
     yes(r.code === 0 && marks().filter((x) => x === 'broken').length === 1, `B 還原後照跑：探針看到改壞版一次（實得 ${r.code}、標記 ${marks().join(',')}）`);
+    const nr = run('--no-result');
+    yes(nr.code === 0 && /^ {3}會睡很久的（第 1 次，被中斷、啟動時還原/m.test(nr.out), 'B 被中斷的那一次記成沒有結果、--no-result 列得出來', nr.out.slice(-300));
   }
 }
 
@@ -208,6 +210,44 @@ console.log('\n— D 兩處紀錄不一致 —');
     yes(r.code === 6 && new RegExp(`兩處紀錄不一致：還原紀錄是第 ${open.seq} 次（zz-target\\.txt）`).test(r.out) && targetBroken(),
       `D 還原紀錄在、帳本沒有對應的 → 回 6、目標檔不被動（實得 ${r.code}）`, r.out.slice(-400));
   }
+}
+
+console.log('\n— G 逾時：記成「沒有結果」，不是跑過 —');
+{
+  yes(reset(), '前置：clone 在起點');
+  const TL = P('.logs/zz-muts-timeout.json');
+  fs.writeFileSync(TL, JSON.stringify([
+    { name: '會紅的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-check.mjs' },
+    { name: '會卡住的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-sleep.mjs', timeoutMs: 2500 },
+  ]));
+  const t0 = Date.now();
+  const r = run(TL, '會卡住的');
+  const sec = (Date.now() - t0) / 1000;
+  const pidF = P('.logs/zz-sleep.pid');
+  const pid = fs.existsSync(pidF) ? Number(fs.readFileSync(pidF, 'utf8')) : 0;
+  await sleep(500);
+  let alive = false;
+  try { process.kill(pid, 0); alive = true; } catch (e) { alive = e.code === 'EPERM'; }
+  yes(pid > 0 && marks().includes('sleep'), `前置：卡住的探針真的跑起來了（pid ${pid}）`);
+  yes(r.code === 1 && /✗ 會卡住的：逾時被殺——沒有結果/.test(r.out) && sec < 60, `G 卡住 → 回 1、寫明沒有結果、${sec.toFixed(1)} 秒結束（實得 ${r.code}）`, r.out.slice(-300));
+  yes(!alive, `G 卡住的探針整棵被殺掉（pid ${pid}＝${alive ? '還在' : '不在'}）`);
+  yes(sha1(P('zz-target.txt')) === ORIG && !fs.existsSync(PENDING), 'G 目標檔雜湊＝原檔、還原紀錄不在');
+  const closing = ledger().filter((e) => e.name === '會卡住的' && e.event === 'done').pop();
+  yes(closing && closing.result === 'no-result', `G 帳本記成 no-result（實得 ${closing ? closing.result : '沒有那一筆'}）——不是 done 了事`);
+  yes(/不影響任何選擇/.test((fs.readFileSync(LEDGER, 'utf8').split('\n')[0] || '')), 'G 帳本第一行寫明這個欄位目前不影響任何選擇');
+  let nr = run('--no-result');
+  yes(nr.code === 0 && /^ {3}會卡住的（第 \d+ 次，逾時 2\.5 秒被殺/m.test(nr.out) && /不影響任何選擇/.test(nr.out), 'G --no-result 列出「會卡住的」、並印出那段說明', nr.out.slice(-300));
+
+  // 反向：正常紅了的不列；手動把它改成 no-result → 列得出來；再正常跑一次 → 又不列
+  const r2 = run(TL, '會紅的');
+  nr = run('--no-result');
+  yes(r2.code === 0 && !/^ {3}會紅的（/m.test(nr.out), 'G 反向：正常紅了的「會紅的」不在 --no-result 裡');
+  fs.appendFileSync(LEDGER, JSON.stringify({ seq: 99, event: 'done', name: '會紅的', file: 'zz-target.txt', result: 'no-result', reason: '手動標記' }) + '\n');
+  nr = run('--no-result');
+  yes(/^ {3}會紅的（第 99 次，手動標記/m.test(nr.out), 'G 手動把「會紅的」改成 no-result → --no-result 列得出來（欄位真的被讀）', nr.out.slice(-300));
+  run(TL, '會紅的');
+  nr = run('--no-result');
+  yes(!/^ {3}會紅的（/m.test(nr.out) && /^ {3}會卡住的（/m.test(nr.out), 'G 再正常跑一次「會紅的」→ 它不再列出，「會卡住的」還在', nr.out.slice(-300));
 }
 
 console.log('\n— E 正常跑完（反向） —');
