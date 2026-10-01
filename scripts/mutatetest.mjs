@@ -57,6 +57,8 @@ const MARKER = P('.logs/zz-marker.txt');
 console.log(`暫存 clone：${path.relative(ROOT, CLONE)}，起點 ${START.slice(0, 7)}；被驗的 mutate ${sha1(P('scripts/mutate.mjs')).slice(0, 12)}`);
 
 const reset = () => {
+  // 先刪目標檔再 reset：git 看索引沒變時不會重寫它（C" 留下的 CRLF 版會帶到下一個情境——實測踩到）
+  fs.rmSync(P('zz-target.txt'), { force: true });
   cgit('reset', '-q', '--hard', START);
   for (const f of [LEDGER, PENDING, MARKER]) fs.rmSync(f, { force: true });
   fs.mkdirSync(P('.logs'), { recursive: true });
@@ -147,10 +149,52 @@ console.log('\n— C 還原紀錄被移掉 —');
     fs.rmSync(PENDING);
     cgit('checkout', '--', 'zz-target.txt');            // 人工還原
     const r = run(LIST, '會紅的');
-    yes(r.code === 0 && new RegExp(`註：第 ${open.seq} 次開跑沒有收尾、還原紀錄不在，但 zz-target\\.txt 的雜湊等於原檔——照跑`).test(r.out)
+    yes(r.code === 0 && new RegExp(`註：第 ${open.seq} 次開跑沒有收尾、還原紀錄不在，但 zz-target\\.txt 統一行尾後的雜湊等於原檔——照跑`).test(r.out)
       && marks().filter((x) => x === 'broken').length === 1 && sha1(P('zz-target.txt')) === ORIG,
     `C' 人工還原後 → 照跑、註明、探針看到改壞版一次、目標檔＝原檔（實得 ${r.code}）`, r.out.slice(-400));
   }
+}
+
+{
+  // C"：MealMate 2026-10-02 撞到的真實路徑——repo 沒有 .gitattributes、git 是 core.autocrlf=true，人工用
+  // `git checkout` 還原，拿到 CRLF 版（git 自己看是乾淨的）→ 統一行尾後是原樣，要照跑。
+  // 照真實路徑造：clone 裡 commit 掉 .gitattributes、開 autocrlf，再用 git 還原（不是直接寫一個 CRLF 檔）。
+  yes(reset(), '前置：clone 在起點');
+  cgit('rm', '-q', '.gitattributes');
+  cgit('commit', '-q', '-m', '沒有 .gitattributes 的機器');
+  cgit('config', 'core.autocrlf', 'true');
+  const open = await killMidway();
+  yes(!!open, '前置：殺掉之後兩處紀錄都在、壞檔留著');
+  if (open) {
+    fs.rmSync(PENDING);
+    cgit('checkout', '--', 'zz-target.txt');
+    yes(fs.readFileSync(P('zz-target.txt'), 'utf8') === 'alpha\r\n' && sha1(P('zz-target.txt')) !== ORIG
+      && cgit('status', '--porcelain=v1', '--untracked-files=no') === '',
+    '前置：git 還原出來的是 CRLF 版、位元組雜湊跟原檔不同、git 看工作區是乾淨的（不然這一條驗不到行尾）');
+    const r = run(LIST, '會紅的');
+    yes(r.code === 0 && /統一行尾後的雜湊等於原檔——照跑/.test(r.out) && marks().filter((x) => x === 'broken').length === 1,
+      `C" 用 git 還原成 CRLF 版 → 統一行尾後是原樣，照跑（實得 ${r.code}）`, r.out.slice(-400));
+  }
+  cgit('config', 'core.autocrlf', 'false');
+}
+
+console.log('\n— F 登記時拒絕只改空白／行尾的突變 —');
+{
+  yes(reset(), '前置：clone 在起點');
+  const BAD = P('.logs/zz-muts-ws.json');
+  const ws = [
+    { name: '會紅的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-check.mjs' },
+    { name: '只改行尾的', file: 'zz-target.txt', find: 'alpha\n', replace: 'alpha\r\n', cmd: 'node scripts/zz-check.mjs' },
+    { name: '只改空白的', file: 'zz-target.txt', find: 'alpha', replace: ' alpha ', cmd: 'node scripts/zz-check.mjs' },
+  ];
+  fs.writeFileSync(BAD, JSON.stringify(ws));
+  const back = JSON.parse(fs.readFileSync(BAD, 'utf8'));
+  yes(back[1].replace === 'alpha\r\n' && back[1].find === 'alpha\n' && back[2].replace === ' alpha ',
+    '前置：讀回確認只改行尾／只改空白的那兩條真的寫進清單（不是被拆成別的字串）');
+  const r = run(BAD, '會紅的');
+  yes(r.code === 2 && /檢查 3\/3 條突變，2 條只改空白或行尾/.test(r.out) && /拒絕：只改行尾的、只改空白的$/m.test(r.out) && marks().length === 0
+    && sha1(P('zz-target.txt')) === ORIG,
+  `F 清單裡有只改行尾、只改空白的 → 回 2、點名那兩條、整份不跑（連沒問題的那條也不跑）（實得 ${r.code}）`, r.out.slice(-400));
 }
 
 console.log('\n— D 兩處紀錄不一致 —');
@@ -171,6 +215,7 @@ console.log('\n— E 正常跑完（反向） —');
   yes(reset(), '前置：clone 在起點');
   const r = run(LIST, '會紅的');
   const L = ledger();
+  yes(/檢查 2\/2 條突變，0 條只改空白或行尾/.test(r.out), 'E 登記檢查：檢查的筆數＝清單的 2 條、0 條被拒（原樣的全部通過）', r.out.slice(-300));
   yes(r.code === 0 && marks().join(',') === 'broken' && sha1(P('zz-target.txt')) === ORIG && !fs.existsSync(PENDING)
     && L.some((e) => e.seq === 1 && e.event === 'started') && L.some((e) => e.seq === 1 && e.event === 'done'),
   `E 正常跑完：探針看到改壞版一次、目標檔＝原檔、沒有還原紀錄、帳本第 1 次有開跑也有完成（實得 ${r.code}）`, r.out.slice(-300));

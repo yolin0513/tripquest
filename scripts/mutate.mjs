@@ -33,6 +33,21 @@ const LEDGER = path.join(LOGS, 'mutate-ledger.jsonl');
 const PENDING = path.join(LOGS, 'mutate-pending.json');
 const rel = (p) => path.relative(ROOT, p).split(path.sep).join('/');
 const sha1 = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
+// 「是不是原樣」比的是統一行尾之後的內容：人工用 git 還原時，另一台機器的 core.autocrlf 可能給出 CRLF
+// （MealMate 2026-10-02 撞到：暫存 repo 沒帶 .gitattributes，還原出來的檔被判成不是原樣、每次都被拒絕）。
+// 這個比法假設「突變不會只改行尾或空白」——由下面的 lintMutations 在登記時強制，不靠大家記得。
+const shaNorm = (buf) => sha1(Buffer.isBuffer(buf) ? buf.toString('utf8').replace(/\r\n/g, '\n') : String(buf).replace(/\r\n/g, '\n'));
+const stripWs = (s) => String(s).replace(/\r\n/g, '\n').replace(/\s+/g, '');
+
+// 只差空白／行尾的突變：統一行尾、去掉所有空白之後 find 與 replace 相同 → 突變什麼都沒改，卻可能「顯示通過」
+export function lintMutations(list) {
+  const bad = [];
+  for (const m of list) {
+    const edits = m.edits || [{ find: m.find, replace: m.replace }];
+    if (edits.some((e) => typeof e.find !== 'string' || typeof e.replace !== 'string' || stripWs(e.find) === stripWs(e.replace))) bad.push(m.name);
+  }
+  return { checked: list.length, bad };
+}
 const short = (s) => String(s).slice(0, 12);
 
 function fsyncWrite(file, data, flag = 'w') {
@@ -57,6 +72,7 @@ function openRun(entries) {
 }
 const nextSeq = (entries) => entries.reduce((m, e) => Math.max(m, e.seq || 0), 0) + 1;
 const fileSha = (relPath) => { try { return sha1(fs.readFileSync(path.join(ROOT, relPath))); } catch (e) { return e.code === 'ENOENT' ? 'missing' : 'unreadable'; } };
+const fileShaNorm = (relPath) => { try { return shaNorm(fs.readFileSync(path.join(ROOT, relPath))); } catch (e) { return e.code === 'ENOENT' ? 'missing' : 'unreadable'; } };
 
 // ---------- 啟動時：照兩處紀錄處理上一次的中斷 ----------
 function startupCheck() {
@@ -83,13 +99,15 @@ function startupCheck() {
     return 0;
   }
   if (open) {
-    const now = fileSha(open.file);
-    if (now !== open.sha) {
-      console.log(`✗ 第 ${open.seq} 次開跑（突變「${open.name}」）沒有收尾，還原紀錄卻不在；${open.file} 現在是 ${short(now)}，原檔應為 ${short(open.sha)}——上次中斷過、紀錄被移掉，請人工確認工作區（git diff ${open.file}）`);
+    // 統一行尾之後比（人工 git 還原可能給出 CRLF）；舊紀錄沒有 shaNorm 的退回原始雜湊
+    const now = open.shaNorm ? fileShaNorm(open.file) : fileSha(open.file);
+    const want = open.shaNorm || open.sha;
+    if (now !== want) {
+      console.log(`✗ 第 ${open.seq} 次開跑（突變「${open.name}」）沒有收尾，還原紀錄卻不在；${open.file} 現在是 ${short(now)}，原檔應為 ${short(want)}（統一行尾後比）——上次中斷過、紀錄被移掉，請人工確認工作區（git diff ${open.file}）`);
       return 5;
     }
     ledgerAdd({ seq: open.seq, event: 'closed-file-ok', file: open.file });
-    console.log(`註：第 ${open.seq} 次開跑沒有收尾、還原紀錄不在，但 ${open.file} 的雜湊等於原檔——照跑`);
+    console.log(`註：第 ${open.seq} 次開跑沒有收尾、還原紀錄不在，但 ${open.file} 統一行尾後的雜湊等於原檔——照跑`);
   }
   return 0;
 }
@@ -103,7 +121,13 @@ function main() {
   const onlyMode = args[0] === '--only';
   const [listFile, ...names] = onlyMode ? args.slice(1) : args;
   if (!listFile) { console.log('用法：node scripts/mutate.mjs [--only] <mutations.json> [名稱...]'); return 2; }
-  const list = JSON.parse(fs.readFileSync(listFile, 'utf8')).filter((m) => !names.length || names.includes(m.name));
+  const all = JSON.parse(fs.readFileSync(listFile, 'utf8'));
+  // 登記時的檢查：整份清單，不只這次選到的
+  const lint = lintMutations(all);
+  console.log(`檢查 ${lint.checked}/${all.length} 條突變，${lint.bad.length} 條只改空白或行尾`);
+  if (lint.checked !== all.length || !all.length) { console.log('✗ 檢查的筆數不等於清單的筆數——檢查器壞了'); return 4; }
+  if (lint.bad.length) { console.log(`✗ 這些突變只改了空白或行尾（統一行尾後判斷「是不是原樣」會看不出差別），拒絕：${lint.bad.join('、')}`); return 2; }
+  const list = all.filter((m) => !names.length || names.includes(m.name));
   if (!list.length) { console.log('✗ 一條突變都沒選到'); return 2; }
   const editsOf = (m) => m.edits || [{ find: m.find, replace: m.replace }];
 
@@ -143,8 +167,8 @@ function main() {
     if (fs.existsSync(PENDING)) { console.log('✗ 要寫還原紀錄時發現它已經存在（上一支還沒收尾）——停下'); return 6; }
     const sha = sha1(orig);
     const seq = nextSeq(readLedger());
-    ledgerAdd({ seq, event: 'started', name: m.name, file: m.file, sha });
-    fsyncWrite(PENDING, JSON.stringify({ seq, name: m.name, file: m.file, sha, content: orig.toString('base64') }));
+    ledgerAdd({ seq, event: 'started', name: m.name, file: m.file, sha, shaNorm: shaNorm(orig) });
+    fsyncWrite(PENDING, JSON.stringify({ seq, name: m.name, file: m.file, sha, shaNorm: shaNorm(orig), content: orig.toString('base64') }));
     fs.writeFileSync(f, text);
     let r;
     try {
@@ -171,4 +195,5 @@ function main() {
   return bad ? 1 : 0;
 }
 
-process.exitCode = main();
+// 直接執行才跑（讓 lintMutations 可以被別支 import 去掃既有的突變清單）
+if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) process.exitCode = main();
