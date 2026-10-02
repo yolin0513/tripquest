@@ -16,7 +16,8 @@ show() {
   grep -E '^\[' "$O/ev2-$1.shell"
   grep -E '^✗|項通過|^擋下|^前置：登記|^結果：登記|^驗法回|^全部擋下|16 個城市：.*沒擋' "$O/ev_$1.log" | cut -c1-170 | head -30
 }
-run() { local l="$1" c="$2"; shift 2; bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1; show "$l"; }
+. "$S/segment.sh"
+run() { local l="$1" c="$2"; shift 2; seg_skip "$l" && return; bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1; show "$l"; }
 SP=scripts/safe-push.sh; VR=scripts/verified-reg.mjs; PT=scripts/pushgatetest.mjs
 run f10-base "$PG"
 run f10-q1 "$PG" $SP=pf10_q1.json

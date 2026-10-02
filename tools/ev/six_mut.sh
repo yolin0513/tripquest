@@ -14,7 +14,8 @@ show() {
   grep -E '^\[' "$O/ev2-$1.shell"
   grep -E '^== |^✗|項通過' "$O/ev_$1.log" | grep -v '^✗ 沒有登記' | cut -c1-150
 }
-run() { local l="$1" c="$2"; shift 2; bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1; show "$l"; }
+. "$S/segment.sh"
+run() { local l="$1" c="$2"; shift 2; seg_skip "$l" && return; bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1; show "$l"; }
 SP=scripts/safe-push.sh; FV=scripts/f8verify.mjs
 run six-1 "$BOTH" $SP=psix_six1.json
 run six-1b "$BOTH" $SP=psix_six1b.json

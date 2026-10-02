@@ -12,8 +12,10 @@ show() {   # $1 標籤
   grep -E '^\[' "$O/ev2-$1.shell"
   grep -E '^✗|項通過|^擋下|^判定的對照組|^全部擋下|^  scripts/.*複本|^build-places：|^importshots：|個城市：.*沒擋|｜沒擋' "$O/ev_$1.log" | cut -c1-160 | head -40
 }
+. "$S/segment.sh"
 run() {   # $1 標籤 $2 指令 $3... patch
   local l="$1" c="$2"; shift 2
+  seg_skip "$l" && return
   bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1
   show "$l"
 }

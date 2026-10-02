@@ -2,7 +2,7 @@
 // 列出實際紅的那幾條，跟預期比（預期是「哪幾條情境的開頭」）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'mut_guard_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -36,6 +36,7 @@ for (const m of RUN) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, ['scripts/mutatetest.mjs'], { cwd: COPY, encoding: 'utf8', timeout: 300000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  if (m === RUN[0]) gateOrExit(m.name.startsWith('G0') && expectGate('mut_guard_mut', m.name, out, itemsOf(RUN.slice(1), ['expect', 'expectUnformed'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hash = (out.match(/被驗的 mutate (\S+)/) || [, '？'])[1];
   const realReds = reds.filter((l) => !l.startsWith('前置'));

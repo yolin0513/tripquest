@@ -2,7 +2,7 @@
 // 看哪幾個對照組報 false、回傳值是多少。預期：拿掉點名 → 對應的對照組 false、回 4；原樣 → 全 true、回 0。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -37,6 +37,11 @@ for (const m of RUN) {
   const sha = crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex').slice(0, 12);
   const r = spawnSync(process.execPath, ['scripts/mutlint.mjs'], { cwd: COPY, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
+  // 這支的「斷言」是對照組的名字（「對照組：判斷＝true、齊全＝true…」那一行）
+  if (m === RUN[0]) {
+    const names = [...((out.match(/^對照組：判斷＝.*$/m) || [''])[0]).matchAll(/(?:、|：)([^、＝]+)＝(?:true|false)/g)].map((x) => x[1]);
+    gateOrExit(m.name.startsWith('K0') && expectGate('mutlint_mut', m.name, out, itemsOf(RUN.slice(1), ['expectFalse']), { messages: names }));
+  }
   const line = (out.match(/^對照組：判斷＝.*$/m) || [''])[0];
   const falses = [...line.matchAll(/(?:、|：)([^、＝]+)＝false/g)].map((x) => x[1]);
   const ok = r.status === m.rc && falses.slice().sort().join('|') === m.expectFalse.slice().sort().join('|');

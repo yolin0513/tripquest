@@ -2,7 +2,7 @@
 // 預期只有指定的那幾條紅。複本＝clone HEAD ＋ 蓋上工作區裡這次改的檔。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'wtg_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -43,6 +43,7 @@ for (const m of RUN) {
   }
   const r = spawnSync(process.execPath, ['scripts/worktreeguardtest.mjs'], { cwd: COPY, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
+  if (m === RUN[0]) gateOrExit(m.name.startsWith('M0') && expectGate('wtg_mut', m.name, out, itemsOf(RUN.slice(1), ['expectRed'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hitAll = m.expectRed.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expectRed.some((e) => l.startsWith(e)));

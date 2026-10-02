@@ -2,7 +2,7 @@
 // 跑 clone 自己的那支測試，看紅的是不是預期那幾條。用法：node tools/mutproof/timeout_mut.mjs <repo> [名稱開頭...]
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'timeout_mut';
 import crypto from 'node:crypto';
@@ -45,6 +45,9 @@ for (const m of RUN) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [m.test], { cwd: COPY, encoding: 'utf8', timeout: 400000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  // 兩個基準各管各的測試：T0 管 worktreeguardtest 的那幾條、T0b 管 mutatetest 的那幾條
+  if (m.name.startsWith('T0')) gateOrExit(expectGate('timeout_mut', m.name, out, itemsOf(RUN.filter((x) => x.test === m.test && !x.name.startsWith('T0')), ['expect'])));
+  else if (!RUN.some((x) => x.name.startsWith('T0') && x.test === m.test)) gateOrExit(false);
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hitAll = m.expect.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)) && !l.startsWith('前置'));

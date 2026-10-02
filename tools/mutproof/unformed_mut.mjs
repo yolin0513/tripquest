@@ -5,13 +5,14 @@
 // 用法：node tools/mutproof/unformed_mut.mjs <repo>
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const REPO = process.argv[2];
 const COPY = path.join(REPO, '.logs', 'uf-mut');
 const MUTS = [
-  { name: 'U0 不改（B C D）', args: ['B', 'C', 'D'], edits: [], check: (r, x, u) => r.status === 0 && x.length === 0 && u.length === 0 },
+  // 基準跑全部組別：U1 的預期是 K 組的斷言，只跑 B C D 的基準裡沒有它，預期清單檢查會誤判成過期
+  { name: 'U0 不改（全部組別）', args: [], edits: [], check: (r, x, u) => r.status === 0 && x.length === 0 && u.length === 0 },
   { name: 'U1 殺程序的判斷永遠當成成立（K）', args: ['K'], expectRed: ['K 殺程序錯過時間窗'],
     edits: [["fs.existsSync(PENDING) && open && !ledger().some((e) => e.seq === open.seq && e.event !== 'started') ? open : null;", "fs.existsSync(PENDING) && open && !ledger().some((e) => e.seq === open.seq && e.event !== 'started') ? open : (open || { seq: 0 });"]],
     check: (r, x) => r.status === 1 && x.some((l) => l.startsWith('K 殺程序錯過時間窗')) },
@@ -36,6 +37,7 @@ for (const m of RUN) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, ['scripts/mutatetest.mjs', ...m.args], { cwd: COPY, encoding: 'utf8', timeout: 400000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  if (m === RUN[0]) gateOrExit(m.name.startsWith('U0') && expectGate('unformed_mut', m.name, out, itemsOf(RUN.slice(1), ['expectRed', 'expectUnformed'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const unf = out.split('\n').filter((l) => l.startsWith('⊘ 情境未成立：')).map((l) => l.slice(8));
   const ok = m.check(r, reds, unf);

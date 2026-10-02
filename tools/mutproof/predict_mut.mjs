@@ -2,7 +2,7 @@
 // 看紅的是不是預期那幾條（只列開頭）。用法：node tools/mutproof/predict_mut.mjs <repo>
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'predict_mut';
 import crypto from 'node:crypto';
@@ -46,6 +46,7 @@ for (const m of RUN) {
   }
   const r = spawnSync(process.execPath, ['scripts/predicttest.mjs'], { cwd: COPY, encoding: 'utf8', timeout: 300000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  if (m === RUN[0]) gateOrExit(m.name.startsWith('M0') && expectGate('predict_mut', m.name, out, itemsOf(RUN.slice(1), ['expect'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hitAll = m.expect.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)));

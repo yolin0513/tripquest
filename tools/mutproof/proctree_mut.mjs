@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { evidHeader, evid } from './evid.mjs';
+import { evidHeader, evid, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 
 const REPO = process.argv[2];
 const DIR = path.join(REPO, '.logs', 'pt-mut');
@@ -45,6 +45,7 @@ for (const m of MUTS) {
   }
   const r = spawnSync(process.execPath, [path.join(DIR, 'scripts', 'proctreetest.mjs')], { cwd: DIR, encoding: 'utf8', timeout: 120000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  if (m === MUTS[0]) gateOrExit(m.name.startsWith('P0') && expectGate('proctree_mut', m.name, out, itemsOf(MUTS.slice(1), ['expect'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hit = m.expect.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)));
