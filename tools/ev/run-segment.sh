@@ -5,6 +5,11 @@
 # 不跑 f9_mut2：它的 9 份補丁全包含在 f9_mut 裡（tools/ev/patch-population.mjs）。
 # 用法：bash tools/ev/run-segment.sh            （記錄寫 .logs/ev/segment-<時間>.txt、資源寫 .logs/ev/run-<驅動>.txt）
 set -u
+# 必須用 Git Bash 跑（從 PowerShell 打 bash 會解成 WSL）
+case "$(cygpath -w "$(command -v bash)" 2>/dev/null)" in
+  *'\Git\'*) ;;
+  *) echo "⊘ 情境未成立：這支 bash 不是 Git Bash——請從 Git Bash 執行"; exit 3 ;;
+esac
 cd "$(dirname "$0")/../.."
 LOG=".logs/ev/segment-$(date +%Y%m%d-%H%M%S).txt"
 mkdir -p .logs/ev

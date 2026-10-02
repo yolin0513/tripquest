@@ -24,10 +24,11 @@ export function listProcesses() {
     }).filter(Boolean);
   }
   const json = execFileSync('powershell', ['-NoProfile', '-Command',
-    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,WorkingSetSize,CreationDate | ConvertTo-Json -Compress'],
+    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,WorkingSetSize,CreationDate,ExecutablePath | ConvertTo-Json -Compress'],
   { encoding: 'utf8', maxBuffer: 64 << 20 });
   const arr = JSON.parse(json);
-  return (Array.isArray(arr) ? arr : [arr]).map((p) => ({ pid: p.ProcessId, ppid: p.ParentProcessId, name: p.Name, mem: p.WorkingSetSize || 0, created: msOf(p.CreationDate) }));
+  // exe：執行檔的完整路徑（拿來直接確認跑的是哪一支 bash——Git Bash 還是 WSL——不靠推論）
+  return (Array.isArray(arr) ? arr : [arr]).map((p) => ({ pid: p.ProcessId, ppid: p.ParentProcessId, name: p.Name, mem: p.WorkingSetSize || 0, created: msOf(p.CreationDate), exe: p.ExecutablePath || null }));
 }
 
 // root 的子孫（不含 root），深的在前（殺的時候先殺葉子）

@@ -35,8 +35,16 @@ const lines = [];
   if (!(c1.n >= 1 && c0.n === 0)) { lines.push('✗ 取樣器對照沒過，不採信'); fs.writeFileSync(out, lines.join('\n') + '\n'); process.exit(4); }
 }
 const t0 = Date.now();
+// bash／sh／python 先解成完整路徑：裸寫交給 Windows PATH，從 PowerShell 起點會解到 WSL 的 bash（本機實測），驗法根本沒跑起來
+const { resolveExe } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'resolve-exe.mjs')).href);
+let exe = cmd[0];
+if (/^(bash|sh|python3?)$/i.test(exe)) {
+  try { exe = resolveExe(exe); lines.push(`${cmd[0]} 解成：${exe}`); }
+  catch (e) { lines.push(`⊘ 情境未成立：${e.message}`); fs.writeFileSync(out, lines.join('\n') + '\n'); process.exit(3); }
+}
 try { fs.writeFileSync(out + '.partial', lines.join('\n') + '\n'); } catch { /* 同上 */ }
-const child = spawn(cmd[0], cmd.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
+const child = spawn(exe, cmd.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
+const seenBash = new Set();
 let log = '';
 child.stdout.on('data', (d) => { log += d; }); child.stderr.on('data', (d) => { log += d; });
 let done = false;
@@ -44,7 +52,18 @@ child.on('exit', () => { done = true; });
 let peak = 0, peakAll = 0, peakMem = 0, minFree = Infinity, samples = 0;
 while (!done) {
   try {
-    const c = count(listProcesses(), child.pid);
+    const all = listProcesses();
+    const c = count(all, child.pid);
+    // 正在跑的每一支 bash：記下執行檔路徑與父程序（第一次看到時記一行）——跑的是不是 Git Bash，看程序本身
+    for (const p of [all.find((q) => q.pid === child.pid), ...descendants(all, child.pid)].filter(Boolean)) {
+      if (/^(bash|sh)\.exe$/i.test(p.name) && !seenBash.has(p.pid)) {
+        seenBash.add(p.pid);
+        const parent = all.find((q) => q.pid === p.ppid);
+        const note = `${new Date().toISOString()} bash 程序 ${p.pid}：${p.exe || '（讀不到執行檔路徑）'}；父程序 ${p.ppid} ${parent ? parent.name : '（已不在）'}${p.exe && /\\Windows\\System32\\/i.test(p.exe) ? '  ← WSL！' : ''}`;
+        lines.push(note);
+        try { fs.appendFileSync(out + '.partial', note + '\n'); } catch { /* 同上 */ }
+      }
+    }
     const free = Math.round(os.freemem() / 1048576);
     samples++; peak = Math.max(peak, c.n); peakAll = Math.max(peakAll, c.all); peakMem = Math.max(peakMem, c.memMB); minFree = Math.min(minFree, free);
     const line = `${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、全部程序 ${c.all}、合計 ${c.memMB} MB、系統可用 ${free} MB`;

@@ -7,7 +7,7 @@ import { evidHeader, evid, expectGate, itemsOf, gateOrExit } from './evid.mjs';
 
 const REPO = process.argv[2];
 const DIR = path.join(REPO, '.logs', 'pt-mut');
-const FILES = ['proctree.mjs', 'run-timeout.mjs', 'proctreetest.mjs'];
+const FILES = ['proctree.mjs', 'run-timeout.mjs', 'proctreetest.mjs', 'resolve-exe.mjs'];
 const MUTS = [
   { name: 'P0 不改（基準）', expect: [] },
   { name: 'P1 不看建立時間（PID 重用的程序也算子孫）', file: 'proctree.mjs',
@@ -24,6 +24,13 @@ const MUTS = [
     find: "const victims = [pid, ...(tree || []).filter((p) => KILLABLE.test(p.name || '')).map((p) => p.pid)];",
     repl: "const victims = [...(tree || []).filter((p) => KILLABLE.test(p.name || '')).map((p) => p.pid), pid];",
     expect: ['killTree 只殺 100、300、200', '名稱不在可殺清單'] },   // 兩條都比對殺的順序
+  { name: 'P6 拒絕清單什麼都不擋（System32、WindowsApps 照用）', file: 'resolve-exe.mjs',
+    find: 'export const REJECT = /[\\\\/]Windows[\\\\/](System32|SysWOW64|Sysnative)[\\\\/]|[\\\\/]WindowsApps[\\\\/]/i;', repl: 'export const REJECT = /$^/;',
+    expect: ['PATH 第一支是 System32（WSL）', 'PATH 上只有 System32 與 WindowsApps', '正斜線寫法的系統目錄也擋'] },
+  // 2026-10-02「預期需要複審」抓到的：proctreetest 新增的 4 條裡，這一條原本沒有任何突變守著
+  { name: 'P7 解不出來時照裸寫的名字跑', file: 'resolve-exe.mjs',
+    find: '  try { list = where(name); } catch { list = []; }', repl: '  try { list = where(name); } catch { return name; }',
+    expect: ['解不出來（where 失敗）'] },
   { name: 'P2 取不到程序表時改用 /T 照殺', file: 'run-timeout.mjs',
     find: "catch (e) { log(`（取不到程序表：${String(e.message).split('\\n')[0]}——只殺 ${pid} 本身，不用 /T）`); tree = null; }",
     repl: "catch (e) { tree = [{ pid: -1, name: 'node.exe' }]; }",

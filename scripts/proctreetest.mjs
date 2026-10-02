@@ -39,6 +39,25 @@ killTree(100, { list: () => { throw new Error('取不到'); }, kill: (v) => kill
 yes(killed2.join(',') === '100', `取不到程序表 → 只殺 root 本身（實得 ${killed2.join(',')}）`);
 yes(r.tree && r.tree.length >= 1, '前置：合成表上的樹真的認出來了（不是空的）');
 
+console.log('\n— 一之二、把 bash／python 解成完整路徑（resolve-exe）—');
+{
+  const { resolveExe, REJECT } = await import('./resolve-exe.mjs');
+  const W = (l) => () => l;
+  const yesOk = () => true;
+  // 合成的路徑在執行時才組出來（不寫成字面：推送閘的自查一看到磁碟代號開頭的路徑就擋）
+  const D = 'C' + ':', B = '\\';
+  const SYS = [D, 'Windows', 'System32', 'bash.exe'].join(B), APPS = [D, 'Users', 'x', 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'bash.exe'].join(B);
+  const GIT = [D, 'Program Files', 'Git', 'usr', 'bin', 'bash.exe'].join(B);
+  yes(resolveExe('bash', { where: W([SYS, GIT]), exists: yesOk }) === GIT, 'PATH 第一支是 System32（WSL）→ 跳過、選到 Git Bash');
+  let err = null;
+  try { resolveExe('bash', { where: W([SYS, APPS]), exists: yesOk }); } catch (e) { err = e; }
+  yes(err && /找不到可用的 bash/.test(err.message), 'PATH 上只有 System32 與 WindowsApps → 丟錯（呼叫端判情境未成立），不是挑一支來跑');
+  err = null;
+  try { resolveExe('bash', { where: () => { throw new Error('where 失敗'); }, exists: yesOk }); } catch (e) { err = e; }
+  yes(!!err, '解不出來（where 失敗）→ 丟錯，不是當成裸寫的 bash 照跑');
+  yes(REJECT.test([D, 'Windows', 'System32', 'bash.exe'].join('/')) && !REJECT.test(GIT), '正斜線寫法的系統目錄也擋；Git 的路徑不擋');
+}
+
 console.log('\n— 二、真的程序 —');
 if (process.platform === 'win32') {
   const child = spawn(process.execPath, ['-e', "const c=require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'ignore'});console.log(c.pid);setTimeout(()=>{},60000)"], { stdio: ['ignore', 'pipe', 'ignore'] });

@@ -4,6 +4,13 @@
 # commit 之後先斷言：HEAD 裡那一支的雜湊＝套完 patch 的雜湊（複本裡確實有改壞的段落），不成立就不跑。
 # 用法：ev2.sh <標籤> <commit> <指令> [檔案=patch.json ...]
 set -u
+# 這支 bash 必須是 Git Bash（MSYS）：裸寫的 bash 從 PowerShell 起點會被解成 WSL（本機實測），驗法根本沒跑起來。
+# 不是 Git Bash、或認不出來 → 印「情境未成立」、不寫 exit=（progress 判成開了頭沒跑完，不算數）。
+BASHEXE="$(cygpath -w "$(command -v bash)" 2>/dev/null)"
+case "$BASHEXE" in
+  *'\Git\'*) echo "[$1] bash 執行檔：$BASHEXE（pid $$）" ;;
+  *) echo "[$1] ⊘ 情境未成立：這支 bash 不是 Git Bash（${BASHEXE:-認不出來}）——不跑"; exit 9 ;;
+esac
 S="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$S/../.." && pwd)"
 M="$REPO/tools/mutations"; O="$REPO/.logs/ev"; mkdir -p "$O"
