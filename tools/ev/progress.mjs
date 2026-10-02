@@ -19,7 +19,9 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
-const EV = path.join(REPO, '.logs', 'ev');
+let EV = path.join(REPO, '.logs', 'ev');
+// 刻意跑的清單外情境（登記制；沒登記的清單外一律報出來）
+const EXTRA_OK = { 'six-1-recheck': '2026-10-02 當場查程序重跑 six-1、跟凍結的那份比對' };
 const ORDER = [['six_mut', '18a7d94'], ['f9_mut', '936b3eb'], ['f10_mut', '44eac70'], ['di_mut', 'c79b4ca'], ['last_mut', 'f125671']];
 
 // 驅動裡的情境：[{ label, cmd }]；cmd＝它用的那個指令變數展開後的字串
@@ -133,19 +135,61 @@ if (arg('--check')) {
   console.log(`對照組：截掉結尾證據 ${cut} 份，判成被中斷 ${cutOk} 份`);
   process.exitCode = notDone.length === 0 && cut === rows.length && cutOk === cut && rows.length > 0 ? 0 : 1;
 } else {
-  const rows = rowsFor(EV);
-  const STATES = ['跑完', '被中斷（有 exit=、沒有完成的證據）', '開了頭沒跑完', '判不出（驅動裡找不到它的指令）', '還沒跑'];
-  const cnt = (s) => rows.filter((r) => r.state === s).length;
-  const by = (d, s) => rows.filter((r) => r.driver === d && r.state === s).length;
-  const sum = STATES.reduce((n, s) => n + cnt(s), 0);
-  const lines = [`tools/ev 進度（${new Date().toISOString()}）：情境 ${rows.length} 個＝${STATES.map((s) => `${s} ${cnt(s)}`).join('、')}；相加 ${sum}${sum === rows.length ? '＝母體' : '≠母體'}`];
-  for (const [d, c] of ORDER) lines.push(`  ${d} @ ${c}：${STATES.map((s) => `${s.replace(/（.*）/, '')} ${by(d, s)}`).join('、')}`);
+  // --ev <目錄>：數別的目錄（對照組用複本造重複、清單外、沒輪到）；預設 .logs/ev
+  if (arg('--ev')) EV = path.resolve(arg('--ev'));
+  // ---------- 進度（2026-10-02 改）：從 log 那一側數，不從清單走 ----------
+  // 第一版逐條走 59 個情境的清單、查不到外殼紀錄就歸成「還沒跑」——相加永遠是 59，不管實際跑了幾個（恆等式；遊戲、MealMate 同一個坑）。
+  // 現在：log 那一側＝.logs/ev 裡實際存在的外殼紀錄逐份判定；清單那一側＝驅動腳本列的情境。兩側分開數、互相核對，對不上就點名、非 0。
+  const list = rowsFor(EV);                                   // 清單那一側（走清單）
+  const inList = new Map(list.map((r) => [r.label, r]));
+  const shells = fs.readdirSync(EV).filter((f) => /^ev2-.+\.shell$/.test(f)).map((f) => f.slice(4, -6)).sort();
+  const extra = shells.filter((l) => !inList.has(l));
+  const problems = [];
+  for (const l of extra) if (!(l in EXTRA_OK)) problems.push(`log 裡有、清單沒有：${l}`);
+  // log 那一側：只靠外殼紀錄本身判定（指令從清單借，清單外的不判）
+  const logRows = shells.filter((l) => inList.has(l)).map((l) => {
+    const r = inList.get(l);
+    const sh = fs.readFileSync(path.join(EV, `ev2-${l}.shell`), 'utf8');
+    const lf = path.join(EV, `ev_${l}.log`);
+    return { label: l, driver: r.driver, ...stateOf(sh, fs.existsSync(lf) ? fs.readFileSync(lf, 'utf8') : null, r.cmd) };
+  });
+  const LS = ['跑完', '被中斷（有 exit=、沒有完成的證據）', '開了頭沒跑完', '判不出（驅動裡找不到它的指令）'];
+  const lc = (s) => logRows.filter((r) => r.state === s).length;
+  const logSum = LS.reduce((n, s) => n + lc(s), 0);
+  if (logSum !== logRows.length) problems.push(`log 那一側三類相加 ${logSum} ≠ 外殼紀錄份數 ${logRows.length}`);
+  // 獨立核對：走清單那一側「不是還沒跑」的條數，要等於 log 那一側在清單裡、不重複的份數（兩個不同的來源）
+  const listSeen = list.filter((r) => r.state !== '還沒跑').length;
+  if (listSeen !== logRows.length) problems.push(`走清單數到有紀錄的 ${listSeen} 個 ≠ log 那一側 ${logRows.length} 份`);
+  // 重複與「宣稱跑完卻還有沒輪到的」：看這幾段驅動實際的輸出（.logs/ev/run-<驅動>.txt）
+  for (const [d] of ORDER) {
+    const f = path.join(EV, `run-${d}.txt`);
+    if (!fs.existsSync(f)) continue;
+    const out = fs.readFileSync(f, 'utf8');
+    const heads = [...out.matchAll(/^==== ([A-Za-z0-9_.-]+)$/gm)].map((m) => m[1]);
+    const dup = [...new Set(heads.filter((h, i) => heads.indexOf(h) !== i))];
+    if (dup.length) problems.push(`${d}：同一次輸出裡同一個情境跑了兩次以上：${dup.join('、')}`);
+    if (/^alldone$/m.test(out)) {
+      const skipped = [...out.matchAll(/^\[([A-Za-z0-9_.-]+)\] 上一段已跑完/gm)].map((m) => m[1]);
+      const notReached = list.filter((r) => r.driver === d && !heads.includes(r.label) && !skipped.includes(r.label)).map((r) => r.label);
+      if (notReached.length) problems.push(`${d}：輸出寫了 alldone，卻還有沒輪到的：${notReached.join('、')}`);
+    }
+  }
+  const notYet = list.length - logRows.length;
+  const lines = [
+    `tools/ev 進度（${new Date().toISOString()}）`,
+    `log 那一側（.logs/ev 實際存在的外殼紀錄，清單內 ${logRows.length} 份、清單外 ${extra.length} 份${extra.length ? '：' + extra.map((l) => `${l}${l in EXTRA_OK ? '（登記過：' + EXTRA_OK[l] + '）' : '（沒登記）'}`).join('、') : ''}）：`
+      + `${LS.map((s) => `${s} ${lc(s)}`).join('、')}；相加 ${logSum}`,
+    `清單那一側：應有 ${list.length} 個；走清單數到有紀錄的 ${listSeen} 個（要＝log 那一側 ${logRows.length}）；沒有紀錄＝還沒跑 ${notYet} 個`,
+    `（「還沒跑」是用應有數減 log 那一側算的，兩者相加必等於應有數——那不是檢查；有在擋的是上面兩側互相核對與下面的 ✗ 項）`,
+  ];
+  for (const [d, c] of ORDER) lines.push(`  ${d} @ ${c}：${LS.map((s) => `${s.replace(/（.*）/, '')} ${logRows.filter((r) => r.driver === d && r.state === s).length}`).join('、')}、還沒跑 ${list.filter((r) => r.driver === d).length - logRows.filter((r) => r.driver === d).length}`);
+  for (const p of problems) lines.push(`✗ ${p}`);
   lines.push('逐條（只有「跑完」的算數；其餘下一段從頭重跑）：');
-  for (const r of rows) {
+  for (const r of list) {
     const ev = r.need ? `｜需要 項通過${r.need.pg}／F8結論${r.need.fv}／結果${r.need.result}，有 ${r.have.pg}／${r.have.fv}／${r.have.result}` : '';
     lines.push(`  ${r.state}｜${r.driver}｜${r.label}${r.exit !== undefined ? `｜exit=${r.exit}` : ''}${ev}`);
   }
   fs.writeFileSync(path.join(EV, 'progress.txt'), lines.join('\n') + '\n');
-  console.log(lines.slice(0, ORDER.length + 1).join('\n'));
-  process.exitCode = sum === rows.length ? 0 : 1;
+  console.log(lines.slice(0, 4 + ORDER.length).concat(problems.map((p) => `✗ ${p}`)).join('\n'));
+  process.exitCode = problems.length ? 1 : 0;
 }

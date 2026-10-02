@@ -44,7 +44,58 @@ if (/^(bash|sh|python3?)$/i.test(exe)) {
   catch (e) { lines.push(`⊘ 情境未成立：${e.message}`); fs.writeFileSync(out, lines.join('\n') + '\n'); process.exit(3); }
 }
 try { fs.writeFileSync(out + '.partial', lines.join('\n') + '\n'); } catch { /* 同上 */ }
+
+// ---------- 逐一計數（2026-10-02）：程序建立加一、結束減一，峰值不靠定時取樣 ----------
+// 取樣抓不到活不到 2 秒的程序（遊戲那邊實測：三支只活 0.8 秒的子程序，逐一計數得峰值 3）。用 tools/proc-watch.ps1 收 WMI 的建立／結束事件
+// （WITHIN 0.1；沒有系統管理員權限，拿不到最準的 Win32_ProcessStartTrace）。本 repo 的程序＝父程序是本 repo 的，或 MSYS 程序表說它的父程序是。
+const stopFile = out + '.stop';
+try { fs.rmSync(stopFile, { force: true }); } catch { /* 沒有就算了 */ }
+const watcher = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'tools', 'proc-watch.ps1'), '-StopFile', stopFile], { stdio: ['pipe', 'pipe', 'pipe'] });
+const ev = { ours: new Map(), liveWork: 0, liveAll: 0, peakWork: 0, peakAll: 0, events: 0, ready: false, failed: null };
+const isWork = (name, ppidName) => WORK.test(name) && !(BROWSER.test(name) && BROWSER.test(ppidName || ''));
+let msysCache = { at: 0, edges: [] };
+const msysParentOf = (pid) => {
+  if (Date.now() - msysCache.at > 300) { try { msysCache = { at: Date.now(), edges: msysEdges() }; } catch { msysCache = { at: Date.now(), edges: [] }; } }
+  const e = msysCache.edges.find(([, c]) => c === pid);
+  return e ? e[0] : null;
+};
+let buf = '';
+watcher.stdout.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\n')) >= 0) {
+    const l = buf.slice(0, i).replace(/\r$/, ''); buf = buf.slice(i + 1);
+    if (l === 'READY') { ev.ready = true; continue; }
+    const f = l.split('\t');
+    if (f[0] === 'C') {
+      ev.events++;
+      const pid = Number(f[1]), ppid = Number(f[2]), name = f[3];
+      let parent = ev.ours.has(ppid) ? ppid : null;
+      if (parent === null && /^(bash|sh|node|python3?|git|chrome|msedge|cmd|conhost)(\.exe)?$/i.test(name)) {
+        const mp = msysParentOf(pid);
+        if (mp !== null && ev.ours.has(mp)) parent = mp;
+      }
+      if (parent !== null) {
+        const work = isWork(name, (ev.ours.get(parent) || {}).name);
+        ev.ours.set(pid, { name, work });
+        ev.liveAll++; if (work) ev.liveWork++;
+        ev.peakAll = Math.max(ev.peakAll, ev.liveAll); ev.peakWork = Math.max(ev.peakWork, ev.liveWork);
+      }
+    } else if (f[0] === 'D') {
+      const p = ev.ours.get(Number(f[1]));
+      if (p && !p.gone) { p.gone = true; ev.liveAll--; if (p.work) ev.liveWork--; }
+    }
+  }
+});
+watcher.on('error', (e) => { ev.failed = e.message; });
+for (let i = 0; i < 100 && !ev.ready && !ev.failed; i++) await new Promise((r) => setTimeout(r, 100));
+if (!ev.ready) lines.push(`（逐一計數沒啟動：${ev.failed || '監看程式 10 秒內沒回 READY'}——峰值只剩取樣，可能漏算短命程序）`);
+
 const child = spawn(exe, cmd.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
+// 主程式（child）自己算一個；它的建立事件可能比這一行早到，所以直接放進來
+ev.ours.set(child.pid, { name: path.basename(exe), work: WORK.test(path.basename(exe)) });
+ev.liveAll++; if (WORK.test(path.basename(exe))) ev.liveWork++;
+ev.peakAll = Math.max(ev.peakAll, ev.liveAll); ev.peakWork = Math.max(ev.peakWork, ev.liveWork);
 const seenBash = new Set();
 let log = '';
 child.stdout.on('data', (d) => { log += d; }); child.stderr.on('data', (d) => { log += d; });
@@ -76,6 +127,14 @@ while (!done) {
   } catch { lines.push(`${new Date().toISOString()} 取不到程序表`); }
   await new Promise((r) => setTimeout(r, 2000));
 }
-lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、取樣 ${samples} 次、峰值：工作程序 ${peak} 個（含主程式）、全部程序 ${peakAll} 個、合計記憶體峰值 ${peakMem} MB、系統可用最低 ${minFree === Infinity ? '—' : minFree} MB`);
+await new Promise((r) => setTimeout(r, 400));   // 讓最後幾個結束事件進來
+try { fs.writeFileSync(stopFile, 'stop'); } catch { /* 寫不進就直接收掉 */ }
+await new Promise((r) => setTimeout(r, 1500));
+try { watcher.kill(); } catch { /* 已經結束 */ }
+try { fs.rmSync(stopFile, { force: true }); } catch { /* 沒有就算了 */ }
+const evPart = ev.ready
+  ? `逐一計數峰值：工作程序 ${ev.peakWork} 個、全部程序 ${ev.peakAll} 個（事件 ${ev.events} 筆、認到本 repo 的 ${ev.ours.size} 支；含主程式；活不到約 0.1 秒的可能漏）`
+  : '逐一計數沒啟動';
+lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFixed(1)} 秒；${evPart}；取樣（每 2 秒，${samples} 次）峰值：工作程序 ${peak} 個、全部程序 ${peakAll} 個；合計記憶體峰值 ${peakMem} MB、系統可用最低 ${minFree === Infinity ? '—' : minFree} MB`);
 fs.writeFileSync(out, lines.join('\n') + '\n\n' + log);
 process.exitCode = child.exitCode;
