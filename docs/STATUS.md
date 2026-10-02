@@ -37,7 +37,13 @@
   **今天的回頭核對（reflog，實測）**：14 次推送逐次比對 HEAD 與 origin/main 的 reflog——每一次都是「rebase 完成（HEAD＝B）→ 推送更新遠端成 B →
   才 cherry-pick 放回」，rebase 完成到放回之間 HEAD 沒有任何其他移動，推上去的值都等於 rebase 完成時的 HEAD（最早兩次 97c1b76、aa6b6b9 同樣）。
   自查跑在 safe-push 裡、推送之前，那段時間 HEAD＝B，所以**自查看到的範圍＝實際推上去的範圍**。被拿開的那個 commit（訊息「3 處裸寫的 bash」）
-  不在遠端歷史裡（遠端 0、本機 main 1）。
+  不在遠端歷史裡（遠端 0、本機 main 1）。commit 數也對過（JLPT 的做法）：留得到自查輸出的 3 次（aa6b6b9..0142e0d、0142e0d..8186a23、
+  6c3aaca..148ec1b），自查印的 commit 數 1／2／1＝`git rev-list --count` 算推上去那段的 1／2／1；其餘 11 次輸出已被覆寫，只有 reflog 為證。
+  **自查程式內部那幾道核對擋得到哪一段（照 JLPT 切）**：`prepush-scan.mjs` 對同一個符號範圍下了四個 git 指令——①取新增行（`git log -p`）
+  ②取 numstat ③數 commit（`rev-list --count`）④取訊息與作者欄。核對有兩組：①的行數＝②的新增行數；③的 commit 數＝④解析出的筆數。
+  所以：commit 落在 ①②之間 → 行數對不上、回 4（**但那個 commit 只刪不增時，兩邊照樣相等，擋不住**）；落在 ②③之間 → ③④都含它、
+  兩邊相等，**它的內容沒被掃、只掃了訊息與作者欄，擋不住**；落在 ③④之間 → 筆數對不上、回 4；**落在自查結束之後、推送之前 → 沒有任何東西在比**。
+  不能說「有核對所以還好」：它只蓋住四個指令之間的其中兩段。鎖定 commit 編號之後，四個指令都用同一個編號，這幾段一起消失。
   **根本修法（排進明天）**：開跑時記下 commit 編號（`PIN=$(git rev-parse HEAD)`，並確認 HEAD 在 main 上），自查只掃 `REMOTE..$PIN`、推送只推
   `$PIN:refs/heads/main`、第三關跟 `$PIN` 比；pushgatetest 新增情境「自查之後才多出一個帶命中的 commit」實測必須擋下（或至少不會被推上去、
   第三關報不符），拿掉鎖定時那個情境必須紅。改完閘門要重跑 pushgatetest 重新登記。
