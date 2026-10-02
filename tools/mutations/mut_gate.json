@@ -6,41 +6,41 @@
       { "find": "set -eo pipefail", "replace": "set -e" },
       { "find": "if ! git push origin main > \"$TMP/push\" 2>&1; then", "replace": "if ! git push origin main 2>&1 | tail -n 1 > \"$TMP/push\"; then" }
     ],
-    "cmd": "node scripts/pushgatetest.mjs"
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 600000
   },
   {
     "name": "自查只看 HEAD",
     "file": "scripts/prepush-scan.mjs",
     "find": "const range = process.argv[2] || '';",
     "replace": "const range = '';",
-    "cmd": "node scripts/pushgatetest.mjs"
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 600000
   },
   {
     "name": "檢查器壞了與命中回同一個值",
     "file": "scripts/prepush-scan.mjs",
     "find": "if (broken.length) { console.log(`擋下：檢查器壞了（${broken.join('、')}）`); process.exit(4); }",
     "replace": "if (broken.length) { console.log(`擋下：檢查器壞了（${broken.join('、')}）`); process.exit(1); }",
-    "cmd": "node scripts/pushgatetest.mjs"
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 600000
   },
   {
     "name": "拿掉最後比對遠端那一關",
     "file": "scripts/safe-push.sh",
     "find": "if [ \"$LOCAL\" != \"$AFTER\" ]; then",
     "replace": "if false; then",
-    "cmd": "node scripts/pushgatetest.mjs"
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 600000
   },
   {
     "name": "忽略對照組",
     "file": "scripts/prepush-scan.mjs",
     "find": "  if (!ctrlHit) broken.push(name);\n",
     "replace": "",
-    "cmd": "node scripts/pushgatetest.mjs"
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 600000
   },
   {
     "name": "推送閘不看自查結果",
     "file": "scripts/safe-push.sh",
     "find": "if [ \"$CHECK\" -ne 0 ]; then",
     "replace": "if false; then",
-    "cmd": "node scripts/pushgatetest.mjs"
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 600000
   }
 ]

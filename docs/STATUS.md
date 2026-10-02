@@ -38,6 +38,22 @@
   跟入庫那份差異 0。**掃不到的**：proctree_mut、mutlint_mut、evidence_mut 當時沒存原始輸出、也還沒有總結行，無法事後核對（下一個時段重跑）。
   six 第一段被叫停的 six-3／six-3a：當時進度檔就判成被中斷，它們的 log 已被第二段重跑覆寫，現存的分類全部來自重跑（9 個都跑完）。
   **注意**：evidence.mjs 多了兩條對照組，`evidence_mut` 登記的斷言指紋會變 → 下次跑會先被「需要複審」擋下，屬預期。
+- **逾時餘裕（2026-10-02 晚，StockDiary／MealMate 撞到：修掉「逾時被當成紅」之後，讓測試變慢的突變會被判成不算數＝沒驗到）**：
+  `node tools/timeout-margin.mjs` 列「每個包住整支測試的逾時 ÷ 那支測試跑過最長的一次」，**用最長那次、不用中位數**，不到 3 倍標 ✗、非 0；
+  沒量過的寫「沒量過」不猜（45 列，多半是 2026-09-23 全面檢測只記了最慢五支）。第一次跑抓到兩處（＝這道檢查的真實對照）：
+  run-affected 單支 1200 秒 vs layouttest 580 秒（2.1 倍）→ 改 1800（3.1 倍）；`tools/mutations/mut_gate.json` 6 條跑 pushgatetest 的突變吃
+  mutate 預設 400 秒 vs 167.4 秒（2.4 倍）→ 每條設 `timeoutMs: 600000`（3.6 倍）。改完全部 ≥ 3 倍；最緊的是 mut_guard_mut 300 秒 vs 改壞後
+  的 mutatetest 93.5 秒（3.2 倍）。**沒有逾時的**（會卡死、但不會誤判成不算數）：wtg_mut、mutlint_mut、evidence_mut、evtest_mut、tools/ev 的 ev2.sh。
+  **Job Object 之後要重算的短逾時**（StockDiary：多 0.85 秒，連基準都逾時）：worktreeguardtest 的「單支逾時」情境 `--timeout-sec 3`、mutatetest
+  G 組 `timeoutMs: 2500`——兩個都是「本來就該卡住」的探針，但前置條件要求探針在逾時前寫出 pid，0.85 秒會吃掉這段；改 killTree 時一起放寬
+  （例如 8 秒、6 秒），並重跑看前置。
+- **只在某個時點查的護欄（2026-10-02 晚盤點，MealMate：記憶體下限只在開跑前查，跑到一半掉到 2,005 MB 沒攔到）**：
+  ① **重負載判定（含「本 repo 最多 4 個工作程序」）**：只在 `run-affected` 開跑前用預測算一次，**跑的時候沒有任何東西在數**——跑到一半才
+  出現的第 5 個看不到；sample-run 會記、但只記不停。② **記憶體下限**：本 repo **根本沒有**（只有 sample-run 事後記最低值）。③ 工作區＝HEAD：
+  `mutate.mjs` 開跑前查＋跑完再拍一次比對（跑到一半被改、又改回來的看不到）；`run-affected` 每支測試前後各拍一次（同樣只看兩端）。
+  ④ 停止旗標：只在情境之間查（刻意的：情境中途不停）。⑤ Git Bash 檢查、bash 解成完整路徑：開跑時一次（執行檔不會中途換，不算洞）。
+  ⑥ 推送閘：fetch 後算範圍、推送前比對登記雜湊；推送期間遠端被改由 git 本身的非快轉拒絕擋。**要補的是 ① ②**：做法照 MealMate——外部監看
+  每 5 秒一次、連續 3 次越線才停（單次會把正常起伏當危險）；計數用 Job Object 改好之後「直接問 job 有幾支」，排在 killTree 那一步之後。
 - **不要把異常值正規化掉（2026-10-02 的實例）**：上午定「取樣漏算差是負的照實印、不夾成 0」；下午巢狀 Git Bash 那一場逐一計數 0、取樣 1，
   漏算印成 −1，才看出逐一計數少算。夾成 0 的話兩個數都小、都不離譜，不會有人覺得奇怪。結束核對只抓多算（結束事件漏收）；
   **少算（建立事件漏收、歸屬認不到）它抓不到，唯一的訊號就是那個負數**——所以負數要留著，不准改成 0 或取絕對值。
@@ -111,7 +127,7 @@
   `tools/mutproof/`。**還在暫存區、沒入庫的**：驗閘門的證據外殼 `ev2.sh` 與它的 `*.shell` 情境檔（`tools/mutations/` 的 `from/to`
   補丁是給它們用的）——排進計畫。
 - **第二批：單支逾時、帳本「沒有結果」（2026-10-02，`419484c`）**：`scripts/run-timeout.mjs` 超過時限就 `taskkill /T /F` 整棵程序樹
-  （`spawnSync` 的 timeout 在 Windows 只殺得到 shell）。`run-affected` 單支時限預設 1200 秒（最慢的 layouttest 實測 516～580 秒），
+  （`spawnSync` 的 timeout 在 Windows 只殺得到 shell）。`run-affected` 單支時限預設 1200 秒（最慢的 layouttest 實測 516～580 秒；2026-10-02 晚改 1800，見「逾時餘裕」），
   `--timeout-sec` 可改；逾時回 7、寫「沒有結果，不是通過也不是紅」。`mutate` 帳本收尾那一筆加 `result`：red／not-red／**no-result**
   （逾時被殺、被中斷後還原、還原紀錄不見但檔案沒事都算 no-result——原本逾時照樣記成 done）；`node scripts/mutate.mjs --no-result`
   列出最近一次沒有結果的。**🔴 這個欄位目前不影響任何選擇**：本 App 還沒有依帳本挑選突變的機制，no-result 只是紀錄、

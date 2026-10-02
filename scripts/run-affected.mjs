@@ -23,9 +23,10 @@ import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
 import { runWithTimeout } from './run-timeout.mjs';
 import { predict, classify, loadTimes, saveTimes, loadHistory, appendHistory } from './predict.mjs';
 
-// 單支測試的時限（秒）。最慢的 layouttest 實測 516～580 秒；20 分鐘留了兩倍餘裕。--timeout-sec 可改。
+// 單支測試的時限（秒）。最慢的 layouttest 實測 516～580 秒；原本 1200（2.1 倍）——讓測試變慢的突變會先逾時、被判成「不算數」＝沒驗到，
+// 2026-10-02 照「餘裕至少 3 倍、用最長那次算」改成 1800（3.1 倍；tools/timeout-margin.mjs 列整張表）。--timeout-sec 可改。
 // 超過就整棵程序樹殺掉、回 7：**沒有結果**——不是通過，也不是紅。
-export const DEFAULT_TIMEOUT_SEC = 1200;
+export const DEFAULT_TIMEOUT_SEC = 1800;
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
