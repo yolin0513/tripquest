@@ -36,7 +36,8 @@ for (const m of MUTS) {
     s = s.replace(a, b);
   }
   fs.writeFileSync(path.join(DIR, 'scripts', 'evidence.mjs'), s);
-  const r = spawnSync(process.execPath, [path.join(DIR, 'scripts', 'evidence.mjs')], { cwd: DIR, encoding: 'utf8' });
+  // 逾時（2026-10-02 補）：evidence.mjs 沒量過——**暫定** 120 秒（只跑對照組、秒級；明顯寬鬆），量到再改成最長×3
+  const r = spawnSync(process.execPath, [path.join(DIR, 'scripts', 'evidence.mjs')], { cwd: DIR, encoding: 'utf8', timeout: 120000 });
   const out = (r.stdout || '') + (r.stderr || '');
   const fin = completed(r, out, /^evidence 結束：回 \d+$/m);
   // 這支的「斷言」是 evidence.mjs 自身對照組的名字（「✓ 對照組：…」那幾行）

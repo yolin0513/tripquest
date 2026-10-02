@@ -41,7 +41,9 @@ for (const m of RUN) {
     fs.writeFileSync(p, out);
     if (fs.readFileSync(p, 'utf8') !== out || !out.includes(m.repl)) { console.log(`✗ ${m.name}：讀回不是改壞的那一份，中止`); process.exit(9); }
   }
-  const r = spawnSync(process.execPath, ['scripts/worktreeguardtest.mjs'], { cwd: COPY, encoding: 'utf8' });
+  // 逾時（2026-10-02 補；原本沒有＝卡住就卡到有人注意）：worktreeguardtest 最長實測 18.9 秒×3＝57，但它裡面有一個 60 秒的
+  // 「單支逾時」情境（守衛被改壞時可能整段等滿），取 180 秒。逾時＝沒有總結行 → completed() 判成被中斷、不算數。
+  const r = spawnSync(process.execPath, ['scripts/worktreeguardtest.mjs'], { cwd: COPY, encoding: 'utf8', timeout: 180000 });
   const out = (r.stdout || '') + (r.stderr || '');
   const fin = completed(r, out);
   if (m === RUN[0]) gateOrExit(m.name.startsWith('M0') && expectGate('wtg_mut', m.name, out, itemsOf(RUN.slice(1), ['expectRed'])));

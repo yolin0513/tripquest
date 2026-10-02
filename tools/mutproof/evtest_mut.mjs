@@ -42,7 +42,8 @@ for (const m of MUTS) {
     fs.writeFileSync(p, out);
     if (fs.readFileSync(p, 'utf8') !== out || !out.includes(m.repl)) { console.log(`✗ ${m.name}：讀回不是改壞的那一份，中止`); process.exit(9); }
   }
-  const r = spawnSync(process.execPath, ['scripts/evtest.mjs'], { cwd: REPO, encoding: 'utf8', env: { ...process.env, EVTEST_ROOT: COPY } });
+  // 逾時（2026-10-02 補）：evtest 最長實測 45.1 秒×3＝135，取 150 秒
+  const r = spawnSync(process.execPath, ['scripts/evtest.mjs'], { cwd: REPO, encoding: 'utf8', env: { ...process.env, EVTEST_ROOT: COPY }, timeout: 150000 });
   const out = (r.stdout || '') + (r.stderr || '');
   const fin = completed(r, out);
   if (m === MUTS[0]) gateOrExit(expectGate(RUNNER, m.name, out, itemsOf(MUTS.slice(1), ['expectRed'])));

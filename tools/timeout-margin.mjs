@@ -65,6 +65,22 @@ add('timeout_mut（400 秒）', 400, 'worktreeguardtest');
 add('timeout_mut（400 秒）', 400, 'mutatetest（改壞後）', 'mutatetest');
 add('predict_mut（300 秒）', 300, 'predicttest');
 add('proctree_mut（120 秒）', 120, 'proctreetest');
+add('wtg_mut（180 秒）', 180, 'worktreeguardtest');
+add('evtest_mut（150 秒）', 150, 'evtest');
+add('mutlint_mut（暫定 120 秒）', 120, 'mutlint');
+add('evidence_mut（暫定 120 秒）', 120, 'evidence');
+add('ev2.sh 每次 pushgatetest（168×3 秒）', 504, 'pushgatetest');
+
+// 沒設逾時＝卡住就卡到有人注意（2026-10-02，Dispatch：成本無上限）：突變驅動裡每一個 spawnSync( 呼叫都要帶 timeout
+const NO_TO = (src) => src.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => /\bspawnSync\(/.test(l) && !/^\s*\/\//.test(l) && !/\btimeout\s*:/.test(l));
+{
+  const ctl = NO_TO("  const r = spawnSync(process.execPath, ['a.mjs'], { cwd: X });\n  const q = spawnSync(process.execPath, ['b.mjs'], { cwd: X, timeout: 9 });\n  // spawnSync( 註解\n");
+  if (!(ctl.length === 1 && ctl[0][0] === 1)) { console.log(`✗ 沒設逾時檢查的對照組沒過（抓到 ${ctl.map((x) => x[0]).join(',')}，要 1）`); process.exit(4); }
+}
+const noTimeout = [];
+for (const f of fs.readdirSync(path.join(ROOT, 'tools', 'mutproof')).filter((x) => /_mut\.mjs$/.test(x))) {
+  for (const [n] of NO_TO(fs.readFileSync(path.join(ROOT, 'tools', 'mutproof', f), 'utf8'))) noTimeout.push(`tools/mutproof/${f}:${n}`);
+}
 const low = rows.filter((r) => r.s !== null && r.limit / r.s < 3);
 const none = rows.filter((r) => r.s === null);
 console.log(`逾時餘裕表：${rows.length} 列（有量測 ${rows.length - none.length}、沒量過 ${none.length}）；倍數＝逾時 ÷ 跑過最長的一次`);
@@ -73,4 +89,5 @@ for (const r of rows.filter((x) => x.s !== null).sort((a, b) => a.limit / a.s - 
 }
 console.log(`沒量過（不猜）：${none.map((r) => `${r.test}（${r.where}）`).join('、') || '無'}`);
 console.log(low.length ? `不到 3 倍：${low.length} 列` : '全部 ≥ 3 倍');
-process.exitCode = low.length ? 1 : 0;
+console.log(noTimeout.length ? `✗ 沒設逾時的 spawnSync：${noTimeout.join('、')}` : `突變驅動的 spawnSync 都有逾時（掃了 tools/mutproof/*_mut.mjs）`);
+process.exitCode = low.length || noTimeout.length ? 1 : 0;

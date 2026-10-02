@@ -43,7 +43,16 @@ if [ "$#" -gt 0 ]; then
     echo "[$LABEL] HEAD 裡的 $f＝改壞的那一份（${inhead:0:12}）"
   done
 fi
-bash -c "$CMD" > "$LOG" 2>&1; CODE=$?
+# 逾時（2026-10-02，Dispatch：卡住的成本無上限，「有人注意」不是機制）：照指令裡跑幾次驗法算——pushgatetest 最長實測 167.4 秒、
+# f8verify 約 4.5 分鐘（**暫定**：只有「約」，沒有逐次最長值；量到再調），乘 3；至少 300 秒。EV2_TIMEOUT_SEC 可蓋過。
+# 逾時被殺的那一場印 ⊘、log 裡不會有完成的證據 → progress／evidence 判成「被中斷、不算數」，不進紅／沒紅。
+# 已知限制：GNU timeout 殺的是 bash -c 這一層；簡單的 bash→node 實測殺得到（2026-10-02，對照組數得到 1 支、殺完 0 支），
+# 更深的巢狀可能漏——Job Object 改好之後接上。
+NPG=$(grep -oF 'pushgatetest.mjs' <<< "$CMD" | wc -l); NFV=$(grep -oF 'f8verify.mjs' <<< "$CMD" | wc -l)
+LIMIT=$(( (NPG * 168 + NFV * 270) * 3 )); [ "$LIMIT" -lt 300 ] && LIMIT=300; LIMIT="${EV2_TIMEOUT_SEC:-$LIMIT}"
+echo "[$LABEL] 逾時：$LIMIT 秒（pushgatetest ×$NPG、f8verify ×$NFV）"
+timeout -k 15 "$LIMIT" bash -c "$CMD" > "$LOG" 2>&1; CODE=$?
+if [ "$CODE" = 124 ] || [ "$CODE" = 137 ]; then echo "[$LABEL] ⊘ 逾時 $LIMIT 秒被殺——沒有結果、不算數"; fi
 echo "[$LABEL] exit=$CODE"
 git checkout -q --detach "$C"; git checkout -q -- .; git clean -qfd -e node_modules > /dev/null 2>&1
 exit 0

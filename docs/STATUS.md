@@ -22,9 +22,11 @@
      **本 repo 多一件（StockDiary 沒做）**：逐一計數改成問 job——`QueryInformationJobObject` 第 1 類（BasicAccounting：
      ActiveProcesses／TotalProcesses）或第 3 類（行程清單），由 jobhelper 定時印出；巢狀鏈拿今天的「計數 0／2、取樣 1／3」當對照。
      要接的地方：`run-timeout.mjs` 的 `runWithTimeout`（run-affected、mutate 都經過它）、`tools/sample-run.mjs`、`workertest`。
-  ③ `proctree_mut`（先複審 P8，再帶 `--accept-review`；排在 ② 之後，因為它驗的正是這套）。
-  ④ 5 支重負載突變驅動＋`node tools/mutproof/evtest_mut.mjs .`（第一次會被「需要複審」擋下）。
-  ⑤ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對要到這裡才第一次有真實資料）。
+     同一步放寬兩處短逾時：worktreeguardtest「單支逾時」3 秒 → 8 秒、mutatetest G 組 2.5 秒 → 6 秒，重跑確認前置條件成立。
+  ③ 逐一計數改成直接問 job＋外部記憶體監看＋程序數即時監看（每 5 秒、連續 3 次越線才停；見「只在某個時點查的護欄」①②）。
+  ④ `proctree_mut`（先複審 P8，再帶 `--accept-review`；排在 ② 之後，因為它驗的正是這套）。
+  ⑤ 5 支重負載突變驅動＋`node tools/mutproof/evtest_mut.mjs .`（第一次會被「需要複審」擋下；新補的逾時也在這時第一次實跑）。
+  ⑥ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對、ev2.sh 的逾時都要到這裡才第一次有真實資料）。
 - **判定也要「跑完才算數」（2026-10-02 晚，MealMate 撞到：被停掉的那一輪記成「跑完、紅錯地方」）**：進度檔早就改成看完成的證據，
   但**判定沒有接上**——查過：九支突變驅動（`tools/mutproof/*_mut.mjs`）判紅只看「結束碼非 0＋有 ✗ 行」，spawnSync 逾時的 null 也算非 0；
   `mutate.mjs` 帳本「結束碼非 0＝red」；舊 ev2 的證據分類「有 exit=、有 ✗＝紅」。**全部同一個洞。** 實測重現：一支先印 ✗、再被
@@ -43,7 +45,12 @@
   沒量過的寫「沒量過」不猜（45 列，多半是 2026-09-23 全面檢測只記了最慢五支）。第一次跑抓到兩處（＝這道檢查的真實對照）：
   run-affected 單支 1200 秒 vs layouttest 580 秒（2.1 倍）→ 改 1800（3.1 倍）；`tools/mutations/mut_gate.json` 6 條跑 pushgatetest 的突變吃
   mutate 預設 400 秒 vs 167.4 秒（2.4 倍）→ 每條設 `timeoutMs: 600000`（3.6 倍）。改完全部 ≥ 3 倍；最緊的是 mut_guard_mut 300 秒 vs 改壞後
-  的 mutatetest 93.5 秒（3.2 倍）。**沒有逾時的**（會卡死、但不會誤判成不算數）：wtg_mut、mutlint_mut、evidence_mut、evtest_mut、tools/ev 的 ev2.sh。
+  的 mutatetest 93.5 秒（3.2 倍）。**原本沒有逾時的 5 支已補（同日，Dispatch：卡住的成本無上限，比調餘裕急；驗證等時段）**：wtg_mut 180 秒
+  （18.9×3＝57，但裡面有 60 秒的逾時情境）、evtest_mut 150 秒（45.1×3）、mutlint_mut／evidence_mut **暫定** 120 秒（沒量過、明顯寬鬆，量到再調）、
+  `tools/ev/ev2.sh` 照指令算（pushgatetest 每次 168 秒、f8verify 每次 270 秒〔**暫定**：只有「約 4.5 分鐘」〕，乘 3、至少 300；`EV2_TIMEOUT_SEC` 可蓋過；
+  逾時印 ⊘、沒有完成的證據 → 被中斷不算數）。計算抽原檔那兩行實測：兩次 pushgatetest 1008、一次 f8verify 810、都沒有 300、蓋過 5。GNU `timeout`
+  殺 `bash -c`：簡單的 bash→node 實測殺得到（對照組同一查法數得到 1 支、殺完 0 支），更深的巢狀可能漏，Job Object 後接上。`timeout-margin.mjs`
+  加了機器檢查：`tools/mutproof/*_mut.mjs` 每個 `spawnSync(` 都要帶 timeout（合成對照組＋把 wtg_mut 還原成舊版 → 抓到 `wtg_mut.mjs:44`）。
   **Job Object 之後要重算的短逾時**（StockDiary：多 0.85 秒，連基準都逾時）：worktreeguardtest 的「單支逾時」情境 `--timeout-sec 3`、mutatetest
   G 組 `timeoutMs: 2500`——兩個都是「本來就該卡住」的探針，但前置條件要求探針在逾時前寫出 pid，0.85 秒會吃掉這段；改 killTree 時一起放寬
   （例如 8 秒、6 秒），並重跑看前置。
