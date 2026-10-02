@@ -11,7 +11,9 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { listProcesses, descendants } from './proctree.mjs';
 
-const taskkill = (v) => spawnSync('taskkill', ['/PID', String(v), '/F'], { stdio: 'ignore' });
+// 測試、突變、驗法會開的程序種類；不在這裡的一律不殺（root 本身是我們剛開的，照殺）
+export const KILLABLE = /^(node|cmd|conhost|bash|sh|chrome|msedge|chromium|chrome_crashpad_handler|workerd|npx|npm|git|python3?|esbuild)(\.exe)?$/i;
+const taskkill = (v) =>spawnSync('taskkill', ['/PID', String(v), '/F'], { stdio: 'ignore' });
 // list、kill 可注入：對照組用合成的程序表時**絕不能真的 taskkill 那些合成的 PID**（可能剛好對到真的程序）
 export function killTree(pid, { list = listProcesses, kill = taskkill, log = (s) => console.log(s) } = {}) {
   if (process.platform !== 'win32') {
@@ -23,9 +25,13 @@ export function killTree(pid, { list = listProcesses, kill = taskkill, log = (s)
   catch (e) { log(`（取不到程序表：${String(e.message).split('\n')[0]}——只殺 ${pid} 本身，不用 /T）`); tree = null; }
   // 先殺 root、再殺子孫（名單在殺之前就取好了）：先殺葉子的話，root 會收到「子程序結束」而有時間跑它的 finally
   // ——mutatetest 的「殺到一半」就是這樣造不出來的（2026-10-02 實測：五個殺程序情境全部判成情境未成立）
-  const victims = [pid, ...(tree || []).map((p) => p.pid)];
+  // 第二道防呆：子孫只殺名稱在 KILLABLE 裡的（測試會開的那幾種）。就算哪天認子孫的判斷又出錯，
+  // OneDrive 這類不相干的程序也不會被殺——不在清單裡的印出來、不殺。
+  const skipped = (tree || []).filter((p) => !KILLABLE.test(p.name || ''));
+  for (const p of skipped) log(`（不殺 ${p.pid} ${p.name}：名稱不在可殺清單）`);
+  const victims = [pid, ...(tree || []).filter((p) => KILLABLE.test(p.name || '')).map((p) => p.pid)];
   for (const v of victims) kill(v);
-  return { killed: victims, tree };
+  return { killed: victims, tree, skipped: skipped.map((p) => p.pid) };
 }
 
 // opts：{ cwd, shell, inherit（輸出直接印到這個程序）, timeoutMs }

@@ -28,6 +28,12 @@ yes(descendants(SYN, 999).length === 0, 'root 不在表上 → 沒有子孫（�
 const killed = [];
 const r = killTree(100, { list: () => SYN, kill: (v) => killed.push(v), log: () => {} });
 yes(killed.join(',') === '100,300,200', `killTree 只殺 100、300、200，root 先殺（實得 ${killed.join(',')}）——不殺 400、500、600`);
+// 第二道防呆：建立時間看起來沒問題（比 root 晚），但名稱不在可殺清單 → 認得到、但不殺
+const SYN2 = [...SYN, { pid: 700, ppid: 200, name: 'OneDrive.exe', created: T('10:05') }];
+const killed3 = [];
+const r3 = killTree(100, { list: () => SYN2, kill: (v) => killed3.push(v), log: () => {} });
+yes(r3.tree.some((p) => p.pid === 700) && !killed3.includes(700) && r3.skipped.includes(700) && killed3.join(',') === '100,300,200',
+  `名稱不在可殺清單（OneDrive.exe）→ 就算被認成子孫也不殺（殺了 ${killed3.join(',')}、略過 ${r3.skipped.join(',') || '無'}）`);
 const killed2 = [];
 killTree(100, { list: () => { throw new Error('取不到'); }, kill: (v) => killed2.push(v), log: () => {} });
 yes(killed2.join(',') === '100', `取不到程序表 → 只殺 root 本身（實得 ${killed2.join(',')}）`);

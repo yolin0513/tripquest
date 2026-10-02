@@ -94,6 +94,13 @@
   **先前報的峰值是「工作程序數」（子孫裡的 node／chrome，含主程式）**，但當時認子孫的方式就是這個洞，所以那些數字**可能被灌水、
   未能排除**；改了之後重量：proctreetest 3、predicttest 2、mutatetest 3、worktreeguardtest 4。`workertest` 同樣改成 `killTree`，
   但它要開 wrangler（重負載）才驗得到——改動存成 `.logs/workertest-killtree.patch`、**還沒進 commit**，排時段驗過再套。
+- **殺程序樹的第二道防呆（2026-10-02）**：除了「子程序比父程序晚建立」，`killTree` 只殺名稱在可殺清單裡的子孫（node、cmd、conhost、
+  bash、chrome、msedge、workerd、npx、npm、git、python…，`run-timeout.mjs` 的 `KILLABLE`），不在清單裡的印出來、不殺——就算哪天
+  認子孫又出錯，OneDrive 這類程序也不會被殺。`proctreetest` 10 項（含「建立時間看起來沒問題、但名稱是 OneDrive → 認得到、不殺」）。
+  突變 P0–P5：**單拿掉建立時間（P1）只紅「認到哪幾支」、「殺了誰」照樣過——被可殺清單補上，在殺這件事上是等價突變；兩道一起拿掉（P5）
+  「殺了誰」才紅**；P4 拿掉清單 → 紅；P3 先殺葉子 → 紅；P2 取不到表時照殺 → 紅（第一版 P2 被清單抵銷成無效突變，改塞一支合格名稱的假程序）。
+- **v11.4 抄送工單已在 `e1b41b7` 裡**（sha256 `4fa91cb6…a5beaf`、374 行、110,854 位元組，與 Dispatch 給的一致）：統籌者放進工作區時
+  蓋掉了已入庫的 v11.3，我整理那一筆 commit 用 `git add -A docs` 一起收進去了，commit 訊息沒提到——在此補記。**尚未執行。**
 - **對照組的樣本不再取自會一直改的檔**：`worktreeguardtest`、`mutatetest` 原本拿 `README.md`、`CLAUDE.md` 當「進版控的檔」，
   改成在 clone 裡自己建、自己 commit 的固定 fixture（`zz-fixture-a.txt`、`zz-fixture-b.txt`）。其餘對照組本來就是合成樣本或被檢查的目標本身。
 - **回頭查：clone 裡跑的到底是不是改壞那份（2026-10-02，MealMate 撞出來的：clone 拿到已 commit 的版本、不是改壞的工作區）**：
