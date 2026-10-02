@@ -58,6 +58,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { headProblems, writeReg, dropReg, regAction, realGit } from './verified-reg.mjs';
 import { scan, makeRun, makeChecks, realUser } from './prepush-scan.mjs';
+import { resolveExe } from './resolve-exe.mjs';
+
+// bash 先解成完整路徑（2026-10-02）：裸寫的 bash 從 PowerShell 起點會被解成 System32 的 WSL（本機實測），閘門驗法根本沒跑起來。
+// 解不出來（PATH 上只有系統目錄或 WindowsApps 的）→ 情境未成立、回 3，不是拿裸寫的 bash 照跑。
+const BASH = (() => {
+  try { return resolveExe('bash'); } catch (e) { console.log('⊘ 情境未成立：' + e.message); process.exit(3); }
+})();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
@@ -75,7 +82,7 @@ const bare = path.join(base, 'remote.git');
 const work = path.join(base, 'work');
 const sh = (cmd, cwd = work, env = {}) => execSync(cmd, { cwd, encoding: 'utf8', env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
 const gate = (env = {}) => {
-  const r = spawnSync('bash', ['scripts/safe-push.sh'], { cwd: work, encoding: 'utf8', env: { ...process.env, ...env } });
+  const r = spawnSync(BASH, ['scripts/safe-push.sh'], { cwd: work, encoding: 'utf8', env: { ...process.env, ...env } });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 };
 const remoteHead = () => sh('git rev-parse main', bare).trim();
@@ -252,7 +259,7 @@ try {
   // FAKEGIT_NTH=n：那個子指令第 n 次（含）以後才失敗（例如「推送前的 ls-remote 照常、推完之後那一次失敗」）。
   const FAKEBIN = path.join(base, 'fakebin');
   const COUNT = path.join(base, 'fakegit.count');
-  const REALGIT = spawnSync('bash', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  const REALGIT = spawnSync(BASH, ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
   fs.mkdirSync(FAKEBIN);
   fs.writeFileSync(path.join(FAKEBIN, 'git'), [
     '#!/bin/sh',
@@ -280,7 +287,7 @@ try {
   const calls = () => (fs.existsSync(COUNT) ? Number(fs.readFileSync(COUNT, 'utf8').trim()) : 0);
   {
     // 假 git 自己的對照組：bash 找到的是它；指定的子指令失敗（前面帶 -c 也認得出）；不相干的照常、輸出跟真的一樣；第 n 次才失敗
-    const b = (cmd, env) => spawnSync('bash', ['-c', cmd], { cwd: work, encoding: 'utf8', env });
+    const b = (cmd, env) => spawnSync(BASH, ['-c', cmd], { cwd: work, encoding: 'utf8', env });
     const e = fakeEnv('ls-remote');
     const which = b('command -v git', e).stdout.trim();
     const f1 = b('git ls-remote origin', e);
