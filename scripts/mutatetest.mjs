@@ -21,13 +21,15 @@ import crypto from 'node:crypto';
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
+import { testedLine } from './probe-hash.mjs';
+import { killTree } from './run-timeout.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CLONE = path.join(ROOT, '.logs', 'mut-clone');
 let pass = 0;
 const yes = (c, m, extra = '') => {
   if (c) { pass++; console.log('✓ ' + m); }
-  else { console.log('✗ ' + m + (extra ? '\n   ' + String(extra).slice(0, 600) : '')); process.exitCode = 1; }
+  else { console.log('✗ ' + m + (extra ? '\n' + String(extra).slice(0, 600).split('\n').map((l) => '   ' + l).join('\n') : '')); process.exitCode = 1; }
 };
 // 「情境未成立」是第三種結果：要測的狀況從頭到尾沒發生——這次什麼都沒量到，**不是通過、也不是紅**
 // （MealMate 2026-10-02：殺程序錯過時間窗，紅在造情境失敗、被算成一條紅）。印 ⊘、最後以回 3 結束（紅是 1）。
@@ -51,9 +53,10 @@ execFileSync('git', ['clone', '-q', ROOT, CLONE]);
 cgit('config', 'user.name', 'mut');
 cgit('config', 'user.email', 'mut@users.noreply.github.com');
 cgit('config', 'core.autocrlf', 'false');
-for (const f of ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', '.gitignore']) fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
+for (const f of ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/proctree.mjs', '.gitignore']) fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
 const P = (r) => path.join(CLONE, r);
 fs.writeFileSync(P('zz-target.txt'), 'alpha\n');
+fs.writeFileSync(P('zz-fixture-a.txt'), 'fixture a\n');   // 「進版控、跟 HEAD 不一樣的檔」用這個 fixture，不拿 README.md
 // 探針：每跑一次在標記檔寫一行（看到的是原樣還是改壞的）；看到 BROKEN 就紅
 fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了'); process.exit(1); }\n");
 fs.writeFileSync(P('scripts/zz-sleep.mjs'), "import fs from 'node:fs'; fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', 'sleep\\n'); fs.writeFileSync('.logs/zz-sleep.pid', String(process.pid)); setTimeout(() => {}, 120000);\n");
@@ -65,6 +68,7 @@ const LIST = P('.logs/zz-muts.json');
 const LEDGER = P('.logs/mutate-ledger.jsonl');
 const PENDING = P('.logs/mutate-pending.json');
 const MARKER = P('.logs/zz-marker.txt');
+console.log(testedLine(CLONE, ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/proctree.mjs']));
 console.log(`暫存 clone：${path.relative(ROOT, CLONE)}，起點 ${START.slice(0, 7)}；被驗的 mutate ${sha1(P('scripts/mutate.mjs')).slice(0, 12)}`);
 
 const reset = () => {
@@ -97,8 +101,7 @@ async function killMidway(name = '會睡很久的') {
   let ready = false;
   for (let i = 0; i < 100 && !ready && !exited; i++) { await sleep(200); ready = fs.existsSync(PENDING) && targetBroken() && marks().includes('sleep'); }
   if (!exited) {
-    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    else process.kill(child.pid, 'SIGKILL');
+    killTree(child.pid, { log: () => {} });   // 認子孫看建立時間、逐支殺（不用 taskkill /T——PID 重用時會殺到不相干的程序）
     await new Promise((r) => (exited || child.exitCode !== null || child.signalCode !== null ? r() : child.on('exit', r)));
   }
   await sleep(300);
@@ -132,15 +135,15 @@ console.log('\n— A 護欄一：工作區 —');
 if (want('A')) {
   {
     pre(reset(), '前置：clone 在起點、工作區乾淨、目標檔＝原檔');
-    fs.appendFileSync(P('README.md'), '\n留下來的改動\n');
-    pre(/README\.md/.test(cgit('status', '--porcelain=v1', '--untracked-files=no')), '前置：README.md 真的跟 HEAD 不一樣');
+    fs.appendFileSync(P('zz-fixture-a.txt'), '\n留下來的改動\n');
+    pre(/zz-fixture-a\.txt/.test(cgit('status', '--porcelain=v1', '--untracked-files=no')), '前置：zz-fixture-a.txt 真的跟 HEAD 不一樣');
     const r = run(LIST, '會紅的');
-    yes(r.code === 2 && /拒絕跑突變：README\.md$/m.test(r.out), `A 嚴格模式、README.md 不一致 → 回 2、點名 README.md（實得 ${r.code}）`, r.out.slice(-300));
+    yes(r.code === 2 && /拒絕跑突變：zz-fixture-a\.txt$/m.test(r.out), `A 嚴格模式、zz-fixture-a.txt 不一致 → 回 2、點名 zz-fixture-a.txt（實得 ${r.code}）`, r.out.slice(-300));
     yes(sha1(P('zz-target.txt')) === ORIG && marks().length === 0, `A 目標檔雜湊沒變、探針沒跑（標記 ${marks().length} 行）`);
   }
   {
     pre(reset(), '前置：clone 在起點');
-    fs.appendFileSync(P('README.md'), '\n不相干的改動\n');
+    fs.appendFileSync(P('zz-fixture-a.txt'), '\n不相干的改動\n');
     const r = run('--only', LIST, '會紅的');
     yes(r.code === 0 && marks().join(',') === 'broken' && sha1(P('zz-target.txt')) === ORIG,
       `A' --only、不相干的改動 → 照跑：探針看到改壞版一次（標記 ${marks().join(',') || '無'}）、目標檔還原（實得 ${r.code}）`, r.out.slice(-300));

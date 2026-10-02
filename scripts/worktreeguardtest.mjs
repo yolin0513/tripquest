@@ -17,13 +17,14 @@ import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
+import { testedLine } from './probe-hash.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CLONE = path.join(ROOT, '.logs', 'wtg-clone');
 let pass = 0;
 const yes = (c, m, extra = '') => {
   if (c) { pass++; console.log('✓ ' + m); }
-  else { console.log('✗ ' + m + (extra ? '\n   ' + String(extra).slice(0, 600) : '')); process.exitCode = 1; }
+  else { console.log('✗ ' + m + (extra ? '\n' + String(extra).slice(0, 600).split('\n').map((l) => '   ' + l).join('\n') : '')); process.exitCode = 1; }
 };
 const sha = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex').slice(0, 12);
 const cgit = (...a) => execFileSync('git', ['-c', 'core.quotepath=false', ...a], { cwd: CLONE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -32,11 +33,11 @@ const mainBefore = snapshot({ root: ROOT });
 
 // ---------- 假測試 ----------
 const FAKE = {
-  'zz-wtg-writer': "import fs from 'node:fs'; fs.appendFileSync('README.md', '\\n測試寫進版控的檔\\n');",
+  'zz-wtg-writer': "import fs from 'node:fs'; fs.appendFileSync('zz-fixture-a.txt', '\\n測試寫進版控的檔\\n');",
   'zz-wtg-newfile': "import fs from 'node:fs'; fs.writeFileSync('docs/zz-junk.txt', 'x');",
   'zz-wtg-ignored': "import fs from 'node:fs'; fs.mkdirSync('screenshots/_out/zz', { recursive: true }); fs.writeFileSync('screenshots/_out/zz/a.png', 'x');",
   'zz-wtg-clean': "console.log('什麼都不做');",
-  'zz-wtg-touchdirty': "import fs from 'node:fs'; fs.appendFileSync('CLAUDE.md', '\\n又改了一次\\n');",
+  'zz-wtg-touchdirty': "import fs from 'node:fs'; fs.appendFileSync('zz-fixture-b.txt', '\\n又改了一次\\n');",
   'zz-wtg-red': "console.log('✗ 故意紅'); process.exit(1);",
   // 卡住：自己睡、再開一個也在睡的孫程序，兩個 pid 寫進 .logs（看整棵樹有沒有真的被殺，不信執行器自己印的字）
   'zz-wtg-hang': "import fs from 'node:fs'; import { spawn } from 'node:child_process'; fs.mkdirSync('.logs', { recursive: true }); const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'ignore' }); fs.writeFileSync('.logs/hang-pids.txt', process.pid + ' ' + g.pid); setTimeout(() => {}, 120000);",
@@ -48,7 +49,7 @@ execFileSync('git', ['clone', '-q', ROOT, CLONE]);
 cgit('config', 'user.name', 'wtg');
 cgit('config', 'user.email', 'wtg@users.noreply.github.com');
 cgit('config', 'core.autocrlf', 'false');
-for (const f of ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/predict.mjs', 'scripts/affected.mjs', '.gitignore', 'package.json']) {
+for (const f of ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/proctree.mjs', 'scripts/predict.mjs', 'scripts/affected.mjs', '.gitignore', 'package.json']) {
   fs.copyFileSync(path.join(ROOT, f), path.join(CLONE, f));
 }
 for (const [n, src] of Object.entries(FAKE)) fs.writeFileSync(path.join(CLONE, 'scripts', n + '.mjs'), src + '\n');
@@ -56,9 +57,13 @@ const pkgPath = path.join(CLONE, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 pkg.scripts['test:chain'] += Object.keys(FAKE).map((n) => ` && node scripts/${n}.mjs`).join('');
 fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+// 固定的 fixture（2026-10-02）：不拿 README.md、CLAUDE.md 這種會一直改的檔當「進版控的檔」——哪天它被改名或刪掉，情境就造不出來
+fs.writeFileSync(path.join(CLONE, 'zz-fixture-a.txt'), 'fixture a\n');
+fs.writeFileSync(path.join(CLONE, 'zz-fixture-b.txt'), 'fixture b\n');
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'wtg 起點');
 const START = cgit('rev-parse', 'HEAD').trim();
+console.log(testedLine(CLONE, ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/proctree.mjs', 'scripts/predict.mjs', 'scripts/affected.mjs']));
 console.log(`暫存 clone：${path.relative(ROOT, CLONE)}，起點 ${START.slice(0, 7)}；被驗的 run-affected ${sha(path.join(CLONE, 'scripts/run-affected.mjs'))}、worktree-guard ${sha(path.join(CLONE, 'scripts/worktree-guard.mjs'))}`);
 
 const reset = () => {
@@ -81,9 +86,9 @@ console.log('\n— 會擋的情境 —');
   yes(reset(), '前置：clone 在起點、工作區乾淨');
   const r = run('zz-wtg-writer');
   const [who, what] = blamed(r.out);
-  yes(r.code === 3 && who === 'zz-wtg-writer' && /^README\.md（改了進版控的檔）$/.test(what || ''),
-    `測試改了進版控的 README.md → 回 3、點名 zz-wtg-writer 與 README.md（實得 ${r.code}、${who}、${what}）`, r.out.slice(-400));
-  yes(/README\.md/.test(cgit('status', '--porcelain=v1')), '前置（事後確認）：README.md 真的被改了——不是情境沒造成');
+  yes(r.code === 3 && who === 'zz-wtg-writer' && /^zz-fixture-a\.txt（改了進版控的檔）$/.test(what || ''),
+    `測試改了進版控的 zz-fixture-a.txt → 回 3、點名 zz-wtg-writer 與 zz-fixture-a.txt（實得 ${r.code}、${who}、${what}）`, r.out.slice(-400));
+  yes(/zz-fixture-a\.txt/.test(cgit('status', '--porcelain=v1')), '前置（事後確認）：zz-fixture-a.txt 真的被改了——不是情境沒造成');
 }
 {
   reset();
@@ -94,11 +99,11 @@ console.log('\n— 會擋的情境 —');
 }
 {
   reset();
-  fs.appendFileSync(path.join(CLONE, 'CLAUDE.md'), '\n開跑前就有的改動\n');
+  fs.appendFileSync(path.join(CLONE, 'zz-fixture-b.txt'), '\n開跑前就有的改動\n');
   const r = run('zz-wtg-touchdirty');
   const [who, what] = blamed(r.out);
-  yes(r.code === 3 && who === 'zz-wtg-touchdirty' && what === 'CLAUDE.md（開跑前就有改動，測試又改了它）',
-    `開跑前就改過的 CLAUDE.md、測試又改一次 → 回 3、點名它（實得 ${r.code}、${who}、${what}）`, r.out.slice(-400));
+  yes(r.code === 3 && who === 'zz-wtg-touchdirty' && what === 'zz-fixture-b.txt（開跑前就有改動，測試又改了它）',
+    `開跑前就改過的 zz-fixture-b.txt、測試又改一次 → 回 3、點名它（實得 ${r.code}、${who}、${what}）`, r.out.slice(-400));
 }
 {
   reset();
@@ -138,7 +143,7 @@ console.log('\n— 要放行的情境 —');
 }
 {
   reset();
-  fs.appendFileSync(path.join(CLONE, 'CLAUDE.md'), '\n開跑前就有的改動\n');
+  fs.appendFileSync(path.join(CLONE, 'zz-fixture-b.txt'), '\n開跑前就有的改動\n');
   const r = run('zz-wtg-clean');
   yes(r.code === 0 && /開跑前不一樣的檔 1 個，跑完多出或變了 0 個/.test(r.out),
     `開跑前就有的改動不算在測試頭上 → 回 0、開跑前 1 個（實得 ${r.code}）`, r.out.slice(-400));

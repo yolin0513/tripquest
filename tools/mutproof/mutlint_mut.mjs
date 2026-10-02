@@ -2,6 +2,7 @@
 // 看哪幾個對照組報 false、回傳值是多少。預期：拿掉點名 → 對應的對照組 false、回 4；原樣 → 全 true、回 0。
 import fs from 'node:fs';
 import path from 'node:path';
+import { evidHeader, evid, linesOf } from './evid.mjs';
 import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -20,7 +21,9 @@ const MUTS = [
   { name: 'K5 一律報有問題（該放的擋住）', edits: [["  if (checked !== pop) problems.push(", "  problems.push('一律');\n  if (checked !== pop) problems.push("]], expectFalse: ['齊全', '漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期'], rc: 4 },
 ];
 let bad = 0;
-for (const m of MUTS) {
+const RUN = MUTS;
+evidHeader('mutlint_mut', RUN.map((x) => x.name));
+for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
   const p = path.join(COPY, 'scripts/mutlint.mjs');
@@ -38,6 +41,7 @@ for (const m of MUTS) {
   const falses = [...line.matchAll(/(?:、|：)([^、＝]+)＝false/g)].map((x) => x[1]);
   const ok = r.status === m.rc && falses.slice().sort().join('|') === m.expectFalse.slice().sort().join('|');
   if (!ok) bad++;
+  evid({ runner: 'mutlint_mut', name: m.name, expect: m.expectFalse, expectUnformed: [], reds: falses, unformed: [], status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}（預期 ${m.rc}）、被驗的 mutlint ${sha}、報 false 的對照組：${falses.join('、') || '無'}`);
 }
 fs.rmSync(COPY, { recursive: true, force: true });

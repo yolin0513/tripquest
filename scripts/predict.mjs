@@ -17,8 +17,9 @@ export const LIMIT_SEC = 600;
 export const OVERRUN = 1.5;
 
 export function predict(selected, times) {
-  const unknown = selected.filter((n) => !(typeof times[n] === 'number' && times[n] >= 0));
-  const sec = selected.reduce((s, n) => s + (unknown.includes(n) ? 0 : times[n]), 0);
+  const secOf = (n) => (times[n] && typeof times[n].sec === 'number' && times[n].sec >= 0 ? times[n].sec : null);
+  const unknown = selected.filter((n) => secOf(n) === null);
+  const sec = selected.reduce((s, n) => s + (unknown.includes(n) ? 0 : secOf(n)), 0);
   return { sec: unknown.length ? null : sec, known: selected.length - unknown.length, unknown };
 }
 
@@ -35,16 +36,27 @@ export function predictorBroken(history, version = PREDICTOR_VERSION) {
   return null;
 }
 
-export function classify({ pred, history = [], version = PREDICTOR_VERSION }) {
+// 重負載的判準（Dispatch 2026-10-02 改定；本意是防筆電過熱關機，不是數程序）：
+//   （2 個以上工作程序 且 預期超過 60 秒）或 任何預期超過 600 秒 或 任何會開瀏覽器的套件。
+//   其餘照跑、不用許可，但照樣記進資源紀錄。沒量過、預測不出、預測法不準仍一律當重負載（v11.3）。
+// browser／multi：這次要跑的測試裡，會開瀏覽器的、會開 2 個以上工作程序的（由 run-affected 從測試與它 import 的輔助檔判斷）
+export const MULTI_SEC = 60;
+export function classify({ pred, history = [], version = PREDICTOR_VERSION, browser = [], multi = [] }) {
   const broken = predictorBroken(history, version);
   if (broken) return { heavy: true, reason: `預測法要改：${broken}；改好之前一律當重負載` };
   if (pred.unknown.length) return { heavy: true, reason: `預測不出：${pred.unknown.length} 支沒量過（${pred.unknown.slice(0, 5).join('、')}${pred.unknown.length > 5 ? '…' : ''}）` };
+  if (browser.length) return { heavy: true, reason: `會開瀏覽器：${browser.length} 支（${browser.slice(0, 5).join('、')}${browser.length > 5 ? '…' : ''}）` };
   if (pred.sec > LIMIT_SEC) return { heavy: true, reason: `預估 ${pred.sec} 秒，超過 ${LIMIT_SEC} 秒` };
-  return { heavy: false, reason: `預估 ${pred.sec} 秒，在 ${LIMIT_SEC} 秒以內` };
+  if (multi.length && pred.sec > MULTI_SEC) return { heavy: true, reason: `會開 2 個以上工作程序（${multi.slice(0, 5).join('、')}）且預估 ${pred.sec} 秒超過 ${MULTI_SEC} 秒` };
+  return { heavy: false, reason: `預估 ${pred.sec} 秒；不開瀏覽器${multi.length ? `、多程序但不到 ${MULTI_SEC} 秒` : ''}` };
 }
 
 // ---------- 檔案 ----------
-export const files = (root) => ({ times: path.join(root, '.logs', 'test-times.json'), history: path.join(root, '.logs', 'run-history.jsonl') });
+// 每支的實測耗時與量的日期**進版控**（tools/test-times.json，v11.3 §5.19 3d）：只有測試名、秒數、日期，沒有路徑與個資；
+// 換一台機器也有歷史，預測器不會永遠冷啟動。格式 { 測試名: { sec, at } }。由 run-affected 自己寫——
+// 它在拍完「跑完後」的工作區之後才寫，所以工作區守衛不會把它算成測試動到的檔。
+// run-history 留在 .logs/（每次開跑一筆：模式、支數、預估、實際、結束方式、停在哪一支——只有數字與測試名）。
+export const files = (root) => ({ times: path.join(root, 'tools', 'test-times.json'), history: path.join(root, '.logs', 'run-history.jsonl') });
 export function loadTimes(root) {
   const f = files(root).times;
   if (!fs.existsSync(f)) return {};

@@ -5,21 +5,24 @@
 // 用法：node tools/mutproof/unformed_mut.mjs <repo>
 import fs from 'node:fs';
 import path from 'node:path';
+import { evidHeader, evid, linesOf } from './evid.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const REPO = process.argv[2];
 const COPY = path.join(REPO, '.logs', 'uf-mut');
 const MUTS = [
   { name: 'U0 不改（B C D）', args: ['B', 'C', 'D'], edits: [], check: (r, x, u) => r.status === 0 && x.length === 0 && u.length === 0 },
-  { name: 'U1 殺程序的判斷永遠當成成立（K）', args: ['K'],
+  { name: 'U1 殺程序的判斷永遠當成成立（K）', args: ['K'], expectRed: ['K 殺程序錯過時間窗'],
     edits: [["fs.existsSync(PENDING) && open && !ledger().some((e) => e.seq === open.seq && e.event !== 'started') ? open : null;", "fs.existsSync(PENDING) && open && !ledger().some((e) => e.seq === open.seq && e.event !== 'started') ? open : (open || { seq: 0 });"]],
     check: (r, x) => r.status === 1 && x.some((l) => l.startsWith('K 殺程序錯過時間窗')) },
-  { name: 'U2 探針一啟動就結束（B C D）', args: ['B', 'C', 'D'],
+  { name: 'U2 探針一啟動就結束（B C D）', args: ['B', 'C', 'D'], expectUnformed: ['B—', 'C—', "C'—", 'C"—', 'D—'],
     edits: [["fs.writeFileSync('.logs/zz-sleep.pid', String(process.pid)); setTimeout(() => {}, 120000);", "fs.writeFileSync('.logs/zz-sleep.pid', String(process.pid));"]],
     check: (r, x, u) => r.status === 3 && x.length === 0 && u.length === 5 },
 ];
 let bad = 0;
-for (const m of MUTS) {
+const RUN = MUTS;
+evidHeader('unformed_mut', RUN.map((x) => x.name));
+for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
   const p = path.join(COPY, 'scripts/mutatetest.mjs');
@@ -37,6 +40,7 @@ for (const m of MUTS) {
   const unf = out.split('\n').filter((l) => l.startsWith('⊘ 情境未成立：')).map((l) => l.slice(8));
   const ok = m.check(r, reds, unf);
   if (!ok) bad++;
+  evid({ runner: 'unformed_mut', name: m.name, expect: m.expectRed || [], expectUnformed: m.expectUnformed || [], reds, unformed: unf, status: r.status, sha: '' });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、✗ ${reds.length} 條、⊘ ${unf.length} 條`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
   for (const l of unf) console.log('     ⊘ ' + l.slice(0, 90));

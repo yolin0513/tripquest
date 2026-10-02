@@ -2,6 +2,9 @@
 // 跑 clone 自己的那支測試，看紅的是不是預期那幾條。用法：node tools/mutproof/timeout_mut.mjs <repo> [名稱開頭...]
 import fs from 'node:fs';
 import path from 'node:path';
+import { evidHeader, evid, linesOf } from './evid.mjs';
+import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
+const RUNNER = 'timeout_mut';
 import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -24,7 +27,9 @@ const MUTS = [
     find: "filter((e) => e.result === 'no-result')", repl: 'filter(() => false)', expect: ['B 被中斷的那一次', 'G --no-result 列出', 'G 手動把', 'G 再正常跑一次'] },
 ];
 let bad = 0;
-for (const m of MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.startsWith(o)))) {
+const RUN = MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.startsWith(o)));
+evidHeader('timeout_mut', RUN.map((x) => x.name));
+for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
   let sha = '（沒改）';
@@ -45,6 +50,13 @@ for (const m of MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.start
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)) && !l.startsWith('前置'));
   const ok = m.expect.length ? r.status !== 0 && hitAll : r.status === 0 && !reds.length;
   if (!ok) bad++;
+  const tested = parseTested(out);
+  const outer = m.file ? sha12(path.join(COPY, m.file)) : null;
+  const nested = { file: m.file || null, outer, inner: tested && m.file ? tested[m.file] || null : null, printed: !!tested };
+  nested.ok = !!tested && (!m.file || nested.inner === outer);
+  fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
+  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
+  evid({ nested, runner: 'timeout_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、改壞那份 ${sha}、紅 ${reds.length} 條${extra.length ? '（另外紅：' + extra.map((x) => x.slice(0, 28)).join('／') + '）' : ''}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
 }

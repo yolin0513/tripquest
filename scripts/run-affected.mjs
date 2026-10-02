@@ -103,6 +103,23 @@ export function sinceFullRun(root = ROOT, today = new Date()) {
   }
 }
 
+// 這次要跑的測試裡，哪些會開瀏覽器、哪些會開 2 個以上工作程序：看測試檔本身＋它 import 的 scripts/ 輔助檔
+// （有些測試是透過共用輔助檔才開瀏覽器的，只看測試檔會漏）。讀不到檔 → 從寬當成會開瀏覽器。
+export const BROWSER_RE = /puppeteer|chromium\.launch|playwright/;
+export const MULTI_RE = /\b(?:spawn|spawnSync|fork|execFile|execFileSync|exec|execSync)\s*\(/;
+export function procFlags(repo, names, read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8')) {
+  const browser = [], multi = [];
+  for (const n of names) {
+    const t = repo.chain.find((x) => x.name === n);
+    const files = [t.file, ...(repo.refs[n] || []).filter((r) => r.startsWith('scripts/') && r.endsWith('.mjs'))];
+    let texts;
+    try { texts = files.map(read); } catch { browser.push(n); continue; }
+    if (texts.some((x) => BROWSER_RE.test(x))) browser.push(n);
+    else if (texts.some((x) => MULTI_RE.test(x))) multi.push(n);
+  }
+  return { browser, multi };
+}
+
 function arg(name) {
   const i = process.argv.indexOf(name);
   return i > 0 ? process.argv[i + 1] : null;
@@ -155,7 +172,7 @@ async function main() {
   try { tbl = loadTimes(ROOT); hist = loadHistory(ROOT); }
   catch (e) { console.log(`✗ 讀不到耗時紀錄（${e.message}）——預測不出，不當成 0 秒`); process.exit(4); }
   const pred = predict(r.selected, tbl);
-  const cls = classify({ pred, history: hist });
+  const cls = classify({ pred, history: hist, ...procFlags(repo, r.selected) });
   console.log(`\n耗時預測：${pred.sec === null ? '預測不出' : `${pred.sec.toFixed(0)} 秒`}（${pred.known}/${r.selected.length} 支量過）→ ${cls.heavy ? '重負載' : '常規'}：${cls.reason}`);
   if (dry) return;
   if (cls.heavy && !approved) {
@@ -189,8 +206,12 @@ async function main() {
     const sec = (Date.now() - t0) / 1000;
     times.push([name, sec]);
     // 這支的實測秒數只在「算數的結束」（跑完、不論紅綠）時更新；逾時被殺的不算量過
-    if (!res.timedOut) { tbl[name] = Math.round(sec * 10) / 10; try { saveTimes(ROOT, tbl); } catch (e) { console.log(`✗ 寫不進 test-times（${e.message}）`); } }
     const touched = changesBetween(before, shot(`${name} 跑完後`));
+    // 先拍「跑完後」、再寫耗時：tools/test-times.json 是執行器自己寫的進版控檔，不能被算成這支測試動到的
+    if (!res.timedOut) {
+      tbl[name] = { sec: Math.round(sec * 10) / 10, at: new Date().toISOString().slice(0, 10) };
+      try { saveTimes(ROOT, tbl); } catch (e) { console.log(`✗ 寫不進 test-times（${e.message}）`); }
+    }
     console.log(`工作區守衛：${name} 開跑前不一樣的檔 ${before.size} 個，跑完多出或變了 ${touched.length} 個`);
     // 逾時先講（它決定這一支「沒有結果」）；同時動到工作區的話也一起點名，兩件都不吞掉
     if (res.timedOut) {

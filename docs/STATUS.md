@@ -63,6 +63,55 @@
   突變**（實測全綠）：這台 Windows 上子程序結束時孫程序跟著被收掉，「整棵樹被殺」那條分不出有沒有 `/T`——`/T` 留著當保險，不補斷言。
   資源：mutatetest 20.6 秒峰值 3、worktreeguardtest 14.8 秒峰值 4；突變整批 240.5 秒，取樣器數到 5（含啟動它的那一支主程式，
   照 §5.19 主程式不算＝4），可用最低 4,832 MB。
+- **入庫的逐項證據（2026-10-02，Dispatch 定案：原始 log 留 `.logs/`、入庫的是腳本從 log 產生的逐項表）**：`scripts/evidence.mjs`
+  從 log 產生 `docs/evidence/*.md`，每一條一行：分類（成立且紅在預期／紅錯地方／沒紅／情境未成立／基準全綠／基準不綠）、
+  預期紅哪幾條、實際紅哪幾條、情境未成立的、回傳值、被驗那份的雜湊。突變驅動（`tools/mutproof/*_mut.mjs`）改成每條印一行
+  `@@EVID` 機器紀錄＋開跑前印 `@@EVID-TOTAL` 母體名單（`tools/mutproof/evid.mjs`）。關卡：清洗本機路徑、使用者名、個資詞
+  （讀被擋掉的 `.logs/pii-terms.txt`，本機從 D1 備份抽出 14 個群組名／行程名）；寫檔前用**另一組獨立寫的偵測**再掃一次
+  （原本複掃跟清洗用同一組樣式＝拿自己驗自己，突變 E1 抓到：拿掉磁碟代號那條，複掃照樣說乾淨）；證據行數≠母體名單
+  → 點名少了／多了哪一條、非 0、不寫檔。自身對照組 14 條（含反向：洗過頭把分類洗掉也要紅）；突變 7 條
+  （`tools/mutproof/evidence_mut.mjs`）各自只紅預期那幾條。**已產生**：`docs/evidence/ev2-legacy.md`＝舊 ev2 證據 63 條（外殼紀錄
+  63 份，逐條）：成立且紅（無預期可比）53、情境未成立 7、成立但沒紅 3——當時沒把「預期紅哪幾條」記成機器讀得到的格式，
+  這批只分得出這三種。**還沒產生**：這一輪 6 支突變驅動的逐項證據——要重跑那幾支（多程序＝重負載）才有 `@@EVID` 紀錄。
+  另：三支測試的 `yes()` 附帶的證據改成每行縮排（證據裡剛好以「✗ 」開頭的行原本會被算成另一條紅——上一輪幾條「預期外」就是這個）。
+- **耗時紀錄改進版控（Dispatch 2026-10-02 決定）**：`tools/test-times.json`，格式 `{ 測試名: { sec, at } }`（秒數＋量的日期，
+  只有數字與測試名）。`run-affected` 先拍「跑完後」的工作區、再寫它，所以守衛不會把它算成測試動到的檔（突變 M8：順序對調 →
+  C2、C3 必須紅）。`.logs/run-history.jsonl` 留在 `.logs/`：欄位只有模式、支數、預估、沒量過的支數、重負載與否、許可與否、
+  實際秒數、結束方式、停在哪一支（測試名）、版本、時間——沒有路徑。
+- **重負載的判準改了（依 Dispatch 2026-10-02 的判準調整）**：舊＝「會開 2 個以上工作程序，或預期超過 1 分鐘」（照字面連 2 個程序跑 43 秒
+  都要許可）；新＝**（2 個以上工作程序 且 預期超過 60 秒）或 任何預期超過 600 秒 或 任何會開瀏覽器的套件**，其餘照跑、不用許可、照記資源紀錄。
+  先前那幾場 16.8、20.6、47 秒的多程序對照組照新判準不需要許可——**不記成違規**（先前回報裡自己標的「違規」以此為準撤回）。
+  `scripts/predict.mjs` 照新判準：會開瀏覽器（看測試檔＋它 import 的 scripts/ 輔助檔；讀不到從寬當會開）→ 重負載；多程序且預估 >60 秒
+  → 重負載；>600 秒 → 重負載；沒量過、預測法不準仍一律重負載（v11.3）。鏈 56 支裡 43 支會開瀏覽器。`predicttest` P8–P10 正反兩向；
+  突變 M9–M11 寫好、**還沒跑**（`predict_mut` 整批多程序、超過 60 秒＝重負載）。
+- **🔴 PID 重用（2026-10-02，JLPT 撞出來的：OneDrive 被認成自己的子程序）——本 App 有同一個洞，已修**：殺程序樹原本用
+  `taskkill /T`（`run-timeout.mjs`、`mutatetest`、`workertest`），資源取樣器原本只照 `ParentProcessId` 認子孫——都不看建立時間，
+  PID 重用時 `/T` 可能殺到早就在跑的不相干程序、取樣數字可能被灌水。新增 `scripts/proctree.mjs`：子程序要**比父程序晚建立**才算；
+  `killTree` 改成逐支 `taskkill /PID x /F`（不加 /T），**root 先殺**、再殺事先取好名單的子孫（先殺葉子的話 root 會收到「子程序結束」
+  而有時間跑 finally——改的當下 mutatetest 五個殺程序情境全部判成⊘情境未成立，就是這樣抓到的）；取不到程序表時只殺 root 本身。
+  `proctreetest` 9 項（合成 PID 重用樣本：早建立的 OneDrive 與它的子程序不算、不殺；真程序：認得到孫程序、殺完都不在）；突變
+  P1 不看建立時間、P2 取不到表時照殺、P3 先殺葉子，各自只紅預期那條。取樣器搬進 `tools/sample-run.mjs` 改用 proctree。
+  **先前報的峰值是「工作程序數」（子孫裡的 node／chrome，含主程式）**，但當時認子孫的方式就是這個洞，所以那些數字**可能被灌水、
+  未能排除**；改了之後重量：proctreetest 3、predicttest 2、mutatetest 3、worktreeguardtest 4。`workertest` 同樣改成 `killTree`，
+  但它要開 wrangler（重負載）才驗得到——改動存成 `.logs/workertest-killtree.patch`、**還沒進 commit**，排時段驗過再套。
+- **對照組的樣本不再取自會一直改的檔**：`worktreeguardtest`、`mutatetest` 原本拿 `README.md`、`CLAUDE.md` 當「進版控的檔」，
+  改成在 clone 裡自己建、自己 commit 的固定 fixture（`zz-fixture-a.txt`、`zz-fixture-b.txt`）。其餘對照組本來就是合成樣本或被檢查的目標本身。
+- **回頭查：clone 裡跑的到底是不是改壞那份（2026-10-02，MealMate 撞出來的：clone 拿到已 commit 的版本、不是改壞的工作區）**：
+  - **有直接證據的**：`wtg_mut` 6 條、`mut_guard_mut` G0–G7——巢狀 clone 裡的測試開跑就印它實際讀到的那份的雜湊，每條只有被改的
+    那支變了（例：M1 只有 worktree-guard 變成 `bb82…`；G0 的 `9cf308ce9daa`＝主工作區那份）。當時只比「跟基準不同」，沒比「＝外層
+    改壞那份」。`prepush-scan` 真 commit 13 種重跑時補讀回：每個 commit 裡都讀得到樣本字串（`.logs/realcommit-readback.txt`）。
+    `gatelint` 真實檔對照點名到寫進去那一行的行號＝直接讀回。`mutlint_mut`、`evidence_mut` 直接跑改壞的那份複本（沒有 clone 這層）。
+  - **🔴 降級：沒有直接證據的**——`predict_mut` 8 條（`predicttest` 不印被驗檔的雜湊）、`timeout_mut` T1（改 `run-timeout.mjs`，
+    `worktreeguardtest` 沒印這支）、T3／T4（巢狀有印、驅動沒存原始輸出）。只有間接證據（基準全綠、突變後恰好紅在預測的那幾條），
+    記成「改壞那份有沒有在跑：未直接確認」，要重跑才能恢復成證據。
+  - **補上的機制**：三支 clone 測試開跑印「被驗的檔：路徑=雜湊；…」（`scripts/probe-hash.mjs`）；四支突變驅動比對它＝外層改壞那份的
+    雜湊、記進 `@@EVID` 的 `nested`，每條的原始輸出存 `.logs/mutproof/<驅動>/`；`evidence.mjs` 對不上就判「情境未成立」（就算紅在
+    預期也一樣；對照組＋突變 E7）。
+  - **「紅在哪一條」是行首比對**（`startsWith('✗ ')`、`startsWith('⊘ 情境未成立：')`）——「✓ 開頭、訊息帶 ✗」不會被當成紅。唯一的
+    子字串用法在 `evidence.mjs` 判斷舊外殼紀錄「沒跑」，已改成只認「[標籤] ✗」開頭（對照組 4 條＋突變 E8）。同一類問題在本 App 的
+    形狀是：測試附帶的證據裡剛好**以 ✗ 開頭**的行，行首比對也會誤算——上一輪 G1、M6 的「預期外」就是它；`yes()` 證據縮排已改（待跑驗證）。
+- **🔴 待跑（多程序＝重負載，等放行；改了但還沒驗）**：`predicttest`（耗時檔改位置與格式、M8）、`worktreeguardtest`、`mutatetest`
+  （`yes()` 縮排）、6 支突變驅動重跑（產生這一輪的逐項證據）、`tools/ev` 的驅動腳本重跑。這幾個 commit 驗過之前**不推送**。
 - **證據 log 的位置（2026-10-02，JLPT 29 條證據因 log 留在 Session 暫存區而降級之後）**：這一輪所有對照組與突變的完整輸出都寫在
   `.logs/`（例：`mutatetest-unformed-all.txt`＝48 項整批、`mt-solo-*.txt`＝各組單獨跑、`mutguard-*`、`timeout-mut.txt`、
   `unformed-mut.txt`、`predict-mut-2.txt`、`mutlint-mut.txt`）。Session 暫存區原本還有 347 份更早的證據輸出（`ev_*.log`、
@@ -552,7 +601,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **56 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **57 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

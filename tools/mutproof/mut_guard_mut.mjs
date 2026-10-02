@@ -2,14 +2,17 @@
 // 列出實際紅的那幾條，跟預期比（預期是「哪幾條情境的開頭」）。
 import fs from 'node:fs';
 import path from 'node:path';
+import { evidHeader, evid, linesOf } from './evid.mjs';
+import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
+const RUNNER = 'mut_guard_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const REPO = process.argv[2];
 const COPY = path.join(REPO, '.logs', 'mg-mut');
 const MUTS = [
   { name: 'G0 不改（基準）', expect: [] },
-  { name: 'G1 拿掉嚴格模式的工作區檢查', find: 'if (!onlyMode && dirty.size) {', repl: 'if (false) {', expect: ['A 嚴格模式'] },
-  { name: 'G2 工作區檢查改成一律拒絕', find: 'if (!onlyMode && dirty.size) {', repl: 'if (true) {', expect: ["A' ", 'B 還原後照跑', "C' ", 'E '] },
+  { name: 'G1 拿掉嚴格模式的工作區檢查', find: 'if (!onlyMode && dirty.size) {', repl: 'if (false) {', expect: ['A '] },
+  { name: 'G2 工作區檢查改成一律拒絕', find: 'if (!onlyMode && dirty.size) {', repl: 'if (true) {', expect: ["A' ", 'A" ', 'E '], expectUnformed: ['B—', 'C—', "C'—", 'C"—', 'D—'] },   // 一律拒絕時 B／C／D 的殺程序情境造不出來＝未成立，不算擋下的證據
   { name: 'G3 啟動時不寫回原檔', find: 'fs.writeFileSync(path.join(ROOT, pending.file), buf);', repl: 'void buf;', expect: ['B '] },
   { name: 'G4 拿掉兩處一致的檢查', find: 'if (!open || open.seq !== pending.seq || open.file !== pending.file || open.sha !== pending.sha) {', repl: 'if (false) {', expect: ['D '] },
   { name: 'G5 還原紀錄不見、檔案不是原檔也照跑', find: 'if (now !== want) {', repl: 'if (false) {', expect: ['C '] },
@@ -17,7 +20,9 @@ const MUTS = [
   { name: 'G7 登記檢查永遠不抓只改空白或行尾的', find: 'stripWs(e.find) === stripWs(e.replace)', repl: 'false', expect: ['F '] },
 ];
 const ONLY = process.argv.slice(3); let bad = 0;
-for (const m of MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.startsWith(o)))) {
+const RUN = MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.startsWith(o)));
+evidHeader('mut_guard_mut', RUN.map((x) => x.name));
+for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
   if (m.find) {
@@ -38,6 +43,13 @@ for (const m of MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.start
   const extra = realReds.filter((l) => !m.expect.some((e) => l.startsWith(e)));
   const ok = m.expect.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length;
   if (!ok) bad++;
+  const tested = parseTested(out);
+  const outer = (m.find ? 'scripts/mutate.mjs' : null) ? sha12(path.join(COPY, (m.find ? 'scripts/mutate.mjs' : null))) : null;
+  const nested = { file: (m.find ? 'scripts/mutate.mjs' : null) || null, outer, inner: tested && (m.find ? 'scripts/mutate.mjs' : null) ? tested[(m.find ? 'scripts/mutate.mjs' : null)] || null : null, printed: !!tested };
+  nested.ok = !!tested && (!(m.find ? 'scripts/mutate.mjs' : null) || nested.inner === outer);
+  fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
+  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
+  evid({ nested, runner: 'mut_guard_mut', name: m.name, expect: m.expect, expectUnformed: m.expectUnformed || [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha: hash });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、被驗的 mutate ${hash}、紅 ${reds.length} 條${extra.length ? '（預期外：' + extra.map((x) => x.slice(0, 24)).join('／') + '）' : ''}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
 }
