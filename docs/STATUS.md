@@ -27,6 +27,20 @@
   ④ `proctree_mut`（先複審 P8，再帶 `--accept-review`；排在 ② 之後，因為它驗的正是這套）。
   ⑤ 5 支重負載突變驅動＋`node tools/mutproof/evtest_mut.mjs .`（第一次會被「需要複審」擋下；新補的逾時也在這時第一次實跑）。
   ⑥ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對、ev2.sh 的逾時都要到這裡才第一次有真實資料）。
+- **🔴 推送閘的競態空檔（2026-10-02 晚，StockDiary／MealMate 撞到；本 repo 讀程式確認也有，而且是 MealMate 那種「連報錯都不會」）**：
+  `safe-push.sh` 自查掃 `REMOTE..HEAD`（**符號 HEAD，自查跑的那一刻才解**）、推的是 `git push origin main`（**推的那一刻的 main**）、第三關的
+  `LOCAL` 在**推完之後**才取 `git rev-parse HEAD`。自查之後多一個 commit：自查沒掃到它、push 把它推上去、第三關拿到的 HEAD 已經含它 → 相等
+  → 印「✓ 已推送」，沒有任何訊號。另一個同形狀的洞：自查看 HEAD、推的卻是 main——HEAD 不在 main 上時，兩者根本是不同的東西。
+  **暫行補償（硬規則，Dispatch 2026-10-02，立刻生效、閘門鎖定 commit 之前）**：自查到推送之間不得有任何新 commit，也不准 amend、rebase；
+  流程是 commit 全部做完 → `bash scripts/safe-push.sh`（自查＋推送一氣呵成）。自查擋下要修的話，修完重跑整支，不沿用上一次的結果。
+  「拿開還沒推的 commit → 推 → 放回」只准在 safe-push **之前**拿開、**之後**放回，中間不碰 HEAD。
+  **今天的回頭核對（reflog，實測）**：14 次推送逐次比對 HEAD 與 origin/main 的 reflog——每一次都是「rebase 完成（HEAD＝B）→ 推送更新遠端成 B →
+  才 cherry-pick 放回」，rebase 完成到放回之間 HEAD 沒有任何其他移動，推上去的值都等於 rebase 完成時的 HEAD（最早兩次 97c1b76、aa6b6b9 同樣）。
+  自查跑在 safe-push 裡、推送之前，那段時間 HEAD＝B，所以**自查看到的範圍＝實際推上去的範圍**。被拿開的那個 commit（訊息「3 處裸寫的 bash」）
+  不在遠端歷史裡（遠端 0、本機 main 1）。
+  **根本修法（排進明天）**：開跑時記下 commit 編號（`PIN=$(git rev-parse HEAD)`，並確認 HEAD 在 main 上），自查只掃 `REMOTE..$PIN`、推送只推
+  `$PIN:refs/heads/main`、第三關跟 `$PIN` 比；pushgatetest 新增情境「自查之後才多出一個帶命中的 commit」實測必須擋下（或至少不會被推上去、
+  第三關報不符），拿掉鎖定時那個情境必須紅。改完閘門要重跑 pushgatetest 重新登記。
 - **判定也要「跑完才算數」（2026-10-02 晚，MealMate 撞到：被停掉的那一輪記成「跑完、紅錯地方」）**：進度檔早就改成看完成的證據，
   但**判定沒有接上**——查過：九支突變驅動（`tools/mutproof/*_mut.mjs`）判紅只看「結束碼非 0＋有 ✗ 行」，spawnSync 逾時的 null 也算非 0；
   `mutate.mjs` 帳本「結束碼非 0＝red」；舊 ev2 的證據分類「有 exit=、有 ✗＝紅」。**全部同一個洞。** 實測重現：一支先印 ✗、再被
