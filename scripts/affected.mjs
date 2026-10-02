@@ -131,7 +131,9 @@ export function findOrphans(scriptNames, chainNames, ok = ORPHAN_OK) {
 // 第一個中文字被截斷成 'js/'，變成「引用整個 js 目錄」—— 那支測試從此什麼都涵蓋，放大器 D 永遠不響。
 // scripts/<名稱>.sh|.mjs 也算（2026-09-24）：pushgatetest 在檔頭寫「涵蓋的程式：scripts/safe-push.sh…」，
 // 原本這個樣式不認 scripts/ 底下的檔，改推送閘時挑選器就不會挑中驗它的那支測試（盤點實測）。
-const REF_RE = /(?:^|[^A-Za-z0-9_.-])((?:js|css|workers|server|data|icons|media|scripts\/fixtures)\/[A-Za-z0-9_./-]*|scripts\/[A-Za-z0-9_-]+\.(?:sh|mjs)|sw\.js|index\.html|manifest\.webmanifest)(?=$|['"`\s),;?#\]}])/g;
+// tools/ev/<名稱>.sh|.mjs 也算（2026-10-02）：evtest 在 OWN 列它真的去跑的那幾支；沒列的（ev2.sh、mk_*）照舊沒人認領→放大。
+// 只認逐檔寫出的路徑、不認 tools/ev/ 整個目錄——寫成目錄就會把 evtest 換成空殼的 ev2.sh、mk_* 也算成「有測試」。
+const REF_RE = /(?:^|[^A-Za-z0-9_.-])((?:js|css|workers|server|data|icons|media|scripts\/fixtures)\/[A-Za-z0-9_./-]*|scripts\/[A-Za-z0-9_-]+\.(?:sh|mjs)|tools\/ev\/[A-Za-z0-9_-]+\.(?:sh|mjs)|sw\.js|index\.html|manifest\.webmanifest)(?=$|['"`\s),;?#\]}])/g;
 const HELPER_RE = /(?:from\s*|import\(\s*)['"]\.\/([A-Za-z0-9_-]+\.mjs)['"]/g;
 export function extractRefs(text, exists) {
   const out = new Set();

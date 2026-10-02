@@ -23,6 +23,22 @@ export function count(all, rootPid, edges = []) {
   return { n: work.length, all: tree.length, memMB: Math.round(tree.reduce((s, p) => s + (p.mem || 0), 0) / 1048576) };
 }
 
+// 取樣漏算多少＝逐一計數峰值 − 取樣峰值（Dispatch 2026-10-02：每一場直接看得到漏算幅度）。
+// 差是負的＝取樣看到的比逐一計數多——逐一計數漏了（建立事件沒收到），照實印成異常，不夾成 0。
+export function missLine(ev, peak, peakAll) {
+  if (!ev.ready) return '取樣漏算：算不出（逐一計數沒啟動）';
+  const dw = ev.peakWork - peak, da = ev.peakAll - peakAll;
+  const part = (d, what) => (d >= 0 ? `${what} ${d} 個` : `${what} −${-d} 個（取樣比逐一計數多——逐一計數漏收事件，兩個峰值都要存疑）`);
+  return `取樣漏算（逐一計數峰值 − 取樣峰值）：${part(dw, '工作程序')}、${part(da, '全部程序')}`;
+}
+{
+  const a = missLine({ ready: true, peakWork: 3, peakAll: 5 }, 1, 2), b = missLine({ ready: true, peakWork: 1, peakAll: 2 }, 2, 2);
+  const c = missLine({ ready: false }, 1, 1);
+  if (!(a.includes('工作程序 2 個、全部程序 3 個') && b.includes('工作程序 −1 個（取樣比逐一計數多') && b.includes('全部程序 0 個') && c.includes('算不出'))) {
+    console.log(`✗ missLine 對照組沒過：${a}｜${b}｜${c}`); process.exit(4);
+  }
+}
+
 const [out, ...cmd] = process.argv.slice(2);
 if (!out || !cmd.length) { console.log('用法：node tools/sample-run.mjs <紀錄檔> <指令> [參數...]'); process.exit(2); }
 const lines = [];
@@ -136,5 +152,6 @@ const evPart = ev.ready
   ? `逐一計數峰值：工作程序 ${ev.peakWork} 個、全部程序 ${ev.peakAll} 個（事件 ${ev.events} 筆、認到本 repo 的 ${ev.ours.size} 支；含主程式；活不到約 0.1 秒的可能漏）`
   : '逐一計數沒啟動';
 lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFixed(1)} 秒；${evPart}；取樣（每 2 秒，${samples} 次）峰值：工作程序 ${peak} 個、全部程序 ${peakAll} 個；合計記憶體峰值 ${peakMem} MB、系統可用最低 ${minFree === Infinity ? '—' : minFree} MB`);
+lines.push(missLine(ev, peak, peakAll));
 fs.writeFileSync(out, lines.join('\n') + '\n\n' + log);
 process.exitCode = child.exitCode;

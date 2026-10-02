@@ -324,6 +324,21 @@ console.log('\n[T16] 改推送閘 → 挑中 pushgatetest');
   }
 }
 
+// ---------- 改 tools/ev 的驅動 → 只挑 evtest；evtest 沒真的跑的（ev2.sh、mk_*）照舊放大（2026-10-02）----------
+console.log('\n[T16b] 改 tools/ev → evtest 認領的才縮小');
+{
+  const chainNow = parseChain(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')), () => true);
+  yes(chainNow.some((t) => t.name === 'evtest') && !BASELINE.includes('evtest'), '前置：evtest 在鏈裡、但不在底線');
+  for (const f of ['tools/ev/six_mut.sh', 'tools/ev/segment.sh', 'tools/ev/progress.mjs']) {
+    const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', f, '--dry'], { cwd: ROOT, encoding: 'utf8' });
+    yes(p.status === 0 && /^ {2}evtest\s+←/m.test(p.stdout) && !/放大到全套/.test(p.stdout), `真實入口 run-affected --files ${f}：挑中 evtest、沒有放大`, p.stdout.split('\n').filter((l) => /←|放大/.test(l)).join(' | '));
+  }
+  for (const f of ['tools/ev/ev2.sh', 'tools/ev/mk_six_patches.mjs']) {
+    const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', f, '--dry'], { cwd: ROOT, encoding: 'utf8' });
+    yes(p.status === 0 && new RegExp(`沒有規則認領的檔：${f.replace(/\./g, '\\.')}`).test(p.stdout), `真實入口 run-affected --files ${f}：evtest 沒真的跑它 → 照舊放大`, p.stdout.split('\n').slice(0, 12).join(' | '));
+  }
+}
+
 // ---------- 孤兒檢查：像檢查的腳本沒登記進鏈（2026-09-24 盤點實測：沒登記的新測試永遠不會跑、也沒有警告）----------
 console.log('\n[T17] 孤兒檢查');
 {

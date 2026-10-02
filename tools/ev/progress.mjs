@@ -114,11 +114,15 @@ function rowsFor(dir) {
 }
 
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
-if (arg('--is-done')) {
+// 被 import（scripts/evtest.mjs 借 scenariosOf）時只給函式，不寫進度檔、不設回傳值
+const IS_MAIN = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (IS_MAIN && arg('--is-done')) {
   const r = rowsFor(EV).find((x) => x.label === arg('--is-done'));
   process.exit(r && r.state === '跑完' ? 0 : 1);
 }
-if (arg('--check')) {
+if (!IS_MAIN) {
+  // 被 import：什麼都不做
+} else if (arg('--check')) {
   // 判準本身的驗法：舊紀錄（當年確實跑完）每份都要判成跑完；截掉 log 結尾那一行（對照組）每份都要判成被中斷
   const rows = rowsFor(arg('--check')).filter((r) => r.state !== '還沒跑');
   const notDone = rows.filter((r) => r.state !== '跑完');

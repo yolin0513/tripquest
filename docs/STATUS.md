@@ -8,9 +8,22 @@
 **2026-10-02 進行中（Dispatch 排的順序：v11.3 工單之前先擋「測試寫進進版控的檔」與 mutate 直接改工作區）**
 - **排隊中（等 Dispatch 放行時段，2026-10-02 晚）**：① `pushgatetest`（本機 `a14607c` 未推，跑完重新登記才推得動）→ ② `proctree_mut`
   （先複審 P8，再帶 `--accept-review`）→ ③ 5 支重負載突變驅動 → ④ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對要到這裡才第一次有
-  真實資料）。之後：**`tools/ev/*.sh` 補一條範圍規則**（現在沒規則認領，動到就放大成全套 57 支）——Dispatch 的條件：規則寫正確性的依據
-  （那幾支會影響什麼，不是「全套太慢」）；突變弄壞驅動的一個行為，縮小後那組必須紅，不紅就維持放大；原樣時那組要綠。
-  **注意**：`tools/test-times.json` 還不存在，`test:affected` 一放大就「預測不出→重負載→回 8」，那是**沒跑**，不是綠。
+  真實資料）→ ⑤ `node tools/mutproof/evtest_mut.mjs .`（下一條的突變，6 條約 5 分鐘；第一次會被「需要複審」擋下）。
+- **`tools/ev` 的範圍規則（2026-10-02 晚，程式寫完、突變驗證等時段）**：原本 `tools/ev/*` 沒規則認領，動到就放大成全套——但**鏈裡 57 支
+  （連 import 的輔助檔 68 檔）沒有一支引用 tools/ev**（掃描附合成對照組 3/3 命中），放大成全套等於一行都沒跑到。正確性的依據：那幾支
+  只影響「列了哪些情境、帶哪幾份補丁、先問 seg_skip、寫驅動側進度、progress 判不判得出跑完」，新的 `scripts/evtest.mjs`（進鏈，第 58 支）
+  就是用 Git Bash 真的去跑五支驅動（ev2.sh 換成假外殼、mk_* 換成空的），驗這些、再跑一次要全部跳過、停止旗標在要一個都不開。
+  `affected.mjs` 只認**逐檔寫出**的 `tools/ev/<名>.sh|.mjs`（evtest 的 `OWN`：五支驅動、segment.sh、progress.mjs）；ev2.sh、mk_* 沒被
+  真的跑，照舊放大。**實測**：evtest 原樣 33 項綠、約 45 秒；affectedtest 新增 T16b（真實入口 `run-affected --files … --dry`）——
+  突變 A（REF_RE 拿掉 tools/ev）只紅 T16b 那 3 條，突變 B（把 ev2.sh 列進 OWN）只紅 ev2.sh 那 1 條。**等時段**：
+  `evtest_mut` 的 V1–V4（f10 不寫「結束」、segment 不看停止旗標、di 不先問 seg_skip、last 的補丁名寫錯）；預期 16 筆已對原樣輸出逐筆
+  確認是某一條斷言的開頭、且只對到一條。`progress.mjs` 加了「被 import 時不執行命令列那一段」（evtest 要借 `scenariosOf`）。
+- **「回 8」是沒跑，不是綠（2026-10-02）**：`tools/test-times.json` 還不存在，`test:affected` 一放大就「預測不出 → 重負載 → 回 8」，
+  一支都沒跑。這種時候回報與 commit 只能寫實際跑了哪幾支（例如「只跑了 affectedtest 與 gatelint」），不能寫成 test:affected 全綠，
+  也不能寫成「照規則停下、一切正常」。
+- **取樣漏算印成一個數字（2026-10-02）**：`tools/sample-run.mjs` 結束行之後多一行「取樣漏算（逐一計數峰值 − 取樣峰值）：工作程序 N 個、
+  全部程序 M 個」；差是負的（取樣比逐一計數多）照實印、註明逐一計數漏收事件、兩個峰值都要存疑，不夾成 0；逐一計數沒啟動印「算不出」。
+  啟動時先跑三種合成樣本的對照組，突變（減法方向反過來）→ 對照組擋下、回 4。
 - **查明**：會動到主工作區的有兩類——(1) 測試／截圖腳本：`imgtest` 每次跑都改寫 `screenshots/features/v1.26-*.png`
   三張（v1.74.4、v1.74.5、09-25 都是事後手動還原）；`imgtest` **只產生、不比對**（`scripts/imgtest.mjs` 截圖後無條件
   `ok('截圖：…')`，全 repo 沒有任何地方讀回那三張）——**那三張進版控的圖目前沒有任何測試在檢查內容**；(2) App 程式突變
@@ -740,7 +753,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **57 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **58 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——
