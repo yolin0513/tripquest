@@ -9,19 +9,22 @@
 // 也不殺認不清的程序。
 
 import { spawn, spawnSync } from 'node:child_process';
-import { listProcesses, descendants } from './proctree.mjs';
+import { listProcesses, descendants, msysEdges } from './proctree.mjs';
 
 // 測試、突變、驗法會開的程序種類；不在這裡的一律不殺（root 本身是我們剛開的，照殺）
 export const KILLABLE = /^(node|cmd|conhost|bash|sh|chrome|msedge|chromium|chrome_crashpad_handler|workerd|npx|npm|git|python3?|esbuild)(\.exe)?$/i;
 const taskkill = (v) =>spawnSync('taskkill', ['/PID', String(v), '/F'], { stdio: 'ignore' });
 // list、kill 可注入：對照組用合成的程序表時**絕不能真的 taskkill 那些合成的 PID**（可能剛好對到真的程序）
-export function killTree(pid, { list = listProcesses, kill = taskkill, log = (s) => console.log(s) } = {}) {
+export function killTree(pid, { list = listProcesses, kill = taskkill, log = (s) => console.log(s), msys = msysEdges } = {}) {
   if (process.platform !== 'win32') {
     try { process.kill(-pid, 'SIGKILL'); } catch { try { process.kill(pid, 'SIGKILL'); } catch { /* 已經不在 */ } }
     return { killed: [pid], tree: null };
   }
   let tree = [];
-  try { tree = descendants(list(), pid); }
+  // 子孫＝Windows 的父子關係＋MSYS 補充的連結（Git Bash 裡再開的程序 Windows 那邊接不起來）；MSYS 表取不到時只用 Windows 的、並印出來
+  let edges = [];
+  try { edges = msys(); } catch (e) { log(`（取不到 MSYS 程序表：${String(e.message).split('\n')[0]}——只照 Windows 的父子關係認，Git Bash 裡再開的程序可能漏掉）`); }
+  try { tree = descendants(list(), pid, { edges }); }
   catch (e) { log(`（取不到程序表：${String(e.message).split('\n')[0]}——只殺 ${pid} 本身，不用 /T）`); tree = null; }
   // 先殺 root、再殺子孫（名單在殺之前就取好了）：先殺葉子的話，root 會收到「子程序結束」而有時間跑它的 finally
   // ——mutatetest 的「殺到一半」就是這樣造不出來的（2026-10-02 實測：五個殺程序情境全部判成情境未成立）

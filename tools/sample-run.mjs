@@ -10,13 +10,14 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { listProcesses, descendants } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'proctree.mjs')).href);
+const { listProcesses, descendants, msysEdges } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'proctree.mjs')).href);
 const WORK = /^(node|python3?|chrome|msedge|chromium)(\.exe)?$/i;
 const BROWSER = /^(chrome|msedge|chromium)(\.exe)?$/i;
 
-export function count(all, rootPid) {
+// 子孫＝Windows 的父子關係＋MSYS 補的連結（2026-10-02：只看 Windows 的，Git Bash 下記到「工作程序 0」——量尺壞的，那一場峰值作廢）
+export function count(all, rootPid, edges = []) {
   const root = all.find((p) => p.pid === rootPid);
-  const tree = [...(root ? [root] : []), ...descendants(all, rootPid)];
+  const tree = [...(root ? [root] : []), ...descendants(all, rootPid, { edges })];
   const byPid = new Map(all.map((p) => [p.pid, p]));
   const work = tree.filter((p) => WORK.test(p.name) && !(BROWSER.test(p.name) && BROWSER.test((byPid.get(p.ppid) || {}).name || '')));
   return { n: work.length, all: tree.length, memMB: Math.round(tree.reduce((s, p) => s + (p.mem || 0), 0) / 1048576) };
@@ -53,9 +54,11 @@ let peak = 0, peakAll = 0, peakMem = 0, minFree = Infinity, samples = 0;
 while (!done) {
   try {
     const all = listProcesses();
-    const c = count(all, child.pid);
+    let edges = [], msysNote = '';
+    try { edges = msysEdges(); } catch (e) { msysNote = '（取不到 MSYS 程序表：這一筆只照 Windows 的父子關係數，Git Bash 裡再開的程序可能漏算）'; }
+    const c = count(all, child.pid, edges);
     // 正在跑的每一支 bash：記下執行檔路徑與父程序（第一次看到時記一行）——跑的是不是 Git Bash，看程序本身
-    for (const p of [all.find((q) => q.pid === child.pid), ...descendants(all, child.pid)].filter(Boolean)) {
+    for (const p of [all.find((q) => q.pid === child.pid), ...descendants(all, child.pid, { edges })].filter(Boolean)) {
       if (/^(bash|sh)\.exe$/i.test(p.name) && !seenBash.has(p.pid)) {
         seenBash.add(p.pid);
         const parent = all.find((q) => q.pid === p.ppid);
@@ -66,7 +69,7 @@ while (!done) {
     }
     const free = Math.round(os.freemem() / 1048576);
     samples++; peak = Math.max(peak, c.n); peakAll = Math.max(peakAll, c.all); peakMem = Math.max(peakMem, c.memMB); minFree = Math.min(minFree, free);
-    const line = `${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、全部程序 ${c.all}、合計 ${c.memMB} MB、系統可用 ${free} MB`;
+    const line = `${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、全部程序 ${c.all}、合計 ${c.memMB} MB、系統可用 ${free} MB${msysNote}`;
     lines.push(line);
     // 每取一次就先寫進 .partial：被中途停掉時紀錄不會整個沒有（2026-10-02 實測：分段停下時 six 的取樣全部沒留下）
     try { fs.appendFileSync(out + '.partial', line + '\n'); } catch { /* 寫不進就算了，最後還會整份寫 */ }

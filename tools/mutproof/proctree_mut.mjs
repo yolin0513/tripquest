@@ -31,6 +31,10 @@ const MUTS = [
   { name: 'P7 解不出來時照裸寫的名字跑', file: 'resolve-exe.mjs',
     find: '  try { list = where(name); } catch { list = []; }', repl: '  try { list = where(name); } catch { return name; }',
     expect: ['解不出來（where 失敗）'] },
+  // 2026-10-02：取樣器在 Git Bash 下記到「工作程序 0」的根因——只看 Windows 的父子關係
+  { name: 'P8 不用 MSYS 補的連結', file: 'proctree.mjs',
+    find: '      if (c.ppid !== parent.pid && !(extra.get(parent.pid) || new Set()).has(c.pid)) continue;', repl: '      if (c.ppid !== parent.pid) continue;',
+    expect: ['補上 MSYS 的連結', 'killTree 也用補上的連結'] },
   { name: 'P2 取不到程序表時改用 /T 照殺', file: 'run-timeout.mjs',
     find: "catch (e) { log(`（取不到程序表：${String(e.message).split('\\n')[0]}——只殺 ${pid} 本身，不用 /T）`); tree = null; }",
     repl: "catch (e) { tree = [{ pid: -1, name: 'node.exe' }]; }",
