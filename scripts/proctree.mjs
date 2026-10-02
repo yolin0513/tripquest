@@ -40,6 +40,8 @@ export function descendants(all, rootPid) {
     for (const c of all) {
       if (c.ppid !== parent.pid || c.pid === parent.pid) continue;
       // 建立時間不早於父程序才算——早於的是 PID 被重用之前就在的別人家的程序
+      // ⚠ 這一道與 run-timeout.mjs 的可殺名稱清單（KILLABLE）互為備援：單獨移除這一道，「殺了誰」不會讓任何測試紅
+      //   （只有「認到哪幾支」那一條會紅）。移除前先確認另一道仍然存在。刻意接受的例外：安全機制要冗餘。
       if (c.created == null || parent.created == null || c.created < parent.created) continue;
       out.push({ ...c, depth });
       walk(c, depth + 1);

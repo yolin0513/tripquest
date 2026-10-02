@@ -27,6 +27,9 @@ export function killTree(pid, { list = listProcesses, kill = taskkill, log = (s)
   // ——mutatetest 的「殺到一半」就是這樣造不出來的（2026-10-02 實測：五個殺程序情境全部判成情境未成立）
   // 第二道防呆：子孫只殺名稱在 KILLABLE 裡的（測試會開的那幾種）。就算哪天認子孫的判斷又出錯，
   // OneDrive 這類不相干的程序也不會被殺——不在清單裡的印出來、不殺。
+  // ⚠ 這一道與 proctree.mjs 的「子程序要比父程序晚建立」互為備援：單獨移除其中一道，「殺了誰」不會讓任何測試紅
+  //   （proctree_mut 的 P1／P4 只紅各自那一條，P5 兩道一起拿掉「殺了誰」才紅）。移除前先確認另一道仍然存在。
+  //   刻意接受的例外：安全機制要冗餘（殺錯程序會砍掉 Yolin 正在同步的檔案）。
   const skipped = (tree || []).filter((p) => !KILLABLE.test(p.name || ''));
   for (const p of skipped) log(`（不殺 ${p.pid} ${p.name}：名稱不在可殺清單）`);
   const victims = [pid, ...(tree || []).filter((p) => KILLABLE.test(p.name || '')).map((p) => p.pid)];
