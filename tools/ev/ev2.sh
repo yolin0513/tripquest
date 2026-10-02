@@ -25,6 +25,7 @@ for fp in "$@"; do
   after="$(git hash-object "$f")"
   git add "$f"
   echo "[$LABEL] 改：$f（${before:0:12} → ${after:0:12}）"
+  echo "[$LABEL] 補丁：$p"   # 給 tools/ev/patch-population.mjs --applied 對帳（實際套了哪幾份）
 done
 if [ "$#" -gt 0 ]; then
   git -c user.name=t -c user.email=t@users.noreply.github.com commit -q -m "突變：$LABEL" || { echo "[$LABEL] ✗ commit 突變失敗——不跑"; exit 9; }

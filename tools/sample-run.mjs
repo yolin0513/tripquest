@@ -19,7 +19,7 @@ export function count(all, rootPid) {
   const tree = [...(root ? [root] : []), ...descendants(all, rootPid)];
   const byPid = new Map(all.map((p) => [p.pid, p]));
   const work = tree.filter((p) => WORK.test(p.name) && !(BROWSER.test(p.name) && BROWSER.test((byPid.get(p.ppid) || {}).name || '')));
-  return { n: work.length, memMB: Math.round(tree.reduce((s, p) => s + (p.mem || 0), 0) / 1048576) };
+  return { n: work.length, all: tree.length, memMB: Math.round(tree.reduce((s, p) => s + (p.mem || 0), 0) / 1048576) };
 }
 
 const [out, ...cmd] = process.argv.slice(2);
@@ -40,16 +40,16 @@ let log = '';
 child.stdout.on('data', (d) => { log += d; }); child.stderr.on('data', (d) => { log += d; });
 let done = false;
 child.on('exit', () => { done = true; });
-let peak = 0, peakMem = 0, minFree = Infinity, samples = 0;
+let peak = 0, peakAll = 0, peakMem = 0, minFree = Infinity, samples = 0;
 while (!done) {
   try {
     const c = count(listProcesses(), child.pid);
     const free = Math.round(os.freemem() / 1048576);
-    samples++; peak = Math.max(peak, c.n); peakMem = Math.max(peakMem, c.memMB); minFree = Math.min(minFree, free);
-    lines.push(`${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、合計 ${c.memMB} MB、系統可用 ${free} MB`);
+    samples++; peak = Math.max(peak, c.n); peakAll = Math.max(peakAll, c.all); peakMem = Math.max(peakMem, c.memMB); minFree = Math.min(minFree, free);
+    lines.push(`${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、全部程序 ${c.all}、合計 ${c.memMB} MB、系統可用 ${free} MB`);
   } catch { lines.push(`${new Date().toISOString()} 取不到程序表`); }
   await new Promise((r) => setTimeout(r, 2000));
 }
-lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、取樣 ${samples} 次、峰值 ${peak} 個工作程序（含主程式）、合計記憶體峰值 ${peakMem} MB、系統可用最低 ${minFree === Infinity ? '—' : minFree} MB`);
+lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、取樣 ${samples} 次、峰值：工作程序 ${peak} 個（含主程式）、全部程序 ${peakAll} 個、合計記憶體峰值 ${peakMem} MB、系統可用最低 ${minFree === Infinity ? '—' : minFree} MB`);
 fs.writeFileSync(out, lines.join('\n') + '\n\n' + log);
 process.exitCode = child.exitCode;

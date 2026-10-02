@@ -8,6 +8,7 @@
 // 這裡用專案自帶的 wrangler（workerd）把**真的** Worker 跑起來，配一個本機 D1，
 // 不需要網路、不需要新依賴、不會碰到正式資料。
 import { spawn } from 'node:child_process';
+import { killTree } from './run-timeout.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { rm } from 'node:fs/promises';
@@ -167,8 +168,8 @@ try {
     if (process.platform === 'win32') {
       // 要**等** taskkill 跑完再清 .wrangler，不然 workerd 還抓著檔案鎖，
       // 那個目錄會刪不掉、行程也會一次次累積下去。
-      const tk = spawn('taskkill', ['/PID', String(dev.pid), '/T', '/F'], { stdio: 'ignore' });
-      await new Promise((r) => { tk.on('exit', r); tk.on('error', r); setTimeout(r, 8000); });
+      // 認子孫看建立時間、逐支殺（不用 taskkill /T——PID 重用時會殺到不相干的程序；2026-10-02）
+      killTree(dev.pid, { log: (s) => console.log(s) });
     } else {
       process.kill(-dev.pid, 'SIGKILL');
     }
