@@ -35,6 +35,7 @@ const lines = [];
   if (!(c1.n >= 1 && c0.n === 0)) { lines.push('✗ 取樣器對照沒過，不採信'); fs.writeFileSync(out, lines.join('\n') + '\n'); process.exit(4); }
 }
 const t0 = Date.now();
+try { fs.writeFileSync(out + '.partial', lines.join('\n') + '\n'); } catch { /* 同上 */ }
 const child = spawn(cmd[0], cmd.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
 let log = '';
 child.stdout.on('data', (d) => { log += d; }); child.stderr.on('data', (d) => { log += d; });
@@ -46,7 +47,10 @@ while (!done) {
     const c = count(listProcesses(), child.pid);
     const free = Math.round(os.freemem() / 1048576);
     samples++; peak = Math.max(peak, c.n); peakAll = Math.max(peakAll, c.all); peakMem = Math.max(peakMem, c.memMB); minFree = Math.min(minFree, free);
-    lines.push(`${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、全部程序 ${c.all}、合計 ${c.memMB} MB、系統可用 ${free} MB`);
+    const line = `${new Date().toISOString()} 本 repo 工作程序 ${c.n}（含啟動它的主程式）、全部程序 ${c.all}、合計 ${c.memMB} MB、系統可用 ${free} MB`;
+    lines.push(line);
+    // 每取一次就先寫進 .partial：被中途停掉時紀錄不會整個沒有（2026-10-02 實測：分段停下時 six 的取樣全部沒留下）
+    try { fs.appendFileSync(out + '.partial', line + '\n'); } catch { /* 寫不進就算了，最後還會整份寫 */ }
   } catch { lines.push(`${new Date().toISOString()} 取不到程序表`); }
   await new Promise((r) => setTimeout(r, 2000));
 }
