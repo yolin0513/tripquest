@@ -31,6 +31,35 @@ export function missLine(ev, peak, peakAll) {
   const part = (d, what) => (d >= 0 ? `${what} ${d} 個` : `${what} −${-d} 個（取樣比逐一計數多——逐一計數漏收事件，兩個峰值都要存疑）`);
   return `取樣漏算（逐一計數峰值 − 取樣峰值）：${part(dw, '工作程序')}、${part(da, '全部程序')}`;
 }
+// 結束時還記著活著的：all＝程序表（null＝取不到→全部當漏收）。真的還在＝同 pid、同名、在這一場開始之後建立
+export function endCheck(ev, all, t0) {
+  const live = [...ev.ours].filter(([, p]) => !p.gone);
+  const byPid = new Map((all || []).map((p) => [p.pid, p]));
+  const alive = [], missed = [];
+  for (const [pid, p] of live) {
+    const q = byPid.get(pid);
+    (all && q && q.name.toLowerCase() === p.name.toLowerCase() && !(q.created < t0 - 1000) ? alive : missed).push(`${pid} ${p.name}`);
+  }
+  return { alive, missed };
+}
+export function endLine(ev, { alive, missed }) {
+  if (!ev.ready) return '結束核對：逐一計數沒啟動，不核對';
+  const head = `結束核對：被包住的指令結束後，逐一計數記著還活著的 ${alive.length + missed.length} 個（應為 0）`;
+  if (!alive.length && !missed.length) return head + '——對得上，逐一計數峰值可信';
+  return head + (missed.length ? `；✗ 結束事件漏收 ${missed.length} 個（程序表裡已經不在：${missed.slice(0, 5).join('、')}${missed.length > 5 ? '…' : ''}），逐一計數峰值不可信、不當成量到的` : '')
+    + (alive.length ? `；真的還活著（留下的孤兒）${alive.length} 個：${alive.slice(0, 5).join('、')}` : '');
+}
+{
+  const t = 1000000;
+  const evx = { ready: true, ours: new Map([[1, { name: 'node.exe', gone: true }], [2, { name: 'sleep.exe' }], [3, { name: 'node.exe' }], [4, { name: 'bash.exe' }]]) };
+  // 2：真的還在；3：不在表上→漏收；4：同 pid 但是更早就存在的別人（PID 重用）→漏收
+  const r = endCheck(evx, [{ pid: 2, name: 'sleep.exe', created: t + 5 }, { pid: 4, name: 'bash.exe', created: t - 60000 }], t);
+  const r0 = endCheck({ ready: true, ours: new Map([[1, { name: 'node.exe', gone: true }]]) }, [], t);
+  const rn = endCheck(evx, null, t);
+  const okEnd = r.alive.join() === '2 sleep.exe' && r.missed.join() === '3 node.exe,4 bash.exe' && /✗ 結束事件漏收 2 個/.test(endLine(evx, r))
+    && r0.alive.length + r0.missed.length === 0 && /對得上/.test(endLine(evx, r0)) && rn.missed.length === 3;
+  if (!okEnd) { console.log(`✗ endCheck 對照組沒過：${JSON.stringify(r)}｜${JSON.stringify(rn)}`); process.exit(4); }
+}
 {
   const a = missLine({ ready: true, peakWork: 3, peakAll: 5 }, 1, 2), b = missLine({ ready: true, peakWork: 1, peakAll: 2 }, 2, 2);
   const c = missLine({ ready: false }, 1, 1);
@@ -93,7 +122,7 @@ watcher.stdout.on('data', (d) => {
       }
       if (parent !== null) {
         const work = isWork(name, (ev.ours.get(parent) || {}).name);
-        ev.ours.set(pid, { name, work });
+        ev.ours.set(pid, { name, work, at: Date.now() });
         ev.liveAll++; if (work) ev.liveWork++;
         ev.peakAll = Math.max(ev.peakAll, ev.liveAll); ev.peakWork = Math.max(ev.peakWork, ev.liveWork);
       }
@@ -148,10 +177,21 @@ try { fs.writeFileSync(stopFile, 'stop'); } catch { /* 寫不進就直接收掉 
 await new Promise((r) => setTimeout(r, 1500));
 try { watcher.kill(); } catch { /* 已經結束 */ }
 try { fs.rmSync(stopFile, { force: true }); } catch { /* 沒有就算了 */ }
+// 結束時的自我核對（JLPT 2026-10-02 撞到：負載重時 WMI 結束事件會掉，那一支就一直被當成活著→峰值多算，它那一場記到 362 個）：
+// 被包住的指令結束後，逐一計數記著還活著的應該是 0。不是 0 的，逐支拿程序表核對——真的還在（同名、在這一場開始之後建立）＝
+// 留下來的孤兒，數字可信、另外點名；不在＝結束事件漏收，逐一計數的峰值不可信、不當成量到的（多算會讓排程無謂拉長）。
+// 建立事件漏收（少算）這一道抓不到——那一支根本沒進帳；取樣峰值大於逐一計數時 missLine 會印成負數，那是它的訊號。
+let ender = { missed: [], alive: [] };
+if (ev.ready) {
+  let all = null;
+  try { all = listProcesses(); } catch { /* 取不到就全部當漏收：寧可不信 */ }
+  ender = endCheck(ev, all, t0);
+}
 const evPart = ev.ready
-  ? `逐一計數峰值：工作程序 ${ev.peakWork} 個、全部程序 ${ev.peakAll} 個（事件 ${ev.events} 筆、認到本 repo 的 ${ev.ours.size} 支；含主程式；活不到約 0.1 秒的可能漏）`
+  ? `逐一計數峰值${ender.missed.length ? `【不可信：結束事件漏收 ${ender.missed.length} 個】` : ''}：工作程序 ${ev.peakWork} 個、全部程序 ${ev.peakAll} 個（事件 ${ev.events} 筆、認到本 repo 的 ${ev.ours.size} 支；含主程式；活不到約 0.1 秒的可能漏）`
   : '逐一計數沒啟動';
 lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFixed(1)} 秒；${evPart}；取樣（每 2 秒，${samples} 次）峰值：工作程序 ${peak} 個、全部程序 ${peakAll} 個；合計記憶體峰值 ${peakMem} MB、系統可用最低 ${minFree === Infinity ? '—' : minFree} MB`);
-lines.push(missLine(ev, peak, peakAll));
+lines.push(endLine(ev, ender));
+lines.push(ender.missed.length ? '取樣漏算：算不出（逐一計數的峰值不可信）' : missLine(ev, peak, peakAll));
 fs.writeFileSync(out, lines.join('\n') + '\n\n' + log);
 process.exitCode = child.exitCode;
