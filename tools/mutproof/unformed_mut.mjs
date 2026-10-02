@@ -5,7 +5,7 @@
 // 用法：node tools/mutproof/unformed_mut.mjs <repo>
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const REPO = process.argv[2];
@@ -37,13 +37,15 @@ for (const m of RUN) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, ['scripts/mutatetest.mjs', ...m.args], { cwd: COPY, encoding: 'utf8', timeout: 400000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out);
   if (m === RUN[0]) gateOrExit(m.name.startsWith('U0') && expectGate('unformed_mut', m.name, out, itemsOf(RUN.slice(1), ['expectRed', 'expectUnformed'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const unf = out.split('\n').filter((l) => l.startsWith('⊘ 情境未成立：')).map((l) => l.slice(8));
-  const ok = m.check(r, reds, unf);
+  const ok = fin.ok && (m.check(r, reds, unf));
   if (!ok) bad++;
-  evid({ runner: 'unformed_mut', name: m.name, expect: m.expectRed || [], expectUnformed: m.expectUnformed || [], reds, unformed: unf, status: r.status, sha: '' });
+  evid({ finished: fin.ok, finishWhy: fin.why, runner: 'unformed_mut', name: m.name, expect: m.expectRed || [], expectUnformed: m.expectUnformed || [], reds, unformed: unf, status: r.status, sha: '' });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、✗ ${reds.length} 條、⊘ ${unf.length} 條`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
   for (const l of unf) console.log('     ⊘ ' + l.slice(0, 90));
 }

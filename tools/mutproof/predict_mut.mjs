@@ -2,7 +2,7 @@
 // 看紅的是不是預期那幾條（只列開頭）。用法：node tools/mutproof/predict_mut.mjs <repo>
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'predict_mut';
 import crypto from 'node:crypto';
@@ -46,11 +46,12 @@ for (const m of RUN) {
   }
   const r = spawnSync(process.execPath, ['scripts/predicttest.mjs'], { cwd: COPY, encoding: 'utf8', timeout: 300000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out);
   if (m === RUN[0]) gateOrExit(m.name.startsWith('M0') && expectGate('predict_mut', m.name, out, itemsOf(RUN.slice(1), ['expect'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hitAll = m.expect.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)));
-  const ok = m.expect.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length;
+  const ok = fin.ok && (m.expect.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length);
   if (!ok) bad++;
   const tested = parseTested(out);
   const outer = m.file ? sha12(path.join(COPY, m.file)) : null;
@@ -58,8 +59,9 @@ for (const m of RUN) {
   nested.ok = !!tested && (!m.file || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
   fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
-  evid({ nested, runner: 'predict_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
+  evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'predict_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、改壞那份 ${sha}、紅 ${reds.length} 條${extra.length ? '（預期外：' + extra.map((x) => x.slice(0, 26)).join('／') + '）' : ''}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 80));
 }
 fs.rmSync(COPY, { recursive: true, force: true });

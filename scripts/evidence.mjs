@@ -58,6 +58,8 @@ export function classify(r) {
   const missU = expU.filter((p) => !starts(unf, p));
   const missR = expect.filter((p) => !starts(reds, p));
   const extraR = reds.filter((l) => !expect.some((p) => l.startsWith(p)));
+  // 沒跑完（被停掉、逾時、沒有最後那一行總結）→ 不算數，不進紅／沒紅（2026-10-02，MealMate：被停掉的那一輪記成「紅錯地方」）
+  if (r.finished === false) return '被中斷（不算數）';
   // clone 裡實際跑的那份不是外層改壞的那份（或沒印被驗的檔）→ 改壞的程式沒在跑 → 這次什麼都沒量到
   if (r.nested && r.nested.ok === false) return '情境未成立';
   if (extraU.length) return '情境未成立';
@@ -90,7 +92,8 @@ export function populationProblems(totals, recs) {
 // ---------- 讀舊的 ev2 ----------
 // 情境成立＝外殼確認了「HEAD 裡的那支＝改壞的那一份」，而且沒有「[標籤] ✗」開頭的失敗行。
 // 只認行首（不拿「一行裡有沒有 ✗ 這個字」判斷——MealMate 2026-10-02：✓ 開頭、訊息裡帶 ✗ 的行被當成紅）。
-export const legacyFormed = (sh) => new RegExp('^\\[[^\\]]+\\] HEAD 裡的 .+＝改壞的那一份', 'm').test(sh) && !/^\[[^\]]+\] ✗/m.test(sh);
+export const LEGACY_DONE = /^(\d+ 項通過|全部擋下|擋下：F8 驗法|結果：)/m;
+export const legacyFormed =(sh) => new RegExp('^\\[[^\\]]+\\] HEAD 裡的 .+＝改壞的那一份', 'm').test(sh) && !/^\[[^\]]+\] ✗/m.test(sh);
 export function parseLegacyEv2(dir) {
   const shells = fs.readdirSync(dir).filter((f) => /^ev2-.+\.shell$/.test(f)).sort();
   const recs = shells.map((f) => {
@@ -103,7 +106,10 @@ export function parseLegacyEv2(dir) {
     const status = m ? Number(m[1]) : null;
     const reds = log ? log.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2)) : [];
     const changed = [...sh.matchAll(/改：(\S+)（(\w+) → (\w+)）/g)].map((x) => `${x[1]} ${x[3]}`);
-    const cls = !formed || status === null || log === null ? '情境未成立' : reds.length || status !== 0 ? '成立且紅（無預期可比）' : '成立但沒紅';
+    // 有 exit= 不等於跑完（被停掉時外殼照樣寫得出 exit=、結束碼跟斷言失敗一樣）：log 裡要有至少一行完成的證據
+    // （寬鬆判準；依指令逐項核對的嚴格版在 tools/mutproof/rescan.mjs，用 tools/ev/progress.mjs 的判準）
+    const done = log !== null && LEGACY_DONE.test(log);
+    const cls = !formed || status === null || log === null ? '情境未成立' : !done ? '被中斷（不算數）' : reds.length || status !== 0 ? '成立且紅（無預期可比）' : '成立但沒紅';
     return { runner: 'ev2（舊）', name: label, expect: ['（當時沒記成機器讀得到的格式）'], reds, unformed: formed ? [] : ['外殼沒有確認改壞的那一份在 HEAD 裡，或沒有 log'], status, sha: changed.join('；'), cls };
   });
   return { shells: shells.length, recs };
@@ -146,13 +152,16 @@ export function selfControls() {
   out.push(['分類：clone 裡跑的不是改壞那份 → 情境未成立（就算紅在預期也一樣）',
     C({ expect: ['A '], reds: ['A 一'], nested: { file: 'x.mjs', outer: 'aaa', inner: 'bbb', ok: false } }) === '情境未成立'
     && C({ expect: ['A '], reds: ['A 一'], nested: { file: 'x.mjs', outer: 'aaa', inner: 'aaa', ok: true } }) === '成立且紅在預期']);
-  out.push(['分類：基準全綠／基準不綠', classify({ expect: [], reds: [], status: 0 }) === '基準全綠' && classify({ expect: [], reds: ['x'], status: 1 }) === '基準不綠']);
+  out.push(['分類：沒跑完 → 被中斷（不算數），就算紅在預期也一樣', C({ expect: ['A '], reds: ['A 一'], finished: false }) === '被中斷（不算數）'
+    && C({ expect: ['A '], reds: ['A 一'], finished: true }) === '成立且紅在預期' && classify({ expect: [], reds: [], status: 0, finished: false }) === '被中斷（不算數）']);
+  out.push(['分類：基準全綠／基準不綠',classify({ expect: [], reds: [], status: 0 }) === '基準全綠' && classify({ expect: [], reds: ['x'], status: 1 }) === '基準不綠']);
   // 舊 ev2 外殼：成立／沒套上／訊息裡帶 ✗ 字但不是失敗行
   const okSh = '[x] 改：a.mjs（111 → 222）\n[x] HEAD 裡的 a.mjs＝改壞的那一份（222）\n[x] exit=1';
   out.push(['舊紀錄：確認改壞那份在 HEAD 裡 → 成立', legacyFormed(okSh)]);
   out.push(['舊紀錄：「[x] ✗ patch 沒套上——不跑」→ 未成立', !legacyFormed('[x] ✗ patch 沒套上（a=p.json）——不跑')]);
   out.push(['舊紀錄：沒有「HEAD 裡＝改壞那份」那一行 → 未成立', !legacyFormed('[x] 改：a.mjs（111 → 222）\n[x] exit=1')]);
-  out.push(['舊紀錄：訊息裡帶 ✗ 字、但不在行首 → 不算失敗', legacyFormed(okSh + '\n[x] 說明：上一輪的 ✗ 已處理')]);
+  out.push(['舊紀錄：完成的證據——有「N 項通過」或 F8 結論才算跑完，只有 ✗ 行不算', LEGACY_DONE.test('✗ 一\n\n12 項通過，有失敗') && LEGACY_DONE.test('全部擋下（只跑了 bp）') && !LEGACY_DONE.test('✗ 一\n✗ 二\n') && !LEGACY_DONE.test('✓ 12 項通過')]);
+  out.push(['舊紀錄：訊息裡帶 ✗ 字、但不在行首 → 不算失敗',legacyFormed(okSh + '\n[x] 說明：上一輪的 ✗ 已處理')]);
   // 母體：少一筆、多一筆都要點名
   const T = [{ runner: 'r', names: ['a', 'b'] }];
   const p1 = populationProblems(T, [{ runner: 'r', name: 'a' }]);
@@ -200,4 +209,5 @@ function main() {
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) process.exitCode = main();
+// 最後一定印這一行（2026-10-02）：evidence_mut 拿它判「跑完了沒」——被強制停掉時結束碼也是 1，跟「擋下」分不出來
+if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) { process.exitCode = main(); console.log(`evidence 結束：回 ${process.exitCode}`); }

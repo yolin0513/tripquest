@@ -106,4 +106,5 @@ function main() {
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) process.exitCode = main();
+// 最後一定印這一行（2026-10-02）：mutlint_mut 拿它判「跑完了沒」——被強制停掉時結束碼也是 1，跟「有問題」分不出來
+if (process.argv[1] && path.resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase()) { process.exitCode = main(); console.log(`mutlint 結束：回 ${process.exitCode}`); }

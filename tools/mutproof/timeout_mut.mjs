@@ -2,7 +2,7 @@
 // 跑 clone 自己的那支測試，看紅的是不是預期那幾條。用法：node tools/mutproof/timeout_mut.mjs <repo> [名稱開頭...]
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'timeout_mut';
 import crypto from 'node:crypto';
@@ -45,13 +45,14 @@ for (const m of RUN) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [m.test], { cwd: COPY, encoding: 'utf8', timeout: 400000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out);
   // 兩個基準各管各的測試：T0 管 worktreeguardtest 的那幾條、T0b 管 mutatetest 的那幾條
   if (m.name.startsWith('T0')) gateOrExit(expectGate('timeout_mut', m.name, out, itemsOf(RUN.filter((x) => x.test === m.test && !x.name.startsWith('T0')), ['expect'])));
   else if (!RUN.some((x) => x.name.startsWith('T0') && x.test === m.test)) gateOrExit(false);
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hitAll = m.expect.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)) && !l.startsWith('前置'));
-  const ok = m.expect.length ? r.status !== 0 && hitAll : r.status === 0 && !reds.length;
+  const ok = fin.ok && (m.expect.length ? r.status !== 0 && hitAll : r.status === 0 && !reds.length);
   if (!ok) bad++;
   const tested = parseTested(out);
   const outer = m.file ? sha12(path.join(COPY, m.file)) : null;
@@ -59,8 +60,9 @@ for (const m of RUN) {
   nested.ok = !!tested && (!m.file || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
   fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
-  evid({ nested, runner: 'timeout_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
+  evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'timeout_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、改壞那份 ${sha}、紅 ${reds.length} 條${extra.length ? '（另外紅：' + extra.map((x) => x.slice(0, 28)).join('／') + '）' : ''}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
 }
 fs.rmSync(COPY, { recursive: true, force: true });

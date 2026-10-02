@@ -2,7 +2,7 @@
 // 列出實際紅的那幾條，跟預期比（預期是「哪幾條情境的開頭」）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'mut_guard_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -36,13 +36,14 @@ for (const m of RUN) {
   const t0 = Date.now();
   const r = spawnSync(process.execPath, ['scripts/mutatetest.mjs'], { cwd: COPY, encoding: 'utf8', timeout: 300000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out);
   if (m === RUN[0]) gateOrExit(m.name.startsWith('G0') && expectGate('mut_guard_mut', m.name, out, itemsOf(RUN.slice(1), ['expect', 'expectUnformed'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hash = (out.match(/被驗的 mutate (\S+)/) || [, '？'])[1];
   const realReds = reds.filter((l) => !l.startsWith('前置'));
   const hitAll = m.expect.every((e) => realReds.some((l) => l.startsWith(e)));
   const extra = realReds.filter((l) => !m.expect.some((e) => l.startsWith(e)));
-  const ok = m.expect.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length;
+  const ok = fin.ok && (m.expect.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length);
   if (!ok) bad++;
   const tested = parseTested(out);
   const outer = (m.find ? 'scripts/mutate.mjs' : null) ? sha12(path.join(COPY, (m.find ? 'scripts/mutate.mjs' : null))) : null;
@@ -50,8 +51,9 @@ for (const m of RUN) {
   nested.ok = !!tested && (!(m.find ? 'scripts/mutate.mjs' : null) || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
   fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
-  evid({ nested, runner: 'mut_guard_mut', name: m.name, expect: m.expect, expectUnformed: m.expectUnformed || [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha: hash });
+  evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'mut_guard_mut', name: m.name, expect: m.expect, expectUnformed: m.expectUnformed || [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha: hash });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、被驗的 mutate ${hash}、紅 ${reds.length} 條${extra.length ? '（預期外：' + extra.map((x) => x.slice(0, 24)).join('／') + '）' : ''}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
 }
 fs.rmSync(COPY, { recursive: true, force: true });

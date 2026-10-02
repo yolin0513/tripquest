@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { evidHeader, evid, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 
 const REPO = process.argv[2];
 const DIR = path.join(REPO, '.logs', 'pt-mut');
@@ -56,14 +56,16 @@ for (const m of MUTS) {
   }
   const r = spawnSync(process.execPath, [path.join(DIR, 'scripts', 'proctreetest.mjs')], { cwd: DIR, encoding: 'utf8', timeout: 120000 });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out);
   if (m === MUTS[0]) gateOrExit(m.name.startsWith('P0') && expectGate('proctree_mut', m.name, out, itemsOf(MUTS.slice(1), ['expect'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hit = m.expect.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expect.some((e) => l.startsWith(e)));
-  const ok = m.expect.length ? r.status !== 0 && hit && !extra.length : r.status === 0 && !reds.length;
+  const ok = fin.ok && (m.expect.length ? r.status !== 0 && hit && !extra.length : r.status === 0 && !reds.length);
   if (!ok) bad++;
-  evid({ runner: 'proctree_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: [], status: r.status, sha: '' });
+  evid({ finished: fin.ok, finishWhy: fin.why, runner: 'proctree_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: [], status: r.status, sha: '' });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、紅 ${reds.length} 條${extra.length ? '（預期外：' + extra.join('／').slice(0, 80) + '）' : ''}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
 }
 fs.rmSync(DIR, { recursive: true, force: true });

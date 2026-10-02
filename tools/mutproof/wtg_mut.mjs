@@ -2,7 +2,7 @@
 // 預期只有指定的那幾條紅。複本＝clone HEAD ＋ 蓋上工作區裡這次改的檔。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'wtg_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -43,11 +43,12 @@ for (const m of RUN) {
   }
   const r = spawnSync(process.execPath, ['scripts/worktreeguardtest.mjs'], { cwd: COPY, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out);
   if (m === RUN[0]) gateOrExit(m.name.startsWith('M0') && expectGate('wtg_mut', m.name, out, itemsOf(RUN.slice(1), ['expectRed'])));
   const reds = out.split('\n').filter((l) => l.startsWith('✗ ')).map((l) => l.slice(2));
   const hitAll = m.expectRed.every((e) => reds.some((l) => l.startsWith(e)));
   const extra = reds.filter((l) => !m.expectRed.some((e) => l.startsWith(e)));
-  const ok = m.expectRed.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length;
+  const ok = fin.ok && (m.expectRed.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length);
   if (!ok) bad++;
   const tested = parseTested(out);
   const outer = m.file ? sha12(path.join(COPY, m.file)) : null;
@@ -55,9 +56,10 @@ for (const m of RUN) {
   nested.ok = !!tested && (!m.file || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
   fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
-  evid({ nested, runner: 'wtg_mut', name: m.name, expect: m.expectRed, expectUnformed: [], reds, unformed: [], status: r.status, sha: (out.match(/被驗的 run-affected \S+、worktree-guard \S+/) || [''])[0] });
+  evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'wtg_mut', name: m.name, expect: m.expectRed, expectUnformed: [], reds, unformed: [], status: r.status, sha: (out.match(/被驗的 run-affected \S+、worktree-guard \S+/) || [''])[0] });
   const hashLine = (out.match(/被驗的 run-affected \S+、worktree-guard \S+/) || ['（沒印雜湊）'])[0];
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}，紅 ${reds.length} 條${extra.length ? `（多紅：${extra.map((x) => x.slice(0, 30)).join('／')}）` : ''}；${hashLine}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 70));
 }
 fs.rmSync(COPY, { recursive: true, force: true });

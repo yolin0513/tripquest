@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 
 const REPO = process.argv[2];
 const DIR = path.join(REPO, '.logs', 'evm');
@@ -38,12 +38,14 @@ for (const m of MUTS) {
   fs.writeFileSync(path.join(DIR, 'scripts', 'evidence.mjs'), s);
   const r = spawnSync(process.execPath, [path.join(DIR, 'scripts', 'evidence.mjs')], { cwd: DIR, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out, /^evidence 結束：回 \d+$/m);
   // 這支的「斷言」是 evidence.mjs 自身對照組的名字（「✓ 對照組：…」那幾行）
   if (m === MUTS[0]) gateOrExit(m.name.startsWith('E0') && expectGate('evidence_mut', m.name, out, itemsOf(MUTS.slice(1), ['fails']), { messages: linesOf(out, '✓ 對照組：').concat(linesOf(out, '✗ 對照組：')) }));
   const failed = out.split('\n').filter((l) => l.startsWith('✗ 對照組：')).map((l) => l.slice('✗ 對照組：'.length));
-  const ok = r.status === m.rc && failed.slice().sort().join('|') === m.fails.slice().sort().join('|');
+  const ok = fin.ok && (r.status === m.rc && failed.slice().sort().join('|') === m.fails.slice().sort().join('|'));
   if (!ok) bad++;
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}（預期 ${m.rc}）、沒過的對照組 ${failed.length} 條${failed.length ? '：' + failed.join('／') : ''}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
 }
 fs.rmSync(DIR, { recursive: true, force: true });
 console.log(bad ? `${bad} 條不照預期` : '全部照預期');

@@ -32,6 +32,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LOGS = path.join(ROOT, '.logs');
 const LEDGER = path.join(LOGS, 'mutate-ledger.jsonl');
 const PENDING = path.join(LOGS, 'mutate-pending.json');
+export const DONE_RE = /^\s*(\d+ 項通過|✓ 全部通過)/m;   // 測試最後那一行總結（見「跑完」那一段）
 const rel = (p) => path.relative(ROOT, p).split(path.sep).join('/');
 const sha1 = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
 // 「是不是原樣」比的是統一行尾之後的內容：人工用 git 還原時，另一台機器的 core.autocrlf 可能給出 CRLF
@@ -57,7 +58,7 @@ function fsyncWrite(file, data, flag = 'w') {
 }
 // 帳本第一行的說明（新建時寫入，--no-result 也會印）。等本 App 有了「依帳本挑選要跑哪些突變」的機制，
 // 再把這段拿掉，並補「沒有結果的會被挑進來」的對照組。
-export const LEDGER_NOTE = '注意：result＝no-result（逾時被殺、中斷後還原）目前**不影響任何選擇**——本 App 還沒有依帳本挑選突變的機制，'
+export const LEDGER_NOTE = '注意：result＝no-result（逾時被殺、沒跑完、中斷後還原）目前**不影響任何選擇**——本 App 還沒有依帳本挑選突變的機制，'
   + '這個欄位只是紀錄。不要以為標了 no-result 的突變下次會自動被跑；要跑請自己指定。';
 const ledgerAdd = (e) => {
   fs.mkdirSync(LOGS, { recursive: true });
@@ -204,11 +205,16 @@ async function main() {
     if (sha1(fs.readFileSync(f)) !== sha) { console.log(`✗ ${m.file} 還原後雜湊不對——還原紀錄保留，下次啟動會照它還原`); return 4; }
     fs.rmSync(PENDING);
     // 結果分三種：紅了／沒紅／沒有結果（逾時被殺）。**沒有結果不是通過**——記成跑過了，下一次就會被當成「跑過了」而跳過
-    const result = r.timedOut ? 'no-result' : r.status !== 0 ? 'red' : 'not-red';
-    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, ...(r.timedOut ? { reason: `逾時 ${(m.timeoutMs || 400000) / 1000} 秒被殺` } : {}) });
+    // 跑完＝有最後那一行總結（2026-10-02，MealMate 撞到：Windows 上被強制停掉時結束碼是 1，跟斷言失敗一模一樣，
+    // 前面幾節本來就印 ✗ 的測試被停掉，會被記成「紅了」）。總結行預設是「N 項通過」或「✓ 全部通過」，測試不一樣的在清單裡寫 done（regex 字串）。
+    const doneRe = m.done ? new RegExp(m.done, 'm') : DONE_RE;
+    const finished = !r.timedOut && r.status !== null && doneRe.test(r.out || '');
+    const result = r.timedOut || !finished ? 'no-result' : r.status !== 0 ? 'red' : 'not-red';
+    const why = r.timedOut ? `逾時 ${(m.timeoutMs || 400000) / 1000} 秒被殺` : !finished ? `沒跑完：沒有最後那一行總結（結束碼 ${r.status}，可能是被強制停掉）` : null;
+    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, ...(why ? { reason: why } : {}) });
     const reds = (r.out || '').split('\n').filter((l) => l.startsWith('✗')).slice(0, 4);
     if (result === 'red') console.log(`✓ ${m.name}：紅了（exit ${r.status}）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
-    else { bad++; console.log(`✗ ${m.name}：${result === 'no-result' ? '逾時被殺——沒有結果（不算紅、也不算跑過）' : '沒紅（照樣全綠）'}`); }
+    else { bad++; console.log(`✗ ${m.name}：${result === 'no-result' ? `${r.timedOut ? '逾時被殺' : '沒跑完（沒有最後那一行總結）'}——沒有結果（不算紅、也不算跑過）` : '沒紅（照樣全綠）'}`); }
   }
   if (!onlyMode) {
     let after;

@@ -11,6 +11,19 @@ export const evidHeader =(runner, names) => console.log('@@EVID-TOTAL ' + JSON.s
 export const evid = (rec) => console.log('@@EVID ' + JSON.stringify(rec));
 export const linesOf = (out, mark) => out.split('\n').filter((l) => l.startsWith(mark)).map((l) => l.slice(mark.length));
 
+// ---------- 跑完了沒（2026-10-02，MealMate 撞到：被停掉的那一輪記成「跑完、紅錯地方」）----------
+// Windows 上被強制停掉時結束碼是 1，跟斷言失敗一模一樣；前面幾節本來就印 ✗ 的測試，只看「結束碼非 0、有 ✗」就分不出來。
+// 跑完＝沒有被訊號或逾時停掉（spawnSync 逾時時 status 是 null——`null !== 0` 照樣成立，以前會被當成紅）＋**最後那一行總結有出現**。
+// 沒跑完的那一條「被中斷、不算數」，不進紅／沒紅的分類（evidence.mjs 記成「被中斷（不算數）」）。跟 tools/ev/progress.mjs 同一個判準。
+export const SUMMARY = /^\d+ 項通過/m;
+export function completed(r, out, summary = SUMMARY) {
+  if (r.error) return { ok: false, why: `開不起來或逾時（${String(r.error.code || r.error.message).slice(0, 40)}）` };
+  if (r.signal) return { ok: false, why: `被訊號 ${r.signal} 停掉` };
+  if (r.status === null || r.status === undefined) return { ok: false, why: '沒有結束碼（被停掉）' };
+  if (!summary.test(out)) return { ok: false, why: `沒有最後那一行總結（${summary.source}）——結束碼 ${r.status} 可能是被強制停掉，不是斷言失敗` };
+  return { ok: true, why: '' };
+}
+
 // ---------- 預期清單過期的前置（2026-10-02，Dispatch：接進每支驅動開跑前）----------
 // 預期清單也會過期（換 fixture、加斷言、改寫原文之後），過期的樣子是「不如預期」——很容易被讀成程式有問題、去修沒壞的東西。
 // 所以每支驅動先跑基準，拿它印出的判定行當「當前斷言集合」，逐條核對其餘突變的預期：每一條必須是某條當前斷言的開頭。

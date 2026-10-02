@@ -2,7 +2,7 @@
 // 看哪幾個對照組報 false、回傳值是多少。預期：拿掉點名 → 對應的對照組 false、回 4；原樣 → 全 true、回 0。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
 import crypto from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -37,6 +37,7 @@ for (const m of RUN) {
   const sha = crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex').slice(0, 12);
   const r = spawnSync(process.execPath, ['scripts/mutlint.mjs'], { cwd: COPY, encoding: 'utf8' });
   const out = (r.stdout || '') + (r.stderr || '');
+  const fin = completed(r, out, /^mutlint 結束：回 \d+$/m);
   // 這支的「斷言」是對照組的名字（「對照組：判斷＝true、齊全＝true…」那一行）
   if (m === RUN[0]) {
     const names = [...((out.match(/^對照組：判斷＝.*$/m) || [''])[0]).matchAll(/(?:、|：)([^、＝]+)＝(?:true|false)/g)].map((x) => x[1]);
@@ -44,10 +45,11 @@ for (const m of RUN) {
   }
   const line = (out.match(/^對照組：判斷＝.*$/m) || [''])[0];
   const falses = [...line.matchAll(/(?:、|：)([^、＝]+)＝false/g)].map((x) => x[1]);
-  const ok = r.status === m.rc && falses.slice().sort().join('|') === m.expectFalse.slice().sort().join('|');
+  const ok = fin.ok && (r.status === m.rc && falses.slice().sort().join('|') === m.expectFalse.slice().sort().join('|'));
   if (!ok) bad++;
-  evid({ runner: 'mutlint_mut', name: m.name, expect: m.expectFalse, expectUnformed: [], reds: falses, unformed: [], status: r.status, sha });
+  evid({ finished: fin.ok, finishWhy: fin.why, runner: 'mutlint_mut', name: m.name, expect: m.expectFalse, expectUnformed: [], reds: falses, unformed: [], status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}（預期 ${m.rc}）、被驗的 mutlint ${sha}、報 false 的對照組：${falses.join('、') || '無'}`);
+  if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);
 }
 fs.rmSync(COPY, { recursive: true, force: true });
 console.log(bad ? `${bad} 條不照預期` : `${MUTS.length} 條全部照預期`);

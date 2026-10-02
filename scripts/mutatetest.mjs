@@ -58,7 +58,9 @@ const P = (r) => path.join(CLONE, r);
 fs.writeFileSync(P('zz-target.txt'), 'alpha\n');
 fs.writeFileSync(P('zz-fixture-a.txt'), 'fixture a\n');   // 「進版控、跟 HEAD 不一樣的檔」用這個 fixture，不拿 README.md
 // 探針：每跑一次在標記檔寫一行（看到的是原樣還是改壞的）；看到 BROKEN 就紅
-fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了'); process.exit(1); }\n");
+fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了\\n\\n0 項通過，有失敗'); process.exit(1); } console.log('1 項通過');\n");
+// 中途被強制停掉（MealMate 2026-10-02）：前面一節本來就印 ✗，接著被 taskkill /F 停掉——結束碼 1，跟斷言失敗一模一樣，只差沒有最後那一行總結
+fs.writeFileSync(P('scripts/zz-killed.mjs'), "import fs from 'node:fs'; import { execFileSync } from 'node:child_process'; fs.mkdirSync('.logs', { recursive: true }); console.log('✗ 前面一節本來就會失敗'); fs.appendFileSync('.logs/zz-marker.txt', 'printed-x\\n'); execFileSync('taskkill', ['/PID', String(process.pid), '/F'], { stdio: 'ignore' }); setTimeout(() => { fs.appendFileSync('.logs/zz-marker.txt', 'finished\\n'); console.log('1 項通過'); }, 5000);\n");
 fs.writeFileSync(P('scripts/zz-sleep.mjs'), "import fs from 'node:fs'; fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', 'sleep\\n'); fs.writeFileSync('.logs/zz-sleep.pid', String(process.pid)); setTimeout(() => {}, 120000);\n");
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'mut 起點');
@@ -288,6 +290,26 @@ if (want('G')) {
     run(TL, '會紅的');
     nr = run('--no-result');
     yes(!/^ {3}會紅的（/m.test(nr.out) && /^ {3}會卡住的（/m.test(nr.out), 'G 再正常跑一次「會紅的」→ 它不再列出，「會卡住的」還在', nr.out.slice(-300));
+  }
+}
+
+console.log('\n— H 中途被強制停掉：記成「沒有結果」，不是紅 —');
+if (want('H')) {
+  pre(reset(), '前置：clone 在起點');
+  const HL = P('.logs/zz-muts-killed.json');
+  fs.writeFileSync(HL, JSON.stringify([
+    { name: '被停掉的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-killed.mjs' },
+    { name: '會紅的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-check.mjs' },
+  ]));
+  const r = run(HL, '被停掉的');
+  if (pre(marks().includes('printed-x') && !marks().includes('finished'), `前置：被停掉的探針印了 ✗、沒撐到總結行就被停掉（探針痕跡：${marks().join(',')}）`)) {
+    const closing = ledger().filter((e) => e.name === '被停掉的' && e.event === 'done').pop();
+    yes(closing && closing.result === 'no-result' && /沒跑完/.test(closing.reason || ''), `H 帳本記成 no-result、理由寫沒跑完（實得 ${closing ? `${closing.result}／${closing.reason}` : '沒有那一筆'}）——不是 red`);
+    yes(r.code === 1 && /✗ 被停掉的：沒跑完（沒有最後那一行總結）——沒有結果/.test(r.out) && !/✓ 被停掉的：紅了/.test(r.out), `H 輸出寫明沒跑完、沒有寫成紅了（實得 ${r.code}）`, r.out.slice(-300));
+    // 反向：同一份清單裡跑到底的「會紅的」照樣記成 red
+    const r2 = run(HL, '會紅的');
+    const c2 = ledger().filter((e) => e.name === '會紅的' && e.event === 'done').pop();
+    yes(r2.code === 0 && c2 && c2.result === 'red', `H 反向：跑到底的「會紅的」照樣記成 red（實得 ${c2 ? c2.result : '沒有那一筆'}）`, r2.out.slice(-300));
   }
 }
 
