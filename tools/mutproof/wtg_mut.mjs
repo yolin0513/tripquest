@@ -14,13 +14,13 @@ const FILES = ['scripts/run-affected.mjs', 'scripts/worktree-guard.mjs', 'script
 const MUTS = [
   { name: 'M0 不改（基準）', file: null, expectRed: [] },
   { name: 'M1 比對永遠回空', file: 'scripts/worktree-guard.mjs', find: 'const out = [];\n  for (const [p, a] of after)', repl: 'const out = []; return out;\n  for (const [p, a] of after)',
-    expectRed: ['測試改了進版控的 README.md', '測試丟下沒被擋掉的新檔', '開跑前就改過的 CLAUDE.md'] },
+    expectRed: ['測試改了進版控的 zz-fixture-a.txt', '測試丟下沒被擋掉的新檔', '開跑前就改過的 zz-fixture-b.txt'] },
   { name: 'M2 run-affected 不看比對結果', file: 'scripts/run-affected.mjs', find: '    if (touched.length) {', repl: '    if (false) {',
-    expectRed: ['測試改了進版控的 README.md', '測試丟下沒被擋掉的新檔', '開跑前就改過的 CLAUDE.md'] },
+    expectRed: ['測試改了進版控的 zz-fixture-a.txt', '測試丟下沒被擋掉的新檔', '開跑前就改過的 zz-fixture-b.txt'] },
   { name: 'M3 不看沒進版控的新檔', file: 'scripts/worktree-guard.mjs', find: "untracked = 'all' } = {}", repl: "untracked = 'no' } = {}",
     expectRed: ['測試丟下沒被擋掉的新檔'] },
   { name: 'M4 開跑前就改過的檔不比雜湊', file: 'scripts/worktree-guard.mjs', find: 'else if (b.hash !== a.hash)', repl: 'else if (false)',
-    expectRed: ['開跑前就改過的 CLAUDE.md'] },
+    expectRed: ['開跑前就改過的 zz-fixture-b.txt'] },
   { name: 'M5 拍不到就當成沒改動', file: 'scripts/run-affected.mjs', find: "      process.exit(4);\n", repl: "      return new Map();\n",
     expectRed: ['git 讀不到'] },
 ];

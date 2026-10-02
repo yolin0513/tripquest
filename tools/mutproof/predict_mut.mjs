@@ -17,7 +17,7 @@ const MUTS = [
   { name: 'M3 拿掉「連續 3 次超過預估」', file: 'scripts/predict.mjs', find: 'if (last3.length === 3 && last3.every', repl: 'if (false && last3.every', expect: ['P5 連續 3 次', 'P5 預測法要改時', 'C5 '] },
   { name: 'M4 拿掉「常規卻超過 600 秒沒拿許可」', file: 'scripts/predict.mjs', find: '  if (crossed) return', repl: '  if (false) return', expect: ['P6 預估常規'] },
   { name: 'M5 不分預測法版本', file: 'scripts/predict.mjs', find: "history.filter((e) => e.version === version && typeof e.actualSec === 'number')", repl: "history.filter((e) => typeof e.actualSec === 'number')", expect: ['P7 舊版'] },
-  { name: 'M6 一律當重負載', file: 'scripts/predict.mjs', find: "return { heavy: false, reason: `預估", repl: "return { heavy: true, reason: `預估", expect: ['P2 ', 'P4 反向', 'C3 '] },
+  { name: 'M6 一律當重負載', file: 'scripts/predict.mjs', find: "return { heavy: false, reason: `預估", repl: "return { heavy: true, reason: `預估", expect: ['P2 ', 'P4 反向', 'P9 反向', 'C3 '] },   // P9 的兩條反向（常規）也該紅
   // 執行器在拍「跑完後」之前就寫了 tools/test-times.json → 工作區守衛把它算成測試動到的檔 → C2、C3 回 3
   { name: 'M8 先寫耗時、再拍工作區', file: 'scripts/run-affected.mjs', find: '    const touched = changesBetween(before, shot(`${name} 跑完後`));',
     repl: "    try { saveTimes(ROOT, { ...tbl, [name]: { sec: 0, at: 'x' } }); } catch (e) { void e; }\n    const touched = changesBetween(before, shot(`${name} 跑完後`));", expect: ['C2 ', 'C3 '] },

@@ -14,11 +14,11 @@ const COPY = path.join(REPO, '.logs', 'to-mut');
 const MUTS = [
   { name: 'T0 不改（基準，worktreeguardtest）', test: 'scripts/worktreeguardtest.mjs', expect: [] },
   { name: 'T0b 不改（基準，mutatetest）', test: 'scripts/mutatetest.mjs', expect: [] },
-  { name: 'T1 逾時時不殺程序樹', test: 'scripts/worktreeguardtest.mjs', file: 'scripts/run-timeout.mjs',
-    find: "if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });",
-    repl: "if (process.platform === 'win32') void 0;", expect: ['卡住的測試 → 回 7'] },
-  { name: 'T1x 只殺直接的子程序（不加 /T）', test: 'scripts/worktreeguardtest.mjs', file: 'scripts/run-timeout.mjs',
-    find: "spawnSync('taskkill', ['/PID', String(pid), '/T', '/F']", repl: "spawnSync('taskkill', ['/PID', String(pid), '/F']", expect: [] },   // 等價突變（實測）：這台 Windows 上子程序結束時孫程序跟著被收掉，/T 有沒有加結果一樣；/T 留著當保險
+  { name: 'T1 逾時時什麼都不殺', test: 'scripts/worktreeguardtest.mjs', file: 'scripts/run-timeout.mjs',
+    find: '  for (const v of victims) kill(v);', repl: '  void victims;', expect: ['卡住的測試 → 回 7'] },
+  // 等價突變（2026-10-02 實測過舊版 /T 的同一件事）：這台 Windows 上 node 的子程序在父程序結束時跟著被收掉，只殺 root 結果一樣
+  { name: 'T1x 只殺 root、不殺子孫', test: 'scripts/worktreeguardtest.mjs', file: 'scripts/run-timeout.mjs',
+    find: "const victims = [pid, ...(tree || []).filter((p) => KILLABLE.test(p.name || '')).map((p) => p.pid)];", repl: 'const victims = [pid];', expect: [] },
   { name: 'T2 run-affected 不設時限', test: 'scripts/worktreeguardtest.mjs', file: 'scripts/run-affected.mjs',
     find: 'timeoutMs: timeoutSec * 1000 });', repl: 'timeoutMs: 0 });', expect: ['卡住的測試 → 回 7'] },
   { name: 'T3 逾時照樣記成沒紅', test: 'scripts/mutatetest.mjs', file: 'scripts/mutate.mjs',
