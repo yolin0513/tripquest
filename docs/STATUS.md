@@ -6,9 +6,11 @@
 ## 目前進行中／交接（給下一個接手的 Session）
 
 **2026-10-02 進行中（Dispatch 排的順序：v11.3 工單之前先擋「測試寫進進版控的檔」與 mutate 直接改工作區）**
-- **下一個時段的順序（Dispatch 2026-10-02 晚定稿；等放行，不自己開）**：
-  ① `pushgatetest` → 推本機那個 pushgatetest commit（`14f5ed8`，每次 rebase 後雜湊會變，認訊息「pushgatetest：3 處裸寫的 bash」）。
-  ② **改 `killTree` 用 Job Object＋逐一計數改成直接問 job（一起做）**，驗三件：殺完 job 裡 0 個殘留；job 裡還有程序時必須報出來（反向）；
+- **下一個時段的順序（Dispatch 2026-10-02 晚定稿，七步；等放行，不自己開）**：
+  ① **推送閘鎖定 commit**（見下面「推送閘的競態空檔」的根本修法）：開跑時記下編號、要求 HEAD 就在 main 上，自查四個 git 指令、推送、第三關
+     全用同一個編號；pushgatetest 加「自查之後才多出一個 commit」情境（拿掉鎖定時必須紅）。
+  ② `pushgatetest`（一次驗到 ① 的新修法與卡著的 commit）→ 推本機那個 pushgatetest commit（雜湊每次 rebase 後會變，認訊息「pushgatetest：3 處裸寫的 bash」）。
+  ③ **改 `killTree` 用 Job Object**（逐一計數問 job 拆到 ④），驗三件：殺完 job 裡 0 個殘留；job 裡還有程序時必須報出來（反向）；
      巢狀鏈（bash→bash→node）逐一計數不再少算——拿今天的「計數 0／2、取樣 1／3」當對照，新版要記到正確的數。順手驗「Node 本來就把子程序
      放進關閉時連帶殺的 job」那個推論（若成立：頂層 node 正常結束時孤兒會被收掉，**逾時中止時不會**——我們要守的是後者）。
      job 裡一律殺、不看名稱；`KILLABLE` 降級成 job 外的最後防線，程式旁寫明分工。
@@ -23,10 +25,10 @@
      ActiveProcesses／TotalProcesses）或第 3 類（行程清單），由 jobhelper 定時印出；巢狀鏈拿今天的「計數 0／2、取樣 1／3」當對照。
      要接的地方：`run-timeout.mjs` 的 `runWithTimeout`（run-affected、mutate 都經過它）、`tools/sample-run.mjs`、`workertest`。
      同一步放寬兩處短逾時：worktreeguardtest「單支逾時」3 秒 → 8 秒、mutatetest G 組 2.5 秒 → 6 秒，重跑確認前置條件成立。
-  ③ 逐一計數改成直接問 job＋外部記憶體監看＋程序數即時監看（每 5 秒、連續 3 次越線才停；見「只在某個時點查的護欄」①②）。
-  ④ `proctree_mut`（先複審 P8，再帶 `--accept-review`；排在 ② 之後，因為它驗的正是這套）。
-  ⑤ 5 支重負載突變驅動＋`node tools/mutproof/evtest_mut.mjs .`（第一次會被「需要複審」擋下；新補的逾時也在這時第一次實跑）。
-  ⑥ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對、ev2.sh 的逾時都要到這裡才第一次有真實資料）。
+  ④ 逐一計數改成直接問 job＋外部記憶體監看＋程序數即時監看（每 5 秒、連續 3 次越線才停；見「只在某個時點查的護欄」①②）。
+  ⑤ `proctree_mut`（先複審 P8，再帶 `--accept-review`；排在 ③ 之後，因為它驗的正是這套）。
+  ⑥ 5 支重負載突變驅動＋`node tools/mutproof/evtest_mut.mjs .`（第一次會被「需要複審」擋下；新補的逾時也在這時第一次實跑）。
+  ⑦ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對、ev2.sh 的逾時都要到這裡才第一次有真實資料）。
 - **🔴 推送閘的競態空檔（2026-10-02 晚，StockDiary／MealMate 撞到；本 repo 讀程式確認也有，而且是 MealMate 那種「連報錯都不會」）**：
   `safe-push.sh` 自查掃 `REMOTE..HEAD`（**符號 HEAD，自查跑的那一刻才解**）、推的是 `git push origin main`（**推的那一刻的 main**）、第三關的
   `LOCAL` 在**推完之後**才取 `git rev-parse HEAD`。自查之後多一個 commit：自查沒掃到它、push 把它推上去、第三關拿到的 HEAD 已經含它 → 相等
