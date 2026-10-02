@@ -174,13 +174,28 @@ if (arg('--check')) {
       if (notReached.length) problems.push(`${d}：輸出寫了 alldone，卻還有沒輪到的：${notReached.join('、')}`);
     }
   }
+  // 真正的兩個來源（Dispatch 2026-10-02）：驅動在跑的當下寫的 driver-progress.log vs 各外殼寫的外殼紀錄。兩邊數字都印，對不上就擋。
+  // 改之前跑的情境（six 那兩段）沒有驅動側紀錄：另外列出，不算錯。
+  const dpF = path.join(EV, 'driver-progress.log');
+  const dp = fs.existsSync(dpF) ? fs.readFileSync(dpF, 'utf8').split('\n').filter(Boolean).map((l) => l.split('\t')) : [];
+  const begun = new Set(dp.filter((x) => x[0] === '開始').map((x) => x[1]));
+  const ended = new Set(dp.filter((x) => x[0] === '結束').map((x) => x[1]));
+  const exited = new Set(shells.filter((l) => /exit=\d+/.test(fs.readFileSync(path.join(EV, `ev2-${l}.shell`), 'utf8'))));
+  const noDriverSide = shells.filter((l) => !begun.has(l));
+  for (const l of ended) if (!exited.has(l)) problems.push(`驅動記了「結束」、外殼紀錄卻沒有 exit=：${l}`);
+  // 被 STOP／killTree 停掉時，外殼來得及寫 exit=、驅動來不及記「結束」——那是被中斷，不擋；只擋「判成跑完、驅動卻沒記結束」
+  const doneSet = new Set(logRows.filter((r) => r.state === '跑完').map((r) => r.label));
+  for (const l of begun) if (doneSet.has(l) && !ended.has(l)) problems.push(`外殼紀錄判成跑完、驅動卻沒記「結束」：${l}`);
   const notYet = list.length - logRows.length;
   const lines = [
     `tools/ev 進度（${new Date().toISOString()}）`,
     `log 那一側（.logs/ev 實際存在的外殼紀錄，清單內 ${logRows.length} 份、清單外 ${extra.length} 份${extra.length ? '：' + extra.map((l) => `${l}${l in EXTRA_OK ? '（登記過：' + EXTRA_OK[l] + '）' : '（沒登記）'}`).join('、') : ''}）：`
       + `${LS.map((s) => `${s} ${lc(s)}`).join('、')}；相加 ${logSum}`,
     `清單那一側：應有 ${list.length} 個；走清單數到有紀錄的 ${listSeen} 個（要＝log 那一側 ${logRows.length}）；沒有紀錄＝還沒跑 ${notYet} 個`,
-    `（「還沒跑」是用應有數減 log 那一側算的，兩者相加必等於應有數——那不是檢查；有在擋的是上面兩側互相核對與下面的 ✗ 項）`,
+    `（「還沒跑」是用應有數減 log 那一側算的，兩者相加必等於應有數——那不是檢查；有在擋的是下面兩個來源的核對與 ✗ 項）`,
+    `兩個來源的核對：驅動側（driver-progress.log）開始 ${begun.size}、結束 ${ended.size}；外殼側有 exit= 的 ${exited.size} 份`
+      + `、其中有驅動側紀錄的 ${[...exited].filter((l) => begun.has(l)).length} 份；判成跑完且有驅動側紀錄的 ${[...doneSet].filter((l) => begun.has(l)).length} 份（都要有驅動側「結束」）；`
+      + `沒有驅動側紀錄（改之前跑的）${noDriverSide.length} 份${noDriverSide.length ? '：' + noDriverSide.join('、') : ''}`,
   ];
   for (const [d, c] of ORDER) lines.push(`  ${d} @ ${c}：${LS.map((s) => `${s.replace(/（.*）/, '')} ${logRows.filter((r) => r.driver === d && r.state === s).length}`).join('、')}、還沒跑 ${list.filter((r) => r.driver === d).length - logRows.filter((r) => r.driver === d).length}`);
   for (const p of problems) lines.push(`✗ ${p}`);
@@ -190,6 +205,6 @@ if (arg('--check')) {
     lines.push(`  ${r.state}｜${r.driver}｜${r.label}${r.exit !== undefined ? `｜exit=${r.exit}` : ''}${ev}`);
   }
   fs.writeFileSync(path.join(EV, 'progress.txt'), lines.join('\n') + '\n');
-  console.log(lines.slice(0, 4 + ORDER.length).concat(problems.map((p) => `✗ ${p}`)).join('\n'));
+  console.log(lines.slice(0, 5 + ORDER.length).concat(problems.map((p) => `✗ ${p}`)).join('\n'));
   process.exitCode = problems.length ? 1 : 0;
 }

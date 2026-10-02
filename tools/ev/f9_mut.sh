@@ -16,7 +16,9 @@ show() {   # $1 標籤
 run() {   # $1 標籤 $2 指令 $3... patch
   local l="$1" c="$2"; shift 2
   seg_skip "$l" && return
+  seg_begin "$l"
   bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1
+  seg_end "$l" $?
   show "$l"
 }
 run f9-base-pg "$PG"

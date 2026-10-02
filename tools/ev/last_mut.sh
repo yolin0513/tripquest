@@ -13,7 +13,7 @@ show() {
   grep -E '^== |^✗|項通過' "$O/ev_$1.log" | grep -v '^✗ 沒有登記' | cut -c1-150
 }
 . "$S/segment.sh"
-run() { local l="$1" c="$2"; shift 2; seg_skip "$l" && return; bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1; show "$l"; }
+run() { local l="$1" c="$2"; shift 2; seg_skip "$l" && return; seg_begin "$l"; bash "$S/ev2.sh" "$l" "$C" "$c" "$@" > "$O/ev2-$l.shell" 2>&1; seg_end "$l" $?; show "$l"; }
 PS=scripts/prepush-scan.mjs; SP=scripts/safe-push.sh; VR=scripts/verified-reg.mjs
 for k in ps_noae ps_noce ps_nopathctl ps_noghnot; do run "last-$k" "$BOTH" $PS=plast_$k.json; done
 for k in sp_p3det sp_p2det; do run "last-$k" "$BOTH" $SP=plast_$k.json; done
