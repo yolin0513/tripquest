@@ -12,6 +12,16 @@
      巢狀鏈（bash→bash→node）逐一計數不再少算——拿今天的「計數 0／2、取樣 1／3」當對照，新版要記到正確的數。順手驗「Node 本來就把子程序
      放進關閉時連帶殺的 job」那個推論（若成立：頂層 node 正常結束時孤兒會被收掉，**逾時中止時不會**——我們要守的是後者）。
      job 裡一律殺、不看名稱；`KILLABLE` 降級成 job 外的最後防線，程式旁寫明分工。
+     **照抄 StockDiary 的做法，不自己重新發明**（它的 repo 裡 `docs/HOWTO_JobObject殺程序樹.md`，對本 repo 唯讀；2026-10-02 已讀）：
+     `jobhelper.ps1 -TargetPid`（建 job、只設 `0x2000`、不設 `0x800`／`0x1000`、印 `JOB-OK`、標準輸入關掉就結束）＋`jobrun.mjs`
+     （先叫協助程序把**自己**放進 job、**等到 `JOB-OK` 才開指令**；建不起來回 97＝情境未成立）；逾時照舊殺 jobrun 那一支即可。
+     驗法照它的 §4：查詢本身的對照、漏一（Git Bash 開的 2 個 sleep：對照剩 2、經 jobrun 剩 0）、漏二（detached：對照剩 1、經 jobrun 剩 0）、
+     cmd.exe 再開 node、正常結束留下的也收掉、回傳碼照傳；突變：不放進 job、順序反過來、准許靜默脫離——三條都要紅。
+     **拿掉 `0x2000` 在本 repo 也是等價突變**（包裝層是 node，Node 自己的 job 會補上）——照 §5.12 寫明理由、不補斷言；本 repo 若有
+     包裝層不是 node 的路徑（例如 `tools/proc-watch.ps1` 那類 PowerShell 直接包），那條就該紅、要重新驗。
+     **本 repo 多一件（StockDiary 沒做）**：逐一計數改成問 job——`QueryInformationJobObject` 第 1 類（BasicAccounting：
+     ActiveProcesses／TotalProcesses）或第 3 類（行程清單），由 jobhelper 定時印出；巢狀鏈拿今天的「計數 0／2、取樣 1／3」當對照。
+     要接的地方：`run-timeout.mjs` 的 `runWithTimeout`（run-affected、mutate 都經過它）、`tools/sample-run.mjs`、`workertest`。
   ③ `proctree_mut`（先複審 P8，再帶 `--accept-review`；排在 ② 之後，因為它驗的正是這套）。
   ④ 5 支重負載突變驅動＋`node tools/mutproof/evtest_mut.mjs .`（第一次會被「需要複審」擋下）。
   ⑤ `tools/ev` 的 f9 之後（`driver-progress.log` 的兩個來源核對要到這裡才第一次有真實資料）。
