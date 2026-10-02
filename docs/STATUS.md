@@ -241,6 +241,12 @@
   ① 找不到中間已結束的子孫；② 找到了但名稱不在白名單的（sleep、grep、sed 這類 coreutils）也不殺。方向：Job Object（開跑時就把
   整棵樹收進一個 job，關閉時連帶殺，不看父程序編號）——Node 沒有內建，要用 PowerShell 編譯一小段 C#（建 job→暫停狀態開程序→
   加進 job→恢復）；MSYS 程序在 job 裡的行為還沒驗。照 §0.6 屬「待驗」，等 Dispatch 排。
+  **可行性實驗（同日，Dispatch 准；`tools/job-feasibility.ps1 -Bash <Git Bash 完整路徑> -Mode terminate|close|rootonly`）**：同一組
+  `( sleep 118 & ) ; sleep 117`。Git Bash（root）、孤兒 sleep 118、直接子程序 sleep 117 **三支 `IsProcessInJob` 都是 True**——Git Bash 開的
+  程序沒有脫離 job；`TerminateJobObject` 之後殘留 0；不呼叫 Terminate、直接關 job（KILL_ON_JOB_CLOSE，對應這支自己死掉）殘留 0；
+  對照組（不用 job、只殺 root）殘留 2——檢查分得出來。第一次跑「情境成立」誤判成 False：PowerShell 5.1 單一物件的 `.Count` 不可靠，
+  包 `@()` 修好、加合成對照。**結論：可行。** 改法（Dispatch 定）：job 裡面的一律殺、不看名稱；`KILLABLE` 保留、降級成「job 外萬一認到的」
+  最後防線（那時歸屬未知，猜名稱才對）——程式旁要寫明這個分工。排在時段的 pushgatetest 之後、proctree_mut 之前。
 - **輸出格式是判定邏輯的一部分（2026-10-02）**：判定「紅在哪一條」錨定在行首（`startsWith('✗ ')`）還不夠——測試附帶的證據行如果
   自己剛好以 `✗ ` 開頭，照樣會被當成一條紅（上一輪 G1、M6 的「預期外」就是它）。要同時確保**只有判定行會出現在行首位置**：
   `yes()` 附帶的證據每一行都縮排。改輸出格式的人要知道它會改到判定。
