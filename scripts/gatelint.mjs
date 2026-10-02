@@ -272,7 +272,9 @@ export function run({ root = ROOT, kinds = KINDS, exceptions = EXCEPTIONS, files
   });
   exceptions.forEach((e, i) => { if (!used.has(i)) broken.push(`登記的例外對不到任何一行（${e.file}／${e.kind}：${e.match}）`); });
   log(`登記的例外：${exceptions.length} 條，用到 ${used.size} 條；命中共 ${all.length}，沒登記的 ${bad.length}`);
-  for (const h of bad) log(`   [${h.kind}] ${h.file}:${h.n}  ${h.text.slice(0, 140)}`);
+  // 判定與證據分行（2026-10-02，JLPT 撞出來的第三層）：被抓到的原始碼放下一行、縮排 6 格，不跟判定行擠在同一行——
+  // 否則別支檔被抓到的原始碼剛好含某段字，「判定行裡要出現那段字」的要求會被碰巧滿足
+  for (const h of bad) { log(`   [${h.kind}] ${h.file}:${h.n}`); log(`      ${h.text.slice(0, 140)}`); }
 
   // 第二部分：跳脫掃描。先跑對照組（兩種位置 × 壞的要抓到、對的不能抓到），再跑真實原文，最後掃全部腳本
   log('— 跳脫掃描（scripts/ 底下全部腳本）—');
@@ -323,7 +325,7 @@ export function run({ root = ROOT, kinds = KINDS, exceptions = EXCEPTIONS, files
   });
   ESC_KNOWN.forEach((k, i) => { if (!knownUsed.has(i)) broken.push(`跳脫掃描登記的已知項對不到任何一行（${k.file}／${k.kind}）`); });
   for (const k of ESC_KNOWN.filter((k) => k.state === '待修')) log(`   已知、待修（未授權）：[${k.kind}] ${k.file}——${k.why}`);
-  for (const h of escBad) log(`   [${h.kind}] ${h.file}:${h.n}  ${h.text.slice(0, 140)}`);
+  for (const h of escBad) { log(`   [${h.kind}] ${h.file}:${h.n}`); log(`      ${h.text.slice(0, 140)}`); }
   bad.push(...escBad);
 
   if (broken.length) { log(`擋下：檢查器壞了（${broken.join('、')}）`); return 4; }
