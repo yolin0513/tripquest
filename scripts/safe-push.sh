@@ -12,6 +12,12 @@
 #     跟 .logs/pushgate.verified 登記的雜湊對不上（或沒有登記）——不推。新 clone 一律要先跑 npm run pushgatetest
 #   6 F8 的驗法沒驗過：這次要推的 commit 動到 build-places.mjs／importshots.mjs／f8verify.mjs／verified-reg.mjs，而它們在 HEAD 裡的版本
 #     跟 .logs/f8.verified 登記的對不上（或沒有登記）——不推。先跑 npm run f8verify。沒動到就不看這一關
+#   7 鎖定不成立：HEAD 不在 main 上（不推）；或推完發現 HEAD 在自查之後又多了 commit（推上去的只有自查過的那一個，多出來的沒推、也沒掃）
+#
+# 鎖定 commit（2026-10-03，StockDiary／MealMate／JLPT 撞到的競態空檔）：一開始就記下 PIN＝HEAD 的 commit 編號，之後**每一步都用 PIN**——
+# 閘門檔與 F8 的雜湊、範圍、自查（它對同一個範圍下四個 git 指令）、推送（PIN:refs/heads/main）、第三關（遠端要等於 PIN）。
+# 原本：自查掃符號 HEAD（跑的那一刻才解）、推的是推送那一刻的 main、第三關推完才取 HEAD——自查之後多一個 commit 會被推上去，
+# 而且第三關取到的 HEAD 已經含它，兩邊相等、不報錯。HEAD 不在 main 上時，「掃 HEAD、推 main」根本是兩個東西，所以先擋。
 #
 # 為什麼長這樣（2026-09-23 實測踩到的）：
 # - 不接管線。管線的回傳值是最後一個指令的：`git push ... | tail -1` 在 push 失敗時照樣回 0，後面的線上確認
@@ -25,6 +31,16 @@ cd "$ROOT"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# 鎖定：HEAD 要在 main 上（推的是 main，掃的要是同一個東西），然後記下 PIN；之後一律用 PIN，不再讀 HEAD／main
+if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then BRANCH="（detached）"; fi
+if [ "$BRANCH" != "main" ]; then
+  echo "✗ HEAD 不在 main 上（現在是 $BRANCH）——推的是 main、掃的是 HEAD，兩邊不是同一個東西"; echo "擋下：鎖定不成立（HEAD 不在 main 上）"; exit 7
+fi
+if ! PIN="$(git rev-parse -q --verify "HEAD^{commit}")"; then
+  echo "✗ 取不到 HEAD 的 commit 編號"; echo "擋下：檢查器壞了（鎖定）"; exit 4
+fi
+echo "鎖定：$PIN（之後的雜湊、範圍、自查、推送、比對都用這個編號）"
+
 # 閘門本身驗過了沒（共用慣例 v9 §5.15：「改過就要重跑」能做成機器擋的就不要靠人記得）：
 # pushgatetest 全部通過時把下面四支的雜湊寫進 .logs/pushgate.verified（不進版控、驗法失敗就刪）；沒有或對不上 → 回 5，不推。
 REG=".logs/pushgate.verified"   # 不進版控：換一台機器 clone 下來就沒有，第一次推送前一定要先跑 pushgatetest
@@ -35,7 +51,7 @@ fi
 # 兩邊都要等於登記：工作區那一份（現在正在執行的就是它）、HEAD 裡那一份（推出去的是它；F9：改過的版本已經 commit、
 # 工作區又改回原樣，照樣要擋）。登記檔一行一支「雜湊 路徑」，路徑要整欄相等才算（不用子字串比對：說明行或別的路徑剛好含有它時會對錯行）。
 reg_want() { local h p; WANT=""; while read -r h p; do if [ "$p" = "$2" ]; then WANT="$h"; fi; done < "$1"; }
-head_hash() { if HAVE="$(git rev-parse -q --verify "HEAD:$1" 2>/dev/null)"; then :; else HAVE="HEAD 裡沒有"; fi; }
+head_hash() { if HAVE="$(git rev-parse -q --verify "$PIN:$1" 2>/dev/null)"; then :; else HAVE="HEAD 裡沒有"; fi; }
 for f in scripts/safe-push.sh scripts/prepush-scan.mjs scripts/pushgatetest.mjs scripts/verified-reg.mjs; do
   reg_want "$REG" "$f"; head_hash "$f"
   if WORK="$(git hash-object -- "$f" 2>/dev/null)"; then :; else WORK="工作區沒有"; fi
@@ -58,8 +74,8 @@ fi
 if [ -n "$REMOTE" ] && ! git cat-file -e "$REMOTE^{commit}" 2>/dev/null; then
   echo "✗ 遠端的 main（$REMOTE）本機沒有、也抓不下來——無法決定要檢查哪些 commit"; echo "擋下：檢查器壞了（範圍）"; exit 4
 fi
-RANGE="${REMOTE:+$REMOTE..}HEAD"
-[ -z "$REMOTE" ] && RANGE="HEAD"
+RANGE="${REMOTE:+$REMOTE..}$PIN"
+[ -z "$REMOTE" ] && RANGE="$PIN"
 
 # F8 的建置腳本與它的驗法（F9）：這次要推的 commit（每一個，不只兩端）動到其中任何一支，才看 .logs/f8.verified；
 # 看的時候整組都要對得上 HEAD 裡的版本。驗法要跑四五分鐘、還會開瀏覽器，沒動到就不擋。
@@ -104,16 +120,22 @@ if ! grep -qx "通過" "$TMP/check"; then
   echo "✗ 公開前自查回 0，卻沒有印出「通過」——它可能根本沒有跑"; echo "擋下：檢查器壞了（自查沒有跑）"; exit 4
 fi
 
-if ! git push origin main > "$TMP/push" 2>&1; then
+# 推的是 PIN（自查掃過的那一個），不是推送那一刻的 main
+if ! git push origin "$PIN:refs/heads/main" > "$TMP/push" 2>&1; then
   cat "$TMP/push"; echo "✗ git push 失敗——停"; exit 2
 fi
 tail -n 1 "$TMP/push"
-LOCAL="$(git rev-parse HEAD)"
 if ! git ls-remote origin refs/heads/main > "$TMP/after" 2> "$TMP/after.err"; then
   cat "$TMP/after.err"; echo "✗ 推完了但讀不到遠端，無法確認有沒有推上去——停"; exit 3
 fi
 AFTER="$(cut -f1 < "$TMP/after")"
-if [ "$LOCAL" != "$AFTER" ]; then
-  echo "✗ 推完了但遠端（${AFTER:-讀不到}）不等於本機（$LOCAL）——停"; exit 3
+if [ "$PIN" != "$AFTER" ]; then
+  echo "✗ 推完了但遠端（${AFTER:-讀不到}）不等於本機（$PIN）——停"; exit 3
 fi
-echo "✓ 已推送，遠端 main ＝ 本機 HEAD（$LOCAL）"
+# 自查之後 HEAD 又動了：推上去的只有 PIN；多出來的沒推、也沒掃——報出來、非 0，要重跑推送閘
+NOW="$(git rev-parse -q --verify "HEAD^{commit}" || echo 取不到)"
+if [ "$NOW" != "$PIN" ]; then
+  echo "✗ 已推送自查過的 $PIN，但 HEAD 在自查之後變成 $NOW——之後多出來的沒推、也沒掃，重跑推送閘"
+  echo "擋下：鎖定不成立（自查之後 HEAD 又動了）"; exit 7
+fi
+echo "✓ 已推送，遠端 main ＝ 本機 HEAD（$PIN）"

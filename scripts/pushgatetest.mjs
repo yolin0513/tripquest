@@ -43,6 +43,10 @@
 //   Q1 git log 失敗（列不出動到的檔）→ 4「動到的檔」；Q2 遠端的 commit 本機沒有、fetch 又失敗 → 4「範圍」；
 //   Q4 推完那次 ls-remote 失敗 → 3「讀不到遠端」；Q5 hash-object 失敗 → 5、工作區取不到；Q6 rev-parse 失敗 → 5、HEAD 取不到；
 //   Q7 F8 那一關的 rev-parse 失敗 → 6。V5 regAction（驗法跑完登記怎麼辦）；V6 登記前的檢查遇到 git 取不到。
+//   （2026-10-03 鎖定 commit 之後，閘門第 1 次 rev-parse 是取 PIN：Q6 改成第 2 次起失敗、Q7 改成第 6 次；Q8＝第 1 次就失敗 → 4「鎖定」）
+//   W 自查之後才多出一個帶命中的 commit（假 git 在 push 之前偷加）→ 遠端＝自查過的 PIN、偷加的不在遠端、回 7「自查之後 HEAD 又動了」
+//   W2 HEAD 不在 main 上、main 上有帶命中沒掃過的 commit → 回 7「HEAD 不在 main 上」、遠端沒被動到
+//   PUSHGATE_ONLY=W,W2 只跑指定情境（不登記；突變驗證用——在 repo 的暫存 clone 裡跑，失敗時刪的是 clone 的登記）
 //   （抓不到遠端＝G，用不存在的網址，本來就是真的失敗）
 //   V1–V4 登記前的檢查（verified-reg.mjs）：乾淨 → 可登記；工作區有沒 commit 的改動、還沒 commit、工作區沒有 → 不登記、
 //     點名那一支、舊的登記一起刪掉
@@ -70,8 +74,10 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REG_REAL = path.join(ROOT, '.logs', 'pushgate.verified');   // 真的 repo 的登記（不進版控）
 // 情境順序（見檔尾）。放最上層：檔尾「有失敗就刪登記」那一行也要讀它（2026-09-24 放在 try 裡面時，那一行當掉、登記留著）
 const order = process.env.PUSHGATE_ORDER || '';
+const ONLY = (process.env.PUSHGATE_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
+const partialRun = !!order || ONLY.length > 0;   // 換順序或只跑一部分：不登記
 // 完整跑的時候，一開始就先刪登記、全過才在最後寫：中途不管哪裡當掉（包括檔尾那幾行自己），都不會留下舊的登記
-if (!order) console.log(`  開始前：.logs/pushgate.verified ${dropReg(REG_REAL)}（全過才會重寫）`);
+if (!partialRun) console.log(`  開始前：.logs/pushgate.verified ${dropReg(REG_REAL)}（全過才會重寫）`);
 let pass = 0;
 const ok = (m) => { pass++; console.log('✓ ' + m); };
 const fail = (m, x) => { console.log('✗ ' + m + (x ? '\n   ' + x : '')); process.exitCode = 1; };
@@ -223,6 +229,9 @@ try {
   // 每個情境開始前都回到同一個起點（情境之間互不污染，順序換了結果也不變——共用慣例 v9 §5.11 第四層）
   const reset = () => {
     for (const h of ['pre-receive', 'post-receive']) { const p = path.join(bare, 'hooks', h); if (fs.existsSync(p)) fs.unlinkSync(p); }
+    // W2 會切到別的分支：先回 main、刪掉別的分支，否則 reset --hard 只會重設那條分支、main 留著上一個情境的 commit
+    sh('git checkout -q -f main');
+    for (const b of sh('git for-each-ref --format=%(refname:short) refs/heads').split('\n').map((x) => x.trim()).filter((x) => x && x !== 'main')) sh(`git branch -q -D ${b}`);
     sh(`git remote set-url origin "${bare}"`);
     sh(`git --git-dir="${bare}" update-ref refs/heads/main ${BASE}`);
     sh(`git reset -q --hard ${BASE}`);
@@ -269,6 +278,11 @@ try {
     '  if [ "$skip" = 1 ]; then skip=0; continue; fi',
     '  case "$a" in -c|-C) skip=1 ;; -*) ;; *) sub="$a"; break ;; esac',
     'done',
+    '# W：推送那一刻之前偷加一個帶命中的 commit（落在「自查結束之後、推送之前」——鎖定 commit 要擋的那個空檔）',
+    'if [ -n "$FAKEGIT_INJECT" ] && [ "$sub" = "push" ]; then',
+    '  printf "%s\\n" "$FAKEGIT_INJECT" > injected.txt && "$FAKEGIT_REAL" add injected.txt && "$FAKEGIT_REAL" commit -q -m injected || { echo "假 git：偷加 commit 失敗" >&2; exit 1; }',
+    '  n=1; if [ -f "$FAKEGIT_COUNT" ]; then n=$(( $(cat "$FAKEGIT_COUNT") + 1 )); fi; echo "$n" > "$FAKEGIT_COUNT"',
+    'fi',
     'if [ -n "$FAKEGIT_FAIL" ] && [ "$sub" = "$FAKEGIT_FAIL" ]; then',
     '  n=1; if [ -f "$FAKEGIT_COUNT" ]; then n=$(( $(cat "$FAKEGIT_COUNT") + 1 )); fi',
     '  echo "$n" > "$FAKEGIT_COUNT"',
@@ -284,6 +298,7 @@ try {
     env[k] = FAKEBIN + path.delimiter + env[k];
     return { ...env, FAKEGIT_REAL: REALGIT, FAKEGIT_FAIL: sub, FAKEGIT_NTH: String(nth), FAKEGIT_COUNT: COUNT };
   };
+  const injectEnv = (text) => ({ ...fakeEnv(''), FAKEGIT_INJECT: text });
   const calls = () => (fs.existsSync(COUNT) ? Number(fs.readFileSync(COUNT, 'utf8').trim()) : 0);
   {
     // 假 git 自己的對照組：bash 找到的是它；指定的子指令失敗（前面帶 -c 也認得出）；不相干的照常、輸出跟真的一樣；第 n 次才失敗
@@ -723,22 +738,59 @@ try {
         `Q5 算不出閘門檔在工作區的雜湊 → 回 5、點名 safe-push.sh、寫明工作區取不到（實得 ${r.code}）`, r.out.slice(-300));
       untouched('Q5');
     }],
-    ['Q6', () => {
+    ['Q8', () => {
+      // 鎖定那一步取不到 HEAD 的 commit 編號（第 1 次 rev-parse）→ 停在「鎖定」，不是往下用空的 PIN
       commit('d.txt', 'clean2\n', 'clean2');
       const r = gate(fakeEnv('rev-parse'));
+      yes(calls() >= 1 && r.code === 4 && /^擋下：檢查器壞了（鎖定）/m.test(R(r.out)),
+        `Q8 取不到 HEAD 的 commit 編號 → 回 4、「鎖定」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('Q8');
+    }],
+    ['Q6', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      // 第 1 次 rev-parse 是鎖定（照常），第 2 次起是閘門檔
+      const r = gate(fakeEnv('rev-parse', 2));
       yes(calls() >= 1 && r.code === 5 && /^✗ scripts\/safe-push\.sh 改過了（.*HEAD 裡是 HEAD 裡沒有、/m.test(R(r.out)),
         `Q6 取不到閘門檔在 HEAD 裡的雜湊 → 回 5、寫明 HEAD 取不到（實得 ${r.code}）`, r.out.slice(-300));
       untouched('Q6');
     }],
     ['Q7', () => {
-      // F8 那一關取不到 HEAD 裡的雜湊：前 4 次 rev-parse 是閘門檔（照常），第 5 次是 F8 的第一支
+      // F8 那一關取不到 HEAD 裡的雜湊：第 1 次 rev-parse 是鎖定、第 2～5 次是閘門檔（照常），第 6 次是 F8 的第一支
       touch('build-places.mjs', 'q7');
       f8Reg();
-      const r = gate(fakeEnv('rev-parse', 5));
-      yes(calls() >= 5, `Q7 前置：假 git 攔到第 5 次 rev-parse（${calls()} 次）`);
+      const r = gate(fakeEnv('rev-parse', 6));
+      yes(calls() >= 6, `Q7 前置：假 git 攔到第 6 次 rev-parse（${calls()} 次）`);
       yes(r.code === 6 && WHO.f8File('build-places.mjs').test(R(r.out)) && /HEAD 裡是 HEAD 裡沒有）/.test(R(r.out)),
         `Q7 F8 那一關取不到 HEAD 裡的雜湊 → 回 6、點名 build-places、寫明 HEAD 取不到（實得 ${r.code}）`, r.out.slice(-300));
       untouched('Q7');
+    }],
+    // ---- 鎖定 commit（2026-10-03）：自查之後才多出一個 commit、HEAD 不在 main 上 ----
+    ['W', () => {
+      // 假 git 在推送那一刻之前偷加一個帶命中的 commit（落在「自查結束之後、推送之前」）。鎖定之前：推的是 main → 那個沒掃過的 commit 上了遠端，
+      // 而第三關推完才取 HEAD、兩邊相等，回 0、沒有任何訊號（MealMate 那種）。鎖定之後：推的是自查過的 PIN，偷加的沒上去，回 7 報出來。
+      commit('d.txt', 'clean2\n', 'clean2');
+      const PIN = localHead();
+      const r = gate(injectEnv('injected ' + fakeMail()));
+      const now = localHead();
+      yes(calls() >= 1 && now !== PIN && sh('git log -1 --format=%s').trim() === 'injected',
+        `W 前置：假 git 在推送前偷加了一個帶命中的 commit（HEAD ${PIN.slice(0, 7)} → ${now.slice(0, 7)}）`);
+      yes(remoteHead() === PIN, `W 遠端＝自查過的那一個（${PIN.slice(0, 7)}），不是偷加之後的（實得 ${remoteHead().slice(0, 7)}）`, r.out.slice(-300));
+      yes(spawnSync('git', ['merge-base', '--is-ancestor', now, remoteHead()], { cwd: work }).status !== 0, 'W 偷加的那個帶命中的 commit 不在遠端歷史裡');
+      yes(r.code === 7 && /^擋下：鎖定不成立（自查之後 HEAD 又動了）/m.test(R(r.out)),
+        `W 報出來：回 7、「自查之後 HEAD 又動了」（實得 ${r.code}）`, r.out.slice(-300));
+    }],
+    ['W2', () => {
+      // main 上有一個帶命中、沒掃過的 commit；HEAD 在另一條分支、是乾淨的。鎖定之前：掃 HEAD（乾淨）、推 main（帶命中）→ 命中上了遠端才回 3
+      commit('e.txt', 'x ' + fakeMail() + '\n', 'hit-on-main');
+      const MAINHIT = localHead();
+      sh(`git checkout -q -b side ${BASE}`);
+      commit('d.txt', 'clean2\n', 'clean2');
+      yes(sh('git symbolic-ref --short HEAD').trim() === 'side' && sh('git rev-parse main').trim() === MAINHIT,
+        'W2 前置：HEAD 在 side、main 上有一個帶命中的 commit');
+      const r = gate();
+      yes(r.code === 7 && /^擋下：鎖定不成立（HEAD 不在 main 上）/m.test(R(r.out)),
+        `W2 HEAD 不在 main 上 → 回 7、「HEAD 不在 main 上」（實得 ${r.code}）`, r.out.slice(-300));
+      yes(remoteHead() === BASE, `W2 遠端沒被動到（main 上那個帶命中的沒被推上去；實得 ${remoteHead().slice(0, 7)}）`);
     }],
     ['V5', () => {
       // 驗法跑完登記怎麼辦（純函式）：失敗一律刪，只跑一部分時也一樣
@@ -786,13 +838,19 @@ try {
     const rnd = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
     for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
   }
+  // PUSHGATE_ONLY=W,W2：只跑指定的情境（給突變驗證用，幾十秒；只跑一部分時不登記，跟換順序一樣）
+  if (ONLY.length) {
+    const unknown = ONLY.filter((id) => !SCENARIOS.some(([x]) => x === id));
+    if (unknown.length) { fail(`PUSHGATE_ONLY 裡有不存在的情境：${unknown.join('、')}`); throw new Error('PUSHGATE_ONLY'); }
+    list = list.filter(([id]) => ONLY.includes(id));
+  }
   console.log('  情境順序：' + list.map(([id]) => id).join(' '));
   for (const [id, fn] of list) { reset(); fn(); }
 
   // 全部通過才登記被驗程式的雜湊（safe-push.sh 推送前比對，對不上就不推）。有 PUSHGATE_ORDER 時不登記：那是驗順序用的額外一跑。
   // 登記在不進版控的 .logs/：換一台機器 clone 下來就沒有登記，第一次推送前一定要先跑這支（新環境正是最需要重跑的時候）。
   // 登記的是 HEAD 裡的版本；工作區那幾支跟 HEAD 不一樣（有沒 commit 的改動）就不登記——驗到的是工作區那一份，推出去的是 HEAD（F9）。
-  if (regAction({ failed: !!process.exitCode, partial: !!order }) === 'write') {
+  if (regAction({ failed: !!process.exitCode, partial: partialRun }) === 'write') {
     const header = '# 推送閘的驗法（pushgatetest）全部通過時登記的雜湊（HEAD 裡的版本）。safe-push.sh 推送前比對，對不上就不推（共用慣例 v9 §5.15）。\n'
       + '# 不進版控。改了下面任何一支、或換了一台機器，就 commit 之後重跑 npm run pushgatetest；全部通過才會寫這個檔，有任何失敗就刪掉它。\n';
     const w = writeReg(ROOT, REG_REAL, GATE.map((f) => 'scripts/' + f), header);
@@ -808,5 +866,5 @@ try {
 }
 // 有任何失敗（含例外）就刪掉登記，不只是「不更新」：閘門檔沒動、驗法卻失敗，最可能是執行環境變了——那正是該停下的時候。
 // 判斷在 regAction（純函式，情境 V5 驗）；這一行只是照判斷執行（F10：已知限制，見證據檔的「常設／一次性」）
-if (regAction({ failed: !!process.exitCode, partial: !!order }) === 'drop') console.log(`  有失敗：.logs/pushgate.verified ${dropReg(REG_REAL)}（下次推送會被擋，直到驗法重新全過）`);
+if (regAction({ failed: !!process.exitCode, partial: partialRun }) === 'drop') console.log(`  有失敗：.logs/pushgate.verified ${dropReg(REG_REAL)}（下次推送會被擋，直到驗法重新全過）`);
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));
