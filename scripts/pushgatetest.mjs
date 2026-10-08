@@ -46,6 +46,7 @@
 //   （2026-10-03 鎖定 commit 之後，閘門第 1 次 rev-parse 是取 PIN：Q6 改成第 2 次起失敗、Q7 改成第 6 次；Q8＝第 1 次就失敗 → 4「鎖定」）
 //   W 自查之後才多出一個帶命中的 commit（假 git 在 push 之前偷加）→ 遠端＝自查過的 PIN、偷加的不在遠端、回 7「自查之後 HEAD 又動了」
 //   W2 HEAD 不在 main 上、main 上有帶命中沒掃過的 commit → 回 7「HEAD 不在 main 上」、遠端沒被動到
+//   X 自查崩潰（結束碼 1，跟命中同號）→ 回 4「檢查器壞了（自查異常結束）」，不是「有命中」（2026-10-08）
 //   N2 正常內容不能被誤擋：repo 歷史裡那個「-U0 與 numstat 對空白行對齊不同」的真 commit，掃起來要通過（2026-10-08）
 //   RS1–RS6／RP1–RP4／RU1 每個自查分支一個真 commit 經推送閘入口 → 回 1、點名那一類；RE1–RE2 email 放行規則各一個 → 回 0、推上去（2026-10-08，§5.20：
 //   原本只有 email 走過真實入口；突變「分支＋它的合成樣本一起拿掉」時合成對照組照樣全綠，只有這些情境會紅——驗證紀錄見 STATUS）
@@ -342,6 +343,18 @@ try {
       commit('c.txt', 'clean\n', 'clean');
       const r = gate();
       yes(r.code === 0 && /^✓ 已推送/m.test(r.out) && remoteHead() === localHead(), 'A 乾淨 → 回 0、已推送、遠端＝本機', r.out.slice(-300));
+    }],
+    ['X', () => {
+      // 自查崩潰（例外沒接住）時結束碼是 1，跟「有命中」同號（2026-10-08：驗證 13 個分支情境時，突變包裝讓自查一載入就崩潰，13 條全部「回 1」、
+      // 看起來全紅，其實一個都沒驗到）。閘門要分得出來：回 1 而且有「擋下：有命中」那一句才是命中；沒有就是檢查器壞了（回 4）。
+      fs.writeFileSync(path.join(work, 'scripts', 'prepush-scan.mjs'), "throw new Error('pushgatetest 情境 X：故意在載入時崩潰');\n");
+      sh('git add scripts/prepush-scan.mjs'); sh('git commit -q -m crash-scan');
+      fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));   // 登記成這一份，閘門才會真的去跑它（不然停在回 5）
+      const r = gate();
+      yes(/Error: pushgatetest 情境 X：故意在載入時崩潰/.test(r.out), 'X 前置：自查真的崩潰了（輸出裡有那個例外）', r.out.slice(-300));
+      yes(r.code === 4 && WHO.broken('自查異常結束').test(R(r.out)) && !WHO.hit.test(R(r.out)) && !/^✗ 公開前自查有命中/m.test(R(r.out)),
+        `X 自查崩潰（結束碼 1）→ 回 4、「檢查器壞了（自查異常結束）」，不是「有命中」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('X');
     }],
     ['N2', () => {
       // 正常內容不能被誤擋（§5.14）：2026-10-08 一次只改 STATUS 的推送，自查用 -U0 抽出 30 行新增、numstat 算 31 行，被判成「抽取壞了」。

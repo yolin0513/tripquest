@@ -112,7 +112,12 @@ CHECK=$?
 set -e
 cat "$TMP/check"
 if [ "$CHECK" -ne 0 ]; then
-  if [ "$CHECK" -eq 1 ]; then echo "✗ 公開前自查有命中——不推"; exit 1; fi
+  # 回 1 不等於命中（2026-10-08）：node 程式崩潰（例外沒接住）的結束碼也是 1，跟「有命中」同號。所以回 1 時還要在輸出裡找到自查自己印的
+  # 「擋下：有命中」那一行（整行比對開頭，不用 grep：grep 出錯回 2 時會跟「沒找到」長得一樣）；找不到就是自查異常結束、沒有真的掃完，報成檢查器壞了。
+  HITLINE=0
+  while IFS= read -r l; do case "$l" in "擋下：有命中（"*) HITLINE=1 ;; esac; done < "$TMP/check"
+  if [ "$CHECK" -eq 1 ] && [ "$HITLINE" = 1 ]; then echo "✗ 公開前自查有命中——不推"; exit 1; fi
+  if [ "$CHECK" -eq 1 ]; then echo "✗ 公開前自查回 1，卻沒有印出「擋下：有命中」——它是異常結束（例如崩潰），不是掃到命中"; echo "擋下：檢查器壞了（自查異常結束）"; exit 4; fi
   echo "✗ 公開前自查的檢查器壞了——不推"; exit 4
 fi
 # 回 0 還不夠：輸出裡要真的有「通過」那一行（自查一行都沒掃就結束、照樣回 0 時，擋在這裡）
