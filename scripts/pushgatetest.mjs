@@ -345,12 +345,14 @@ try {
       // 只在整份檔案的尺度上重現、縮不成合成小樣本，所以用 repo 歷史裡那個真的 commit（真實資料，第二道；第一道是 N 的「只刪不增要放行」）。
       // 前置：那個 commit 在本 repo 裡、而且 -U0 與 numstat 的新增行數真的不同（不然情境沒成立，什麼都沒驗到）。
       const c = spawnSync('git', ['log', '--format=%H', '-1', '--fixed-strings', '--grep=STATUS：鎖定 commit 驗完推上去'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim();
-      const plus = (args) => sh(`git log -p --format= ${args} ${c}^..${c}`, ROOT).split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++ ')).length;
-      const ns = c ? Number(sh(`git log --numstat --format= ${c}^..${c}`, ROOT).trim().split('\t')[0]) : NaN;
+      // 範圍寫成 c~1..c，不寫 c^..c：sh() 經過 cmd.exe，^ 是它的跳脫字元，c^..c 會被吃成 c..c（空範圍、0 行——第一次就是這樣，前置擋下了）
+      const R2 = `${c}~1..${c}`;
+      const plus = (args) => sh(`git log -p --format= ${args} ${R2}`, ROOT).split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++ ')).length;
+      const ns = c ? Number(sh(`git log --numstat --format= ${R2}`, ROOT).trim().split('\t')[0]) : NaN;
       const u0 = c ? plus('--unified=0') : NaN;
-      yes(!!c && u0 !== ns, `N2 前置：撞到過的那個真 commit 在 repo 裡（${c ? c.slice(0, 7) : '找不到'}），而且 -U0 抽 ${u0} 行、numstat 算 ${ns} 行——兩種 diff 真的對不上`);
+      yes(!!c && ns > 0 && u0 !== ns, `N2 前置：撞到過的那個真 commit 在 repo 裡（${c ? c.slice(0, 7) : '找不到'}），而且 -U0 抽 ${u0} 行、numstat 算 ${ns} 行——兩種 diff 真的對不上`);
       const lines = [];
-      const code = scan({ range: `${c}^..${c}`, run: makeRun(ROOT), checks: makeChecks(realUser()), log: (l) => lines.push(l) });
+      const code = scan({ range: R2, run: makeRun(ROOT), checks: makeChecks(realUser()), log: (l) => lines.push(l) });
       const out = lines.join('\n');
       yes(code === 0 && !/^擋下：檢查器壞了（新增行抽取）/m.test(R(out)) && /^新增行核對：抽出 (\d+) 行，git 算 \1 行$/m.test(out),
         `N2 那個 commit 掃起來通過、新增行核對兩邊相等（實得 ${code}；${(out.match(/^新增行核對：.*$/m) || ['沒印核對那一行'])[0]}）`, out.slice(-300));
