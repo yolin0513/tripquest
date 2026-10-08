@@ -68,7 +68,11 @@ export function scan({ range = '', run = makeRun(process.cwd()), checks = makeCh
   // 名字與信箱一樣會永久公開；§5.11：要講得出是誰、為什麼擋）
   let added, commits = 0, parsed = 0;
   try {
-    const cmd = range ? `git log -p --format= --unified=0 ${range}` : 'git show HEAD --format= --unified=0';
+    // 抽新增行與下面的 numstat 核對**用同一組 diff 選項**（2026-10-08）：原本這裡用 --unified=0、numstat 用預設，兩種都是合法的 diff，
+    // 但對空白行的對齊可以不同——一次只改 STATUS 的推送，-U0 算出 30 行新增、numstat 算出 31 行，正常內容被判成「抽取壞了」擋下
+    // （照「故障時停下」擋的，沒放出去任何東西）。只在整份檔案的尺度上才重現，縮不成小樣本；所以從結構上讓兩邊用同一種 diff。
+    // 預設 diff 多出來的上下文行以空白開頭，下面只認 hunk 裡以 + 開頭的行，不會被誤抽。
+    const cmd = range ? `git log -p --format= ${range}` : 'git show HEAD --format=';
     // 照 diff 的結構抽：只有 @@ 之後、以 + 開頭的行才是內容。不能用「以 +++ 開頭就當檔頭跳過」——內容本身以 ++ 開頭的行，
     // 加上 diff 的 + 也變成 +++，會被默默丟掉、根本沒掃（2026-09-24 統籌者查出，四個 App 全中）。
     added = [];
