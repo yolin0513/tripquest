@@ -751,8 +751,13 @@ try {
       const X = remoteHead();
       fs.rmSync(w2, { recursive: true, force: true });
       commit('d.txt', 'clean2\n', 'clean2');
-      yes(X !== BASE && spawnSync('git', ['cat-file', '-e', X + '^{commit}'], { cwd: work }).status !== 0,
-        'Q2 前置：遠端的 main 是本機沒有的 commit（情境成立）');
+      // 先驗尺（2026-10-08）：「cat-file 結束碼非 0＝本機沒有」只在 git 本身跑得起來時成立——git 跑不起來時結束碼也是非 0（或 null），
+      // 前置會照樣成立，後面整段就被當成有效的量測。所以同一個呼叫方式先對本機確定有的 BASE 量一次，回得出來（0）才相信「X 那邊的非 0」。
+      const catE = (rev) => spawnSync('git', ['cat-file', '-e', rev + '^{commit}'], { cwd: work });
+      const ruler = catE(BASE), probe = catE(X);
+      yes(ruler.status === 0, `Q2 前置（先驗尺）：同一個呼叫方式查本機確定有的 BASE 回得出來（結束碼 ${ruler.status}${ruler.error ? `、${ruler.error.code}` : ''}）`);
+      yes(ruler.status === 0 && X !== BASE && typeof probe.status === 'number' && probe.status !== 0,
+        `Q2 前置：遠端的 main 是本機沒有的 commit（情境成立；cat-file 對它回 ${probe.status}）`);
       const r = gate(fakeEnv('fetch'));
       yes(calls() >= 1 && r.code === 4 && /^擋下：檢查器壞了（範圍）/m.test(R(r.out)),
         `Q2 遠端的 commit 本機沒有、也抓不下來 → 回 4、「範圍」（實得 ${r.code}、假 git 攔到 ${calls()} 次）`, r.out.slice(-300));
