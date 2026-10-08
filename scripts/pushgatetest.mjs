@@ -848,6 +848,38 @@ try {
     }],
   ];
 
+  // ---- 每個分支都經真實入口證明會擋（2026-10-08，共用慣例 §5.20「對照組是合成字串不算對照組」）----
+  // 原本只有 email 走過「真的 commit → 推送閘命令列入口」；secret 6 個、path 4 個、user 1 個分支只被合成字串餵進正規式（每次推送印的「對照組命中=true」）
+  // 或內部函式 scanWith（Z）證明過。這裡每個分支一個情境：樣本取自查自己那一類的對照樣本（執行時才組出、不寫進任何進版控的檔），寫進暫存 repo 的真 commit，
+  // **讀回確認那個分支的正規式真的命中檔案內容**（拆字串相接可能寫出不含違規字串的行——v11.2 的實例），經 gate() 跑，斷言回 1、點名那一類、遠端沒被動到。
+  // email 的兩條放行規則各一個「該放行」的真 commit：回 0、推上去。分支樣本互不重疊由 Z 證明（拿掉哪一個分支都只有它自己的樣本漏掉）。
+  {
+    const base0 = makeChecks(realUser());
+    const hitCls = (cls) => new RegExp(`^擋下：有命中（(?:[^\\n]*、)?${cls}（\\d+ 行`, 'm');
+    const branchCase = (id, cls, i, sample, partRe) => [id, () => {
+      fs.writeFileSync(path.join(work, 'branch.txt'), `sample: ${sample}\n`);
+      const back = fs.readFileSync(path.join(work, 'branch.txt'), 'utf8');
+      sh('git add branch.txt'); sh(`git commit -q -m branch-${id}`);
+      yes(partRe.test(back), `${id} 前置：寫進 commit 的那一行真的被 ${cls} 第 ${i + 1} 個分支命中（讀回檔案確認）`);
+      const r = gate();
+      yes(r.code === 1 && hitCls(cls).test(R(r.out)), `${id} ${cls} 第 ${i + 1} 個分支：真 commit 經推送閘入口 → 回 1、點名 ${cls}（實得 ${r.code}）`, r.out.slice(-300));
+      untouched(id);
+    }];
+    base0.secret.parts.forEach((re, i) => SCENARIOS.push(branchCase(`RS${i + 1}`, 'secret', i, base0.secret.ctrl[i], new RegExp(re.source, base0.secret.flags))));
+    base0.path.parts.forEach((re, i) => SCENARIOS.push(branchCase(`RP${i + 1}`, 'path', i, base0.path.ctrl[i], new RegExp(re.source, base0.path.flags))));
+    SCENARIOS.push(branchCase('RU1', 'user', 0, base0.user.ctrl[0], base0.user.re));
+    base0.email.ctrlNot.forEach((sample, i) => SCENARIOS.push([`RE${i + 1}`, () => {
+      fs.writeFileSync(path.join(work, 'branch.txt'), `${sample}\n`);
+      const back = fs.readFileSync(path.join(work, 'branch.txt'), 'utf8');
+      sh('git add branch.txt'); sh(`git commit -q -m branch-RE${i + 1}`);
+      const m = back.match(base0.email.re) || [];
+      yes(m.length > 0 && m.every((x) => base0.email.allow(x)) && base0.email.allowRes[i].test(m[0]),
+        `RE${i + 1} 前置：寫進 commit 的那一行有信箱、而且是第 ${i + 1} 條放行規則放行的（讀回檔案確認：${m.length} 個）`);
+      const r = gate();
+      yes(r.code === 0 && remoteHead() === localHead(), `RE${i + 1} email 第 ${i + 1} 條放行規則：真 commit 經推送閘入口 → 回 0、推上去（實得 ${r.code}）`, r.out.slice(-300));
+    }]));
+  }
+
   // 順序：預設照上面；PUSHGATE_ORDER=reverse 反過來；PUSHGATE_ORDER=shuffle:<種子> 打亂（F5-5：換順序結果要不變）
   let list = SCENARIOS.slice();
   if (order === 'reverse') list.reverse();
