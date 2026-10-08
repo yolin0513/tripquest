@@ -16,7 +16,7 @@
 import path from 'node:path';
 
 // ---------- 底線（R2）：不論改了什麼，每版都跑 ----------
-export const BASELINE = ['affectedtest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest', 'gatelint'];   // gatelint：推送閘的壞寫法掃描（共用慣例 v9 §5.16），不論改了什麼每版都跑
+export const BASELINE = ['affectedtest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest', 'gatelint', 'convtest'];   // gatelint：推送閘的壞寫法掃描（共用慣例 v9 §5.16），不論改了什麼每版都跑；convtest：共用慣例副本跟主檔一致（主檔在別的 repo，它改了本 repo 什麼都沒動，只有每次都跑才抓得到）
 
 // ---------- 放大器（R4） ----------
 // imgtest：案例 ②（v1.41）就是 trip.js 的畫面結構改動讓它紅的（修訂 1-C）
@@ -112,6 +112,7 @@ export const ORPHAN_OK = {
   livetest: '打正式站（共用慣例 §5.6：打真網路的不進 npm test）；手動跑',
   'livecheck-import': '打正式站；接在 npm run sweep 後面，每版推送後跑',
   'prepush-scan': '推送閘自己呼叫的公開前自查；行為由 pushgatetest 驗',
+  convcheck: '共用慣例副本與主檔的比對器（函式庫）；行為由 convtest 驗（convtest 在鏈裡、也在底線）',
 };
 // scriptNames：scripts/ 底下 .mjs／.js 的檔名（不含副檔名）；chainNames：鏈上的名字
 export function findOrphans(scriptNames, chainNames, ok = ORPHAN_OK) {

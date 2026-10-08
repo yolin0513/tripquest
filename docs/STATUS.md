@@ -5,6 +5,21 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### 2026-10-08 共用慣例副本 v9 → v11.6＋副本版本檢查（Yolin 核准的單項任務；其餘工作仍在暫停中）
+
+- **起因**：本專案的 `docs/CONVENTIONS.md` 停在 v9（2026-09-24），主檔（統籌工作區的 CONVENTIONS.md）早就是 v11.6（2026-10-02）；MealMate 發現、只讀沒碰。
+  過期的副本和現行的副本讀起來長得一樣，沒有任何東西會說。
+- **副本已更新**：用程式從主檔逐位元組覆寫（不是手打）；比對器兩向對照（原樣複本判相同、改一個字判不同）；寫完逐位元組相同、
+  第一行 `<!-- CONVENTIONS v11.6 2026-10-02 -->` 逐字相同、無 BOM、無 CR；主檔在統籌工作區是已 commit 的乾淨版本。
+- **新檢查** `scripts/convcheck.mjs`（照抄 MealMate 的，主檔路徑登記成相對路徑）＋`scripts/convtest.mjs`（進 test:chain＝第 59 支，**也進底線**：主檔在別的 repo，
+  它改了本 repo 什麼都沒動，只有每次都跑才抓得到）。紅的條件：讀不到主檔（講明「讀不到主檔」，不當成通過）、副本與主檔是同一個實體檔（實體路徑或
+  檔案編號相同，硬連結也算——MealMate 那支沒有這條，是在它的測試裡比路徑字串）、版本行不同、版本相同但全文不同。**換一台沒有統籌工作區的機器會紅，刻意的**。
+  實測：convtest 8 項綠；拿 git 裡 v9 那份舊副本去比 → 判「版本不同」；突變 5 條（`tools/mutations/mut_conv.json`）各自只紅預期那一條
+  （不看版本行→CV1、讀不到主檔當一致→CV3、不比全文→CV1、不確認是兩個實體檔→CV4 兩條、只比路徑不比檔案編號→CV4 硬連結）。
+- **v9→v11.6 之間本專案的違反清單**見回報；要另開工作的：§5.18 突變挑選器與帳本進版控（都還沒有）、§5.19 跑的時候即時數程序與記憶體下限（七步的 ④）、
+  殺程序不靠父程序編號（七步的 ③）、58 支測試用裸寫的 python／bash 開子程序（§5.23）、§0.5 新條文 §5.17～§5.23 在 STATUS 沒有逐條寫「適用／不適用／尚未觸發」。
+- **沒推**：推送閘本身改過、還沒驗（見下面 2026-10-04 暫停），現在跑推送閘會回 5；這一筆跟著其他未推的一起等。
+
 ### 2026-10-04 暫停（Yolin 指示：App 的工作全部暫停，等他說做才開工）
 
 **恢復時的第一件事**：先問 Dispatch 能不能跑「下面第 ① 步的驗證 A、B」（各約 30～40 秒、2 個工作程序、常駐 0）；在拿到許可之前**不要推送任何東西**——
@@ -936,7 +951,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **58 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **59 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

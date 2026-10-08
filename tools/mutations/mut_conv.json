@@ -1,0 +1,42 @@
+[
+  {
+    "name": "副本比對：不看版本行",
+    "why": "副本過期（版本不同）也判一致——照著過期的規則工作一整天，沒有任何東西會說。預期只紅 CV1 比對器。",
+    "file": "scripts/convcheck.mjs",
+    "find": "  if (cv !== mv) return { ok: false, why:",
+    "replace": "  if (cv === '不比版本') return { ok: false, why:",
+    "cmd": "node scripts/convtest.mjs"
+  },
+  {
+    "name": "副本比對：讀不到主檔當成一致",
+    "why": "主檔搬家或換機器時，檢查默默變成永遠通過——跟沒有這道檢查一樣。預期只紅 CV3。",
+    "file": "scripts/convcheck.mjs",
+    "find": "  if (mt == null) return { ok: false, why: '讀不到主檔' };",
+    "replace": "  if (mt == null) return { ok: true, why: '讀不到主檔' };",
+    "cmd": "node scripts/convtest.mjs"
+  },
+  {
+    "name": "副本比對：只比版本行、不比全文",
+    "why": "主檔改了內容卻沒改版本（或副本被手改），照樣判一致。預期只紅 CV1 比對器。",
+    "file": "scripts/convcheck.mjs",
+    "find": "  if (norm(copyText) !== norm(masterText)) return",
+    "replace": "  if (norm(copyText) === '不比全文') return",
+    "cmd": "node scripts/convtest.mjs"
+  },
+  {
+    "name": "副本比對：不先確認是兩個不同的實體檔",
+    "why": "主檔路徑指錯到副本自己（或被連結起來）時，自己跟自己比永遠一致。預期只紅 CV4 的兩條（指到自己、硬連結）。",
+    "file": "scripts/convcheck.mjs",
+    "find": "  if (same !== false) return",
+    "replace": "  if (same === '不看') return",
+    "cmd": "node scripts/convtest.mjs"
+  },
+  {
+    "name": "副本比對：同一個實體檔只比路徑、不比檔案編號",
+    "why": "硬連結（路徑不同、實體同一個）認不出來。預期只紅 CV4 硬連結那一條。",
+    "file": "scripts/convcheck.mjs",
+    "find": "(sa.ino !== 0n && sa.ino === sb.ino && sa.dev === sb.dev)",
+    "replace": "(false)",
+    "cmd": "node scripts/convtest.mjs"
+  }
+]
