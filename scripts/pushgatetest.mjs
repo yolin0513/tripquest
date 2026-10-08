@@ -80,7 +80,8 @@ const partialRun = !!order || ONLY.length > 0;   // 換順序或只跑一部分�
 if (!partialRun) console.log(`  開始前：.logs/pushgate.verified ${dropReg(REG_REAL)}（全過才會重寫）`);
 let pass = 0;
 const ok = (m) => { pass++; console.log('✓ ' + m); };
-const fail = (m, x) => { console.log('✗ ' + m + (x ? '\n   ' + x : '')); process.exitCode = 1; };
+// 附帶的證據（閘門的原始輸出）每一行都縮排：閘門自己的「✗ …」行若頂到行首，會被讀成 pushgatetest 的判定行（2026-10-08 實測撞到）
+const fail = (m, x) => { console.log('✗ ' + m + (x ? '\n' + String(x).split('\n').map((l) => '   ' + l).join('\n') : '')); process.exitCode = 1; };
 const yes = (c, m, x) => (c ? ok(m) : fail(m, x));
 
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'tq-pushgate-'));
