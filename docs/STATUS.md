@@ -143,6 +143,17 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
   但 `sig` 跟現在一樣時，當時每天第一站是誰就確定了，舊 prompt 的主題＝`themeForSpot(那一站)` 可以重算（`themes.json` 最後一次改在 PROMPT_V=2 之前同一天，
   所有 v2 記錄都是用現在這份規則產的）。`aiText` 是同步記錄：改了會同步給整個群組＝**改到 D1 裡的真實群組**，要 Yolin 同意。
   清掉記錄的話，建立者下次打開行程頁會自動重產（花錢）；要「空著、不自動重產」得保留記錄與 `sig`、只刪 payload 裡那幾天。
+- **Yolin 選 (a)（10/27）：只清猜出來那幾天的句子，記錄與 sig 留著、不重產。Dispatch 五道閘**：①先乾跑、只印數字與結構，Dispatch 看過才放行；
+  ②sig 不符的另列「無法判定」、不動；③雙向對照組；④寫入前把目標記錄原樣存在不進版控的地方＋記 sha256；⑤寫完重讀，確認只少了那幾天的句子。
+  **「在我看過乾跑數字之前，一個位元組都不要寫到 D1。」**
+  - **乾跑已寫好（只讀不寫）**：`scripts/aicache-dryrun.mjs`。判準：當天第一站 `themeForSpot` 不是 journey、且不等於 `storedThemeOf(當天)` → 猜的天，清那天的 dayLines／narration。
+    另外兩種不動、單獨數：sig 不符；猜測來自 primary／tags／inferredType（產文案後可能變過，重算不一定等於當時送的）。行程已刪、同一趟兩筆、payload 不是物件也不動。
+    整趟層級的副標／片頭／片尾**這次不動**，只數會改的記錄裡有幾筆帶著——要不要清另外決定。`js/aicontent.js` 的 `tripTextSig` 改成 export 給它用（算式沒動）。
+    對照組（合成 9 趟、12 筆，答案事先寫好；被選的必須正好是 2 筆，猜對的／sig 不符／欄位來的都不准被選；改寫後只少那天兩句）全對；`mut_aicachedry` 6/6 紅在預期。
+    讀檔那條路用 `.logs/` 的合成 wrangler 格式檔走過一次。**還沒對正式 D1 跑**：要 D1 唯讀權限（等 Yolin）。
+  - **寫入的路（還沒寫，待放行）**：照 `workers/worker.mjs` 墓碑那段的做法——每筆先 `UPDATE groups SET seq = seq + 1 … RETURNING seq`，再
+    `UPDATE records SET seq=?, updated_at=?, json=? WHERE group_id=? AND id=? AND seq=<乾跑讀到的舊 seq>`（樂觀鎖：期間有人改過就不寫、報出來）。
+    json 裡的 `updatedAt` 同步改成寫入時刻，客戶端 `recWins` 才會收新的那份。備份與寫完重讀照閘門④⑤。
 - **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 70 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。

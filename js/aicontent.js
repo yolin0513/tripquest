@@ -142,7 +142,8 @@ export function digestFrom(trip, spotList) {
 
 // tripText 的 sig 算式。狀態查詢（aiTextStatus）要跟真正產生時用同一份，
 // 不然會出現「說是舊的但按了又不重產」這種鬼打牆。
-function tripTextSig(d) {
+// export 給 scripts/aicache-dryrun.mjs：判斷雲端那份快取是不是照現在的行程內容產的，要用同一支算式。
+export function tripTextSig(d) {
   return sigOf({ v: PROMPT_V, t: d.title, days: d.days.map((x) => [x.day, x.region, x.spots]) });
 }
 

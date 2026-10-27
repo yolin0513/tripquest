@@ -1,0 +1,56 @@
+[
+  {
+    "name": "乾跑：sig 不符也照清",
+    "why": "當時送的是哪些景點已經不知道，卻照現在的景點判定。預期對照組 change、sigMismatch 對不上、被選的多了 r3，回 3、不跑真實資料。",
+    "file": "scripts/aicache-dryrun.mjs",
+    "find": "  if (!d.days.length || rec.sig !== tripTextSig(d)) return { kind: 'sigMismatch' };",
+    "replace": "  if (!d.days.length) return { kind: 'sigMismatch' };",
+    "cmd": "node scripts/aicache-dryrun.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "乾跑：欄位來的猜測也照清",
+    "why": "primary／tags／inferredType 產文案之後可能變過，重算不一定等於當時送的。預期對照組 fieldDays 對不上、被選的多了 r4。",
+    "file": "scripts/aicache-dryrun.mjs",
+    "find": "  return byName === oldK ? 'guessed' : 'field';",
+    "replace": "  return 'guessed';",
+    "cmd": "node scripts/aicache-dryrun.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "乾跑：送「旅途」的天也算猜的",
+    "why": "「旅途」不是類別主張。預期對照組 guessedDays、sentences 對不上（T1 第 2 天被算進來）。",
+    "file": "scripts/aicache-dryrun.mjs",
+    "find": "  if (oldK === 'journey' || oldK === theme.storedThemeOf(list)) return 'clean';",
+    "replace": "  if (oldK === theme.storedThemeOf(list)) return 'clean';",
+    "cmd": "node scripts/aicache-dryrun.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "乾跑：猜對的也清",
+    "why": "名字猜的剛好等於帶著的 theme，那句是對的。預期對照組被選的多了 r2（刪掉一句本來是對的）。",
+    "file": "scripts/aicache-dryrun.mjs",
+    "find": "  if (oldK === 'journey' || oldK === theme.storedThemeOf(list)) return 'clean';",
+    "replace": "  if (oldK === 'journey') return 'clean';",
+    "cmd": "node scripts/aicache-dryrun.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "乾跑：改寫時把整趟層級的句子也丟了",
+    "why": "副標／片頭／片尾這次不動。預期對照組「r1 改寫後的 payload 不是只少第 1 天兩句」。",
+    "file": "scripts/aicache-dryrun.mjs",
+    "find": "  const newPayload = { ...p, dayLines: drop(p.dayLines), narration: drop(p.narration) };",
+    "replace": "  const newPayload = { dayLines: drop(p.dayLines), narration: drop(p.narration) };",
+    "cmd": "node scripts/aicache-dryrun.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "乾跑：同一趟兩筆也照清",
+    "why": "兩筆 tripText 不知道客戶端吃哪一筆，不動。預期對照組 dup、change 對不上。",
+    "file": "scripts/aicache-dryrun.mjs",
+    "find": "    if (perTrip.get(r.tripId) > 1) { out.dup++; continue; }",
+    "replace": "    if (perTrip.get(r.tripId) > 9) { out.dup++; continue; }",
+    "cmd": "node scripts/aicache-dryrun.mjs",
+    "done": "^(✓|✗) 對照組"
+  }
+]
