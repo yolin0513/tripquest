@@ -120,6 +120,9 @@ console.log('\n[T12] 放大器 D：沒人涵蓋的程式檔');
   // 漏列離線清單只有 shelltest 抓得到，所以它不能靠「剛好改到 sw.js」才被挑中
   const nw = pick(['js/tripday.js', 'js/views/trip.js']);
   yes(!nw.full && nw.selected.includes('shelltest'), '只動 js、沒動 sw.js → 照樣挑到 shelltest（離線清單漏列只有它抓得到）', JSON.stringify(nw.selected));
+  // 新增的猜類別呼叫點可能落在任何一支 js；guesscensustest 不算涵蓋任何 js，只能靠底線每次都被挑中（2026-10-27）
+  const gc = pick(['js/route.js']);
+  yes(!gc.full && gc.selected.includes('guesscensustest'), '只動一支 js（route.js）→ 照樣挑到 guesscensustest（猜類別的呼叫點新增在哪都抓得到）', JSON.stringify(gc.selected));
 }
 
 // ---------- 修訂二：目錄引用不展開閉包，放大器 D 恢復作用 ----------

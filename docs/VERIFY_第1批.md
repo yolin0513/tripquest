@@ -52,6 +52,13 @@
 | H3 | 🔴 同一份行程的行程頁：**每個景點標題列上沒有猜出來的類別字**（以前印「🌿 山林自然」之類）；帶著 theme 的照樣印 | 匯入的三站標題列都找到、字裡 0 個類別名；帶著 food 的那站看得到「美食」 | 自動：`guesstruthtest` H3-1、H3-2；`mut_guesstruth` 後 2 條 | 行程頁又把猜的類別寫成字 |
 | B12 | 和紙主題下，手機加到主畫面後**冷啟動的啟動畫面**仍是深藍 | 已知限制、不算錯：`manifest.webmanifest` 的 `theme_color`／`background_color` 是靜態的 `#0f1523`，不能隨使用者選的主題換 | 人看：記下實機上看到的樣子，給 Yolin 判斷要不要改成中性色 | — |
 
+## D. 挑選器（`guesscensustest` 進底線，10bcf23；**推論、沒跑過**）
+
+| # | 要看什麼 | 怎麼算通過 | 怎麼驗 | 紅＝ |
+|---|---|---|---|---|
+| D1 | 只動任何一支 js，`guesscensustest` 都被挑到（新增的猜類別呼叫點可能落在任何一支） | 改 `js/route.js` 時不是全套、而且挑到它；只改 docs 時恰好是底線（含它） | 自動：`affectedtest` 新斷言「只動一支 js（route.js）→ 照樣挑到 guesscensustest」＋既有的「只改 docs → 恰好底線」；`mut_guesscensus` 最後一條（拿掉底線）預期只紅前者 | 新增的呼叫點要等到有人剛好改到 `guesscensustest` 才被抓 |
+| D2 | `guesscensustest` 讀整個 `js/`，**不算涵蓋**任何 js（算了會悶住放大器 D） | 改一支沒有任何測試點名的 js（`js/__nobody.js`）→ 照樣放大成全套 | 自動：`affectedtest` T12（既有）；`mut_guesscensus` 倒數第二條（把它從過濾條件拿掉）預期紅 T12 | 沒人測的新 js 不再觸發全套 |
+
 ## C. 證明會紅（§5.1）
 
 | # | 做什麼 | 通過 |
