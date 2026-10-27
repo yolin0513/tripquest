@@ -25,6 +25,7 @@ const SHELL_ASSETS = [
   './js/prefs.js',
   './js/boot-theme.js',
   './js/tripday.js',
+  './js/glyphs.js',
   './js/daterange.js',
   './js/ai.js',
   './js/aikeys.js',

@@ -21,6 +21,7 @@ import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js'
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates } from '../tripday.js';
+import { paperPlane } from '../glyphs.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -476,14 +477,17 @@ function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick }) {
       first ? h('span', { class: 'ds-first' }, first) : null,
     ));
   }
+  // 紙飛機（原創圖形，js/glyphs.js）：停在選中那一格正上方、機頭朝右（下一天）；換天時飛過去（減少動態時直接跳）
+  const plane = h('span', { class: 'ds-plane', 'aria-hidden': 'true' }, paperPlane());
   const el = h('nav', { class: 'daystrip', 'aria-label': `共 ${dayNums.length} 天，選一天看行程` },
-    h('div', { class: 'ds-track' }, ...cells.values()));
+    h('div', { class: 'ds-track' }, plane, ...cells.values()));
   const select = (d) => {
     for (const [n, c] of cells) {
       c.classList.toggle('on', n === d);
       c.setAttribute('aria-pressed', String(n === d));
     }
     const c = cells.get(d);
+    if (c) plane.style.left = (c.offsetLeft + c.offsetWidth / 2) + 'px';
     // 選中的那一格捲進日期列中央（只捲日期列，不捲整頁）
     if (c && el.isConnected) {
       const tr = el.querySelector('.ds-track');

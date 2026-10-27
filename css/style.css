@@ -143,7 +143,20 @@ button, input, textarea, select { font: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 0 4px;
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0;
 }
+#topbar h1 .gl-pack { flex: none; }
+.top-title-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* 兩個原創圖形（js/glyphs.js）：線條用字色、色塊用主題色；深色與和紙各自套 */
+.gl { display: block; overflow: visible; }
+.gl polygon, .gl rect, .gl path, .gl line { stroke: var(--text); stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+.gl-paper { fill: var(--bg-elev); }
+.gl-wing { fill: var(--primary); }
+.gl-fold { stroke-width: 3; }
+.gl-strap, .gl-flap { fill: none; }
+.gl-body { fill: var(--accent); }
+.gl-pocket { fill: var(--ok); stroke-width: 3.5; }
 .icon-btn {
   appearance: none;
   border: 0;
@@ -391,7 +404,9 @@ button.card { appearance: none; font: inherit; }
   margin: 14px -16px 0; padding: 8px 16px; background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-.ds-track { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.ds-track { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; position: relative; padding-top: 28px; }
+/* 紙飛機：在格子上方自己的一條、不疊在任何字上；不吃點擊。left 由 trip.js 設成選中那格的中心 */
+.ds-plane { position: absolute; top: 1px; left: 0; transform: translateX(-50%); line-height: 0; pointer-events: none; transition: left 0.45s ease-out; }
 .ds-track::-webkit-scrollbar { display: none; }
 .ds-day {
   appearance: none; flex: none; font: inherit; color: var(--text); cursor: pointer;

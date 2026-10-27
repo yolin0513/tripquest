@@ -5,6 +5,7 @@ import * as store from './store.js';
 import { mount, h, toast, smoothScrollTo } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
 import { initIdentity } from './identity.js';
+import { backpack } from './glyphs.js';
 
 const view = document.getElementById('view');
 const backBtn = document.getElementById('backBtn');
@@ -58,7 +59,8 @@ function fallbackFor(r) {
 }
 
 export function setTop({ title, back = true, action = null }) {
-  topTitle.textContent = title || 'TripQuest';
+  // 標題左邊放背包（App 識別，原創圖形，見 js/glyphs.js）；字放在自己的 span 裡，長了照樣截斷
+  topTitle.replaceChildren(backpack(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));
   document.title = title ? `${title}｜TripQuest` : 'TripQuest 旅圖任務';
   backBtn.hidden = !back;
   _action = action;

@@ -1,6 +1,6 @@
 // 行程頁的出發倒數、日期列、時間軸（npm run itinviewtest；會開瀏覽器）
 //
-// 涵蓋的程式：js/views/trip.js、js/views/home.js、js/tripday.js、css/style.css
+// 涵蓋的程式：js/views/trip.js、js/views/home.js、js/tripday.js、js/glyphs.js、js/app.js、css/style.css
 //
 // v1.74.11 新增。計算本身（第幾天、預設選哪天、倒數的字）由 tripdaytest 驗（秒級）；這支驗使用者看到的：
 //   C1 還沒出發：行程頁頂端寫「還有 N 天出發」，首頁那張旅程卡也寫；N 是自己造的日期算出來的
@@ -17,6 +17,8 @@
 //   B3 時間軸開頭看得到「同行夥伴」（不是「今日」）和旅伴名字；沒有旅伴就不放這一列
 //   B4 進行中、看今天：現在這一站之後的換虛線框、字淡一點但對比照樣 ≥ 4.5
 //   B5 看的不是今天、還沒出發：什麼都不淡化
+//   G1 紙飛機（原創圖形，js/glyphs.js）停在選中那天的正上方、不蓋到那格的字；點別天就跟過去
+//   G2 頁首標題左邊看得到背包，標題字照樣看得到
 // 入口：首頁點旅程卡進行程頁；日期列用滑鼠點。情境（日期、時間）一律自己造，不靠今天是哪天。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -124,6 +126,17 @@ const cardCountdown = (page, title) => page.evaluate((t) => {
 const pageCountdown = (page) => page.evaluate(() => document.querySelector('.countdown .cd-big')?.textContent ?? null);
 const shownDays = (page) => page.evaluate(() => [...document.querySelectorAll('.daycollapse')]
   .filter((d) => getComputedStyle(d).display !== 'none').map((d) => d.dataset.day));
+// 紙飛機在不在第 day 格的正上方：中心落在那格左右之間、底不低於那格的頂（不蓋字）、有大小、在視窗裡
+const planeAt = (page, day) => page.evaluate((d) => {
+  const pl = document.querySelector('.daystrip .ds-plane svg');
+  const c = document.querySelector(`.daystrip .ds-day[data-day="${d}"]`);
+  if (!pl || !c) return { ok: false, why: `紙飛機 ${!!pl}、第 ${d} 格 ${!!c}` };
+  const a = pl.getBoundingClientRect(), b = c.getBoundingClientRect();
+  const mid = (a.left + a.right) / 2;
+  const ok = a.width >= 12 && a.height >= 8 && mid > b.left && mid < b.right && a.bottom <= b.top + 1
+    && a.left >= 0 && a.right <= innerWidth && getComputedStyle(pl.parentElement).visibility !== 'hidden';
+  return { ok, why: `飛機中心 x ${Math.round(mid)}、那格 ${Math.round(b.left)}～${Math.round(b.right)}；飛機底 ${Math.round(a.bottom)}、那格頂 ${Math.round(b.top)}` };
+}, day);
 const stripCells = (page) => page.evaluate(() => [...document.querySelectorAll('.daystrip .ds-day')]
   .map((c) => ({ day: c.dataset.day, on: c.classList.contains('on'), pressed: c.getAttribute('aria-pressed') })));
 
@@ -201,9 +214,26 @@ try {
   v = await seen(page, '.daycollapse.open .tl-next .qc-name');
   yes(v.ok && v.text.startsWith('乙二'), `B4 未到的「乙二」淡化了但字照樣看得清楚（對比 ≥ 4.5）（${v.why}）`);
 
+  // ---- G1／G2 兩個原創圖形（js/glyphs.js）----
+  const g1 = await planeAt(page, 2);
+  yes(g1.ok, `G1 紙飛機停在選中那天（第 2 天）的正上方、看得到、沒蓋到那格的字（${g1.why}）`);
+  const g2 = await page.evaluate(() => {
+    const pk = document.querySelector('#topTitle svg.gl-pack');
+    const tx = document.querySelector('#topTitle .top-title-text');
+    if (!pk || !tx) return { ok: false, why: `背包 ${!!pk}、標題字 ${!!tx}` };
+    const a = pk.getBoundingClientRect(), b = tx.getBoundingClientRect();
+    const ok = a.width >= 12 && a.height >= 12 && a.top >= 0 && a.bottom <= document.getElementById('topbar').getBoundingClientRect().bottom && a.right <= b.left + 1;
+    return { ok, why: `背包 ${Math.round(a.width)}×${Math.round(a.height)}、右緣 ${Math.round(a.right)}、標題字左緣 ${Math.round(b.left)}` };
+  });
+  yes(g2.ok, `G2 頁首看得到背包，在標題字左邊、不疊在字上（${g2.why}）`);
+  v = await seen(page, '#topTitle .top-title-text');
+  yes(v.ok && v.text === '進行中', `G2 加了背包之後，標題字照樣看得到（${v.why}；字「${v.text}」）`);
+
   const cell3 = await page.$('.daystrip .ds-day[data-day="3"]');
   yes(!!cell3, 'S2 日期列有第 3 天那一格');
-  if (cell3) { await cell3.click(); await sleep(400); }
+  if (cell3) { await cell3.click(); await sleep(800); }
+  const g3 = await planeAt(page, 3);
+  yes(g3.ok, `G1 點第 3 天 → 紙飛機跟著到第 3 天上方（${g3.why}）`);
   cells = await stripCells(page);
   yes((await shownDays(page)).join() === '3', `S2 點第 3 天 → 只顯示第 3 天（實得 ${(await shownDays(page)).join() || '無'}）`);
   yes(cells.filter((c) => c.on).map((c) => c.day).join() === '3' && cells.find((c) => c.day === '3').pressed === 'true'

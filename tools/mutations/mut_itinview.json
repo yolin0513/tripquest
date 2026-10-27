@@ -150,5 +150,29 @@
     "find": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60) + (stripEl ? stripEl.offsetHeight : 0);",
     "replace": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60);",
     "cmd": "node scripts/scrolltest.mjs"
+  },
+  {
+    "name": "紙飛機：不跟著選中的天",
+    "why": "飛機一直停在最左邊。預期紅 itinviewtest 的 G1 兩條（第 2 天、點第 3 天）。",
+    "file": "js/views/trip.js",
+    "find": "    if (c) plane.style.left = (c.offsetLeft + c.offsetWidth / 2) + 'px';",
+    "replace": "",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "紙飛機：疊在格子的字上",
+    "why": "拿掉格子上方給飛機的那一條空間，飛機蓋到「第 N 天」。預期只紅 G1 的「沒蓋到那格的字」（兩條都含這個條件）；只驗飛機存在照樣綠。",
+    "file": "css/style.css",
+    "find": ".ds-track { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; position: relative; padding-top: 28px; }",
+    "replace": ".ds-track { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; position: relative; }",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "背包：頁首沒放",
+    "why": "標題列只剩字。預期紅 G2 的「看得到背包」與「標題字照樣看得到」（標題字的 span 一起不見）。",
+    "file": "js/app.js",
+    "find": "  topTitle.replaceChildren(backpack(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));",
+    "replace": "  topTitle.textContent = title || 'TripQuest';",
+    "cmd": "node scripts/itinviewtest.mjs"
   }
 ]
