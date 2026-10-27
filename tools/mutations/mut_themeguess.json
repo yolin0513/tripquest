@@ -1,0 +1,20 @@
+[
+  {
+    "name": "量測：已刪的也算進去",
+    "why": "已刪的景點與已刪行程的景點被算進來，比例會灌水。預期對照組對不上（trips、spots…）、回 3、不跑真實資料。",
+    "file": "scripts/themeguess-count.mjs",
+    "find": "  const alive = (r) => r && !r.deleted;",
+    "replace": "  const alive = (r) => !!r;",
+    "cmd": "node scripts/themeguess-count.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "量測：B 不分具體類別與「旅途」",
+    "why": "印成「旅途」的也算成具體類別，會高估。預期對照組 Bspecific 對不上、回 3。",
+    "file": "scripts/themeguess-count.mjs",
+    "find": "    if (oldK !== newK) { B++; if (oldK !== 'journey') Bspecific++; }",
+    "replace": "    if (oldK !== newK) { B++; Bspecific++; }",
+    "cmd": "node scripts/themeguess-count.mjs",
+    "done": "^(✓|✗) 對照組"
+  }
+]

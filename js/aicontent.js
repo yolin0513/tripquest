@@ -11,7 +11,7 @@
 import * as store from './store.js';
 import { aiOn, aiComplete, aiJSON } from './ai.js';
 import { myDeviceId } from './identity.js';
-import { themeMeta, themeForSpot } from './theme.js';
+import { themeMeta, storedThemeOf } from './theme.js';
 
 // 只有行程建立者（貼了金鑰那台）會真的呼叫 AI；舊行程沒記 createdByDevice → 放行
 function isCreator(trip) {
@@ -117,8 +117,14 @@ function ensure(tripId, key, sig, generate) {
 
 // ---------- 行程模型（給 prompt 用的精簡版）----------
 function tripDigest(tripId) {
-  const trip = store.get(tripId);
-  const spots = store.spotsOf(tripId).slice().sort((a, b) => (a.day || 1) - (b.day || 1) || (a.order || 0) - (b.order || 0));
+  return digestFrom(store.get(tripId), store.spotsOf(tripId));
+}
+
+// 純函式（scripts/postertruthtest.mjs 直接餵合成行程）。
+// 主題只給景點**自己帶著**的（storedThemeOf）；沒帶就不給——AI 不知道那是猜的，會當成事實寫進「每天一句」。
+// 2026-10-27 之前這裡每天都附 themeForSpot(第一站) 照名字猜的類別名。
+export function digestFrom(trip, spotList) {
+  const spots = spotList.slice().sort((a, b) => (a.day || 1) - (b.day || 1) || (a.order || 0) - (b.order || 0));
   const byDay = new Map();
   for (const s of spots) {
     const d = s.day || 1;
@@ -128,7 +134,7 @@ function tripDigest(tripId) {
   const days = [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([day, list]) => ({
     day,
     region: list[0]?.region || trip.region || '',
-    theme: themeMeta(list[0] ? themeForSpot(list[0]) : 'journey').label,
+    theme: storedThemeOf(list) ? themeMeta(storedThemeOf(list)).label : '',
     spots: list.map((s) => s.name),
   }));
   return { title: trip.title || '我們的旅程', region: trip.region || '', days, spots };
@@ -146,13 +152,19 @@ function tripTextSig(d) {
 const lastFail = new Map();
 
 // ================= 1. 行程表 + 影片文案（一次呼叫）=================
+// prompt 裡「每天」那幾行——行程資料只從這裡進 prompt（純函式，postertruthtest 驗它）。
+// 那天沒有可靠的主題就不寫主題，不寫「—」以外的任何猜測。
+export function tripTextDayList(d) {
+  return d.days.map((x) => `第${x.day}天（${[x.region || '—', x.theme].filter(Boolean).join('，')}）：${x.spots.join('、')}`).join('\n');
+}
+
 // payload: { subtitle, dayLines:{[day]:string}, videoIntro, videoOutro, narration:{[day]:string} }
 export async function ensureTripText(tripId) {
   const d = tripDigest(tripId);
   if (!d.days.length) return null;
   const sig = tripTextSig(d);
   return ensure(tripId, 'tripText', sig, async () => {
-    const dayList = d.days.map((x) => `第${x.day}天（${x.region || '—'}，${x.theme}）：${x.spots.join('、')}`).join('\n');
+    const dayList = tripTextDayList(d);
     const obj = await aiJSON(tripId, {
       feature: 'narrate', maxTokens: 700,
       system: '你在幫一份給長輩看的家庭旅遊「行程表海報」與「回憶影片」寫文案。\n'

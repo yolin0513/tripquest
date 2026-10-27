@@ -58,6 +58,25 @@
 >   這次是剛好覺得怪，沒覺得怪的話那份錯的清單就交出去了。
 > - **借來的案例不能當自己的正樣本**：本專案沒有 s05（那是別的專案的情境），「已知只看碼」那一方用的是合成樣本，照實標明。
 
+### 🔴 2026-10-27 主題章與 AI 文案不再把猜測當事實（Dispatch 定：獨立修正項，**優先於整個繪本風改版**，不用等 Yolin）——工作區、未推
+
+> Dispatch 原話：「改版是讓畫面更好看，這一條是讓畫面不說謊。」做完要回報數字，他會讓 Yolin 知道線上曾經有這個情形。
+
+- **線上的問題（實查）**：從分享連結匯入的景點不帶 `theme`（`js/share.js`），v1.74 以前的舊資料也沒有。海報每天的主題章是當天每站 `s.theme || themeForSpot(s)` 的多數決，
+  `themeForSpot` 第一步就照名字用正規式猜（名字以「山」結尾 → 🌿山林自然）；AI 文案 `tripDigest` 每天附 `themeForSpot(第一站)` 的類別名（**連帶著的 theme 都不看**），
+  AI 當成事實寫進「每天一句」。
+- **第 1 步 量比例：沒做成。** 對正式 D1 的唯讀查詢被 Claude Code 的權限分類器擋下（「Production Reads」）；我沒有繞過，也沒改讀本機的 D1 備份（同一份資料、換條路讀＝繞過）。
+  量測腳本已寫好、對照組驗過：`scripts/themeguess-count.mjs`（只印筆數與比例、不印名字；合成 3 趟 6 站答案事先寫好，對不上回 3、不跑真實資料；`mut_themeguess` 2/2 紅）。
+  拿到許可後的兩行指令寫在腳本開頭；輸出檔含真實行程，只放 `.logs/`。**量得到的只有同步到雲端的行程**。
+- **第 2、3 步（已改，工作區）**：`js/theme.js` 新增 `storedThemeOf(spots)`——只看景點自己帶著的 theme，一個都沒帶回 null。
+  海報（`js/poster/index.js`，模型抽成純函式 `modelFrom`）的當天主題、整趟主題都改用它；**沒帶就不印主題章**（`stampText` 回空字串），配色退回中性。
+  AI（`js/aicontent.js`，抽成 `digestFrom`、`tripTextDayList`）：沒帶就不寫主題，帶著的照寫。
+- **第 4 步 測試**：`scripts/postertruthtest.mjs`（新、秒級、進鏈，鏈 67 支）12 項綠；P0 前置確認合成名字在舊寫法下真的會被猜成 nature、第 3 天在舊寫法下是 nature。
+  `mut_postertruth` 4/4 紅在預期（回到照名字猜、海報補「旅途」、AI 補「旅途」、反方向把主題章整個關掉）。從真實入口（做海報、攔下送往 Anthropic 的請求）的兩條在瀏覽器，待驗清單 H1、H2。
+- **還沒處理、要決定的**：① **已經快取的 AI 文案**是用猜測寫的，輸入的簽章沒變就不會重產——要它重產一次得改簽章，會花使用者金鑰的錢（每趟一次呼叫）；
+  ② 任務示意插圖 `paintRef`（`quest.js`、`trip.js`）與回顧卡、景點卡的配色也照猜的類別挑——是圖與顏色、不是字，這次沒動，列待辦。
+- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 67 支、預測不出耗時＝重負載，要等瀏覽器時段與許可。
+
 ### 2026-10-27 行程頁改版第 1～4 項（Yolin 答 1.B、3 先不做、4 可以；Dispatch 定順序 1→5）——**本機 commit 成「未驗的檢查點」（735aa97 與其後一個），沒推；等瀏覽器時段**
 
 > Dispatch 2026-10-27 授權：本機 commit 檢查點、第一行寫明未驗與待驗清單檔名，**不要 push**。瀏覽器時段要等他放行（影片那邊在量獨占機器的基準，
@@ -139,7 +158,10 @@ Dispatch 裁定（原話摘要）：日期控制要「看得見全部天數的�
   - **實查補上**（第 1-2 節）：主題章照名字猜**確定會發生**——`js/share.js` 從分享連結匯入的景點不帶 `theme`。同一個退回寫法也在 `quest.js`／`trip.js` 的
     `paintRef`（任務示意插圖），**不在海報範圍、另列待辦**；別人拍的照片在你手機上可能只有 320px 縮圖（全圖延遲同步）。
   - 🔴 **瀏覽器窗格被自動打開過**：寫入 `.svg`／`index.html` 時有一個編輯後掛勾會在窗格顯示那個檔（上一輪起就有，`index.html` 是用 file:// 開的）。
-    2026-10-27 發現後全部關掉；之後在瀏覽器時段放行前，**不要用 Write／Edit 改 `.svg`、`.html`**，或改完立刻關窗格。
+    2026-10-27 發現後全部關掉；之後在瀏覽器時段放行前，**不要用 Write／Edit 改 `.svg`、`.html`**，或改完立刻關窗格。（改 `.js`／`.css` 實測不會打開，已用 `tabs_context` 確認。）
+    **Dispatch 裁定：那段時間影片那邊的基準數據作廢**——被污染的量測比沒有量測更糟（沒有量測你知道自己不知道，被污染的你以為自己知道）。
+    那份基準表不在本 repo（影片那邊的），作廢紀錄由 Dispatch 寫；本 repo 只記污染的來源：上一輪寫原創圖形草圖與 `index.html` 起、到 10/27 這輪關掉為止。
+  - **不再用 `sed -i` 改檔**（Dispatch 2026-10-27）：10/27 用它改了 `itinviewtest` 一行註解，讀回確認沒出事；但規矩（共用慣例 §5.5）是一律 Write／Edit，不先判斷內容有沒有特殊字元。
 
 ### 2026-10-27 補齊「減少動態效果」（Dispatch 核准的單項：既有缺陷，不等行程頁改版的決定）——**改好、未 commit，等瀏覽器驗證的時段**
 
@@ -1195,7 +1217,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **66 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **67 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

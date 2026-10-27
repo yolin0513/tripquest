@@ -70,9 +70,21 @@ export function themeForTrip(spots, themes = _themes) {
   return majorityTheme(spots, themes);
 }
 
+// 只看景點**自己帶著**的 theme（建立時對得上景點庫才決定的），不照名字猜。
+// 一個都沒帶（從分享連結匯入的、v1.74 以前的舊資料）→ null：呼叫端不印主題章、不把主題告訴 AI。
+// 給使用者看的字一律用這支，不用 themeForDay／themeForTrip（那兩支沒帶 theme 就照名字猜）。
+export function storedThemeOf(spots) {
+  const list = (spots || []).map((s) => s && s.theme).filter(Boolean);
+  return list.length ? pickMajority(list) : null;
+}
+
 function majorityTheme(spots, themes) {
   const list = (spots || []).map((s) => s.theme || themeForSpot(s, themes));
   if (!list.length) return 'journey';
+  return pickMajority(list);
+}
+
+function pickMajority(list) {
   const count = new Map();
   const firstSeen = new Map();
   list.forEach((k, i) => {

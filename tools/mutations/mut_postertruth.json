@@ -1,0 +1,34 @@
+[
+  {
+    "name": "主題：沒帶 theme 就照名字猜（回到修正前）",
+    "why": "storedThemeOf 把沒帶 theme 的景點也照名字猜。海報與 AI 兩邊一起回到線上的舊行為。預期紅 postertruthtest 的 P1、P2、P4、P5、P6 第 1 天那條；P3、P6 第 2 天照樣綠。",
+    "file": "js/theme.js",
+    "find": "  const list = (spots || []).map((s) => s && s.theme).filter(Boolean);",
+    "replace": "  const list = (spots || []).map((s) => s && (s.theme || themeForSpot(s))).filter(Boolean);",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "海報：沒有主題的那天補一個通用類別",
+    "why": "當天主題退回 journey，主題章印「🧳 旅途」——一個沒有來源的字。預期只紅 P1、P2。",
+    "file": "js/poster/index.js",
+    "find": "      theme: storedThemeOf(byDaySpots.get(day)),",
+    "replace": "      theme: storedThemeOf(byDaySpots.get(day)) || 'journey',",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "AI：沒有主題的那天照樣送一個類別名",
+    "why": "themeMeta(null) 退回「旅途」，送進 prompt。預期只紅 P6 第 1 天那條。",
+    "file": "js/aicontent.js",
+    "find": "    theme: storedThemeOf(list) ? themeMeta(storedThemeOf(list)).label : '',",
+    "replace": "    theme: themeMeta(storedThemeOf(list)).label,",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "海報：把主題章整個關掉",
+    "why": "反方向：帶著 theme 的那天也不印。預期只紅 P3（證明 P1 不是靠「什麼都不印」過的）。",
+    "file": "js/poster/index.js",
+    "find": "  if (!day || !day.theme) return '';",
+    "replace": "  return '';",
+    "cmd": "node scripts/postertruthtest.mjs"
+  }
+]
