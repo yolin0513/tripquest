@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" width="1180" height="760" font-family="system-ui, 'Noto Sans TC', sans-serif">
+  <!-- 海報重做草圖（2026-10-27）：左＝封面、右＝每天一張；都是 4:5 直式（實際輸出 1080×1350，這裡縮成 432×540）。
+       名字、地點全是合成的佔位字；灰框＝放使用者自己拍的照片的位置。沒有任何角色或品牌圖像。 -->
+  <defs>
+    <pattern id="paper" width="12" height="12" patternUnits="userSpaceOnUse">
+      <rect width="12" height="12" fill="#fffcf6"/>
+      <circle cx="3" cy="4" r="0.6" fill="#efe4d2"/>
+      <circle cx="9" cy="9" r="0.5" fill="#efe4d2"/>
+    </pattern>
+    <pattern id="photo" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="10" height="10" fill="#e6ddd0"/>
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#d6cbbb" stroke-width="3"/>
+    </pattern>
+  </defs>
+  <rect width="1180" height="760" fill="#f4efe6"/>
+  <text x="40" y="44" font-size="22" font-weight="700" fill="#3e3a39">海報重做草圖（未定稿，等 Yolin 看）</text>
+  <text x="40" y="70" font-size="14" fill="#5c5551">灰色斜紋框＝使用者自己拍的照片；所有字都是合成的佔位字；顏色是和紙主題那一組（粉彩只當底，字一律墨色）</text>
+
+  <!-- ===== 左：封面 ===== -->
+  <g transform="translate(60,100)">
+    <rect width="432" height="540" rx="22" fill="url(#paper)" stroke="#3e3a39" stroke-width="4"/>
+    <!-- 標題貼紙 -->
+    <rect x="28" y="28" width="300" height="70" rx="16" fill="#f6d27a" stroke="#3e3a39" stroke-width="3" transform="rotate(-2 178 63)"/>
+    <text x="48" y="74" font-size="30" font-weight="800" fill="#3e3a39" transform="rotate(-2 178 63)">我們的三天旅程</text>
+    <text x="32" y="128" font-size="15" fill="#5c5551">有出發日才寫日期；沒有就不寫</text>
+    <!-- 大照片 -->
+    <rect x="28" y="146" width="376" height="250" rx="14" fill="url(#photo)" stroke="#3e3a39" stroke-width="3"/>
+    <text x="216" y="270" font-size="15" text-anchor="middle" fill="#5c5551">整趟最多讚的那張（1600px）</text>
+    <text x="216" y="292" font-size="13" text-anchor="middle" fill="#5c5551">沒有讚就用第一天第一張</text>
+    <!-- 數字三格 -->
+    <g font-size="14" fill="#3e3a39">
+      <rect x="28" y="414" width="116" height="58" rx="12" fill="#f2a497" stroke="#3e3a39" stroke-width="2.5"/>
+      <text x="86" y="438" text-anchor="middle" font-weight="800" font-size="20">3 天</text>
+      <text x="86" y="460" text-anchor="middle">天數</text>
+      <rect x="158" y="414" width="116" height="58" rx="12" fill="#b9daa5" stroke="#3e3a39" stroke-width="2.5"/>
+      <text x="216" y="438" text-anchor="middle" font-weight="800" font-size="20">9 站</text>
+      <text x="216" y="460" text-anchor="middle">景點</text>
+      <rect x="288" y="414" width="116" height="58" rx="12" fill="#f6d27a" stroke="#3e3a39" stroke-width="2.5"/>
+      <text x="346" y="438" text-anchor="middle" font-weight="800" font-size="20">42 張</text>
+      <text x="346" y="460" text-anchor="middle">照片</text>
+    </g>
+    <!-- 旅伴頭像 -->
+    <g>
+      <circle cx="46" cy="502" r="14" fill="#a8d3e6" stroke="#3e3a39" stroke-width="2"/><text x="46" y="507" font-size="13" text-anchor="middle" fill="#3e3a39">藍</text>
+      <circle cx="78" cy="502" r="14" fill="#b9daa5" stroke="#3e3a39" stroke-width="2"/><text x="78" y="507" font-size="13" text-anchor="middle" fill="#3e3a39">綠</text>
+      <circle cx="110" cy="502" r="14" fill="#f2a497" stroke="#3e3a39" stroke-width="2"/><text x="110" y="507" font-size="13" text-anchor="middle" fill="#3e3a39">紅</text>
+      <text x="134" y="507" font-size="14" fill="#3e3a39">小藍、小綠、小紅</text>
+    </g>
+    <!-- 頁尾波浪＋識別（原創圖形，Yolin 選了才放） -->
+    <path d="M0 520 q27 -12 54 0 t54 0 t54 0 t54 0 t54 0 t54 0 t54 0 t54 0 V540 H0Z" fill="#efe4d2" transform="translate(0,-2)"/>
+    <text x="404" y="532" font-size="11" text-anchor="end" fill="#5c5551">TripQuest</text>
+  </g>
+  <text x="60" y="670" font-size="15" font-weight="700" fill="#3e3a39">封面</text>
+  <text x="60" y="692" font-size="13" fill="#5c5551">數字都是 App 裡數得出來的（天數、景點、照片）。</text>
+  <text x="60" y="710" font-size="13" fill="#5c5551">不放主題章、不放「這趟是美食之旅」這類分類。</text>
+  <text x="60" y="728" font-size="13" fill="#5c5551">AI 副標：有綁金鑰而且產生過才放；沒有就空著，不編。</text>
+
+  <!-- ===== 右：每天一張 ===== -->
+  <g transform="translate(640,100)">
+    <rect width="432" height="540" rx="22" fill="url(#paper)" stroke="#3e3a39" stroke-width="4"/>
+    <!-- 頁首：DAY 貼紙＋路線 -->
+    <rect x="24" y="24" width="112" height="52" rx="14" fill="#f2a497" stroke="#3e3a39" stroke-width="3"/>
+    <text x="80" y="58" font-size="24" font-weight="800" text-anchor="middle" fill="#3e3a39">DAY 2</text>
+    <text x="150" y="46" font-size="15" font-weight="700" fill="#3e3a39">月/日（週X）</text>
+    <text x="150" y="68" font-size="14" fill="#3e3a39">甲站 → 丙站</text>
+    <!-- 主照片＋兩張小的 -->
+    <rect x="24" y="92" width="384" height="212" rx="14" fill="url(#photo)" stroke="#3e3a39" stroke-width="3"/>
+    <text x="216" y="196" font-size="15" text-anchor="middle" fill="#5c5551">這天最多讚的那張（1600px）</text>
+    <rect x="24" y="316" width="186" height="104" rx="12" fill="url(#photo)" stroke="#3e3a39" stroke-width="2.5"/>
+    <rect x="222" y="316" width="186" height="104" rx="12" fill="url(#photo)" stroke="#3e3a39" stroke-width="2.5"/>
+    <!-- 示意圖標籤的示範：不是使用者拍的就要寫出來 -->
+    <rect x="232" y="326" width="58" height="22" rx="11" fill="#fffcf6" stroke="#3e3a39" stroke-width="1.5"/>
+    <text x="261" y="342" font-size="12" text-anchor="middle" fill="#3e3a39">示意圖</text>
+    <!-- 時間軸條：有填時間才寫時間 -->
+    <line x1="40" y1="452" x2="392" y2="452" stroke="#3e3a39" stroke-width="2.5" stroke-dasharray="7 6"/>
+    <g font-size="13" fill="#3e3a39" text-anchor="middle">
+      <circle cx="60" cy="452" r="8" fill="#fffcf6" stroke="#3e3a39" stroke-width="2.5"/>
+      <text x="60" y="440">09:30</text><text x="60" y="476">甲站</text>
+      <circle cx="216" cy="452" r="8" fill="#fffcf6" stroke="#3e3a39" stroke-width="2.5"/>
+      <text x="216" y="476">乙站</text>
+      <circle cx="372" cy="452" r="8" fill="#fffcf6" stroke="#3e3a39" stroke-width="2.5"/>
+      <text x="372" y="440">15:00</text><text x="372" y="476">丙站</text>
+    </g>
+    <text x="216" y="440" font-size="11" text-anchor="middle" fill="#5c5551">（沒填時間就不寫）</text>
+    <path d="M0 520 q27 -12 54 0 t54 0 t54 0 t54 0 t54 0 t54 0 t54 0 t54 0 V540 H0Z" fill="#efe4d2" transform="translate(0,-2)"/>
+    <text x="404" y="532" font-size="11" text-anchor="end" fill="#5c5551">TripQuest</text>
+  </g>
+  <text x="640" y="670" font-size="15" font-weight="700" fill="#3e3a39">每天一張</text>
+  <text x="640" y="692" font-size="13" fill="#5c5551">照片佔版面七成（現在約四分之一寬）。</text>
+  <text x="640" y="710" font-size="13" fill="#5c5551">沒有使用者拍的才用景點示意圖，而且貼「示意圖」標籤。</text>
+  <text x="640" y="728" font-size="13" fill="#5c5551">那天一張照片都沒有：不放假照片，改成大色塊＋站名。</text>
+</svg>
