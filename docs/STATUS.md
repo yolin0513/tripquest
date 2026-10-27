@@ -5,9 +5,23 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
-### 🔴🔴🔴 2026-10-27 交接契約：換一個全新的 Session 讀完這一節就能接著跑（v1.74.10 線上；本機 10 個 commit 沒推）
+### 🔴🔴🔴 2026-10-27 收工交接：換一個全新的 Session 讀完這一節就能接著跑（v1.74.10 線上；本機 19 個 commit 沒推；工作區乾淨）
 
-**今天定下來的三條原則（Dispatch 2026-10-27，先讀）**
+**0. 等 Yolin 做的三件（都卡著後面的驗證，Session 不能自己做）**
+1. **貼權限那一行**（不然瀏覽器測試與突變會被分類器擋）：在專案根目錄 PowerShell 貼
+   `Copy-Item docs\claude-settings.local.proposed.json .claude\settings.local.json`（內容說明在同名 `.md`）。Session 自己寫被擋是對的——**被擋就停，不換方法**。
+2. **AI 文案乾跑要的 D1 唯讀權限**：`scripts/aicache-dryrun.mjs`（4aaf0df，對照組與 6 條突變已實測紅）要讀正式 D1 才能給出「會清掉哪幾天」的數字；
+   **Dispatch 明訂：Yolin 看過乾跑數字之前，一個位元組都不寫到 D1。** 之後再選 (a) 只清猜過的那幾天／(b) 留著標「可能不準」／(c) 不動（建議 (a)，見下方「🔴 主題章」那一節）。
+   `scripts/themeguess-count.mjs`（量線上比例）同樣等這個權限。
+3. **要不要存「使用者打的原始名字」**：新欄位＝資料結構變更，要不要開 3 代理投票由 Yolin 決定。不存的話，v1.74 以前就比錯的配對，`trustedTheme` 的複核永遠擋不到（見下方「複核通過不等於配對正確」）。
+
+**另外兩題等 Yolin 選（不卡驗證）**
+4. **❤️ 讚數在家人手機上偏多**（讀程式確認、沒實測，待驗 G0c）：取消讚只刪本機那筆，`reaction` 只增不刪、Worker 也不刪；照片牆、任務頁、檢視器、行程頁合計都直接數筆數、不依人去重——
+   按讚→取消→再按，別人那邊同一人變 2 筆。徽章「應援團」、回顧「互相按了 N 個讚」數同一批。跟主題章同一類（把不可信的值當事實顯示）。選項：
+   (a) **先不顯示數字**（只留「我按了沒」），修不修之後再說——不用投票、成本低（Dispatch 建議把這個放進選項）；(b) 修同步規則（加「取消讚」紀錄，動 `merge.js`＋Worker，要投票、Worker 先部署）；(c) 先 (a) 再 (b)。我建議 (c)。
+5. 已快取的 AI 文案 (a)/(b)/(c)：同第 2 件，要等乾跑數字。
+
+**今天定下來的原則（Dispatch 2026-10-27，先讀）**
 1. **參考站有的欄位，不代表我們有那筆資料。** 例：參考寫「今日同行夥伴」，我們沒有「哪一天誰同行」的資料，所以只寫「同行夥伴」。
 2. **判準要寫成「使用者看得到什麼」，不是「某個物件存在」。** 節點在、但被移到畫面外、被蓋住、淡到看不清，都算沒過。
 3. **配色是裝飾，插圖與文字是主張。** 照名字猜的類別可以拿來挑顏色；印成字、送給 AI、挑特定類別的圖、出任務都不行——要用 `trustedTheme`／`trustedThemeOf`
@@ -16,14 +30,23 @@
 4. **海報一律不印類別，連可信的也不印**（Dispatch 2026-10-27 最終裁定，蓋過同一天「第一批也用可信類別」那句）：沒有主題章、主題插圖、每站 emoji；
    可信類別在海報上只決定配色。`js/poster/presets.js` 的 `styleFor` 插圖與時間軸一律中性；`postertruthtest` P2／P8／P9 守。
 
-**海報 P1 版型（2026-10-27 寫完、一條都沒跑；待驗清單 F 節）**：固定 4:5 1080×1350，封面＋每天一張（不論幾天；舊的「1～2 天一張長圖、≥3 天一天一張」作廢）。
-版面是純函式 `js/poster/layout.js`（`pagesFrom`：每一區固定高度、放不下寫「還有 N 站」「＋N 位」、沒有的資料整區收起來）；`js/poster/index.js` 只照版面畫（`drawPage`，每一區 clip）。
-新測試 `scripts/posterlayouttest.mjs`（L1–L14，進鏈）＋`mut_posterlayout`（15）；`v147shots` 的海報段改成新規格（張數＋1、「封面 / 共 4 張」、每張 1080×1350）。
-沒做（照設計稿第 4 節是 P2／P3）：讚數挑照片、只有縮圖的提示、和紙單一風格與手寫字型、canvas 讀像素的對比斷言。
+5. **一個可能錯的資料，只要不拿它去主張任何事，就不會變成錯的說法。** 例：P2 的讚數只拿來排順序、不印數字、不寫「最多人按讚」；排錯了只是換一張家人拍的照片。
 
-**P2 照片：細設計寫好（設計稿第 2-5 節），沒寫程式。** 讀程式查到兩件（沒實測，待驗 G0a／G0b）：
-**取消讚不會同步**——取消是本機硬刪，`reaction` 只增不刪、Worker 也不刪，別人手機上的讚永遠在（照片牆的 ❤️ 數也錯）；要修得動 `merge.js`＋Worker 的同步語意（資料結構、要投票、Worker 先部署），**等 Yolin**。
-所以 P2 的讚數只用「按過讚的不同人數」排序、海報不印數字。另一件：**海報現在一律用 320px 縮圖**，連本機有全圖也是——P2 改成全圖優先、量實際像素判糊、產生前講明並讓人選。
+**今天這一邊做了什麼（全部沒推；除了註明的，一條都沒跑）**
+
+| 件 | 狀態 | 在哪 | 待驗 |
+|---|---|---|---|
+| 猜類別的完整清查：母體 9 處都登記用途（color 4、number 2、curated 2、internal 1）；曾印成字的 3 處（海報主題章、AI 文案、行程頁標題列）已改掉 | 寫好、沒跑 | `scripts/guesscensustest.mjs`（進底線）＋`mut_guesscensus`（8） | D 節、E6 |
+| 可信類別 `trustedTheme`／`trustedThemeOf`：只從景點庫重算，不看存著的 `spot.theme`；四處改用它 | 寫好、沒跑 | `js/theme.js`；`scripts/themetrusttest.mjs`（讀 `.theme` 的 18 處登記）＋`mut_themetrust`（14） | E 節 |
+| 海報一律不印類別（連可信的也不印），只用在配色 | 寫好、沒跑 | `js/poster/presets.js` `styleFor`；`postertruthtest` P0–P9＋`mut_postertruth`（9） | E3、E3b |
+| 海報重做設計稿 | 只有文件 | `docs/DESIGN_海報重做.md` | — |
+| **海報 P1 版型**：固定 4:5 1080×1350，封面＋每天一張（舊的長圖作廢）；版面純函式 `js/poster/layout.js` `pagesFrom`（每區固定高度、「還有 N 站」「＋N 位」、沒有的整區收起來），`js/poster/index.js` 只照著畫（每區 clip） | 寫好、沒跑 | `posterlayouttest`（L1–L14，進鏈）＋`mut_posterlayout`（15）；`v147shots` 海報段改新規格 | F 節 |
+| **海報 P2 照片**：讚數（不同人數）排序、四層排序、全圖優先、量像素判糊、產生前講明＋三個按鈕 | **只有設計，Dispatch 核准，程式不要現在寫** | 設計稿第 2-5 節 | G 節（G0a–G0c） |
+| 清猜類別 AI 文案的乾跑工具 | **對照組與 6 條突變已實測紅**；正式 D1 沒跑 | `scripts/aicache-dryrun.mjs` | 等第 0 點第 2 件 |
+| 權限建議檔 | 寫好，等 Yolin 貼 | `docs/claude-settings.local.proposed.json` | 等第 0 點第 1 件 |
+
+P2 讀程式查到、沒實測的兩件：取消讚不會同步（第 0 點第 4 件）；**海報現在一律用 320px 縮圖**，連本機有全圖也是（G0b）。
+P3（和紙單一風格、手寫字型、canvas 讀像素的對比斷言）、P4（濾鏡）沒動。
 
 **這整件事值不值得做的依據：景點庫 135 筆裡，有 38 筆（28%）「照名字猜」跟「景點庫分類」不一樣**（讀 `data/` 算的，2026-10-27）。
 那是舊做法錯誤率的**下界**——只算得到景點庫裡有的；景點庫以外的地點連對照的標準都沒有。例：梧棲漁港景點庫是美食、名字猜海濱；清水寺景點庫是中性、名字猜古蹟。
@@ -41,7 +64,12 @@
 - `ea04587` 設計文件 8-1／8-2。
 - `336344b` `mutate.mjs` 的 cmd 白名單（`mutcmdtest`）、建議的權限檔。
 - `10ecb51` 行程頁景點標題列不再印猜的類別；`guesstruthtest`（H2、H3）；`themeguess-count.mjs` 的 C 改正。
-- **這一節所在的 commit**：`guesscensustest`（猜類別的母體登記）＋這份交接。之後工作區應該是乾淨的（`git status --porcelain` 為空）。
+- `10bcf23`、`0434f9c`、`0991dfb` `guesscensustest`（猜類別的母體登記）、挑選器的 D1／D2、交接。
+- `4aaf0df` AI 文案乾跑工具（只讀不寫）。
+- `c3bf9aa`、`dc45780` 海報重做設計稿；「存著的 theme 可不可信」查證。
+- `8cb4f48` 可信類別 `trustedTheme`；`0a6288a` 海報一律不印類別。
+- `4dfb22d` 海報 P1 版型；`60ec9f6` P2 設計。
+- **這一節所在的 commit**：收工交接（STATUS、待驗清單各節狀態、設計稿補 ❤️ 數）。之後工作區應該是乾淨的（`git status --porcelain` 為空）。
 - `sw.js` 的 `VERSION` 還是 `tripquest-v1.74.10`。**全部驗完才 bump 到 v1.74.11、跑 `test:affected`、commit、`safe-push.sh`、curl 確認線上 VERSION、`npm run sweep`。**
 
 **2. 待驗清單與那支尺**
@@ -59,6 +87,7 @@
 4. 秒級、還沒跑過的：`guesscensustest`、`affectedtest`（補了 VERIFY D1、E5 兩條）＋ `mut_guesscensus`（8；最後兩條驗挑選器，VERIFY D 節）；
    可信類別（VERIFY E 節）：`themetrusttest`、`postertruthtest`＋`mut_themetrust`（14）、`mut_postertruth`（9）。
    海報 P1（VERIFY F 節）：`posterlayouttest`＋`mut_posterlayout`（15）；`v147shots`（瀏覽器，第 2 步一起跑）。`guesstruthtest`＋`mut_guesstruth`（5）在第 2、3 步（瀏覽器）。
+   P2 讀程式查到的三件（VERIFY G0a–G0c）：G0b 秒級；G0a、G0c 要兩個分頁當兩台手機（瀏覽器）。
 5. `mutatetest`：**先計時**（開 2 個以上程序、耗時沒量過）。
 6. `npm run test:affected`：這次放大成**全套 72 支**（加了 `themetrusttest`、`posterlayouttest`）、預測不出耗時＝重負載。跑完把每支耗時記下來。
 跑完**立刻**告訴 Dispatch（MealMate 等機器）。
@@ -70,7 +99,8 @@
 - **H2 瀏覽器測試**：已寫（`guesstruthtest` H2-0～H2-2，網路層攔 body、合成金鑰、跟基準行程比類別名次數），**沒跑**。
 - **`paintRef`**：查過不用改——佔位圖 `themePlaceholder` 只是色圓與波浪，是顏色不是插圖；真的圖來自景點或使用者的照片。登記在 `guesscensustest`（color）。
 - **猜類別的完整清查**（Dispatch 10/27 要的）：母體 9 處，都登記在 `guesscensustest` 的 `REGISTRY`。印成字的曾有 3 處（海報主題章、AI 文案、行程頁標題列），都已改成 `storedThemeOf`／`s.theme`，
-  不再呼叫猜類別的函式；剩下 9 處＝color 4、number 2、curated 2、internal 1。**沒跑過。**
+  不再呼叫猜類別的函式（後來同一天再改成 `trustedTheme`；`storedThemeOf` 作廢）；剩下 9 處＝color 4、number 2、curated 2、internal 1。**沒跑過。**
+- **海報 P2 程式**：設計已核准（設計稿第 2-5 節），Dispatch 說等之後再寫；寫時先把 2-5 節第五點的測試逐條加進待驗清單 G 節、先寫測試。
 - **已快取的 AI 文案**：查證結果在本檔下方「🔴 主題章」那一節；選項 (a) 只清猜過的那幾天、不重產（建議）／(b) 留著、標「可能不準」／(c) 不動。**要 Yolin 拍板**——(a) 會改到 D1 裡的真實群組。
 - 量線上比例（`scripts/themeguess-count.mjs`）：要讀正式 D1，**待 Yolin 在機器前開權限**，Session 不自己開。
 
@@ -81,6 +111,7 @@ Session 自己寫 `.claude/settings.local.json` 被分類器以「Self-Modificat
 
 **7. 紀律（今天踩過的）**：寫檔改檔只用 Write／Edit（不用 sed -i）；`git add` 逐路徑；commit 第一行寫明未驗與待驗清單；不要改 .svg／.html（會自動開窗格）；
 Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10/27 第二輪我照樣跑了秒級測試（affectedtest 等 7 支與 `mut_themeguess`），違反了這句，已回報。
+同日 P1 時又跑了一次唯讀的 `node -e` 讀 `package.json`，已照實回報；Dispatch 回：那句是為了機器與額度，唯讀確認事實不在要防的範圍——但仍以「跑東西先問」為準，有疑慮就先問。
 
 > ### 🔴🔴 先讀這一條：用結束碼判定成敗時，先確認「失敗」和「你要測的那種失敗」不是同一個碼（2026-10-08）
 >
