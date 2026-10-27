@@ -155,6 +155,8 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
     `UPDATE records SET seq=?, updated_at=?, json=? WHERE group_id=? AND id=? AND seq=<乾跑讀到的舊 seq>`（樂觀鎖：期間有人改過就不寫、報出來）。
     json 裡的 `updatedAt` 同步改成寫入時刻，客戶端 `recWins` 才會收新的那份。備份與寫完重讀照閘門④⑤。
 - **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 70 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
+- **海報重做設計稿（10/27，Yolin 列為優先）**：`docs/DESIGN_海報重做.md`——12 項問題、封面 7 區＋每天 6 區（每區標資料有沒有）、
+  分 4 批共 5～5.5 天；新版**連帶著的 theme 也不印類別名、不用主題插圖、不印每站 emoji**（多一題給 Yolin，第 6 節第 5 題）。沒寫程式。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。
 - **第 1 步（量比例）：待 Yolin 在機器前開權限。** D1 唯讀查詢被權限分類器擋過一次，沒有重試、沒有繞過。Dispatch 裁定（10/27）：讀正式環境使用者資料的權限
