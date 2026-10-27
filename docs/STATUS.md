@@ -13,6 +13,14 @@
 3. **配色是裝飾，插圖與文字是主張。** 照名字猜的類別可以拿來挑顏色；印成字、送給 AI、挑特定類別的圖、出任務都不行——要用 `trustedTheme`／`trustedThemeOf`
    （從景點庫重算；**存著的 `spot.theme` 也是猜的，不准看**——同一天查到，原本寫的 `storedThemeOf` 作廢）。
    守這條的是 `scripts/guesscensustest.mjs`（猜類別的每一個呼叫點登記用途）與 `scripts/themetrusttest.mjs`（讀存著的 `.theme` 的每一處登記用途）。
+4. **海報一律不印類別，連可信的也不印**（Dispatch 2026-10-27 最終裁定，蓋過同一天「第一批也用可信類別」那句）：沒有主題章、主題插圖、每站 emoji；
+   可信類別在海報上只決定配色。`js/poster/presets.js` 的 `styleFor` 插圖與時間軸一律中性；`postertruthtest` P2／P8／P9 守。
+
+**這整件事值不值得做的依據：景點庫 135 筆裡，有 38 筆（28%）「照名字猜」跟「景點庫分類」不一樣**（讀 `data/` 算的，2026-10-27）。
+那是舊做法錯誤率的**下界**——只算得到景點庫裡有的；景點庫以外的地點連對照的標準都沒有。例：梧棲漁港景點庫是美食、名字猜海濱；清水寺景點庫是中性、名字猜古蹟。
+
+**「複核通過」不等於「配對正確」**：`trustedTheme` 第 3 步拿景點名字再比一次，只擋得到「使用者改過名字」與「景點庫那筆被刪改」；
+建立時名字就被換成景點庫的名字，**v1.74 以前當年比錯的配對，複核一定通過、擋不到**。要擋得存下使用者打的原始名字（新欄位＝資料結構，Dispatch 已轉 Yolin 決定要不要開投票）。
 
 **1. 狀態（`git log origin/main..HEAD`，全部沒推；推送只用 `bash scripts/safe-push.sh`）**
 - `5062754` STATUS 文字（最醒目處的「剛好覺得怪才回頭驗」）。
@@ -40,7 +48,7 @@
 2. 原樣跑 VERIFY 裡的自動項：`itinviewtest`、`washitest`、`motiontest`、`guesstruthtest`，以及改過的舊測試 `collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest`。
 3. B1–B5 的 8 條突變與其餘瀏覽器突變：`mut_itinview`（22）、`mut_washi`（4）、`mut_motion` 後 7 條、`mut_guesstruth`（5）；C1「拿 HEAD 舊版跑新測試要紅」。
 4. 秒級、還沒跑過的：`guesscensustest`、`affectedtest`（補了 VERIFY D1、E5 兩條）＋ `mut_guesscensus`（8；最後兩條驗挑選器，VERIFY D 節）；
-   可信類別（VERIFY E 節）：`themetrusttest`、`postertruthtest`＋`mut_themetrust`（14）、`mut_postertruth`（4）。`guesstruthtest`＋`mut_guesstruth`（5）在第 2、3 步（瀏覽器）。
+   可信類別（VERIFY E 節）：`themetrusttest`、`postertruthtest`＋`mut_themetrust`（14）、`mut_postertruth`（9）。`guesstruthtest`＋`mut_guesstruth`（5）在第 2、3 步（瀏覽器）。
 5. `mutatetest`：**先計時**（開 2 個以上程序、耗時沒量過）。
 6. `npm run test:affected`：這次放大成**全套 71 支**（加了 `themetrusttest`）、預測不出耗時＝重負載。跑完把每支耗時記下來。
 跑完**立刻**告訴 Dispatch（MealMate 等機器）。
@@ -173,7 +181,7 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
     `js/theme.js` 的 `trustedTheme(spot, lookup)` 回 `{ key, placeId, recheck, via, reason }`（拿不到的理由：not-curated／no-lookup／place-gone／recheck-mismatch／no-tag-map／neutral）、
     `trustedThemeOf(spots, lookup)`；查表 `generate.js` 的 `loadPlaceLookup()`／`placeLookupSync()`（`matchPlace` 拆出同步的 `matchLoaded`）。
     換過去的：`trip.js` 標題列、`aicontent.js` 的 `digestFrom`（`ensureTripText` 先載景點庫）、`poster/index.js` 的 `modelFrom`（兩個 render 先載）、`generate.js` 建景點與 `themedQuestsForSpot`。
-    測試：新 `scripts/themetrusttest.mjs`（雙向 R0–R7＋讀 `.theme` 的登記制 19 處，進鏈與底線）、`postertruthtest` 改寫（P0–P7）、`guesstruthtest` 種子改成存著猜的 theme 的舊景點＋真的梧棲漁港；
+    測試：新 `scripts/themetrusttest.mjs`（雙向 R0–R7＋讀 `.theme` 的登記制 17 處，進鏈與底線）、`postertruthtest` 改寫（P0–P9；海報不印類別之後拿掉 `stampText`）、`guesstruthtest` 種子改成存著猜的 theme 的舊景點＋真的梧棲漁港；
     突變 `mut_themetrust` 14、`mut_postertruth` 4、`mut_guesstruth` 5（多一條「回到只看帶著的」）、`mut_guesscensus` 第一條 find 跟著改。`guesscensustest` 拿掉 generate.js 兩條登記（7 處）。
   - **重算擋不到的（照實講）**：建立景點時名字就被換成景點庫的名字（v1.74 以前也是），使用者當初打的字沒有存——**v1.74 以前鬆比對的誤命中，複核抓不到**
     （拿景點庫的名字再比，一定比得回同一筆）。複核擋得到的只有：使用者改過名字、景點庫刪了或改了那筆。要擋誤命中得從現在起把使用者打的字存下來（新欄位＝資料結構，要投票），只對新資料有用。

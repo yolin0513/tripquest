@@ -29,17 +29,10 @@ export function buildModel(tripId) {
   });
 }
 
-// 每天的主題章那一行字；沒有可靠來源就是 ''（畫海報與測試共用這一支）
-export function stampText(day) {
-  if (!day || !day.theme) return '';
-  const tm = themeMeta(day.theme);
-  return `${tm.emoji} ${tm.label}`;
-}
-
 // 純函式（scripts/postertruthtest.mjs 直接餵合成行程）。
-// 主題一律用可信類別（trustedTheme／trustedThemeOf：從景點庫重算，不看存著的 theme）：拿不到就是 null，
-// 不印主題章、不畫主題插圖、配色退回中性。2026-10-27 查到：分享匯入的景點不帶 theme、舊寫法照名字猜；
-// 帶著的 theme 也是建立時照名字猜的。lookup 沒給（景點庫沒載好）→ 全部 null。
+// 海報**一律不印類別**（Dispatch 2026-10-27 裁定，連可信的也不印）：沒有主題章、沒有主題插圖、沒有每站 emoji。
+// 主題只拿來決定配色，而且用可信類別（trustedTheme／trustedThemeOf：從景點庫重算，不看存著的 theme）；
+// 拿不到就是 null、配色退回中性。lookup 沒給（景點庫沒載好）→ 全部 null。
 export function modelFrom({ trip, spots, members, aiTx = {}, questsOf, submissionsOf, lookup = null }) {
   const bestQuestHint = (spotId) => questsOf(spotId)[0]?.hint || '';
   const pickPhotoHash = (spot) => {
@@ -62,7 +55,7 @@ export function modelFrom({ trip, spots, members, aiTx = {}, questsOf, submissio
       district: s.district || '',
       blurb: s.blurb || s.wikiExtract || bestQuestHint(s.id) || '',
       startTime: spotTimes(s).startTime, endTime: spotTimes(s).endTime,
-      photoHash: pickPhotoHash(s), emoji: s.emoji || '📍',
+      photoHash: pickPhotoHash(s),
       region: s.region || '',
       theme: trustedTheme(s, lookup).key,
     });
@@ -259,12 +252,6 @@ async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
   roundRect(ctx, PAD - 20, bandY - 4, W - (PAD - 20) * 2, 92, 16);
   ctx.fill();
   deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd);
-  // 當天主題章
-  // 只有那天拿得到可信類別才印；拿不到（d.theme 是 null）就不印——寧可少一個裝飾，不印一個可能錯的分類
-  const stamp = stampText(d);
-  ctx.textAlign = 'right'; ctx.fillStyle = dp.sub;
-  ctx.font = F(p, 700, 24);
-  if (stamp) ctx.fillText(stamp, W - PAD - 4, bandY + 52);
   ctx.textAlign = 'left';
   ctx.fillStyle = dp.accent;
   ctx.font = DISP(p, 700, 56);
@@ -290,14 +277,13 @@ async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
     const rowTop = y;
     const rowH = measureRow(ctx, p, it, pw);
 
-    // 時間點的圓 + emoji
+    // 時間點的圓（不放 emoji：每站的 emoji 有一部分是照名字猜的）
     ctx.fillStyle = p.paper;
     ctx.beginPath(); ctx.arc(lineX, rowTop + 18, 22, 0, 7); ctx.fill();
     ctx.strokeStyle = dp.accent; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(lineX, rowTop + 18, 22, 0, 7); ctx.stroke();
-    ctx.font = '24px ' + CJK_STACK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(it.emoji, lineX, rowTop + 19);
-    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = dp.accent;
+    ctx.beginPath(); ctx.arc(lineX, rowTop + 18, 8, 0, 7); ctx.fill();
 
     const timeLabel = it.startTime ? (it.endTime ? `${it.startTime}–${it.endTime}` : it.startTime) : '';
     const textX = lineX + 44;

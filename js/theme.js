@@ -80,6 +80,8 @@ export function themeForTrip(spots, themes = _themes) {
 //   4. 取景點庫那筆的 primary、再來 tags，經 themes.json 的 byTag 換成類別；換出來是中性的 journey 也當作沒有
 // 已知限制：建立時景點名字就被換成景點庫的名字（generate.js），使用者當初打的字沒存下來——
 // v1.74 以前比對很鬆時的誤命中，第 3 步複核不出來（拿景點庫的名字再比，一定比得回同一筆）。
+// **「複核通過」不等於「配對正確」**：第 3 步只擋得到兩種——使用者改過名字、景點庫那筆被刪或改過；
+// 擋不到「當年就比錯」。要擋那種，得從建立時存下使用者打的原始名字（新欄位，資料結構變更，Yolin 決定要不要開投票）。
 // lookup：{ placeById(id), matchPlace(name, cityHint) }，兩支都要同步；由 generate.js 的 loadPlaceLookup() 先載好。
 // 沒有 lookup → 一律當作沒有（保守方向）。回傳一律帶來源，下一個人看得出這個類別是怎麼來的。
 export function trustedTheme(spot, lookup, themes = _themes) {

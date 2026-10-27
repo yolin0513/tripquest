@@ -1,7 +1,7 @@
 [
   {
     "name": "主題：回到只看帶著的 theme（2026-10-27 第一次修正的寫法）",
-    "why": "海報當天主題用 storedThemeOf：帶著但不可信的也算。預期紅 postertruthtest 的 P1（第 1 天乙溪帶著 food）、P3（第 2 天印存著的海濱）、P4（第 3 天兩票 nature）。",
+    "why": "海報當天主題用存著的 theme：帶著但不可信的也算。預期紅 postertruthtest 的 P1（第 1 天乙溪帶著 food）、P3（第 2 天用存著的 coast 配色）、P4（第 3 天變 coast）。",
     "file": "js/poster/index.js",
     "find": "      theme: trustedThemeOf(byDaySpots.get(day), lookup),",
     "replace": "      theme: (byDaySpots.get(day).map((s) => s.theme).filter(Boolean)[0] || null),",
@@ -9,7 +9,7 @@
   },
   {
     "name": "海報：沒有主題的那天補一個通用類別",
-    "why": "當天主題退回 journey，主題章印「🧳 旅途」——一個沒有來源的字。預期紅 P1、P2、P7。",
+    "why": "當天主題退回 journey，配色換成「旅途」的——一個沒有來源的類別。預期紅 P1、P7。",
     "file": "js/poster/index.js",
     "find": "      theme: trustedThemeOf(byDaySpots.get(day), lookup),",
     "replace": "      theme: trustedThemeOf(byDaySpots.get(day), lookup) || 'journey',",
@@ -24,11 +24,51 @@
     "cmd": "node scripts/postertruthtest.mjs"
   },
   {
-    "name": "海報：把主題章整個關掉",
-    "why": "反方向：可信的那天也不印。預期只紅 P3（證明 P1 不是靠「什麼都不印」過的）。",
+    "name": "海報：當天主題整個關掉",
+    "why": "反方向：可信的那天也不給配色。預期紅 P3、P4（證明 P1 不是靠「什麼都沒有」過的）。",
     "file": "js/poster/index.js",
-    "find": "  if (!day || !day.theme) return '';",
-    "replace": "  return '';",
+    "find": "      theme: trustedThemeOf(byDaySpots.get(day), lookup),",
+    "replace": "      theme: null,",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "海報：每站 emoji 放回模型",
+    "why": "2026-10-27 以前的寫法，存著的 emoji 有一部分是照名字猜的。預期只紅 P2。",
+    "file": "js/poster/index.js",
+    "find": "      photoHash: pickPhotoHash(s),",
+    "replace": "      photoHash: pickPhotoHash(s), emoji: s.emoji || '📍',",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "配色：主題插圖跟著主題換",
+    "why": "styleFor 回到吃主題的 deco。預期只紅 P8。",
+    "file": "js/poster/presets.js",
+    "find": "  const deco = null;",
+    "replace": "  const deco = (themeMeta && themeMeta.deco) || null;",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "配色：時間軸樣式跟著主題換",
+    "why": "styleFor 回到吃主題的 timeline（燈籠串、葉子點）。預期只紅 P8。",
+    "file": "js/poster/presets.js",
+    "find": "  const timeline = 'dot';",
+    "replace": "  const timeline = (themeMeta && themeMeta.timeline) || 'dot';",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "繪製：主題章在畫的那一半自己拿類別名",
+    "why": "模型裡沒有類別名，但畫的那一半用 d.theme 自己查 themeMeta 印出來。預期只紅 P9。",
+    "file": "js/poster/index.js",
+    "find": "  deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd);",
+    "replace": "  deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd); if (d.theme) ctx.fillText(themeMeta(d.theme).label, W - PAD - 4, bandY + 52);",
+    "cmd": "node scripts/postertruthtest.mjs"
+  },
+  {
+    "name": "P9 掃描：註解也算",
+    "why": "預期紅 P9 的對照組（註解那行被算進去，抓到 2 行）。",
+    "file": "scripts/postertruthtest.mjs",
+    "find": ".map((l) => l.replace(/\\/\\/.*$/, ''));",
+    "replace": ".map((l) => l);",
     "cmd": "node scripts/postertruthtest.mjs"
   }
 ]

@@ -34,11 +34,12 @@ export const PRESETS = {
 
 export const CJK_STACK = '"PingFang TC","Noto Sans TC","Microsoft JhengHei","Heiti TC",sans-serif';
 
-// preset + 主題 → 實際樣式
+// preset + 主題 → 實際樣式。主題只換顏色；主題插圖（deco）與時間軸樣式（燈籠串之類）一律用中性的——
+// 那些圖案本身就在說「這是什麼類別」，海報不印類別（Dispatch 2026-10-27）。
 export function styleFor(preset, themeMeta) {
   const tp = (themeMeta && themeMeta.poster) || {};
-  const deco = (themeMeta && themeMeta.deco) || null;
-  const timeline = (themeMeta && themeMeta.timeline) || 'dot';
+  const deco = null;
+  const timeline = 'dot';
   if (preset.themeMode === 'full') {
     return {
       ...preset,
