@@ -1,0 +1,22 @@
+{
+  "affectedtest": {
+    "sec": 5.2,
+    "at": "2026-10-27"
+  },
+  "validate-places": {
+    "sec": 0.2,
+    "at": "2026-10-27"
+  },
+  "itintest": {
+    "sec": 0.1,
+    "at": "2026-10-27"
+  },
+  "secret-leak-test": {
+    "sec": 4.1,
+    "at": "2026-10-27"
+  },
+  "aitest": {
+    "sec": 39.6,
+    "at": "2026-10-27"
+  }
+}
