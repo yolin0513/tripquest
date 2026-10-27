@@ -38,7 +38,7 @@
 1. 驗尺：`node scripts/mutate.mjs --only tools/mutations/mut_itinview.json "第 1 批：第一站藏在格子外" "第 1 批：用透明度淡化（字變得看不清楚）"`
 2. 原樣跑 VERIFY 裡的自動項：`itinviewtest`、`washitest`、`motiontest`、`guesstruthtest`，以及改過的舊測試 `collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest`。
 3. B1–B5 的 8 條突變與其餘瀏覽器突變：`mut_itinview`（22）、`mut_washi`（4）、`mut_motion` 後 7 條、`mut_guesstruth`（4）；C1「拿 HEAD 舊版跑新測試要紅」。
-4. 秒級、還沒跑過的：`guesscensustest` ＋ `mut_guesscensus`（6）。
+4. 秒級、還沒跑過的：`guesscensustest`、`affectedtest`（補了 VERIFY D1 那條）＋ `mut_guesscensus`（8；最後兩條驗挑選器，VERIFY D 節）。
 5. `mutatetest`：**先計時**（開 2 個以上程序、耗時沒量過）。
 6. `npm run test:affected`：這次放大成**全套 70 支**、預測不出耗時＝重負載。跑完把每支耗時記下來。
 跑完**立刻**告訴 Dispatch（MealMate 等機器）。
