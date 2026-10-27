@@ -24,6 +24,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { userClick } from './userclick.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5235;
@@ -104,6 +105,7 @@ const seen = (page, sel) => page.evaluate(async (s) => {
 }, sel);
 
 // 從首頁點那張旅程卡進去（使用者的路）
+// 先捲到看得到、確認點的那一點真的是這張卡才按（userClick）：直接 c.click() 時，第 5 張卡一半在底部分頁列後面，點到的是分頁列
 async function openFromHome(page, title) {
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
@@ -111,7 +113,9 @@ async function openFromHome(page, title) {
   const cards = await page.$$('.trip-card');
   for (const c of cards) {
     if ((await c.evaluate((el) => el.querySelector('.trip-card-title')?.textContent)) === title) {
-      await c.click();
+      const k = await userClick(page, c, `「${title}」旅程卡`);
+      yes(k.ok, `點得到首頁「${title}」那張旅程卡（${k.why}）`);
+      if (!k.ok) return false;
       await page.waitForSelector('.qcollapse', { timeout: 15000 });
       await sleep(900);
       return true;
@@ -231,7 +235,7 @@ try {
 
   const cell3 = await page.$('.daystrip .ds-day[data-day="3"]');
   yes(!!cell3, 'S2 日期列有第 3 天那一格');
-  if (cell3) { await cell3.click(); await sleep(800); }
+  if (cell3) { const k = await userClick(page, cell3, '日期列第 3 天'); yes(k.ok, `S2 點得到日期列第 3 天（${k.why}）`); await sleep(800); }
   const g3 = await planeAt(page, 3);
   yes(g3.ok, `G1 點第 3 天 → 紙飛機跟著到第 3 天上方（${g3.why}）`);
   cells = await stripCells(page);
@@ -243,7 +247,8 @@ try {
   yes(n3 > 0 && st3 === 0, `B5 看的不是今天（第 3 天、${n3} 站）→ 不分已到／未到、什麼都不淡化（實得 ${st3} 站有狀態）`);
 
   // 回第 1 天看時間軸
-  await (await page.$('.daystrip .ds-day[data-day="1"]')).click();
+  const k1 = await userClick(page, await page.$('.daystrip .ds-day[data-day="1"]'), '日期列第 1 天');
+  yes(k1.ok, `T1 點得到日期列第 1 天（${k1.why}）`);
   await sleep(400);
   const tl = await page.evaluate(() => [...document.querySelectorAll('.daycollapse.open .tl-item')].map((li) => ({
     name: li.querySelector('.qc-name')?.firstChild?.textContent || '', time: li.querySelector('.tl-time')?.textContent ?? null,
