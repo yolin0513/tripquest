@@ -1,0 +1,100 @@
+[
+  {
+    "name": "總開關：少了 ::after",
+    "why": "偽元素的動畫（以後誰用 ::after 做裝飾動畫）不會被蓋掉。預期紅 motioncsstest 的 M2（找不到完整的總開關）＋M3（那條變成沒登記的 !important）。",
+    "file": "css/style.css",
+    "find": ".reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {",
+    "replace": ".reduce-motion *, .reduce-motion *::before {",
+    "cmd": "node scripts/motioncsstest.mjs"
+  },
+  {
+    "name": "總開關：動畫時間沒壓到 0",
+    "why": "時間照舊，等於沒有總開關。預期只紅 motioncsstest 的 M2 animation-duration。",
+    "file": "css/style.css",
+    "find": "  animation-duration: 0.01ms !important;",
+    "replace": "  animation-duration: 0.3s !important;",
+    "cmd": "node scripts/motioncsstest.mjs"
+  },
+  {
+    "name": "總開關：轉場沒有 !important",
+    "why": "任何選擇器更具體的轉場規則都會贏過它（折疊的 .daycollapse.open .dc-body）。預期只紅 motioncsstest 的 M2 transition-duration。",
+    "file": "css/style.css",
+    "find": "  transition-duration: 0.01ms !important;",
+    "replace": "  transition-duration: 0.01ms;",
+    "cmd": "node scripts/motioncsstest.mjs"
+  },
+  {
+    "name": "總開關：被包進 @media",
+    "why": "只在某些條件下生效。預期只紅 motioncsstest 的 M2「在最外層」。",
+    "file": "css/style.css",
+    "edits": [
+      { "find": ".reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {", "replace": "@media (min-width: 900px) { .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {" },
+      { "find": "/* 例外：載入中的轉圈。", "replace": "} /* 突變：@media 在這裡收尾 */ /* 例外：載入中的轉圈。" }
+    ],
+    "cmd": "node scripts/motioncsstest.mjs"
+  },
+  {
+    "name": "例外：沒登記就開",
+    "why": "有人在總開關之外另開一條會贏的 !important，卻沒登記。預期只紅 motioncsstest 的 M3（沒登記、以及登記的那條不再命中）。",
+    "file": "css/style.css",
+    "find": ".reduce-motion .spinner { animation-duration",
+    "replace": ".reduce-motion .spinner-x { animation-duration",
+    "cmd": "node scripts/motioncsstest.mjs"
+  },
+  {
+    "name": "瀏覽器：拿掉總開關",
+    "why": "預期紅 motiontest 的 R2（勾勾、淡入、折疊、全頁動畫的時間）與 R3（勾了開關的慶祝畫面）；撒彩帶那幾條不紅（JS 那一道另外擋）。",
+    "file": "css/style.css",
+    "find": ".reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {",
+    "replace": ".reduce-motion-off *, .reduce-motion-off *::before, .reduce-motion-off *::after {",
+    "cmd": "node scripts/motiontest.mjs"
+  },
+  {
+    "name": "瀏覽器：撒彩帶不看設定",
+    "why": "預期紅 motiontest 的 R2 撒彩帶與 R3 慶祝畫面那兩條。",
+    "file": "js/ui.js",
+    "find": "  if (document.documentElement.classList.contains('reduce-motion')) return wrap;",
+    "replace": "  if (document.documentElement.classList.contains('reduce-motion-off')) return wrap;",
+    "cmd": "node scripts/motiontest.mjs"
+  },
+  {
+    "name": "瀏覽器：不監聽系統設定的變化",
+    "why": "預期只紅 motiontest 的 R5（不重開就跟著變）。",
+    "file": "js/prefs.js",
+    "find": ".addEventListener?.('change', apply);",
+    "replace": ".addEventListener?.('change-off', apply);",
+    "cmd": "node scripts/motiontest.mjs"
+  },
+  {
+    "name": "瀏覽器：開關不存偏好",
+    "why": "預期紅 motiontest 的 R3（勾了沒生效、沒存、重開不在）。",
+    "file": "js/views/settings.js",
+    "find": "checkbox(prefs.reduceMotion === true, (on) => { setPref('reduceMotion', on); })",
+    "replace": "checkbox(prefs.reduceMotion === true, (on) => { void on; })",
+    "cmd": "node scripts/motiontest.mjs"
+  },
+  {
+    "name": "瀏覽器：系統已設時不講明",
+    "why": "預期只紅 motiontest 的 R4（系統已設那一條）。",
+    "file": "js/views/settings.js",
+    "find": "        systemReducesMotion()",
+    "replace": "        false",
+    "cmd": "node scripts/motiontest.mjs"
+  },
+  {
+    "name": "瀏覽器：系統沒設也講明",
+    "why": "預期只紅 motiontest 的 R4 反向。",
+    "file": "js/views/settings.js",
+    "find": "        systemReducesMotion()",
+    "replace": "        true",
+    "cmd": "node scripts/motiontest.mjs"
+  },
+  {
+    "name": "瀏覽器：建立頁照樣平滑捲動",
+    "why": "預期只紅 motiontest 的 R6 減少動態那一條。",
+    "file": "js/views/create.js",
+    "find": "contains('reduce-motion') ? 'auto' : 'smooth'",
+    "replace": "contains('reduce-motion-off') ? 'auto' : 'smooth'",
+    "cmd": "node scripts/motiontest.mjs"
+  }
+]

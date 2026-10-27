@@ -457,7 +457,10 @@ try {
         for (let k = 0; k < 2; k++) {
           const opened = await page.evaluate(() => {
             let n = 0;
-            for (const b of document.querySelectorAll('.daycollapse:not(.open) .dc-head, .qcollapse:not(.open) .qc-toggle')) { b.click(); n++; }
+            for (const b of document.querySelectorAll('.qcollapse:not(.open) .qc-toggle')) { b.click(); n++; }
+            // v1.74.11 起一次只顯示一天（日期列切換），天的標題點了不會展開。沒選中的天直接加 open
+            // 讓它顯示出來一起掃——不加的話，除了選中那一天，其餘天的卡片永遠不會被檢查到
+            for (const d of document.querySelectorAll('.daycollapse:not(.open)')) { d.classList.add('open'); n++; }
             // <details>（「進階（可略過）」那種）也要展開 —— 使用者會展開它
             for (const d of document.querySelectorAll('details:not([open])')) { d.open = true; n++; }
             return n;

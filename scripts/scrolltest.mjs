@@ -1,11 +1,11 @@
 // 旅程頁的折疊預設值 + 自動捲到今天（npm run scrolltest）
 //
 // 規則：
-//   天    —— 進行中只展開今天；還沒出發展開第 1 天；已結束全收
-//   景點  —— 還沒完成的展開、完成的收起
-//   兩者的使用者手動選擇都優先（存 localStorage）
-//   自動捲動 —— 只在進行中、今天那列看不到、且不是按返回進來時才動；設定可關；
-//              尊重「減少動態效果」
+//   天    —— v1.74.11 起一次只顯示一天（上方日期列）：進行中選今天；還沒出發、已結束都選第 1 天
+//            （以前已結束是全收，一次只顯示一天之後全收就是空白）。新打開回到預設，返回才沿用手動點的那天
+//   景點  —— 還沒完成的展開、完成的收起；使用者手動選擇優先（存 localStorage）
+//   自動捲動 —— 只在進行中、要看的那一站被擋在畫面外、且不是按返回進來時才動；設定可關；
+//              尊重「減少動態效果」。日期列黏在標題列下面，被它蓋住也算看不到
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -150,31 +150,60 @@ const openDays = (s) => s.days.filter((d) => d.open).map((d) => d.day);
 
 try {
   // ================= A. 旅程進行中（昨天出發 → 今天是第 2 天）=================
+  // v1.74.11 起一次只顯示一天（上方日期列）。「自動捲到今天」對應成兩步：
+  //   ① 日期列自動選中今天那一格（不必捲，日期列一直看得到）
+  //   ② 那一天的時間軸裡，「現在這一站」在畫面外 → 捲到看得到它
   const A = await device();
-  const tidA = await seed(A.page, { startOffset: -1, dayCount: 3 });
+  const tidA = await seed(A.page, { startOffset: -1, dayCount: 3, spotsPerDay: 6 });
   await openTrip(A.page, tidA);
   const a = await snapshot(A.page);
 
-  if (JSON.stringify(openDays(a)) === '[2]') ok('進行中：只展開今天（第 2 天），其他天收合');
-  else fail('進行中展開的天數不對：' + JSON.stringify(openDays(a)));
+  if (JSON.stringify(openDays(a)) === '[2]') ok('進行中：只顯示今天（第 2 天），其他天藏起來');
+  else fail('進行中顯示的天數不對：' + JSON.stringify(openDays(a)));
+  const stripA = await A.page.evaluate(() => {
+    const track = document.querySelector('.daystrip .ds-track');
+    const tr = track && track.getBoundingClientRect();
+    return [...document.querySelectorAll('.daystrip .ds-day')].map((c) => {
+      const r = c.getBoundingClientRect();
+      return { day: +c.dataset.day, on: c.classList.contains('on'), today: c.classList.contains('is-today'),
+        inView: !!tr && r.left >= tr.left - 1 && r.right <= tr.right + 1 && r.top >= 0 };
+    });
+  });
+  if (stripA.length === 3 && stripA.filter((c) => c.on).map((c) => c.day).join() === '2' && stripA.find((c) => c.day === 2).today && stripA.find((c) => c.day === 2).inView)
+    ok('進行中：日期列三天都在、自動選中今天（第 2 天）那一格、標著今天、而且在日期列看得到的範圍裡');
+  else fail('日期列不對：' + JSON.stringify(stripA));
 
   // v1.42：只展開「現在這一站」（今天第一個未完成的），不再把當天全部未完成的打開 ——
   // 使用者實機回報「第二天的全部任務都是展開的」就是舊行為造成的
   const openNames = a.spots.filter((x) => x.open).map((x) => x.name);
-  if (a.spots.length === 6 && openNames.length === 1 && openNames[0] === '第2天景點1') {
+  if (a.spots.length === 18 && openNames.length === 1 && openNames[0] === '第2天景點1') {
     ok(`只展開今天第一個未完成的景點（${openNames[0]}），其他收合`);
   } else fail('景點展開狀態不對：' + JSON.stringify(a.spots));
 
-  // 自動捲動：今天那列本來在畫面外，應該被帶到頂列下方
+  // ②：現在這一站指定成今天的最後一站（第 6 站），一開頁一定在畫面外 → 要捲到看得到它
+  await A.page.evaluate(async (t) => {
+    const s = await import('./js/store.js');
+    const last = s.spotsOf(t).filter((x) => x.day === 2).sort((x, y) => x.order - y.order).pop();
+    await s.setHereSpot(t, last.id, null);
+  }, tidA);
+  await openTrip(A.page, tidA);
   const pos = await A.page.evaluate(() => {
-    const head = document.querySelector('.daycollapse[data-day="2"] .dc-head');
-    const topH = document.getElementById('topbar').offsetHeight;
-    return { top: Math.round(head.getBoundingClientRect().top), topH: Math.round(topH), y: Math.round(window.scrollY) };
+    const sec = [...document.querySelectorAll('.daycollapse.open .qcollapse')].find((x) => x.classList.contains('is-here'));
+    const head = sec && sec.querySelector('.qc-head');
+    const stripB = document.querySelector('.daystrip').getBoundingClientRect().bottom;
+    const tabH = document.getElementById('tabbar').offsetHeight;
+    const r = head ? head.getBoundingClientRect() : null;
+    return { has: !!head, top: r ? Math.round(r.top) : null, bottom: r ? Math.round(r.bottom) : null,
+      docTop: r ? Math.round(r.top + window.scrollY) : null,
+      stripB: Math.round(stripB), limit: Math.round(window.innerHeight - tabH), vh: window.innerHeight, y: Math.round(window.scrollY) };
   });
-  if (pos.y > 100) ok(`進行中：自動捲到今天（捲了 ${pos.y}px）`);
+  // 前置：那一站在文件裡的位置真的在第一個畫面以下（否則「有捲」證明不了什麼）
+  if (pos.has && pos.docTop > pos.vh) ok(`前置：現在這一站在第一個畫面以下（文件位置 ${pos.docTop}px > 畫面高 ${pos.vh}px）`);
+  else fail('前置不成立：現在這一站本來就在第一個畫面裡，或找不到它：' + JSON.stringify(pos));
+  if (pos.y > 100) ok(`進行中：自動捲到現在這一站（捲了 ${pos.y}px）`);
   else fail('沒有自動捲動：scrollY=' + pos.y);
-  if (pos.top >= pos.topH - 4 && pos.top <= pos.topH + 40) ok(`停在「第 2 天」標題列（距頂列 ${pos.top - pos.topH}px），看得到自己在哪一天`);
-  else fail(`停的位置不對：標題列 top=${pos.top}、頂列高 ${pos.topH}`);
+  if (pos.top >= pos.stripB - 4 && pos.bottom <= pos.limit) ok(`停的位置看得到那一站：在日期列下面、底部分頁上面（top ${pos.top}、日期列底 ${pos.stripB}、可見下緣 ${pos.limit}）`);
+  else fail(`停的位置不對（被日期列蓋住或在畫面外）：${JSON.stringify(pos)}`);
   // 判準是「App 呼叫了 window.scrollTo 幾次、跨了多久」，不是 scroll 事件的取樣數
   //（後者會被瀏覽器合併，負載一高就只剩 1 次 —— 那是 v1.73.2 之前的偽失敗來源）。
   // smoothScrollTo 是 320ms 的 rAF 動畫，一定不只一次呼叫、一定跨得過 0 毫秒。
@@ -200,8 +229,9 @@ try {
   const tidC = await seed(C.page, { startOffset: -6, dayCount: 3 });
   await openTrip(C.page, tidC);
   const c = await snapshot(C.page);
-  if (openDays(c).length === 0) ok('已結束：所有天都收合');
-  else fail('已結束卻有展開的天：' + JSON.stringify(openDays(c)));
+  // v1.74.11：以前是全部收合；一次只顯示一天之後收合就是空白，改成從第 1 天看起
+  if (JSON.stringify(openDays(c)) === '[1]') ok('已結束：顯示第 1 天（不是一片空白）');
+  else fail('已結束顯示的天數不對：' + JSON.stringify(openDays(c)));
   if (c.scrollY === 0) ok('已結束：不自動捲動');
   else fail('已結束卻捲了：' + c.scrollY);
 
@@ -219,15 +249,17 @@ try {
   else fail('同一天展開的數量不對：' + JSON.stringify(undoneToday));
 
   // ================= E. 使用者手動的選擇優先 =================
-  await D.page.evaluate(() => {
-    document.querySelector('.daycollapse[data-day="1"] .dc-head').click();   // 手動展開第 1 天
-    document.querySelector('.daycollapse[data-day="2"] .dc-head').click();   // 手動收合今天
-  });
+  // v1.74.11：點日期列換天當場生效；但「新打開這趟行程」是「帶我到今天」，一律回到今天
+  //（返回才沿用剛剛點的那天，那條在 collapsetest 驗）
+  await D.page.evaluate(() => document.querySelector('.daystrip .ds-day[data-day="1"]').click());
   await sleep(200);
+  const e0 = await snapshot(D.page);
+  if (JSON.stringify(openDays(e0)) === '[1]') ok('點日期列的第 1 天：當場換成顯示第 1 天');
+  else fail('點日期列沒換天：' + JSON.stringify(openDays(e0)));
   await openTrip(D.page, tidD);
   const e = await snapshot(D.page);
-  if (JSON.stringify(openDays(e)) === '[1]') ok('重新進入：照使用者手動的選擇（展開第 1 天、收合今天）');
-  else fail('沒有記住手動選擇：' + JSON.stringify(openDays(e)));
+  if (JSON.stringify(openDays(e)) === '[2]') ok('新打開這趟行程：回到今天（第 2 天），不沿用上次點的第 1 天');
+  else fail('新打開沒有回到今天：' + JSON.stringify(openDays(e)));
 
   // 手動展開一個「已完成」的景點，重進仍是展開的
   await D.page.evaluate(() => {
@@ -241,31 +273,32 @@ try {
   if (reopened && reopened.open) ok('手動展開的「已完成」景點，重進仍展開');
   else fail('手動展開沒被記住：' + JSON.stringify(reopened));
 
-  // ================= E2. 「全部展開 / 全部收合」要兩層一起 =================
+  // ================= E2. 「全部展開 / 全部收合」 =================
+  // v1.74.11 起只管景點：天一次只顯示一天，不再跟著展開／收合（收合天就是空白）
   const E2 = await device();
   const tidE2 = await seed(E2.page, { startOffset: -1, dayCount: 3, complete: [[1, 0]] });
   await openTrip(E2.page, tidE2);
   await E2.page.evaluate(() => [...document.querySelectorAll('.day-tool-btn')].find((b) => b.textContent.includes('全部展開')).click());
   await sleep(250);
   const allOpen = await snapshot(E2.page);
-  if (allOpen.days.every((d) => d.open) && allOpen.spots.every((s) => s.open)) ok(`全部展開：${allOpen.days.length} 天、${allOpen.spots.length} 個景點都展開`);
-  else fail('全部展開沒有兩層一起：' + JSON.stringify({ days: openDays(allOpen), spots: allOpen.spots.map((s) => s.open) }));
+  if (JSON.stringify(openDays(allOpen)) === '[2]' && allOpen.spots.every((s) => s.open)) ok(`全部展開：${allOpen.spots.length} 個景點都展開，天照樣只顯示今天`);
+  else fail('全部展開不對：' + JSON.stringify({ days: openDays(allOpen), spots: allOpen.spots.map((s) => s.open) }));
 
   await E2.page.evaluate(() => [...document.querySelectorAll('.day-tool-btn')].find((b) => b.textContent.includes('全部收合')).click());
   await sleep(250);
   const allShut = await snapshot(E2.page);
-  if (allShut.days.every((d) => !d.open) && allShut.spots.every((s) => !s.open)) ok('全部收合：兩層都收合');
-  else fail('全部收合沒有兩層一起：' + JSON.stringify({ days: openDays(allShut), spots: allShut.spots.map((s) => s.open) }));
+  if (JSON.stringify(openDays(allShut)) === '[2]' && allShut.spots.every((s) => !s.open)) ok('全部收合：景點都收合，今天那一天照樣看得到（不是空白）');
+  else fail('全部收合不對：' + JSON.stringify({ days: openDays(allShut), spots: allShut.spots.map((s) => s.open) }));
 
   // 收合後重進，狀態要留著（不會被預設值蓋回去）
   await openTrip(E2.page, tidE2);
   const afterReload = await snapshot(E2.page);
-  if (afterReload.days.every((d) => !d.open) && afterReload.spots.every((s) => !s.open)) ok('全部收合後重新進入：仍是收合的（沒有被預設值蓋掉）');
+  if (afterReload.spots.every((s) => !s.open)) ok('全部收合後重新進入：景點仍是收合的（沒有被預設值蓋掉）');
   else fail('全部收合的狀態沒留住：' + JSON.stringify({ days: openDays(afterReload), spots: afterReload.spots.map((s) => s.open) }));
 
   // 再單獨點開一個景點，只有它變（記憶不會互相污染）
   await E2.page.evaluate(() => {
-    document.querySelector('.daycollapse[data-day="1"] .dc-head').click();
+    document.querySelector('.daystrip .ds-day[data-day="1"]').click();
     document.querySelectorAll('.qcollapse')[0].querySelector('.qc-toggle').click();
   });
   await sleep(200);
@@ -276,7 +309,8 @@ try {
 
   // ================= F. 按返回回來：不捲動、還原原本位置 =================
   const F = await device();
-  const tidF = await seed(F.page, { startOffset: -1, dayCount: 3 });
+  // 一次只顯示一天（v1.74.11）之後頁面變短：每天 6 站才捲得到 1500
+  const tidF = await seed(F.page, { startOffset: -1, dayCount: 3, spotsPerDay: 6 });
   await openTrip(F.page, tidF);
   await F.page.evaluate(() => window.scrollTo(0, 1500));
   await sleep(300);
@@ -319,7 +353,13 @@ try {
 
   // ================= H. 減少動態效果：直接跳，不做動畫 =================
   const H = await device({ reduceMotion: true });
-  const tidH = await seed(H.page, { startOffset: -1, dayCount: 3 });
+  const tidH = await seed(H.page, { startOffset: -1, dayCount: 3, spotsPerDay: 6 });
+  // 現在這一站指定成今天最後一站：一定在畫面外，才量得到「還是會帶過去」（同 A 的前置）
+  await H.page.evaluate(async (t) => {
+    const s = await import('./js/store.js');
+    const last = s.spotsOf(t).filter((x) => x.day === 2).sort((x, y) => x.order - y.order).pop();
+    await s.setHereSpot(t, last.id, null);
+  }, tidH);
   await openTrip(H.page, tidH);
   const hh = await snapshot(H.page);
   if (hh.reduceMotion) ok('系統偏好「減少動態效果」有被讀到');
@@ -336,7 +376,7 @@ try {
   // ================= 底部分頁：再按一次回到最上面 =================
   const T = await device();
   // 照片牆要有東西才捲得動，所以先讓幾個景點有照片
-  const tidT = await seed(T.page, { startOffset: -1, dayCount: 3, spotsPerDay: 3, complete: [[1, 0], [1, 1], [1, 2], [2, 0]] });
+  const tidT = await seed(T.page, { startOffset: -1, dayCount: 3, spotsPerDay: 6, complete: [[1, 0], [1, 1], [1, 2], [2, 0]] });
   await openTrip(T.page, tidT);
 
   await T.page.evaluate(() => window.scrollTo(0, 1200));
@@ -395,7 +435,7 @@ try {
   else fail(`設定頁不一致：${sParked} → ${sTop}`);
 
   const R2 = await device({ reduceMotion: true });
-  const tidR2 = await seed(R2.page, { startOffset: -1, dayCount: 3, spotsPerDay: 3 });
+  const tidR2 = await seed(R2.page, { startOffset: -1, dayCount: 3, spotsPerDay: 6 });
   await openTrip(R2.page, tidR2);
   await R2.page.evaluate(() => { window.scrollTo(0, 1200); window.__scrolls = []; });
   await sleep(400);
@@ -414,6 +454,18 @@ try {
   const stillAuto = await R2.page.evaluate(() => Math.round(window.scrollY));
   if (stillAuto > 100) ok(`沒有干擾原本的自動捲動（打開行程仍捲到指定那一站，${stillAuto}px）`);
   else fail('自動捲動被影響了：' + stillAuto);
+  // 這裡「現在這一站」在第 3 天、今天是第 2 天——兩者不同天，正是「照日期找」會找到隱藏那天的情境
+  const r2v = await R2.page.evaluate(() => {
+    const shown = [...document.querySelectorAll('.daycollapse.open')].map((e) => e.dataset.day);
+    const hd = document.querySelector('.daycollapse.open .qcollapse.is-here .qc-head');
+    const sb = document.querySelector('.daystrip').getBoundingClientRect().bottom;
+    const tabH = document.getElementById('tabbar').offsetHeight;
+    const r = hd && hd.getBoundingClientRect();
+    return { shown, has: !!r, top: r ? Math.round(r.top) : null, bottom: r ? Math.round(r.bottom) : null, sb: Math.round(sb), limit: window.innerHeight - tabH };
+  });
+  if (r2v.shown.join() === '3' && r2v.has && r2v.top >= r2v.sb - 4 && r2v.bottom <= r2v.limit)
+    ok('現在這一站不在今天（第 3 天 vs 今天第 2 天）：顯示第 3 天，捲完那一站看得到、沒被日期列蓋住');
+  else fail('現在這一站不在今天時捲錯地方：' + JSON.stringify(r2v));
 
   // ================= 底部分頁導覽：完整矩陣 =================
   // v1.35 出過大包：判斷「已經在這一頁」用了 active（＝在這個分頁的「區域」裡），

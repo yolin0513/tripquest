@@ -58,6 +58,88 @@
 >   這次是剛好覺得怪，沒覺得怪的話那份錯的清單就交出去了。
 > - **借來的案例不能當自己的正樣本**：本專案沒有 s05（那是別的專案的情境），「已知只看碼」那一方用的是合成樣本，照實標明。
 
+### 2026-10-27 行程頁改版第 1～4 項（Yolin 答 1.B、3 先不做、4 可以；Dispatch 定順序 1→5）——**全部在工作區、未 commit，等瀏覽器時段**
+
+Dispatch 裁定（原話摘要）：日期控制要「看得見全部天數的橫向日期列」，不是下拉、不是上一天／下一天；進頁面自動選中今天；當天時間軸自動捲到現在這一站；
+「不必再提折衷方案」。和紙主題「粉彩色不能當文字顏色……只能當底色或色塊，字一律用墨色」。航班、住宿、待辦、必去、交通標籤延後另開一輪。
+
+- **第 1 項 減少動態效果**：見下一節。`motiontest` 的「天」探針已改成量換天的淡入（`.daycollapse.open .dc-inner` 的 `dayin`）——
+  第 3 項把天的折疊轉場拿掉了，舊探針量 `.dc-body` 的轉場會讓 R1 對照組必紅（**推論：還沒開瀏覽器跑過**）。
+- **第 2 項 出發倒數**：`js/tripday.js`（新）`tripPhase`／`defaultDay`／`countdownText`；首頁旅程卡 `.trip-card-cd`、行程頁頂端 `.countdown`。
+  只在「還沒出發而且有日期」時顯示（「還有 N 天出發」「明天出發」）；進行中、已結束、沒設日期一律不顯示（不拿 0 冒充）。`localDay` 拒絕 13 月、2 月 30 日。
+- **第 3 項 日期列＋時間軸**：`js/views/trip.js` `dayStrip()`；`.daycollapse.open`＝選中、沒選中的 `display:none`；選中的天存 `tripquest.daySel.<tripId>`
+  （新打開：焦點 > 今天 > 第一天；返回／切分頁回來用 `navRestoredScroll()` 分辨、沿用）；日期列黏在標題列下，`top` 用 JS 量標題列實際高度；
+  時間軸 `ol.timeline > li.tl-item`，沒填時間就留白（不補猜的時間）。一天的旅程不畫日期列。**15 天以上**：390px 寬推論一次約看得到 4～5 格，其餘橫向捲；
+  itinviewtest S4 會量實際格數（只印、不設門檻），已向 Dispatch 回報。
+  - 刻意不動 `scripts/importshots.mjs`（f8verify 的登記檔，動了要重跑 f8verify；沒設日期的新旅程預設第 1 天照樣能用）。
+  - **待改**：`scripts/gallery.mjs`、`scripts/shotxl.mjs`（工具、不在鏈裡）還在點 `.dc-head`，下次用到前要改成點日期列。
+  - **風險（推論）**：時間軸左欄 4rem，特大字級可能擠——等 layouttest。
+- **第 4 項 淺色「和紙」主題**：
+  - `css/style.css`：新增**文字專用變數** `--primary-text`／`--accent-text`／`--ok-text`／`--danger-text`／`--heart-text`／`--warn-text`／`--mark-text`
+    （深色主題等於原值，外觀不變），41 處 `color:` 改用它們（只改 `color` 屬性，邊框與底色照用原變數）；`--danger-ink`／`--heart-ink`（SOS 鈕、新成員徽章的字）。
+    `html[data-theme="washi"]`：和紙白 #fffcf6 底、墨灰 #3e3a39 字、珊瑚粉／山吹黃／若竹綠只當底色；文字變數換成深墨色系。另有 `[data-theme="washi"][data-contrast="high"]`。
+    水色（#a8d3e6）這一版沒用上。
+  - **順手修的既有缺陷**：附近／求救頁一直在用 `--fg`、`--card`，從沒定義（palettetest P1 抓到）——字照樣繼承，但卡片沒底色、「選中」那格不變色。
+    補成 `--fg: var(--text)`、`--card: var(--bg-elev-2)`。**深色主題下這幾頁的卡片會多出底色**（外觀改變，推論、未截圖）。
+    `.sync-banner.done`、`.crew-row .cr-line.ok`、`.share-live` 原本寫 `var(--ok, #…)` 帶預設值、批次替換沒抓到，已手動改成 `--ok-text`。
+  - `js/prefs.js`：`theme`（`dark`／`washi`）→ `<html data-theme>`，並換 `meta[name=theme-color]`；`js/views/settings.js`：「看得舒服」加「畫面顏色」兩顆按鈕；
+    高對比的說明字跟著主題改（和紙下寫「背景更白、文字更黑」）。
+  - `scripts/palettetest.mjs`（新、秒級）：解析樣式表，四個主題（深色、深色＋高對比、和紙、和紙＋高對比）每一條有字色或底色的規則，算字對底的對比 ≥ 4.5
+    （沒設底色就看上一層那條規則的底，再沒有就對頁面三種底取最差；漸層每個色標都算；透明與半透明疊在頁面上算）。例外**登記制**（`EXEMPT`，登記了沒用到也報），
+    分「每個主題都放行」（沒有字的線條、進度條、開關；疊在照片或固定黑底上的；只有表情符號的）與「只放行深色」（**深色主題既有的 22 處對比不足**，見下）。
+    14 個對照組（每個分支一個合成樣本）。
+  - `scripts/washitest.mjs`（新、**開瀏覽器**、沒跑過）：W1–W6 從底部分頁「⚙️ 設定」切換、重開、切回；W4／W5 在首頁、旅程頁、設定頁、建立頁逐字掃瀏覽器實際算出來的對比；
+    W0 是掃描器自己的對照組（放一個粉彩字，必須抓到）。
+  - **深色主題既有的對比不足（v1.74.11 之前就有，這一版不改深色外觀）**：主色字在最淺的底（--bg-elev-2）上 3.84（勾勾、「＋新增」、麵包屑、連結等 11 處；底部分頁選中那格放在分頁列自己的底上、有過）、危險色字 4.42（4 處）、標籤 3.8～4.4（5 處）、
+    SOS 鈕白字 2.78、新成員徽章白字 2.72，共 22 處；另有頭像（每人色相不同、靜態算不出）。「對最淺的底」是保守算法，實際也許只放在較深的底上。
+    **要不要修是 Yolin 的決定**（列在「等 Yolin 回覆」⓪）。
+- **實測驗證過的**（全部秒級、沒開瀏覽器）：palettetest 27 項綠；拿 HEAD 與「只加了文字變數之前」的樣式表跑都紅（P0 沒有和紙那層、P1 `--fg`／`--card` 沒定義）；
+  `mut_palette.json` 8/8 紅在預期；tripdaytest 25、motioncsstest 20、affectedtest 105、mutlint、gatelint、zhtest 綠；改過的 JS `node --check` 全過。
+- **還沒驗的（要開瀏覽器）**：motiontest、itinviewtest、washitest 新版跑一次＋拿 HEAD 舊版跑一次證明會紅；改過的 collapsetest、scrolltest、walltest、imgtest、layouttest；
+  瀏覽器突變 motion 7、itinview 11、washi 3 條；部署前的 `test:affected`（新突變檔沒有規則認領 → 放大成全套 65 支、沒量過耗時 → 判重負載，要許可）。
+  **和紙主題逐頁的實際樣子（三段字級＋高對比）一次都沒看過。** 全部驗完才 bump `VERSION`（v1.74.10 → v1.74.11）、逐路徑 commit、`safe-push.sh`；本機 5062754 也還沒推。
+- **第 5 項 行程回顧的插圖**：四項實查做完、已回報 Dispatch，**等 Yolin 選「照片會不會離開裝置」**（見「等 Yolin 回覆」⓪）；還沒設計、沒寫程式。
+- **第 1 批實作（2026-10-27，Dispatch：改檔可以、不開瀏覽器、驗證排到瀏覽器時段一次驗）**——工作區、未 commit：
+  - `js/tripday.js` 新增 `weekdayLabel`、`dayRoute`、`timelineStates`（`tripdaytest` 先寫 14 條、實作前全紅、實作後 39 項綠；`mut_tripday` 新 5 條 5/5 紅）。
+  - `js/views/trip.js`：日期列每格加「週X」與當天第一站（`.ds-first`）；當日標題卡加「第一站 → 最後一站」（`.dc-route`）；
+    每天時間軸開頭放「同行夥伴」（`crewStrip`，**不寫「今日」**——沒有「哪一天誰同行」的資料）；三態 `tl-past`／`tl-now`／`tl-next`
+    只在進行中、看今天、今天有現在這一站時才有。`.dc-inner` 從 `ol` 移到外面包住同行夥伴與時間軸（換天淡入照舊）。
+  - `css/style.css`：時間軸改虛線、三態圓點；未到的卡片虛線框、名字用 `--muted`——**不用 opacity**（字的對比要照樣 ≥ 4.5）；
+    和紙主題專屬：墨色粗框、同行夥伴下的虛線、行程頁最底下一道波浪（`.page:has(.daystrip)::after`，CSS mask）。`palettetest` 27 項綠（兩個圓點登記成沒有字）。
+  - `itinviewtest` 加 B1–B5，全部用 `seen()`（捲到中間、沒被蓋住、含 opacity 的對比 ≥ 4.5）；`mut_itinview` 加 8 條（含「字移到畫面外」「用 opacity 淡化」兩條只驗存在抓不到的）。**都沒跑過。**
+  - **「當日合計」沒做**：花費沒有「第幾天」，依設計文件第 0.5 節移到第 3 批（Dispatch 這輪把它列在第 1 批，已回報）。
+  - 兩個原創圖形的草圖：`docs/sketches/原創圖形草圖.svg`，**沒放進畫面**，等 Yolin。
+  - **待驗清單**：`docs/VERIFY_第1批.md`（判準一律是「使用者看得到什麼」；截圖項目寫明截哪張、看哪裡）。
+- **海報重做＋繪本風（Yolin 2026-10-27 新增，參考兩份行程頁的錄影）**：設計提案在 `docs/DESIGN_繪本風改版.md`（三批＋估工）。
+  🔴 **參考裡的角色（三麗鷗、吉依卡哇）一個都不用**，只學風格（Dispatch 定）。**任何第三方角色、吉祥物、商標、品牌圖像都不得入庫**（界線寫在設計文件最前面）。
+  角色方案 Yolin 選 (c)：時間軸放旅伴頭像（回答「誰跟我去」），日期軸與頁首各一個原創圖形（回答「現在在哪一天」／App 識別），**就這兩個**，做完看效果再談加。AI：Yolin 定「有綁金鑰用 AI、沒綁用本機生成」；
+  **但現在綁的是 Claude（只讀圖、不能生圖）**，要生圖得另接一家服務——那要先問他。海報外觀等方向定了、草圖給他看過才寫程式。
+
+### 2026-10-27 補齊「減少動態效果」（Dispatch 核准的單項：既有缺陷，不等行程頁改版的決定）——**改好、未 commit，等瀏覽器驗證的時段**
+
+- **缺陷**（實查）：系統設定「減少動態效果」會讓 `<html>` 加上 `reduce-motion`（`js/prefs.js`），但 CSS 只有照片檢視器淡入那一條認它——
+  慶祝畫面的彈出與撒彩帶、對話框往上滑、天與景點的折疊、換頁淡入全部照跑；`prefs.reduceMotion` 存在但**設定頁沒有開關**。
+- **改了什麼**（工作區，未 commit）：
+  - `css/style.css` 結尾一條總開關：`.reduce-motion *`／`::before`／`::after` 的動畫與轉場時間 0.01ms、延遲 0、只跑一次，全部 `!important`。
+    不一條一條補（那是排除制，以後每加一段動畫都要有人記得）。例外只有載入中的轉圈（放慢照轉，停住像當掉），**登記在 `motioncsstest.mjs` 的 `EXEMPT`**。
+  - `js/ui.js`：減少動態時撒彩帶連產生都不產生。`js/prefs.js`：`systemReducesMotion()`、`reducesMotion()`；監聽系統設定的變化（不用重開）。
+  - `js/views/settings.js`：「看得舒服」加「減少動態效果」開關；**系統已設時講明「不管這裡開或關都照系統」**（系統那邊 App 改不了，不講的話勾掉之後畫面照樣不動，會以為開關壞了）。
+  - `js/views/create.js`：沒填名字時捲到名稱欄，減少動態時用 `auto`。
+- **測試**：`scripts/motioncsstest.mjs`（秒級、不開瀏覽器：M1 母體 24 條、M2 總開關結構、M3 例外登記制＋11 個對照組）；
+  `scripts/motiontest.mjs`（**開瀏覽器**，R1–R6 走底部分頁「⚙️ 設定」與首頁「＋ 建立新旅程」的真實入口；R1 是「沒設定時動畫真的在」的對照組）。兩支都進鏈（鏈 59 → 61）。
+- **實測驗證過的**：改前 motioncsstest 紅（M2 找不到總開關、M3 登記的例外沒命中），改後 20 項綠；`tools/mutations/mut_motion.json` 前 5 條（改 CSS）
+  用 `mutate.mjs --only` 跑，**5/5 紅、而且紅的正好是各自預期那一類**，工作區已還原；affectedtest 105 項、mutlint、gatelint 綠。
+- **還沒驗的**（要開瀏覽器，等 Dispatch 排時段）：
+  1. `motiontest` 一次都沒跑過——包括它在**修正前的程式**上會不會紅（要拿 HEAD 那一版跑一次，§5.1）。
+  2. `mut_motion.json` 後 7 條（瀏覽器那幾條）沒跑。
+  3. `npm run test:affected` 這次挑到 39/61 支（改到 `css/style.css` 與兩個 view → 放大器 A），含 layouttest 等開瀏覽器的，屬重負載。
+  4. 之後才 bump `VERSION`、commit、`safe-push.sh`。**不要在這些之前 commit**（Dispatch 2026-10-04：不要為了收尾把沒驗完的東西 commit 進去）。
+- **待辦（順手查到的既有問題，這一輪不做）**：
+  - `index.html:25` 從 Google Fonts 的 CDN 載 Caveat（海報的英文標題），而 `sw.js` 不快取跨網域（`if (url.origin !== self.location.origin) return;`）——
+    **現在離線時海報的英文字型就已經會退回系統字型**。不會壞，但沒人知道。要修就把 Caveat 打包進 repo、列進 SHELL、CSP 拿掉 gstatic。
+  - 行程頁改版的參考提示詞裡的「Huninn」：**我推論是 jf 開源粉圓、完整中文字型、檔案好幾 MB——沒實查**。將來真的要用，先量檔案大小再決定；
+    要離線就只能打包進 SW，第一次安裝會多下載那麼多。
+
 ### 2026-10-08 共用慣例副本 v9 → v11.6＋副本版本檢查（Yolin 核准的單項任務；其餘工作仍在暫停中）
 
 - **起因**：本專案的 `docs/CONVENTIONS.md` 停在 v9（2026-09-24），主檔（統籌工作區的 CONVENTIONS.md）早就是 v11.6（2026-10-02）；MealMate 發現、只讀沒碰。
@@ -844,6 +926,21 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 > 這些是需要 Yolin 決定、我不能自行動手的事。用純文字列出，不要用互動式提示框。
 
+**⓪ 行程頁改版（2026-10-27）——Yolin 已答 1.B、2、3 先不做、4 可以；做到哪見最上面「行程頁改版第 1～4 項」。還在等的兩件：**
+- **⓪-a 行程回顧的插圖「用使用者上傳的照片生成」：照片會不會離開裝置？**（隱私選擇，而且是旅伴的照片；外送第三方服務依授權邊界要先問他）
+  - 實查：照片在 `js/photos.js` `importPhoto` 壓到長邊 1600px（約 300KB）＋縮圖，以 sha256 為鍵存 IndexedDB；同步群組會經 outbox 傳到 TripQuest 自己的
+    Worker／R2；原檔預設不留、開了也只留本機。回顧頁存在（`/trip/:id/memories`：回憶影片、相簿、海報、最終回顧 `/recap`、徽章）。海報三種風格只是拍立得框＋
+    主題色薄暈＋紙紋，**沒有對照片像素做任何處理**。AI 照片說明只送文字、不送照片。
+  - **A（建議）本機風格化**：在手機上用 canvas 把照片轉成水彩／色鉛筆感（色塊簡化、邊緣描線、紙紋），**照片不離開裝置**、離線可用、免費、不用帳號；
+    效果是「濾鏡級」，不是重畫。
+  - **B 外部 AI 生圖**：效果可以是真的插畫，但**照片要送到第三方服務**、要網路、要付費與帳號、有內容政策與等待時間；要 Yolin 同意且旅伴知情。
+  - **C 先不做**。
+- **⓪-c 海報與繪本風（`docs/DESIGN_繪本風改版.md`）**：照片送不送（第 2 節選項 1～3，建議 1：預設不送、每次按下前講明送到哪）；要不要另接影像生成服務；
+  ~~吉祥物要不要做~~（已定 (c)：時間軸用旅伴頭像、日期軸與頁首各一個原創圖形，就這兩個；等草圖）；第 3 批（手繪地圖、路線播放、交通膠囊、準備清單、當日合計、航班）要哪幾項。
+- **⓪-b 深色主題既有的對比不足要不要修**（palettetest 量到，v1.74.11 之前就有）：主色字在最淺的底上 3.84（11 處）、危險色字 4.42（4 處）、SOS 鈕白字 2.78、
+  新成員徽章白字 2.72、標籤 3.8～4.4（5 處），共 22 處。**建議修**：只把深色的文字變數調亮一點（例 `--primary-text` #4f8dff → 約 #6fa3ff）、SOS 鈕與徽章改深色字，
+  一處改全站跟著變；代價是深色主題的藍字會稍微變淡、要截圖給他看過。不修的話它們留在 `palettetest` 的「只放行深色」登記裡。
+
 **① Remote Control 怎麼開**（他 2026-09-16 說「開啟 Remote Control」，我查證後尚未收到選擇）
 - 實測到的事實：**無法從 Session 內部靠改設定檔打開**——它是**啟動參數**
   `claude --remote-control [name]`（另有 `--remote-control-session-name-prefix`）。
@@ -1072,7 +1169,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **59 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **65 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

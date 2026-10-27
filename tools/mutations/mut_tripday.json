@@ -1,0 +1,130 @@
+[
+  {
+    "name": "倒數：拿時刻比、不拿日比",
+    "why": "前一天晚上 11:30 看，明天出發會被算成 0 天（四捨五入），倒數消失。實測紅 tripdaytest 的 T3 兩條＋T5 回程當天＋T6（後兩者的「現在」不是午夜，拿時刻比一樣會錯）。",
+    "file": "js/tripday.js",
+    "find": "  const today = startOfDay(now);",
+    "replace": "  const today = new Date(now);",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "倒數：出發當天還算 before",
+    "why": "出發當天會顯示「還有 0 天出發」。實測紅 tripdaytest 的 T4 兩條＋T6（單日行程的出發當天）。",
+    "file": "js/tripday.js",
+    "find": "  if (diff > 0) return { phase: 'before'",
+    "replace": "  if (diff >= 0) return { phase: 'before'",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "倒數：回程當天就算結束",
+    "why": "回程那一天行程頁就當成已結束。實測紅 tripdaytest 的 T5 回程當天＋T6（單日行程的出發日就是回程日）。",
+    "file": "js/tripday.js",
+    "find": "  if (today > end) return { phase: 'after'",
+    "replace": "  if (today >= end) return { phase: 'after'",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "倒數：沒填回程日不當單日",
+    "why": "沒填回程日的旅程出發當天就變成已結束。實測只紅 tripdaytest 的 T6。",
+    "file": "js/tripday.js",
+    "find": "  const end = localDay(endDate) || start;",
+    "replace": "  const end = localDay(endDate) || new Date(0);",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "倒數：明天出發也寫成還有 1 天",
+    "why": "實測只紅 tripdaytest 的 T3 字那一條。",
+    "file": "js/tripday.js",
+    "find": "  return p.daysToGo === 1 ? '明天出發' :",
+    "replace": "  return p.daysToGo === -1 ? '明天出發' :",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "倒數：不擋不存在的日期",
+    "why": "改成三個欄位都對不上才擋：2 月 30 日（年對得上）就放過、算出一個錯的倒數。實測只紅 tripdaytest 的 T1「2 月 30 日」；13 月 40 日三欄都對不上，這條突變下照樣被擋，所以它不紅是對的。",
+    "file": "js/tripday.js",
+    "find": "  if (t.getFullYear() !== y || t.getMonth() !== m - 1 || t.getDate() !== d) return null;",
+    "replace": "  if (t.getFullYear() !== y && t.getMonth() !== m - 1 && t.getDate() !== d) return null;",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "選天：現在這一站不優先",
+    "why": "他手動指定了第 3 天的那一站，日期列卻停在今天。預期只紅 tripdaytest 的 D1。",
+    "file": "js/tripday.js",
+    "find": "  if (focusDay && dayNums.includes(focusDay)) return focusDay;",
+    "replace": "  if (focusDay && dayNums.includes(focusDay) && !(todayDay > 0)) return focusDay;",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "選天：今天那天不在日期列上也選",
+    "why": "選中一個不存在的格子，畫面上一天都不顯示。預期只紅 tripdaytest 的 D6。",
+    "file": "js/tripday.js",
+    "find": "  if (todayDay > 0 && dayNums.includes(todayDay)) return todayDay;",
+    "replace": "  if (todayDay > 0) return todayDay;",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "選天：現在這一站的天不在日期列上也選",
+    "why": "預期只紅 tripdaytest 的 D7。",
+    "file": "js/tripday.js",
+    "find": "  if (focusDay && dayNums.includes(focusDay)) return focusDay;",
+    "replace": "  if (focusDay) return focusDay;",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "選天：預設選最後一天",
+    "why": "還沒出發、已結束、沒設日期時從最後一天看起。預期紅 tripdaytest 的 D3、D4、D5、D6。",
+    "file": "js/tripday.js",
+    "find": "  return dayNums[0];",
+    "replace": "  return dayNums[dayNums.length - 1];",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "選天：沒有任何一天不擋",
+    "why": "回 undefined 冒充一天。預期只紅 tripdaytest 的 D8。",
+    "file": "js/tripday.js",
+    "find": "  if (!dayNums || !dayNums.length) return null;",
+    "replace": "  if (!dayNums) return null;",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "週幾：差一天",
+    "why": "第 1 天算成出發日的隔天。預期紅 tripdaytest 的 W1、W2。",
+    "file": "js/tripday.js",
+    "find": "  const t = new Date(start); t.setDate(t.getDate() + (day - 1));",
+    "replace": "  const t = new Date(start); t.setDate(t.getDate() + day);",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "週幾：天數不對也照算",
+    "why": "第 0 天、沒有天數也吐一個星期幾。預期只紅 tripdaytest 的 W5。",
+    "file": "js/tripday.js",
+    "find": "  if (!start || !(day >= 1)) return '';",
+    "replace": "  if (!start) return '';",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "第一站 → 最後一站：一站也寫兩次",
+    "why": "預期只紅 tripdaytest 的 R2（R3 濾完剩一站也會紅）。",
+    "file": "js/tripday.js",
+    "find": "  return names.length === 1 ? names[0] : `${names[0]} → ${names[names.length - 1]}`;",
+    "replace": "  return `${names[0]} → ${names[names.length - 1]}`;",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "三態：不是今天也分",
+    "why": "預期只紅 tripdaytest 的 S2。",
+    "file": "js/tripday.js",
+    "find": "  if (!live || i < 0) return {};",
+    "replace": "  if (i < 0) return {};",
+    "cmd": "node scripts/tripdaytest.mjs"
+  },
+  {
+    "name": "三態：現在這一站不在這一天也猜",
+    "why": "找不到就當成第一站。預期紅 tripdaytest 的 S3、S4。",
+    "file": "js/tripday.js",
+    "find": "  const i = nowId ? list.indexOf(nowId) : -1;",
+    "replace": "  const i = Math.max(0, nowId ? list.indexOf(nowId) : -1);",
+    "cmd": "node scripts/tripdaytest.mjs"
+  }
+]

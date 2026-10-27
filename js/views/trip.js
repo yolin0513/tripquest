@@ -20,6 +20,7 @@ import { loadEmergency } from '../emergency.js';
 import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
+import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates } from '../tripday.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -96,9 +97,15 @@ export default async function trip(tripId, { fresh = false } = {}) {
     byDay.get(d).push(s);
   }
 
+  // 出發倒數：只在「還沒出發」時出現；沒設出發日就不出現（不顯示 0、不猜）
+  const cd = countdownText(t.startDate, t.endDate);
+
   const container = h('div', { class: 'page' },
     welcomeCard(tripId),
     syncBanner(tripId, t),
+    cd ? h('div', { class: 'countdown', role: 'status' },
+      h('span', { class: 'cd-big' }, cd),
+      h('span', { class: 'cd-sub' }, rangeLabel(t.startDate, t.endDate))) : null,
     h('div', { class: 'progress-banner' },
       h('div', { class: 'pb-text' },
         h('div', { class: 'pb-title' }, allDone ? '全部完成了！🎉' : `已完成 ${prog.done} / ${prog.total}`),
@@ -156,20 +163,12 @@ export default async function trip(tripId, { fresh = false } = {}) {
   } else {
     const dayNums = [...byDay.keys()].sort((a, b) => a - b);
     const todayDay = dayForToday(t);
-    const daySecs = [];
 
-    // 全部展開 / 全部收合 小工具（只在多於一天時顯示）
-    if (dayNums.length > 1) {
-      // 兩層一起：天和景點都展開／收合。只收「天」的話，展開後裡面景點還是關的，
-      // 使用者得再一個個點，等於沒有「全部展開」。
+    // 全部展開 / 全部收合 小工具（景點多於一個時顯示）
+    // v1.74.11 起一次只顯示一天（上面的日期列切換），所以這兩顆只管景點；
+    // 天不再有「收合」——收起來就是空白，長輩會以為行程不見了。
+    if (spots.length > 1) {
       const setAll = (open) => {
-        for (const el of container.querySelectorAll('.daycollapse')) {
-          el.classList.toggle('open', open);
-          const chv = el.querySelector('.dc-chev');
-          if (chv) chv.textContent = open ? '▾' : '▸';
-          el.querySelector('.dc-head')?.setAttribute('aria-expanded', String(open));
-          try { localStorage.setItem(`tripquest.dayOpen.${tripId}.${el.dataset.day}`, open ? '1' : '0'); } catch { /* noop */ }
-        }
         for (const el of container.querySelectorAll('.qcollapse')) {
           el.classList.toggle('open', open);
           const chv = el.querySelector('.qc-chev');
@@ -195,18 +194,48 @@ export default async function trip(tripId, { fresh = false } = {}) {
     // 「現在這一站」換了（他自己改的，或前一站拍完自動往下走）→ 把記住的折疊狀態清掉，
     // 新的預設才生效。不清的話，之前按過一次「全部展開」就等於永遠全部展開 ——
     // 使用者實機看到的「第二天的全部任務都是展開的」就是這樣來的。
+    const selKey = 'tripquest.daySel.' + tripId;
     try {
       const fk = 'tripquest.focus.' + tripId;
       if (localStorage.getItem(fk) !== String(focusId)) {
         for (const s of spots) localStorage.removeItem('tripquest.spotOpen.' + s.id);
-        for (const d of byDay.keys()) localStorage.removeItem(`tripquest.dayOpen.${tripId}.${d}`);
+        localStorage.removeItem(selKey);
         localStorage.setItem(fk, String(focusId));
       }
+      // 新打開這趟行程＝「帶我到今天」：一律回到預設的那一天，不沿用上次看到哪一天。
+      // 返回、底部分頁切回來才沿用——他剛剛在看第 3 天，回來還是第 3 天。
+      // 不能只看 fresh：router 每一次導覽（包括返回）都給 fresh；分得出「返回」的是 navRestoredScroll()。
+      if (fresh && !navRestoredScroll()) localStorage.removeItem(selKey);
     } catch { /* noop */ }
+
+    // 選中哪一天：手動選的（還在這趟的天數裡）> 現在這一站那天 > 今天 > 第一天
+    let sel = defaultDay({ dayNums, todayDay, focusDay });
+    try {
+      const stored = Number(localStorage.getItem(selKey));
+      if (dayNums.includes(stored)) sel = stored;
+    } catch { /* noop */ }
+
+    const daySecs = new Map();
+    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d) });
+    function pick(d) {
+      for (const [n, sec] of daySecs) sec.classList.toggle('open', n === d);
+      strip.select(d);
+      try { localStorage.setItem(selKey, String(d)); } catch { /* noop */ }
+      // 換天之後把那一天的開頭帶到日期列下面；本來就看得到就不動
+      const head = daySecs.get(d)?.querySelector('.dc-head');
+      if (head) {
+        const stripH = strip.el.getBoundingClientRect().bottom;
+        const r = head.getBoundingClientRect();
+        if (r.top < stripH || r.top > window.innerHeight * 0.6) smoothScrollTo(Math.max(0, window.scrollY + r.top - stripH - 8));
+      }
+    }
+    // 只有一天就不需要日期列（只有一格，沒東西可以切）
+    // 日期列放在「全部展開／收合」上面：它是這一區的目錄
+    if (dayNums.length > 1) container.insertBefore(strip.el, container.querySelector('.day-tools'));
     for (const day of dayNums) {
-      container.append(dayCollapse(day, byDay.get(day), tripId, t, {
-        dayNums, todayDay, allDone, focusDay, focusId, hereId,
-      }));
+      const sec = dayCollapse(day, byDay.get(day), tripId, t, { todayDay, focusId, hereId, open: day === sel });
+      daySecs.set(day, sec);
+      container.append(sec);
     }
     // 新增景點在「調整每天的行程」裡；這裡不再重複放
   }
@@ -275,15 +304,18 @@ function scrollToToday(container, todayDay, hereId) {
   if (navRestoredScroll()) return;
   if (getPrefs().autoScroll === false) return;
 
-  const spotSec = hereId ? container.querySelector(`.qcollapse[data-spot="${CSS.escape(hereId)}"]`) : null;
-  const day = hereId ? (store.getRaw(hereId)?.day || 1) : todayDay;
-  const daySec = container.querySelector(`.daycollapse[data-day="${day}"]`);
+  // v1.74.11：一次只顯示一天，捲的目標是**正在顯示的那一天**（日期列已經選中今天或現在這一站那天）。
+  // 不能照日期去找：沒顯示的那幾天量出來位置是 0，會把畫面捲到不對的地方。
+  const daySec = container.querySelector('.daycollapse.open');
+  const spotSec = hereId && daySec ? daySec.querySelector(`.qcollapse[data-spot="${CSS.escape(hereId)}"]`) : null;
   const dayHead = daySec && (daySec.querySelector('.dc-head') || daySec);
   const spotHead = spotSec && (spotSec.querySelector('.qc-head') || spotSec);
   const head = dayHead || spotHead;
   if (!head) return;
 
-  const topH = document.getElementById('topbar')?.offsetHeight || 60;
+  // 日期列黏在標題列下面，被它蓋住的那一段也算看不到
+  const stripEl = container.querySelector('.daystrip');
+  const topH = (document.getElementById('topbar')?.offsetHeight || 60) + (stripEl ? stripEl.offsetHeight : 0);
   const tabH = document.getElementById('tabbar')?.offsetHeight || 76;
   const bottom = window.innerHeight - tabH;
   const r = head.getBoundingClientRect();
@@ -388,7 +420,7 @@ async function pickHereSpot(tripId) {
   // 不然使用者會覺得「我明明選了，畫面卻沒反應」
   try {
     for (const s of spots) localStorage.removeItem('tripquest.spotOpen.' + s.id);
-    for (const d of byDay.keys()) localStorage.removeItem(`tripquest.dayOpen.${tripId}.${d}`);
+    localStorage.removeItem('tripquest.daySel.' + tripId);   // 日期列回到新那一站所在的那一天
   } catch { /* noop */ }
 
   // 帶上是誰改的。離線也會先在本機生效，outbox 會在連線恢復後推出去。
@@ -404,13 +436,8 @@ async function pickHereSpot(tripId) {
 
 // 今天是這趟的第幾天：0 = 還沒開始、-1 = 已結束、null = 沒設日期、正整數 = 進行中
 function dayForToday(t) {
-  if (!t.startDate) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const start = new Date(t.startDate + 'T00:00:00');
-  const end = new Date((t.endDate || t.startDate) + 'T00:00:00');
-  if (today < start) return 0;
-  if (today > end) return -1;
-  return Math.floor((today - start) / 86400000) + 1;
+  const p = tripPhase(t.startDate, t.endDate);
+  return { none: null, before: 0, after: -1, during: p.day }[p.phase];
 }
 
 function dayDate(t, day) {
@@ -426,61 +453,110 @@ function dayProgress(daySpots) {
   return { done, total };
 }
 
-// 「天」這一層的折疊
+// 日期列：所有天數排成一列、一直看得到（不是下拉選單、也不是上一天／下一天的箭頭——
+// 那兩種會把「這趟有幾天」藏起來，長輩不知道還有別天）。天數多時橫向捲，選中的那格會捲進畫面。
+function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick }) {
+  const cells = new Map();
+  for (const d of dayNums) {
+    const dp = dayProgress(byDay.get(d));
+    const done = dp.total > 0 && dp.done === dp.total;
+    const dstr = dayDate(t, d);
+    const wk = weekdayLabel(t.startDate, d);
+    const isToday = todayDay === d && todayDay > 0;
+    // 第三行：當天的第一站（使用者排的名字；沒有就不放這一行）
+    const first = dayRoute(byDay.get(d).slice(0, 1));
+    cells.set(d, h('button', {
+      class: 'ds-day' + (isToday ? ' is-today' : '') + (done ? ' done' : ''),
+      dataset: { day: String(d) },
+      'aria-label': `第 ${d} 天${dstr ? '，' + dstr + (wk ? ' ' + wk : '') : ''}${isToday ? '，今天' : ''}${first ? '，從' + first + '開始' : ''}${done ? '，全部完成' : ''}`,
+      onclick: () => onPick(d),
+    },
+      h('span', { class: 'ds-num' }, `第 ${d} 天`),
+      h('span', { class: 'ds-sub' }, isToday ? `今天${wk ? ' ' + wk : ''}` : (dstr ? `${dstr} ${wk}`.trim() : (done ? '✓ 完成' : `${byDay.get(d).length} 站`))),
+      first ? h('span', { class: 'ds-first' }, first) : null,
+    ));
+  }
+  const el = h('nav', { class: 'daystrip', 'aria-label': `共 ${dayNums.length} 天，選一天看行程` },
+    h('div', { class: 'ds-track' }, ...cells.values()));
+  const select = (d) => {
+    for (const [n, c] of cells) {
+      c.classList.toggle('on', n === d);
+      c.setAttribute('aria-pressed', String(n === d));
+    }
+    const c = cells.get(d);
+    // 選中的那一格捲進日期列中央（只捲日期列，不捲整頁）
+    if (c && el.isConnected) {
+      const tr = el.querySelector('.ds-track');
+      const target = c.offsetLeft - (tr.clientWidth - c.offsetWidth) / 2;
+      tr.scrollTo({ left: Math.max(0, target), behavior: document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth' });
+    }
+  };
+  select(sel);
+  // 第一次畫上去時還沒有版面，等掛上之後再把選中那格捲進來。
+  // 黏住的位置照標題列**實際**的高度：它是 min-height，還加了 iPhone 瀏海的安全區、字級大時也會長高，
+  // 寫死 --topbar-h 的話日期列會滑進標題列底下被蓋住。
+  requestAnimationFrame(() => {
+    const tb = document.getElementById('topbar');
+    if (tb) el.style.top = tb.offsetHeight + 'px';
+    select(sel);
+  });
+  return { el, select };
+}
+
+// 同行夥伴：放在每一天時間軸的開頭，回答「誰跟我去」。
+// 寫「同行夥伴」不寫「今日同行夥伴」——TripQuest 沒有「哪一天誰同行」的資料，寫「今日」就是猜。
+// 頭像用旅伴自己的（不另外畫角色；日期軸與頁首的原創圖形回答的是另一件事，兩者不混用）。
+function crewStrip(t) {
+  const members = store.membersOf(t.groupId);
+  if (!members.length) return null;
+  return h('div', { class: 'tl-crew' },
+    h('span', { class: 'tl-crew-label' }, '同行夥伴'),
+    h('div', { class: 'tl-crew-list' }, ...members.map((m) => h('span', { class: 'tl-chip' },
+      avatar(m.displayName, hashHue(m.id)),
+      h('span', { class: 'tl-chip-name' }, m.displayName || '旅伴')))));
+}
+
+// 「天」這一層：v1.74.11 起是日期列選中的那一天（class open ＝ 正在顯示），景點排成時間軸
 function dayCollapse(day, daySpots, tripId, t, ctx) {
   const dp = dayProgress(daySpots);
   const dayDone = dp.total > 0 && dp.done === dp.total;
   const dstr = dayDate(t, day);
-
-  // 預設展開規則。使用者手動指定「現在這一站」時，那一天最優先 ——
-  // 他自己講的，比日期推算準。
-  let dflt;
-  if (ctx.focusDay) dflt = day === ctx.focusDay;          // 現在這一站在哪一天就開哪一天
-  else if (ctx.allDone) dflt = false;
-  else if (ctx.todayDay == null || ctx.todayDay === 0) dflt = day === ctx.dayNums[0];   // 沒設日期 / 還沒開始 → 只開第一天
-  else if (ctx.todayDay === -1) dflt = false;                                            // 已結束 → 全收
-  else dflt = day === ctx.todayDay;                                                      // 進行中 → 只開今天
-
-  const key = `tripquest.dayOpen.${tripId}.${day}`;
-  let open = dflt;
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored === '1') open = true;
-    else if (stored === '0') open = false;
-  } catch { /* noop */ }
-
-  const chev = h('span', { class: 'dc-chev' }, open ? '▾' : '▸');
+  const open = !!ctx.open;
   const isToday = ctx.todayDay === day && ctx.todayDay > 0;
 
+  const wk = weekdayLabel(t.startDate, day);
+  const route = dayRoute(daySpots);
   const meta = [
-    dstr || null,
+    dstr ? `${dstr} ${wk}`.trim() : null,
     `${daySpots.length} 個景點`,
     dp.total ? (dayDone ? '✓ 全部完成' : `完成 ${dp.done}/${dp.total}`) : null,
   ].filter(Boolean).join(' · ');
 
   const wxSpan = h('span', { class: 'dc-wx' });   // 天氣摘要背景填（另起一行）
+  const states = timelineStates(daySpots.map((s) => s.id), { live: isToday, nowId: ctx.focusId });
 
   const sec = h('section', { class: 'daycollapse' + (open ? ' open' : ''), dataset: { day: String(day) } },
-    h('button', {
-      class: 'dc-head' + (isToday ? ' is-today' : ''), 'aria-expanded': String(open),
-      onclick: () => {
-        const nowOpen = !sec.classList.contains('open');
-        sec.classList.toggle('open', nowOpen);
-        chev.textContent = nowOpen ? '▾' : '▸';
-        try { localStorage.setItem(key, nowOpen ? '1' : '0'); } catch { /* noop */ }
-      },
-    },
+    // 標題不再能點：天不收合了（收起來是空白）。換天用上面的日期列。
+    h('div', { class: 'dc-head' + (isToday ? ' is-today' : '') },
       h('span', { class: 'dc-main' },
         h('span', { class: 'dc-row1' },
           h('span', { class: 'dc-daynum' }, `第 ${day} 天`),
           isToday ? h('span', { class: 'dc-todaytag' }, '今天') : null,
         ),
+        // 當日標題卡的第二行：第一站 → 最後一站（使用者排的，不另外編一個當日標題）
+        route ? h('span', { class: 'dc-route' }, route) : null,
         h('span', { class: 'dc-meta' }, h('span', {}, meta), wxSpan),
       ),
-      chev,
     ),
     h('div', { class: 'dc-body' },
-      h('div', { class: 'dc-inner' }, ...daySpots.map((s) => spotSection(s, tripId, ctx.focusId, ctx.hereId)))),
+      h('div', { class: 'dc-inner' },
+        crewStrip(t),
+        // 時間軸：左邊一條虛線、每站一個點；有填時間的在點旁邊寫幾點，沒填就只有點（不補猜的時間）。
+        // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
+        h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
+          h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
+          h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
+          spotSection(s, tripId, ctx.focusId, ctx.hereId)))))),
   );
   sec._wxSpan = wxSpan;
   return sec;
@@ -1121,7 +1197,7 @@ async function removeTrip(tripId, t) {
 // 這趟旅程在本機留下的所有 localStorage 旗標
 function clearTripKeys(tripId) {
   const spotIds = store.spotsOf(tripId).map((s) => s.id);
-  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here'].map((k) => `tripquest.${k}.${tripId}`);
+  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here', 'daySel'].map((k) => `tripquest.${k}.${tripId}`);
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);

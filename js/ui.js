@@ -251,6 +251,9 @@ export function celebrate({ title, lines = [], photoURL, actions = [] }) {
 
 function confetti() {
   const wrap = h('div', { class: 'confetti' });
+  // 減少動態效果：連產生都不產生。只靠 CSS 把時間壓成 0 的話，60 片會在一瞬間跳到畫面底下，
+  // 那一瞬間的閃動正是要避免的。
+  if (document.documentElement.classList.contains('reduce-motion')) return wrap;
   const colors = ['#4f8dff', '#ffb454', '#4fd6a6', '#ff6b8b', '#c58bff'];
   for (let i = 0; i < 60; i++) {
     wrap.append(h('i', {

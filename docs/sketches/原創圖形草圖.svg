@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 560" width="720" height="560" font-family="'PingFang TC','Noto Sans TC','Microsoft JhengHei',sans-serif">
+  <!-- TripQuest 原創圖形草圖（2026-10-27）。給 Yolin 看的，還沒放進 App。
+       全部是自己用幾何形畫的：三角形、圓角矩形、圓弧、直線；沒有臉、沒有五官與身體，所以不會被讀成任何角色。
+       兩個位置各一個：日期軸的「現在在哪一天」標記、頁首的 App 識別。每個位置給兩個候選（紙飛機、背包）。 -->
+  <defs>
+    <!-- 紙飛機：兩個三角形＋一條折線 -->
+    <g id="plane">
+      <polygon points="0,22 56,0 30,46" fill="#fffcf6" stroke="#3e3a39" stroke-width="4" stroke-linejoin="round"/>
+      <polygon points="30,46 26,30 56,0" fill="#f2a497" stroke="#3e3a39" stroke-width="4" stroke-linejoin="round"/>
+      <line x1="26" y1="30" x2="0" y2="22" stroke="#3e3a39" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <!-- 背包：圓角矩形本體＋上蓋圓弧＋提把＋前口袋 -->
+    <g id="pack">
+      <path d="M14 10 Q14 2 22 2 H34 Q42 2 42 10" fill="none" stroke="#3e3a39" stroke-width="4" stroke-linecap="round"/>
+      <rect x="4" y="10" width="48" height="50" rx="14" fill="#f6d27a" stroke="#3e3a39" stroke-width="4"/>
+      <path d="M4 26 Q28 36 52 26" fill="none" stroke="#3e3a39" stroke-width="4" stroke-linecap="round"/>
+      <rect x="16" y="38" width="24" height="15" rx="5" fill="#b9daa5" stroke="#3e3a39" stroke-width="3.5"/>
+    </g>
+  </defs>
+
+  <rect width="720" height="560" fill="#fffcf6"/>
+  <text x="24" y="40" font-size="22" font-weight="800" fill="#3e3a39">TripQuest 原創圖形草圖（還沒放進 App）</text>
+  <text x="24" y="66" font-size="14" fill="#5c5551">幾何形自己畫的；沒有臉、沒有五官，不對應任何既有角色。兩個位置各選一個。</text>
+
+  <!-- 位置一：日期軸 -->
+  <text x="24" y="112" font-size="17" font-weight="800" fill="#3e3a39">① 日期軸：停在選中那一天（換天時移過去）</text>
+  <g transform="translate(24,130)">
+    <text x="0" y="16" font-size="14" fill="#5c5551">候選 A　紙飛機</text>
+    <line x1="20" y1="80" x2="320" y2="80" stroke="#b3a698" stroke-width="3" stroke-dasharray="8 7"/>
+    <g fill="#fffcf6" stroke="#3e3a39" stroke-width="3">
+      <circle cx="40" cy="80" r="9"/><circle cx="110" cy="80" r="9" fill="#f2a497"/><circle cx="180" cy="80" r="9"/><circle cx="250" cy="80" r="9"/><circle cx="320" cy="80" r="9"/>
+    </g>
+    <use href="#plane" transform="translate(92,26) scale(0.62)"/>
+    <g font-size="13" fill="#3e3a39" text-anchor="middle"><text x="40" y="110">第 1 天</text><text x="110" y="110" font-weight="800">第 2 天</text><text x="180" y="110">第 3 天</text><text x="250" y="110">第 4 天</text><text x="320" y="110">第 5 天</text></g>
+  </g>
+  <g transform="translate(380,130)">
+    <text x="0" y="16" font-size="14" fill="#5c5551">候選 B　背包</text>
+    <line x1="20" y1="80" x2="300" y2="80" stroke="#b3a698" stroke-width="3" stroke-dasharray="8 7"/>
+    <g fill="#fffcf6" stroke="#3e3a39" stroke-width="3">
+      <circle cx="40" cy="80" r="9"/><circle cx="110" cy="80" r="9" fill="#f6d27a"/><circle cx="180" cy="80" r="9"/><circle cx="250" cy="80" r="9"/>
+    </g>
+    <use href="#pack" transform="translate(94,22) scale(0.58)"/>
+    <g font-size="13" fill="#3e3a39" text-anchor="middle"><text x="40" y="110">第 1 天</text><text x="110" y="110" font-weight="800">第 2 天</text><text x="180" y="110">第 3 天</text><text x="250" y="110">第 4 天</text></g>
+  </g>
+
+  <!-- 位置二：頁首 -->
+  <text x="24" y="300" font-size="17" font-weight="800" fill="#3e3a39">② 頁首：App 識別（標題左邊）</text>
+  <g transform="translate(24,318)">
+    <rect width="320" height="72" rx="18" fill="#f8f0e3" stroke="#3e3a39" stroke-width="3"/>
+    <use href="#plane" transform="translate(18,13) scale(0.82)"/>
+    <text x="84" y="46" font-size="22" font-weight="900" fill="#3e3a39">TripQuest</text>
+    <text x="0" y="98" font-size="13" fill="#5c5551">候選 A　紙飛機</text>
+  </g>
+  <g transform="translate(380,318)">
+    <rect width="320" height="72" rx="18" fill="#f8f0e3" stroke="#3e3a39" stroke-width="3"/>
+    <use href="#pack" transform="translate(18,6) scale(0.95)"/>
+    <text x="84" y="46" font-size="22" font-weight="900" fill="#3e3a39">TripQuest</text>
+    <text x="0" y="98" font-size="13" fill="#5c5551">候選 B　背包</text>
+  </g>
+
+  <!-- 深色主題底上看一眼 -->
+  <text x="24" y="460" font-size="17" font-weight="800" fill="#3e3a39">深色主題的底上</text>
+  <rect x="24" y="472" width="676" height="72" rx="18" fill="#1a2740"/>
+  <use href="#plane" transform="translate(60,484) scale(0.82)"/>
+  <use href="#pack" transform="translate(400,478) scale(0.95)"/>
+  <text x="124" y="516" font-size="15" fill="#f5f8ff">紙飛機</text>
+  <text x="464" y="516" font-size="15" fill="#f5f8ff">背包</text>
+</svg>

@@ -1,0 +1,154 @@
+[
+  {
+    "name": "日期列：不黏住",
+    "why": "捲到長長的時間軸下面，日期列跟著捲走，「其他天」就看不到了。預期只紅 itinviewtest 的 S1 黏住那一條。",
+    "file": "css/style.css",
+    "find": "  position: sticky; top: var(--topbar-h); z-index: 5;",
+    "replace": "  position: relative; top: var(--topbar-h); z-index: 5;",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "日期列：沒選中的天照樣顯示",
+    "why": "一次只顯示一天沒有生效。預期紅 itinviewtest 的 S1 只顯示第 2 天、S2 只顯示第 3 天。",
+    "file": "css/style.css",
+    "find": ".daycollapse:not(.open) { display: none; }",
+    "replace": ".daycollapse:not(.open) { display: block; }",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "日期列：點了不換天",
+    "why": "預期紅 itinviewtest 的 S2 兩條（只顯示第 3 天、那格選中）。",
+    "file": "js/views/trip.js",
+    "find": "      for (const [n, sec] of daySecs) sec.classList.toggle('open', n === d);",
+    "replace": "      for (const [n, sec] of daySecs) sec.classList.toggle('open', n === sel);",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "日期列：只有一天也畫",
+    "why": "預期只紅 itinviewtest 的 S3 沒有日期列。",
+    "file": "js/views/trip.js",
+    "find": "    if (dayNums.length > 1) container.insertBefore(strip.el, container.querySelector('.day-tools'));",
+    "replace": "    if (dayNums.length >= 1) container.insertBefore(strip.el, container.querySelector('.day-tools'));",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "時間軸：沒填時間就補一個",
+    "why": "猜出來的時間變成使用者看得到的字（v1.74 原則）。預期只紅 itinviewtest 的 T1 甲二。",
+    "file": "js/views/trip.js",
+    "find": "        h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),",
+    "replace": "        h('span', { class: 'tl-time' }, spotTimes(s).startTime || '09:00'),",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "倒數：進行中／沒設日期也顯示",
+    "why": "拿 0 冒充倒數。預期紅 itinviewtest 的 C2 行程頁那三條。",
+    "file": "js/views/trip.js",
+    "find": "  const cd = countdownText(t.startDate, t.endDate);",
+    "replace": "  const cd = countdownText(t.startDate, t.endDate) || '還有 0 天出發';",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "倒數：首頁卡沒有",
+    "why": "預期只紅 itinviewtest 的 C1 首頁卡兩條。",
+    "file": "js/views/home.js",
+    "find": "        ? h('div', { class: 'trip-card-cd' }, countdownText(trip.startDate, trip.endDate)) : null,",
+    "replace": "        ? null : null,",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "選天：新打開也沿用上次點的那天",
+    "why": "「自動捲到今天」對應的「自動選中今天」失效。預期紅 collapsetest「新打開回到現在這一站所在的第 1 天」。",
+    "file": "js/views/trip.js",
+    "find": "      if (fresh && !navRestoredScroll()) localStorage.removeItem(selKey);",
+    "replace": "      if (false) localStorage.removeItem(selKey);",
+    "cmd": "node scripts/collapsetest.mjs"
+  },
+  {
+    "name": "選天：返回也回到預設那天",
+    "why": "router 每次導覽都給 fresh，只看 fresh 的話返回也會被重設。預期紅 collapsetest「切回任務還是第 2 天」與「按返回鍵還是第 2 天」。",
+    "file": "js/views/trip.js",
+    "find": "      if (fresh && !navRestoredScroll()) localStorage.removeItem(selKey);",
+    "replace": "      if (fresh) localStorage.removeItem(selKey);",
+    "cmd": "node scripts/collapsetest.mjs"
+  },
+  {
+    "name": "自動捲動：照日期找、不照正在顯示的那天",
+    "why": "現在這一站的天跟今天不同時，量到隱藏那天的位置 0、捲到錯的地方。預期紅 scrolltest R2 的「現在這一站不在今天」那一條；A 的那一站就在今天，對 A 是等價突變、不紅。",
+    "file": "js/views/trip.js",
+    "find": "  const daySec = container.querySelector('.daycollapse.open');",
+    "replace": "  const daySec = container.querySelector(`.daycollapse[data-day=\"${todayDay}\"]`);",
+    "cmd": "node scripts/scrolltest.mjs"
+  },
+  {
+    "name": "第 1 批：日期列不寫週幾",
+    "why": "預期紅 itinviewtest 的 B1 第 1 天那格與第 2 天（今天）那格兩條。",
+    "file": "js/views/trip.js",
+    "find": "    const wk = weekdayLabel(t.startDate, d);",
+    "replace": "    const wk = '';",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：第一站藏在格子外",
+    "why": "節點還在、使用者看不到（只驗 class 存在的測試會照樣綠）。預期只紅 itinviewtest 的 B1 第一站那一條。",
+    "file": "css/style.css",
+    "find": ".ds-first { font-size: 0.78rem;",
+    "replace": ".ds-first { position: absolute; left: -9999px; font-size: 0.78rem;",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：當日標題卡沒有第一站 → 最後一站",
+    "why": "預期只紅 itinviewtest 的 B2。",
+    "file": "js/views/trip.js",
+    "find": "        route ? h('span', { class: 'dc-route' }, route) : null,",
+    "replace": "        null,",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：照抄參考寫「今日同行夥伴」",
+    "why": "我們沒有「哪一天誰同行」的資料，寫「今日」就是猜。預期只紅 itinviewtest 的 B3 標題那一條。",
+    "file": "js/views/trip.js",
+    "find": "    h('span', { class: 'tl-crew-label' }, '同行夥伴'),",
+    "replace": "    h('span', { class: 'tl-crew-label' }, '今日同行夥伴'),",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：沒有旅伴也放一個空的標題",
+    "why": "預期只紅 itinviewtest 的 B3「沒有旅伴就不放」。",
+    "file": "js/views/trip.js",
+    "find": "  if (!members.length) return null;",
+    "replace": "  if (false) return null;",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：不是今天也淡化",
+    "why": "不知道他走到哪就淡化，淡錯了會讓人以為那一站不用去。預期紅 itinviewtest 的 B5 第 3 天那一條（現在這一站「乙一」不在第 3 天、還沒出發那趟的現在這一站在第 1 天第一站，會被分三態 → B5 還沒出發那一條也紅）。",
+    "file": "js/views/trip.js",
+    "find": "  const states = timelineStates(daySpots.map((s) => s.id), { live: isToday, nowId: ctx.focusId });",
+    "replace": "  const states = timelineStates(daySpots.map((s) => s.id), { live: true, nowId: ctx.focusId });",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：用透明度淡化（字變得看不清楚）",
+    "why": "palettetest 只看字色、看不到 opacity，所以這條要靠瀏覽器實算。預期只紅 itinviewtest 的 B4「字照樣看得清楚」那一條。",
+    "file": "css/style.css",
+    "find": ".tl-next .qc-name { color: var(--muted); }",
+    "replace": ".tl-next .qc-name { color: var(--muted); opacity: 0.35; }",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "第 1 批：未到的卡片沒換虛線框",
+    "why": "預期只紅 itinviewtest 的 B4 虛線框那一條。",
+    "file": "css/style.css",
+    "find": ".tl-next > .qcollapse { border-style: dashed; background: transparent; }",
+    "replace": ".tl-next > .qcollapse { background: transparent; }",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "自動捲動：沒把日期列算進去",
+    "why": "捲完那一站被黏住的日期列蓋住。預期紅 scrolltest A 的「在日期列下面」。",
+    "file": "js/views/trip.js",
+    "find": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60) + (stripEl ? stripEl.offsetHeight : 0);",
+    "replace": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60);",
+    "cmd": "node scripts/scrolltest.mjs"
+  }
+]

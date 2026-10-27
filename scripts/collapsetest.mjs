@@ -9,8 +9,10 @@
 //      之後不管焦點怎麼移動都還是全開。
 //
 // 規則（現行）：
-//   天  ：現在這一站在哪天 → 只開那天；否則 全完成→全收 / 沒日期或還沒開始→只開第一天
-//         / 已結束→全收 / 進行中→只開今天。使用者手動點過的那一天以他為準。
+//   天  ：v1.74.11 起一次只顯示一天（上方日期列切換；class open ＝ 正在顯示）。
+//         現在這一站在哪天 → 顯示那天；否則 進行中→今天 / 其餘（沒日期、還沒開始、已結束、全完成）→第一天。
+//         以前「已結束／全完成」是全收；一次只顯示一天之後全收就是空白，所以改第一天。
+//         新打開這趟行程一律回到預設那天；返回才沿用他剛剛點的那一天（tripquest.daySel.<tripId>）。
 //   景點：只開「現在這一站」（手動指定的，或第一個未完成的）。
 //         使用者手動點過的那一個以他為準。
 //   焦點換了（他自己改，或前一站拍完自動往下走）→ 清掉記住的狀態，新預設生效。
@@ -100,7 +102,16 @@ try {
   await open(setup.tid);
   let st = await state();
   eq(openSpots(st).join(','), 'D2乙', `只展開第一個未完成的景點（實得：${openSpots(st).join('、') || '無'}）`);
-  eq(openDays(st).join(','), '2', `只展開它所在的第 2 天（實得：${openDays(st).join('、') || '無'}）`);
+  eq(openDays(st).join(','), '2', `只顯示它所在的第 2 天（實得：${openDays(st).join('、') || '無'}）`);
+  {
+    const vis = await page.evaluate(() => ({
+      shown: [...document.querySelectorAll('.daycollapse')].filter((d) => getComputedStyle(d).display !== 'none').map((d) => d.dataset.day),
+      cells: [...document.querySelectorAll('.daystrip .ds-day')].map((c) => ({ day: c.dataset.day, on: c.classList.contains('on') })),
+    }));
+    eq(vis.shown.join(','), '2', `畫面上真的只看得到第 2 天（其他天 display:none；實得：${vis.shown.join('、') || '無'}）`);
+    eq(vis.cells.map((c) => c.day).join(','), '1,2', '日期列兩天都看得到（不是只剩選中的那一天）');
+    eq(vis.cells.filter((c) => c.on).map((c) => c.day).join(','), '2', '日期列選中的是第 2 天');
+  }
   yes(!st.spots.find((x) => x.name === 'D2丙').open, '同一天其他未完成的景點是收起來的（使用者回報的就是這裡全開）');
   yes(!st.spots.find((x) => x.name === 'D1甲').open, '已完成的景點收起來');
 
@@ -174,7 +185,7 @@ try {
   await open(setup.tid);
   st = await state();
   eq(openSpots(st).join(','), 'D1乙', `只展開指定的那一站（實得：${openSpots(st).join('、') || '無'}）`);
-  eq(openDays(st).join(','), '1', '也只展開它所在的第 1 天');
+  eq(openDays(st).join(','), '1', '也只顯示它所在的第 1 天');
   yes(st.spots.find((x) => x.name === 'D1乙').here, '那一站標著「現在這一站」');
 
   // ---------- 儲存鍵沒有因為 v1.41 改版而失效 ----------
@@ -182,11 +193,43 @@ try {
   // 先手動點一下再看 —— 剛剛換焦點時記住的狀態被清掉了，那時候本來就該是 0 個
   const keys = await page.evaluate(() => {
     document.querySelectorAll('.qcollapse')[0].querySelector('.qc-toggle').click();
-    document.querySelectorAll('.daycollapse')[1].querySelector('.dc-head').click();
-    return Object.keys(localStorage).filter((k) => /spotOpen|dayOpen|focus/.test(k));
+    document.querySelector('.daystrip .ds-day[data-day="2"]').click();
+    return Object.keys(localStorage).filter((k) => /spotOpen|daySel|focus/.test(k));
   });
   yes(keys.some((k) => k.startsWith('tripquest.spotOpen.')), `景點層的鍵還是 tripquest.spotOpen.<spotId>（${keys.filter((k) => k.includes('spotOpen')).length} 個）`, '目前有的鍵：' + JSON.stringify(keys));
-  yes(keys.some((k) => k.startsWith('tripquest.dayOpen.')), '天層的鍵還是 tripquest.dayOpen.<tripId>.<day>');
+  yes(keys.includes(`tripquest.daySel.${setup.tid}`), '天層：點日期列記在 tripquest.daySel.<tripId>（v1.74.11 起取代 dayOpen）', '目前有的鍵：' + JSON.stringify(keys));
+  st = await state();
+  eq(openDays(st).join(','), '2', '點日期列的第 2 天 → 當場換成顯示第 2 天');
+
+  // ---------- 返回沿用、新打開回到預設 ----------
+  console.log('\n— 返回與新打開 —');
+  // 底部分頁切到「照片」再切回「任務」：還是第 2 天（他剛剛選的）
+  const tab = async (label) => {
+    const hs = await page.$$('a.tab');
+    for (const hd of hs) if ((await hd.evaluate((el) => el.textContent)).includes(label)) { await hd.click(); return true; }
+    return false;
+  };
+  yes(await tab('照片'), '底部分頁有「照片」');
+  await page.waitForFunction(() => /\/people$/.test(location.hash));
+  await sleep(400);
+  yes(await tab('任務'), '底部分頁有「任務」');
+  await page.waitForSelector('.daycollapse.open');
+  await sleep(500);
+  st = await state();
+  eq(openDays(st).join(','), '2', `切到「照片」再切回「任務」→ 還是他剛剛選的第 2 天（實得：${openDays(st).join('、') || '無'}）`);
+  // 瀏覽器的返回鍵也一樣
+  yes(await tab('照片'), '再切到「照片」');
+  await page.waitForFunction(() => /\/people$/.test(location.hash));
+  await sleep(300);
+  await page.goBack();
+  await page.waitForSelector('.daycollapse.open');
+  await sleep(500);
+  st = await state();
+  eq(openDays(st).join(','), '2', `按返回鍵 → 還是第 2 天（實得：${openDays(st).join('、') || '無'}）`);
+  // 新打開（現在這一站是第 1 天的 D1乙）→ 回到第 1 天
+  await open(setup.tid);
+  st = await state();
+  eq(openDays(st).join(','), '1', `新打開這趟行程 → 回到現在這一站所在的第 1 天，不沿用上次點的第 2 天（實得：${openDays(st).join('、') || '無'}）`);
   yes(keys.some((k) => k.startsWith('tripquest.focus.')), '新增 tripquest.focus.<tripId> 記住上次的焦點（用來判斷要不要清掉舊狀態）');
 
   console.log('\n折疊規則測試結束');

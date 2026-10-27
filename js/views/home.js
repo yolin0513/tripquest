@@ -4,6 +4,7 @@ import { h, ring, fmtDate, avatar, toast } from '../ui.js';
 import { navigate } from '../router.js';
 import { hashHue } from '../ids.js';
 import { isStandalone, shouldOfferInstall } from '../install.js';
+import { countdownText } from '../tripday.js';
 
 // 從邀請連結加入，剪貼簿優先
 async function joinFromLink() {
@@ -85,6 +86,8 @@ function tripCard(trip) {
         [trip.region, spots.length ? `${spots.length} 個景點` : null,
          trip.startDate ? `${fmtDate(trip.startDate)}${trip.endDate ? '–' + fmtDate(trip.endDate) : ''}` : null]
           .filter(Boolean).join('　')),
+      countdownText(trip.startDate, trip.endDate)
+        ? h('div', { class: 'trip-card-cd' }, countdownText(trip.startDate, trip.endDate)) : null,
       members.length ? h('div', { class: 'avatars' }, ...members.slice(0, 6).map((m) => avatar(m.displayName, hashHue(m.id)))) : null,
     ),
     ring(p.ratio, { size: 60, label: `${p.done}/${p.total}` }),

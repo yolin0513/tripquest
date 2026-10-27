@@ -1,0 +1,26 @@
+[
+  {
+    "name": "和紙：設定存了卻沒套到畫面",
+    "why": "點了「淺色（和紙）」畫面不變。預期紅 washitest 的 W2 立刻換、W3 重開仍是和紙、W5 底變純白，以及 W4／W5 逐頁掃（深色底上算的字照樣過，但 W2 那幾條先紅）。",
+    "file": "js/prefs.js",
+    "find": "  if (washi) el.dataset.theme = 'washi'; else delete el.dataset.theme;",
+    "replace": "  delete el.dataset.theme;",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "和紙：網址列顏色不跟著換",
+    "why": "手機上方一條深藍、下面白紙。預期紅 washitest 的 W2 立刻換（網址列 #fffcf6）。",
+    "file": "js/prefs.js",
+    "find": "  document.querySelector('meta[name=\"theme-color\"]')?.setAttribute('content', THEME_BG[washi ? 'washi' : 'dark']);",
+    "replace": "  document.querySelector('meta[name=\"theme-color\"]')?.setAttribute('content', THEME_BG.dark);",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "和紙：高對比的說明沒跟著改",
+    "why": "和紙下寫「背景更深、文字更白」是錯的話。預期只紅 washitest 的 W5 說明那一條。",
+    "file": "js/views/settings.js",
+    "find": "        h('div', { class: 'form-hint' }, prefs.theme === 'washi'",
+    "replace": "        h('div', { class: 'form-hint' }, false",
+    "cmd": "node scripts/washitest.mjs"
+  }
+]

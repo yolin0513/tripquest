@@ -18,6 +18,21 @@
   --danger: #ff6b6b;
   --ring-track: #37496e;
   --ring-fill: #4f8dff;
+  /* 文字專用的顏色：只准用在 color。深色主題等於原本那幾個色，和紙主題換成深墨色——
+     粉彩（珊瑚粉、山吹黃、若竹綠）只能當底色或色塊，當字對比不夠（palettetest 擋）。 */
+  --primary-text: #4f8dff;
+  --accent-text: #ffb454;
+  --ok-text: #4fd6a6;
+  --danger-text: #ff6b6b;
+  --heart-text: #ff6b8b;
+  --warn-text: #ffb14e;
+  --mark-text: #d4a017;
+  --danger-ink: #fff;
+  --heart-ink: #fff;
+  /* 附近／求救那幾頁一直在用 --fg、--card，卻從沒定義過（palettetest P1 抓到）：
+     字照樣繼承得到，但卡片沒有底色、「選中」的那格也沒有變色。補上定義。 */
+  --fg: var(--text);
+  --card: var(--bg-elev-2);
   --radius: 20px;
   --tabbar-h: 76px;
   --topbar-h: 60px;
@@ -39,6 +54,44 @@ html[data-contrast="high"] {
   --line: #5a7099;
   --text: #ffffff;
   --muted: #dbe4f7;
+}
+
+/* 淺色「和紙」主題（設定頁可切換）：和紙白底、墨灰字；四個粉彩只當底色與色塊。
+   字一律用墨色系——粉彩當字的對比只有 1.5～2，長輩看不清楚。 */
+html[data-theme="washi"] {
+  --bg: #fffcf6;
+  --bg-elev: #f8f0e3;
+  --bg-elev-2: #efe4d2;
+  --line: #b3a698;
+  --text: #3e3a39;
+  --muted: #5c5551;
+  --primary: #f2a497;
+  --primary-ink: #3e3a39;
+  --accent: #f6d27a;
+  --ok: #b9daa5;
+  --ok-ink: #3e3a39;
+  --heart: #f2a497;
+  --danger: #c4453a;
+  --danger-ink: #ffffff;
+  --heart-ink: #3e3a39;
+  --ring-track: #e6dac8;
+  --ring-fill: #f2a497;
+  --primary-text: #9a3a2b;
+  --accent-text: #765000;
+  --ok-text: #2f6a2a;
+  --danger-text: #a32419;
+  --heart-text: #a3304d;
+  --warn-text: #765000;
+  --mark-text: #765000;
+  color-scheme: light;
+}
+html[data-theme="washi"][data-contrast="high"] {
+  --bg: #ffffff;
+  --bg-elev: #fbf6ee;
+  --bg-elev-2: #f2e9db;
+  --line: #3e3a39;
+  --text: #000000;
+  --muted: #2e2a29;
 }
 
 * { box-sizing: border-box; }
@@ -154,7 +207,7 @@ button, input, textarea, select { font: inherit; }
   -webkit-tap-highlight-color: transparent;
 }
 #tabbar .tab .ti { font-size: 25px; line-height: 1; }
-#tabbar .tab.active { color: var(--primary); }
+#tabbar .tab.active { color: var(--primary-text); }
 #tabbar .tab.active .ti { transform: translateY(-1px); }
 #tabbar .tab:active { opacity: 0.6; }
 
@@ -223,7 +276,7 @@ button.card { appearance: none; font: inherit; }
 .btn-ok { background: var(--ok); color: var(--ok-ink); }
 .btn-soft { background: var(--bg-elev-2); color: var(--text); border-color: var(--line); }
 .btn-ghost { background: transparent; color: var(--muted); border-color: var(--line); }
-.btn-danger { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.btn-danger { background: transparent; color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 .btn-block { display: flex; width: 100%; margin-top: 12px; }
 .btn-big { font-size: 1.2rem; padding: 20px; min-height: 68px; }
 .btn.is-locked { opacity: 0.6; }
@@ -238,8 +291,8 @@ button.card { appearance: none; font: inherit; }
   color: var(--muted);
   border: 1px solid var(--line);
 }
-.tag-curated { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-.tag-ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.tag-curated { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag-ok { color: var(--ok-text); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
 .tag-todo { color: var(--muted); }
 /* 標籤外觀、但實際是按鈕（例：景點頁每個任務的「編輯 / 刪除」）——
    觸控區要有 44px，不能沿用純標示用的 .tag 那種小尺寸，尤其「刪除」點錯代價大。 */
@@ -252,8 +305,8 @@ button.card { appearance: none; font: inherit; }
   background: var(--bg-elev-2); color: var(--text);
 }
 .tag-btn:active { transform: scale(0.96); }
-.tag-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
-.tag-er { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); margin-left: 6px; }
+.tag-btn.danger { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.tag-er { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); margin-left: 6px; }
 
 .section-label {
   font-size: 0.9rem;
@@ -285,7 +338,7 @@ button.card { appearance: none; font: inherit; }
 .ring { position: relative; flex: none; display: grid; place-items: center; }
 .ring svg { position: absolute; inset: 0; }
 .ring-label { font-size: 0.8rem; font-weight: 800; color: var(--text); }
-.ring-done .ring-label { color: var(--ok); font-size: 1.1rem; }
+.ring-done .ring-label { color: var(--ok-text); font-size: 1.1rem; }
 
 /* ---------- 頭像 ---------- */
 .avatars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -332,15 +385,40 @@ button.card { appearance: none; font: inherit; }
 }
 .day-tool-btn:active { transform: scale(0.96); }
 
-/* 「天」折疊 */
+/* 日期列（v1.74.11）：所有天數一直看得到，黏在標題列下面；天數多時橫向捲 */
+.daystrip {
+  position: sticky; top: var(--topbar-h); z-index: 5;
+  margin: 14px -16px 0; padding: 8px 16px; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.ds-track { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.ds-track::-webkit-scrollbar { display: none; }
+.ds-day {
+  appearance: none; flex: none; font: inherit; color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  min-width: 76px; min-height: var(--tap); padding: 6px 10px;
+  background: var(--bg-elev); border: 1.5px solid var(--line); border-radius: 14px;
+}
+.ds-num { font-weight: 900; font-size: 1rem; line-height: 1.2; white-space: nowrap; }
+.ds-sub { font-size: 0.8rem; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.ds-day.is-today { border-color: var(--primary); }
+.ds-day.on { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+.ds-day.on .ds-sub { color: var(--primary-ink); }
+/* 第三行：當天第一站。格子不跟著名字變寬，長的截斷（全名在 aria-label 與當日標題卡上） */
+.ds-first { font-size: 0.78rem; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7.5em; }
+.ds-day.on .ds-first { color: var(--primary-ink); }
+.ds-day:active { transform: scale(0.96); }
+.ds-day:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* 「天」：一次只顯示日期列選中的那一天（class open） */
 .daycollapse { margin-top: 12px; }
+.daycollapse:not(.open) { display: none; }
 .dc-head {
-  appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  width: 100%; text-align: left; color: inherit;
   display: flex; align-items: center; gap: 12px;
   background: var(--bg-elev-2); border: 1px solid var(--line); border-radius: 16px;
   padding: 14px 16px; min-height: 60px;
 }
-.dc-head:active { background: var(--bg-elev); }
 .dc-head.is-today { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--bg-elev-2)); }
 .dc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .dc-row1 { display: flex; align-items: center; gap: 8px; }
@@ -349,14 +427,57 @@ button.card { appearance: none; font: inherit; }
   font-size: 0.72rem; font-weight: 800; padding: 3px 9px; border-radius: 999px;
   background: var(--primary); color: var(--primary-ink);
 }
+.dc-route { font-size: 0.95rem; font-weight: 800; line-height: 1.35; color: var(--text); overflow-wrap: anywhere; }
 .dc-meta { font-size: 0.85rem; color: var(--muted); font-weight: 600; line-height: 1.4; display: flex; flex-wrap: wrap; gap: 2px 8px; }
 .dc-wx { color: var(--text); font-weight: 700; }
 .dc-wx:not(:empty)::before { content: ""; }
-.dc-chev { flex: none; color: var(--muted); font-size: 1.05rem; width: 1.4em; text-align: center; }
-.dc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease; }
-.daycollapse.open .dc-body { grid-template-rows: 1fr; }
-.dc-inner { overflow: hidden; min-height: 0; padding-top: 2px; }
-.dc-inner .qcollapse:first-child { margin-top: 10px; }
+.dc-inner { min-height: 0; padding-top: 2px; }
+.daycollapse.open .dc-inner { animation: dayin 0.22s ease; }
+@keyframes dayin { from { opacity: 0; transform: translateY(6px); } }
+
+/* 時間軸：左邊一條線、每站一個點，有填時間才寫時間 */
+/* 欄寬用 rem：字級切到「特大」時時間字跟著變大，欄也跟著變寬，不會擠出去 */
+.timeline { --tl-col: 4rem; --tl-line: 3.3rem; list-style: none; margin: 0; padding: 0 0 0 var(--tl-col); position: relative; }
+.timeline::before { content: ""; position: absolute; left: var(--tl-line); top: 1.4rem; bottom: 1.4rem; width: 0; border-left: 3px dashed var(--line); }
+.tl-item { position: relative; }
+.tl-item > .qcollapse { margin-top: 10px; }
+.tl-time { position: absolute; left: calc(-1 * var(--tl-col)); width: calc(var(--tl-line) - 0.5rem); top: 1.3rem;
+  text-align: right; font-weight: 800; font-size: 0.8rem; line-height: 1.2; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 點的中心對準線的中心：線在 --tl-line、寬 3px；點連框共 19px */
+.tl-dot { position: absolute; left: calc(var(--tl-line) - var(--tl-col) + 1.5px - 9.5px); top: 1.45rem;
+  width: 13px; height: 13px; border-radius: 50%; background: var(--bg); border: 3px solid var(--primary); }
+.tl-item:has(.qcollapse.is-here) .tl-dot { background: var(--primary); }
+/* 三態（只有進行中、看的是今天、今天有現在這一站時才有）：
+   已到＝實心灰點；現在＝實心主色、大一點；未到＝空心點、卡片換成虛線框、底色透明。
+   「淡化」不用 opacity——字的對比要照樣 ≥ 4.5（長輩看的），只換框線與底色，字色用 --muted（palettetest 會算）。 */
+.tl-past .tl-dot { background: var(--muted); border-color: var(--muted); }
+.tl-now .tl-dot { background: var(--primary); width: 17px; height: 17px; top: 1.3rem; left: calc(var(--tl-line) - var(--tl-col) + 1.5px - 11.5px); }
+.tl-next > .qcollapse { border-style: dashed; background: transparent; }
+.tl-next .qc-name { color: var(--muted); }
+
+/* 同行夥伴：每一天時間軸的開頭（回答「誰跟我去」；用旅伴自己的頭像） */
+.tl-crew { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 4px; }
+.tl-crew-label { font-size: 0.85rem; font-weight: 800; color: var(--muted); }
+.tl-crew-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px;
+  background: var(--bg-elev); border: 1px solid var(--line); font-size: 0.85rem; font-weight: 700; max-width: 100%; }
+.tl-chip .avatar { width: 26px; height: 26px; font-size: 0.8rem; }
+.tl-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
+
+/* 和紙主題的繪本感裝飾（只在和紙；深色主題不加）：墨色粗框圓角、虛線分隔、行程頁最底下一道波浪。
+   都是框線與底色，不碰字色；波浪是純裝飾（偽元素，讀螢幕的軟體讀不到）。 */
+html[data-theme="washi"] .dc-head { border: 2.5px solid var(--text); border-radius: 18px; }
+html[data-theme="washi"] .dc-head.is-today { border-color: var(--text); }
+html[data-theme="washi"] .ds-day { border: 2px solid var(--text); }
+html[data-theme="washi"] .qcollapse { border: 2px solid var(--text); border-left-width: 5px; }
+html[data-theme="washi"] .tl-next > .qcollapse { border-style: dashed; }
+html[data-theme="washi"] .tl-crew { padding-bottom: 10px; border-bottom: 2px dashed var(--line); }
+html[data-theme="washi"] .page:has(.daystrip)::after {
+  content: ""; display: block; height: 28px; margin: 28px -16px 0;
+  background: var(--accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'%3E%3Cpath d='M0 14 Q15 0 30 14 T60 14 T90 14 T120 14 V28 H0 Z'/%3E%3C/svg%3E") repeat-x 0 0 / 120px 28px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'%3E%3Cpath d='M0 14 Q15 0 30 14 T60 14 T90 14 T120 14 V28 H0 Z'/%3E%3C/svg%3E") repeat-x 0 0 / 120px 28px;
+}
 
 /* 用地圖帶路 */
 .nextstn-btn {
@@ -392,7 +513,7 @@ button.card { appearance: none; font: inherit; }
 .here-pick:active { transform: scale(0.99); }
 .here-pick-emoji { font-size: 1.5rem; flex: none; }
 .here-pick-name { flex: 1; min-width: 0; font-weight: 800; line-height: 1.35; }
-.here-pick-tick { flex: none; color: var(--primary); font-weight: 900; font-size: 1.2rem; }
+.here-pick-tick { flex: none; color: var(--primary-text); font-weight: 900; font-size: 1.2rem; }
 
 /* 標出「現在這一站」 */
 .qcollapse.is-here { border-color: var(--primary); }
@@ -507,7 +628,7 @@ body.pv-open { overflow: hidden; }
 .welcome-card .wc-x { margin-left: auto; min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--text); font-size: 1.1rem; }
 .sync-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 10px; border-radius: 12px; background: var(--bg-elev-2); color: var(--muted); font-weight: 600; font-size: 0.95rem; }
 .sync-banner .spinner { width: 18px; height: 18px; border-width: 2px; }
-.sync-banner.done { color: var(--ok, #6cd39a); }
+.sync-banner.done { color: var(--ok-text); }
 .wall-ctl.on .wall-ctl-chev { color: var(--text); }
 /* 排序只有新／舊兩種，做成「按一下就換」的切換鈕，按鈕上直接寫現在是哪一種 */
 .wall-ctl-sort { padding: 0 12px; }
@@ -527,7 +648,7 @@ body.pv-open { overflow: hidden; }
   flex: none; font-size: 0.85rem; font-weight: 800; color: var(--muted);
   background: var(--bg-elev-2); border-radius: 999px; padding: 3px 10px;
 }
-.pick-row-tick { flex: none; color: var(--primary); font-weight: 900; font-size: 1.2rem; }
+.pick-row-tick { flex: none; color: var(--primary-text); font-weight: 900; font-size: 1.2rem; }
 
 /* ---------- 大任務卡（長輩主視覺） ---------- */
 /* 卡片本身不是按鈕了：上半部（圖＋文字）點了看照片，下半部是加照片的兩顆大按鈕。
@@ -576,7 +697,7 @@ body.pv-open { overflow: hidden; }
   font-size: 0.95rem; font-weight: 800; padding: 6px 14px; border-radius: 999px;
   background: var(--bg-elev-2); color: var(--muted);
 }
-.qbig.done .qbig-status { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.qbig.done .qbig-status { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok-text); }
 .qbig.done .qbig-photo { filter: saturate(1); }
 .qbig-check {
   position: absolute; top: 12px; right: 12px;
@@ -672,13 +793,13 @@ body.pv-open { overflow: hidden; }
 .crew-btn .crew-label { flex: none; color: var(--muted); font-weight: 700; white-space: nowrap; }
 .crew-btn .avatar.ghost { opacity: 0.38; }
 .crew-wrap { position: relative; display: inline-flex; }
-.crew-new { position: absolute; right: -4px; top: -6px; background: var(--heart); color: #fff; font-size: 0.62rem; font-weight: 800; border-radius: 999px; padding: 1px 5px; box-shadow: 0 0 0 2px var(--bg); }
+.crew-new { position: absolute; right: -4px; top: -6px; background: var(--heart); color: var(--heart-ink); font-size: 0.62rem; font-weight: 800; border-radius: 999px; padding: 1px 5px; box-shadow: 0 0 0 2px var(--bg); }
 .crew-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 2px; }
 .crew-row + .crew-row { border-top: 1px solid var(--line); }
 .crew-row .cr-main { flex: 1; min-width: 0; }
 .crew-row .cr-name { font-weight: 800; font-size: 1.05rem; }
 .crew-row .cr-line { color: var(--muted); font-size: 0.92rem; margin-top: 2px; }
-.crew-row .cr-line.ok { color: var(--ok, #6cd39a); }
+.crew-row .cr-line.ok { color: var(--ok-text); }
 /* 有人加入的橫幅（行程頁，一次性） */
 .join-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin: 0 0 10px; border-radius: var(--radius);
   background: color-mix(in srgb, var(--heart) 16%, var(--bg-elev)); border: 1px solid var(--heart); font-weight: 800; }
@@ -800,12 +921,12 @@ textarea.field { resize: vertical; line-height: 1.6; }
   flex: none; touch-action: manipulation;
 }
 .chip-x:active { background: var(--bg-elev-2); }
-.chip-add { cursor: pointer; color: var(--primary); font-weight: 800; }
+.chip-add { cursor: pointer; color: var(--primary-text); font-weight: 800; }
 
 /* ---------- 階層選景點 ---------- */
 .crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 10px; }
 .crumb-btn {
-  appearance: none; border: 0; background: transparent; color: var(--primary);
+  appearance: none; border: 0; background: transparent; color: var(--primary-text);
   font: inherit; font-weight: 700; cursor: pointer; padding: 4px 6px; border-radius: 8px;
   min-height: 44px;   /* 麵包屑也要好按 */
 }
@@ -839,9 +960,9 @@ textarea.field { resize: vertical; line-height: 1.6; }
   flex: none; align-self: center; font-weight: 800; font-size: 0.95rem;
   color: var(--muted); min-width: 44px; text-align: center;
 }
-.place-card.on .pc-add { color: var(--ok); }
-.tag-hot { color: var(--heart); border-color: color-mix(in srgb, var(--heart) 45%, transparent); background: color-mix(in srgb, var(--heart) 12%, transparent); }
-.tag-must { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); font-size: 0.72rem; padding: 2px 7px; }
+.place-card.on .pc-add { color: var(--ok-text); }
+.tag-hot { color: var(--heart-text); border-color: color-mix(in srgb, var(--heart) 45%, transparent); background: color-mix(in srgb, var(--heart) 12%, transparent); }
+.tag-must { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 40%, transparent); font-size: 0.72rem; padding: 2px 7px; }
 
 .picked-bar {
   position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px);
@@ -983,7 +1104,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .music-pick .mp-prev { min-height: 48px; text-align: center; padding: 0; font-size: 1.05rem; }
 .music-src ul { margin: 8px 0; padding-left: 20px; }
 .music-src li { margin: 4px 0; }
-.music-src a { color: var(--primary); word-break: break-all; }
+.music-src a { color: var(--primary-text); word-break: break-all; }
 
 .photo-view { display: flex; flex-direction: column; gap: 14px; }
 .photo-view img { width: 100%; border-radius: 14px; max-height: 56vh; object-fit: contain; background: #000; }
@@ -1012,7 +1133,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .drb-icon { font-size: 1.4rem; flex: none; }
 .drb-placeholder { color: var(--muted); font-weight: 600; }
 .drb-val { font-weight: 800; flex: 1; min-width: 0; }
-.drb-edit { color: var(--primary); font-weight: 800; font-size: 0.9rem; flex: none; }
+.drb-edit { color: var(--primary-text); font-weight: 800; font-size: 0.9rem; flex: none; }
 
 .cal-card { max-width: 460px; margin: 0 auto; border-radius: 24px; }
 .cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
@@ -1071,8 +1192,8 @@ textarea.field { resize: vertical; line-height: 1.6; }
   flex: none; font-size: 0.9rem; font-weight: 800; padding: 4px 12px; border-radius: 999px;
   background: var(--bg-elev-2); color: var(--muted);
 }
-.qc-prog.part { color: var(--accent); }
-.qc-prog.done { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+.qc-prog.part { color: var(--accent-text); }
+.qc-prog.done { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok-text); }
 .qc-chev { flex: none; color: var(--muted); font-size: 0.9rem; width: 1.2em; text-align: center; }
 /* .qc-edit 已移除：那顆「編輯」會把長輩帶到景點頁，而拍照按鈕在那裡，
    於是「編輯」看起來就成了加照片的入口。景點管理現在集中在「調整每天的行程」。 */
@@ -1153,7 +1274,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .plan-arrow:disabled { opacity: 0.28; cursor: default; }
 .plan-addspot {
   appearance: none; width: 100%; border: 2px dashed var(--line); background: transparent;
-  color: var(--primary); border-radius: 14px; padding: 14px; font-weight: 800; cursor: pointer;
+  color: var(--primary-text); border-radius: 14px; padding: 14px; font-weight: 800; cursor: pointer;
   min-height: 52px; margin-bottom: 6px;
 }
 .plan-addspot:active { transform: scale(0.99); }
@@ -1169,7 +1290,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
   width: 52px; height: 52px; border-radius: 50%;
   border: 3px solid color-mix(in srgb, var(--danger) 60%, #fff);
-  background: var(--danger); color: #fff;
+  background: var(--danger); color: var(--danger-ink);
   font-size: 1.3rem; font-weight: 800; cursor: pointer;
   z-index: 60; opacity: 0.82;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
@@ -1288,7 +1409,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .wx-day-icon { font-size: 2rem; margin: 4px 0; }
 .wx-day-txt { font-size: 0.8rem; color: var(--muted); }
 .wx-day-temp { margin-top: 4px; font-size: 1rem; }
-.wx-day-rain { font-size: 0.78rem; color: var(--primary); margin-top: 3px; font-weight: 700; }
+.wx-day-rain { font-size: 0.78rem; color: var(--primary-text); margin-top: 3px; font-weight: 700; }
 
 /* ---------- 分帳 ---------- */
 .exp-summary { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
@@ -1301,15 +1422,15 @@ textarea.field { resize: vertical; line-height: 1.6; }
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
 }
 .exp-settle-txt { flex: 1; min-width: 0; }
-.exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent); }
+.exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent-text); }
 /* v1.73：金額（「應收 NT$1,250.00」）的最小寬度是不可斷行的數字，名字那一欄
    min-width:0 就被壓到剩一個字的寬 —— 實機截圖是「阿」「嬤」直排、金額壓在上面。
    讓整列可以換行：排得下就同一列，排不下金額自己掉到下一行靠右。 */
 .exp-person { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
 .exp-person-main { flex: 1 1 120px; min-width: 0; }
 .exp-person-bal { font-weight: 800; font-size: 0.95rem; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
-.exp-person-bal.pos { color: var(--ok); }
-.exp-person-bal.neg { color: var(--danger); }
+.exp-person-bal.pos { color: var(--ok-text); }
+.exp-person-bal.neg { color: var(--danger-text); }
 /* v1.73.5：特大字級下金額（不可斷行的數字）把標題欄擠到只剩 31px，
    標題的字就畫出來撞在金額上。排不下就讓金額掉到下一行。 */
 .exp-item {
@@ -1342,7 +1463,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   border-radius: 14px; font-size: 1.5rem; font-weight: 800; padding: 14px 0; cursor: pointer; min-height: 56px;
 }
 .numpad-key:active { transform: scale(0.95); background: var(--bg-elev-2); }
-.numpad-del { color: var(--danger); }
+.numpad-del { color: var(--danger-text); }
 .exp-part {
   display: flex; align-items: center; gap: 10px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
@@ -1353,7 +1474,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .exp-share { width: 76px; min-height: 40px; padding: 6px 8px; text-align: center; }
 
 /* ---------- 成就徽章 ---------- */
-.pr-badges { font-size: 0.85rem; margin-left: 8px; color: var(--accent); font-weight: 800; }
+.pr-badges { font-size: 0.85rem; margin-left: 8px; color: var(--accent-text); font-weight: 800; }
 
 /* ---------- 示意圖：出處標示與佔位 ---------- */
 /* Wikimedia 的圖多是 CC 授權，要標作者與授權條款；美食用的是「該道菜」的通用照，
@@ -1389,11 +1510,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
   width: 44px; height: 44px; flex: none; border-radius: 12px;
   background: var(--bg-elev-2); display: grid; place-items: center; font-size: 1.3rem;
 }
-.qrow.done .qrow-icon { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+.qrow.done .qrow-icon { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok-text); }
 .qrow-main { flex: 1; min-width: 0; }
 .qrow-title { font-weight: 800; font-size: 1.08rem; line-height: 1.4; }
 .qrow-status { font-size: 0.9rem; font-weight: 700; color: var(--muted); margin-top: 6px; }
-.qrow-status.is-done { color: var(--ok); }
+.qrow-status.is-done { color: var(--ok-text); }
 .qrow-thumbs { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .qrow-thumbs img {
   width: 64px; height: 64px; object-fit: cover; border-radius: 10px;
@@ -1531,7 +1652,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .recap-closing { font-size: 1.05rem; line-height: 1.6; margin: 16px 0 0; text-align: center; color: var(--muted); font-style: italic; }
 
 /* AI 生成內容的小標記 —— 明顯但不吵 */
-.ai-mark { color: #d4a017; font-size: 0.85em; vertical-align: 2px; }
+.ai-mark { color: var(--mark-text); font-size: 0.85em; vertical-align: 2px; }
 .spot-blurb { line-height: 1.7; margin: 12px 0 4px; color: var(--fg); }
 /* v1.73.5：欄寬下限本來是固定的 90px，但數字字級是 1.6rem —— 特大字級下變成 40px，
    「51/51」要 110px，直接畫出格子撞到隔壁（使用者截圖是「51/51117.3」黏在一起）。
@@ -1600,7 +1721,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   position: sticky; top: 0; z-index: 2;
   background: var(--bg); padding: 8px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
 }
-.imp-warn-c { color: var(--accent); font-weight: 700; }
+.imp-warn-c { color: var(--accent-text); font-weight: 700; }
 .imp-day { font-weight: 800; font-size: 0.95rem; margin: 14px 0 8px; color: var(--muted); }
 .imp-row {
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;
@@ -1618,12 +1739,12 @@ textarea.field { resize: vertical; line-height: 1.6; }
   min-width: 0; max-width: 100%;
 }
 .imp-name { flex: 1 1 auto; min-width: 0; font-weight: 700; padding: 9px 10px; font-size: 1rem; }
-.imp-badge { flex: none; width: 16px; font-size: 1rem; color: var(--ok); font-weight: 900; }
+.imp-badge { flex: none; width: 16px; font-size: 1rem; color: var(--ok-text); font-weight: 900; }
 .imp-del {
   flex: none; width: 44px; height: 44px; border-radius: 10px;
   background: transparent; border: 1px solid var(--line); color: var(--muted); font-size: 1.1rem;
 }
-.imp-warn { font-size: 0.82rem; color: var(--accent); margin-top: 6px; line-height: 1.5; }
+.imp-warn { font-size: 0.82rem; color: var(--accent-text); margin-top: 6px; line-height: 1.5; }
 .imp-add {
   width: 100%; background: transparent; border: 2px dashed var(--line); color: var(--muted);
   border-radius: 12px; padding: 12px; font-weight: 700; min-height: 48px; margin-bottom: 4px;
@@ -1658,7 +1779,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
   background: var(--primary); color: var(--primary-ink);
   display: grid; place-items: center; font-weight: 900; font-size: 1rem;
 }
-.ig-ic { flex: none; width: 34px; display: grid; place-items: center; color: var(--primary); }
+.ig-ic { flex: none; width: 34px; display: grid; place-items: center; color: var(--primary-text); }
 .ig-emoji { font-size: 1.5rem; line-height: 1; }
 .ig-txt { flex: 1; min-width: 0; }
 .ig-t { display: block; font-weight: 800; font-size: 1.02rem; line-height: 1.5; }
@@ -1763,7 +1884,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
    但它的框只有 58px，文字就畫到右邊的按鈕區底下（實測 107→318）。
    狀態列本來就短，折成兩行完全可以接受；蓋住數字不行。 */
 .qline-sub { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
-.qline.done .qline-sub { color: var(--ok); }
+.qline.done .qline-sub { color: var(--ok-text); }
 .qline-chev { flex: none; color: var(--muted); font-size: 0.8rem; width: 10px; text-align: center; }
 .qline.open .qline-chev { transform: rotate(90deg); }
 
@@ -1797,7 +1918,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qline-tags { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .qline-likes { color: var(--muted); font-size: 0.9rem; font-weight: 700; }
 .qline-link {
-  appearance: none; border: 0; background: transparent; color: var(--primary);
+  appearance: none; border: 0; background: transparent; color: var(--primary-text);
   font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer;
   min-height: 44px; padding: 0 4px; margin-left: auto;
 }
@@ -1866,7 +1987,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .len-s { font-size: 0.85rem; color: var(--muted); }
 
 .share-box { display: flex; flex-direction: column; gap: 10px; }
-.share-live { font-weight: 700; color: var(--ok, #3fb27f); margin: 0; }
+.share-live { font-weight: 700; color: var(--ok-text); margin: 0; }
 .share-url {
   font-size: 0.86rem; line-height: 1.5; word-break: break-all; user-select: all;
   padding: 10px 12px; border-radius: 12px; background: var(--bg-elev-2);
@@ -1908,7 +2029,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 
 /* ---- 規劃第 2 批：時刻鏈、移動時間、排順序 ---- */
 .plan-travel-note { font-size: 0.82rem; color: var(--muted); padding: 2px 0 4px 54px; pointer-events: none; }
-.plan-travel-note.far { color: #ffb14e; padding-right: 8px; line-height: 1.45; }
+.plan-travel-note.far { color: var(--warn-text); padding-right: 8px; line-height: 1.45; }
 /* 大眾運輸（v1.68）：實際班次，跟「開車估算」要看得出差別 —— 所以給底色與正常字級，
    開車那一行縮成附註。長輩看的是「幾點的車、在哪上車」，那一行不能小。 */
 .plan-travel-note.transit { color: var(--text); padding: 8px 10px 8px 54px; line-height: 1.5;
@@ -1919,7 +2040,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* 行程檢查（v1.69）。一次最多三條、依當天時間先後排（不依嚴重度）：
    長輩是照順序讀一天的行程的，而且修最早的那一條通常會連帶解掉後面的。 */
 .pd-check { min-height: 40px; padding: 4px 12px; white-space: nowrap; flex: 0 0 auto; }
-.pd-check.has-issue { border-color: #ffb14e; color: #ffb14e; font-weight: 700; }
+.pd-check.has-issue { border-color: #ffb14e; color: var(--warn-text); font-weight: 700; }
 .pd-start { min-height: 44px; padding: 4px 10px; white-space: nowrap; font-size: 0.85rem; flex: 0 0 auto; }
 .chk-item { padding: 10px 12px; border-radius: 12px; margin-bottom: 10px;
   background: color-mix(in srgb, #ffb14e 12%, transparent); }
@@ -1930,10 +2051,10 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .chk-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .chk-btns .btn { min-height: 44px; }
 .plan-eta { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
-.plan-eta.warn { color: #ffb14e; font-weight: 700; }
+.plan-eta.warn { color: var(--warn-text); font-weight: 700; }
 /* 使用者自己填的時間打架（v1.67）。比 .plan-eta.warn 更明顯：它是「確定有問題」，
    不像遲到推算那樣建立在估算上。字級不縮 —— 長輩要看得到。 */
-.plan-conflict { font-size: 0.85rem; line-height: 1.45; color: #ffb14e; font-weight: 700;
+.plan-conflict { font-size: 0.85rem; line-height: 1.45; color: var(--warn-text); font-weight: 700;
   margin-top: 4px; padding: 6px 8px; border-radius: 8px;
   background: color-mix(in srgb, #ffb14e 14%, transparent); }
 .plan-pin.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, transparent); }
@@ -2018,7 +2139,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .pos-banner { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 12px;
   border-radius: 10px; background: color-mix(in srgb, var(--primary) 16%, var(--card)); font-size: 14.5px; }
 .pos-banner span { flex: 1; }
-.pos-banner-off { border: none; background: transparent; color: var(--primary); font-weight: 700; font-size: 14.5px; padding: 4px 6px; }
+.pos-banner-off { border: none; background: transparent; color: var(--primary-text); font-weight: 700; font-size: 14.5px; padding: 4px 6px; }
 .pc-lead { margin: 0 0 10px; font-size: 15px; line-height: 1.6; }
 .pc-row { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
 .pc-k { flex: none; width: 5.6em; font-weight: 700; font-size: 14.5px; }
@@ -2029,3 +2150,27 @@ textarea.field { resize: vertical; line-height: 1.6; }
   background: color-mix(in srgb, var(--primary) 14%, var(--card)); border: 1.5px solid var(--primary); }
 .claim-nudge-t { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
 .claim-nudge-p { font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0 0 10px; }
+
+/* ---------- 出發倒數（v1.74.11）：只在還沒出發時出現 ---------- */
+.countdown { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding: 14px 16px;
+  border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 16%, var(--bg-elev)); border: 1.5px solid var(--accent); }
+.cd-big { font-size: 1.35rem; font-weight: 900; }
+.cd-sub { color: var(--muted); font-size: 0.95rem; }
+.trip-card-cd { margin-top: 2px; font-weight: 700; color: var(--accent-text); }
+
+/* ---------- 減少動態效果（v1.74.11）---------- */
+/* <html class="reduce-motion">：系統設定「減少動態效果」或設定頁的開關（js/prefs.js）。
+   一條總開關蓋掉全部動畫與轉場，不一條一條補——一條一條補是排除制，以後每加一段動畫都要
+   有人記得補，而那個人不會記得。時間壓到 0.01ms 而不是 none：animationend／transitionend
+   照樣會發生，等這兩個事件收尾的程式不會卡住。
+   要在這裡開例外，得同時登記在 scripts/motioncsstest.mjs 的 EXEMPT，否則那支會紅。 */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+/* 例外：載入中的轉圈。停住的圈看起來像當掉了，放慢照轉。 */
+.reduce-motion .spinner { animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }

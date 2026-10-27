@@ -252,7 +252,7 @@ export default async function create() {
     const title = titleField.value.trim();
     if (!title) {
       toast('先幫這趟旅程取個名字');
-      titleField.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      titleField.scrollIntoView({ block: 'center', behavior: document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth' });
       titleField.focus();
       titleField.classList.add('field-attn');
       setTimeout(() => titleField.classList.remove('field-attn'), 1800);

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "和紙：文字變數換成粉彩",
+    "why": "粉彩當字（這個主題唯一可能做壞的地方）。預期紅 palettetest 真樣式表的 P2／P3 和紙（含和紙＋高對比）。",
+    "file": "css/style.css",
+    "find": "  --primary-text: #9a3a2b;",
+    "replace": "  --primary-text: #f2a497;",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "文字色改回直接用 --primary",
+    "why": "繞過文字變數，和紙下就是粉彩當字。預期紅 palettetest 真樣式表的 P2／P3 和紙。",
+    "file": "css/style.css",
+    "find": "#tabbar .tab.active { color: var(--primary-text); }",
+    "replace": "#tabbar .tab.active { color: var(--primary); }",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：不看上一層的底色",
+    "why": "預期紅對照組「上一層的底色要算進去」，以及真樣式表深色兩個主題的 P2／P3（日期列選中格 .ds-day.on .ds-sub、底部分頁 #tabbar .tab.active 被改成對頁面算）。",
+    "file": "scripts/palettetest.mjs",
+    "find": "      const pc = par ? ownColors(par) : { fg: null, bg: null };",
+    "replace": "      const pc = { fg: null, bg: null };",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：透明不疊在頁面上算",
+    "why": "預期紅對照組「疊在頁面上的半透明底」（落到解不出來）與真樣式表的 P4（tag-ok 這類 color-mix 透明底）。",
+    "file": "scripts/palettetest.mjs",
+    "find": "  if (/^transparent$/i.test(v)) return under ? { color: under } : { unresolved: '透明（疊在什麼上面靜態看不出來）' };",
+    "replace": "  if (/^transparent$/i.test(v)) return { unresolved: '透明（疊在什麼上面靜態看不出來）' };",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：漸層只看第一個色標",
+    "why": "預期紅對照組「漸層的每個色標都要過」，以及真樣式表的「登記的例外每一條都真的用到」（照片上的兩條漸層遮罩變成沒用到）。",
+    "file": "scripts/palettetest.mjs",
+    "find": "    return args.map((a) => splitTop(a, /\\s/)[0]);",
+    "replace": "    return args.slice(0, 1).map((a) => splitTop(a, /\\s/)[0]);",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：只對 --bg 算、不取最差的底",
+    "why": "預期紅真樣式表的「登記的例外每一條都真的用到」（深色那幾條只在 --bg-elev-2 上不到 4.5，換成只看 --bg 就變成沒用到）。",
+    "file": "scripts/palettetest.mjs",
+    "find": "    const pages = pageBgs.map((x) => x.color);",
+    "replace": "    const pages = [pageBgs[0].color];",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：登記了沒用到也不報",
+    "why": "預期紅對照組「登記了卻沒用到」與「只登記深色，和紙照樣擋」。",
+    "file": "scripts/palettetest.mjs",
+    "find": "  const stale = Object.keys(exempt).filter((k) => !usedExempt.has(k));",
+    "replace": "  const stale = [];",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：例外不分主題",
+    "why": "「深色｜選擇器」也放行和紙。預期紅對照組「只登記深色，和紙照樣擋」，以及真樣式表的「登記的例外每一條都真的用到」（深色＋高對比那一份被深色那一份搶先用掉）。",
+    "file": "scripts/palettetest.mjs",
+    "find": "    const exemptKey = (sel) => [`${name}｜${sel}`, sel].find((k) => exempt[k] != null);",
+    "replace": "    const exemptKey = (sel) => Object.keys(exempt).find((k) => k === sel || k.endsWith('｜' + sel));",
+    "cmd": "node scripts/palettetest.mjs"
+  }
+]

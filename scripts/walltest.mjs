@@ -149,7 +149,7 @@ try {
   else fail('沒有標示現在這一站');
   if (manual.openSpots.length === 1 && manual.openSpots[0] === '太平山') ok('只展開指定的那個景點，其他收合');
   else fail('展開的景點不對：' + JSON.stringify(manual.openSpots));
-  if (manual.openDays.length === 1 && manual.openDays[0] === '2') ok('只展開它所在的那一天（第 2 天）');
+  if (manual.openDays.length === 1 && manual.openDays[0] === '2') ok('只顯示它所在的那一天（第 2 天）');
   else fail('展開的天數不對：' + JSON.stringify(manual.openDays));
 
   // 重開行程頁，狀態要留著
@@ -164,30 +164,33 @@ try {
   if (again.name.includes('太平山') && again.openSpots.length === 1 && again.openSpots[0] === '太平山') {
     ok('下次打開這趟行程：仍然預設展開指定的那一站');
   } else fail('重開後沒維持：' + JSON.stringify(again));
-  if (again.scrollY > 100) ok(`重新打開時自動捲動（捲了 ${again.scrollY}px）`);
-  else fail('重新打開沒有自動捲動：' + again.scrollY);
-  // 捲動目標應該是「那一站所屬的那一天」的標題列，而且那一站要看得到
+  // v1.74.11 起一次只顯示一天：日期列選中那一站所在的那一天；那一站本來就在第一個畫面裡就不捲（長輩最怕畫面自己跳），
+  // 在畫面外才捲。所以「有沒有捲」要看前置——那一站在文件裡的位置——兩種結果都有對錯，不是只有「捲了才對」。
   const target = await page.evaluate(() => {
-    const topH = document.getElementById('topbar').offsetHeight;
+    const strip = document.querySelector('.daystrip');
+    const topH = document.getElementById('topbar').offsetHeight + (strip ? strip.offsetHeight : 0);
     const tabH = document.getElementById('tabbar').offsetHeight;
-    const dayHead = document.querySelector('.daycollapse[data-day="2"] .dc-head');
-    const spotHead = [...document.querySelectorAll('.qcollapse')]
+    const shown = [...document.querySelectorAll('.daycollapse.open')].map((e) => e.dataset.day);
+    const spotHead = [...document.querySelectorAll('.daycollapse.open .qcollapse')]
       .find((e) => e.querySelector('.qc-name')?.firstChild?.textContent === '太平山')?.querySelector('.qc-head');
-    const d = dayHead.getBoundingClientRect(), q = spotHead.getBoundingClientRect();
+    const q = spotHead ? spotHead.getBoundingClientRect() : null;
     return {
-      dayTop: Math.round(d.top), topH: Math.round(topH),
-      spotVisible: q.top >= topH && q.bottom <= window.innerHeight - tabH,
-      // v1.41 之後任務列變矮，整頁可能根本沒那麼長 —— 捲到底也還碰不到頂。
-      // 那不是壞掉：真正要看的是「那一站有沒有在畫面上」。
-      atBottom: Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 2,
+      shown, has: !!q, topH: Math.round(topH), vh: window.innerHeight, tabH,
+      docTop: q ? Math.round(q.top + window.scrollY) : null, docBottom: q ? Math.round(q.bottom + window.scrollY) : null,
+      spotVisible: !!q && q.top >= topH - 2 && q.bottom <= window.innerHeight - tabH,
     };
   });
-  const nearTop = target.dayTop >= target.topH - 4 && target.dayTop <= target.topH + 40;
-  if (nearTop) ok(`捲到「第 2 天」的標題列（距頂列 ${target.dayTop - target.topH}px）`);
-  else if (target.atBottom && target.spotVisible) ok(`頁面不夠長捲不到頂，但已捲到底且那一站看得見（距頂列 ${target.dayTop - target.topH}px）`);
-  else fail(`捲動目標不是那一天的標題列：${JSON.stringify(target)}`);
-  if (target.spotVisible) ok('那一站也在畫面內，打開行程就直接看到要去的那一站');
-  else fail('捲完之後那一站還是看不到');
+  if (target.shown.length === 1 && target.shown[0] === '2' && target.has) ok('日期列選中那一站所在的第 2 天，畫面上看得到太平山');
+  else fail('顯示的天不對或找不到那一站：' + JSON.stringify(target));
+  // 第一個畫面裡看得到嗎（頂列＋日期列底下、底部分頁上面）
+  const fitsFirstScreen = target.docTop >= target.topH && target.docBottom <= target.vh - target.tabH;
+  if (fitsFirstScreen) {
+    if (again.scrollY === 0) ok(`那一站本來就在第一個畫面裡 → 不捲（scrollY 0；文件位置 ${target.docTop}px）`);
+    else fail(`那一站本來就看得到，卻自己捲了 ${again.scrollY}px`);
+  } else if (again.scrollY > 100) ok(`那一站在第一個畫面外（文件位置 ${target.docTop}px）→ 自動捲過去（捲了 ${again.scrollY}px）`);
+  else fail(`那一站在第一個畫面外卻沒有捲：scrollY ${again.scrollY}、文件位置 ${target.docTop}px`);
+  if (target.spotVisible) ok('那一站在畫面內、沒有被日期列蓋住，打開行程就直接看到要去的那一站');
+  else fail('那一站還是看不到（或被日期列蓋住）：' + JSON.stringify(target));
 
   // 完成之後要自動放手，不能把人困在手動狀態
   await page.evaluate(async (s) => {
@@ -303,12 +306,26 @@ try {
     await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}`, { waitUntil: 'networkidle0' });
     await E.waitForSelector('.qline');
     await sleep(1800);
-    const r = await E.evaluate(() => ({
-      scrollY: Math.round(window.scrollY),
-      openDays: [...document.querySelectorAll('.daycollapse.open')].map((e) => e.dataset.day),
-    }));
-    if (r.scrollY > 100 && r.openDays.length === 1 && r.openDays[0] === '3') ok(`${label}：重新打開仍會展開第 3 天並捲到位（${r.scrollY}px）`);
-    else fail(`${label}：沒有捲動或展開錯誤：${JSON.stringify(r)}`);
+    // v1.74.11：日期列選中第 3 天；那一站在第一個畫面外才捲、在裡面就不捲（同上面的前置判斷）
+    const r = await E.evaluate(() => {
+      const strip = document.querySelector('.daystrip');
+      const topH = document.getElementById('topbar').offsetHeight + (strip ? strip.offsetHeight : 0);
+      const tabH = document.getElementById('tabbar').offsetHeight;
+      const here = document.querySelector('.daycollapse.open .qcollapse.is-here .qc-head');
+      const q = here ? here.getBoundingClientRect() : null;
+      return {
+        scrollY: Math.round(window.scrollY),
+        openDays: [...document.querySelectorAll('.daycollapse.open')].map((e) => e.dataset.day),
+        has: !!q, docTop: q ? Math.round(q.top + window.scrollY) : null, docBottom: q ? Math.round(q.bottom + window.scrollY) : null,
+        topH: Math.round(topH), limit: window.innerHeight - tabH,
+        visible: !!q && q.top >= topH - 2 && q.bottom <= window.innerHeight - tabH,
+      };
+    });
+    const fits = r.has && r.docTop >= r.topH && r.docBottom <= r.limit;
+    const scrollOk = fits ? r.scrollY === 0 : r.scrollY > 100;
+    if (r.openDays.length === 1 && r.openDays[0] === '3' && r.visible && scrollOk)
+      ok(`${label}：重新打開顯示第 3 天、看得到指定那一站（${fits ? '本來就在第一個畫面裡，沒捲' : '在畫面外，捲了 ' + r.scrollY + 'px'}）`);
+    else fail(`${label}：天、捲動或可見性不對：${JSON.stringify(r)}`);
   }
 
   // ================= 照片牆的排序與篩選 =================

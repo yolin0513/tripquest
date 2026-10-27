@@ -5,7 +5,7 @@ import { h, toast, confirmDialog, promptDialog, modal, fmtBytes } from '../ui.js
 import { navigate } from '../router.js';
 import { estimate, isPersisted, requestPersist, wipeAll } from '../db.js';
 import { importBundle, importShareCode, joinInvite, parseInviteText } from '../share.js';
-import { getPrefs, setPref, FS_LABELS } from '../prefs.js';
+import { getPrefs, setPref, FS_LABELS, THEME_LABELS, systemReducesMotion } from '../prefs.js';
 import { getConfig, setConfig, modeLabel, syncEnabled, testConnection, syncNow } from '../sync.js';
 import { myName, setMyName, exportCard, encodeCard, decodeCard, importCard } from '../identity.js';
 import { pendingCount } from '../outbox.js';
@@ -54,10 +54,28 @@ export default async function settings() {
       h('div', { class: 'seg' }, ...Object.entries(FS_LABELS).map(([k, label]) =>
         h('button', { class: prefs.fs === k ? 'on' : '', onclick: () => { setPref('fs', k); settings(); } }, label))),
     ),
+    h('div', { class: 'form-field' },
+      h('span', { class: 'form-label' }, '畫面顏色'),
+      h('div', { class: 'seg theme-seg' }, ...Object.entries(THEME_LABELS).map(([k, label]) =>
+        h('button', { class: (prefs.theme === 'washi' ? 'washi' : 'dark') === k ? 'on' : '', 'data-theme-pick': k,
+          onclick: () => { setPref('theme', k); settings(); } }, label))),
+      h('div', { class: 'form-hint' }, '深色適合晚上、比較不刺眼；淺色像白紙，白天在戶外比較好看。'),
+    ),
     h('label', { class: 'switch-row' },
       h('div', {}, h('div', { style: 'font-weight:700' }, '高對比模式'),
-        h('div', { class: 'form-hint' }, '背景更深、文字更白，看起來更清楚。')),
+        h('div', { class: 'form-hint' }, prefs.theme === 'washi'
+          ? '背景更白、文字更黑，看起來更清楚。'
+          : '背景更深、文字更白，看起來更清楚。')),
       checkbox(prefs.contrast === 'high', (on) => { setPref('contrast', on ? 'high' : 'normal'); })),
+
+    h('label', { class: 'switch-row' },
+      h('div', {}, h('div', { style: 'font-weight:700' }, '減少動態效果'),
+        h('div', { class: 'form-hint' }, '完成任務時不撒彩帶、畫面不彈跳，展開收合與換頁直接切換。看了會暈或覺得眼花時打開。'),
+        // 系統已經說要減少：這個開關關掉也不會恢復動畫。不講的話，他勾掉之後畫面照樣不動，會以為開關壞了。
+        systemReducesMotion()
+          ? h('div', { class: 'form-hint' }, '手機系統已經設定「減少動態效果」，所以不管這裡開或關，App 都會照系統的設定減少動態。')
+          : null),
+      checkbox(prefs.reduceMotion === true, (on) => { setPref('reduceMotion', on); })),
 
     h('label', { class: 'switch-row' },
       h('div', {}, h('div', { style: 'font-weight:700' }, '打開旅程時自動捲到今天'),

@@ -142,19 +142,23 @@ try {
   // 每次跑都改寫那三張進版控的截圖；那三張留在版控當文件圖，目前沒有任何測試在檢查它們的內容。
   const OUT = path.join(ROOT, 'screenshots/_out/imgtest');
   await mkdir(OUT, { recursive: true });
-  await page.evaluate(() => document.querySelectorAll('.daycollapse .dc-head').forEach((b) => {
-    if (!b.closest('.daycollapse').classList.contains('open')) b.click();
-  }));
-  await sleep(400);
-
   const shotCard = async (match, file) => {
-    const found = await page.evaluate((m) => {
+    const found = await page.evaluate(async (m) => {
       const card = [...document.querySelectorAll('.qline')].find((c) => c.querySelector('.qline-title')?.textContent.includes(m));
       if (!card) return false;
+      // v1.74.11 起一次只顯示一天：先在日期列點那張卡所在的那一天（使用者看到它的方式），
+      // 景點收合著就點開
+      const day = card.closest('.daycollapse')?.dataset.day;
+      const cell = day && document.querySelector(`.daystrip .ds-day[data-day="${day}"]`);
+      if (cell && !card.closest('.daycollapse').classList.contains('open')) cell.click();
+      const sec = card.closest('.qcollapse');
+      if (sec && !sec.classList.contains('open')) sec.querySelector('.qc-toggle')?.click();
+      await new Promise((r) => setTimeout(r, 300));
       const r = card.getBoundingClientRect();
-      // 讓整張卡（含圖片下緣的授權小字）都在畫面內，頂列下方留一點空
-      window.scrollBy(0, r.top - (document.getElementById('topbar').offsetHeight + 16));
-      return true;
+      // 讓整張卡（含圖片下緣的授權小字）都在畫面內，頂列與日期列下方留一點空
+      const strip = document.querySelector('.daystrip');
+      window.scrollBy(0, r.top - (document.getElementById('topbar').offsetHeight + (strip ? strip.offsetHeight : 0) + 16));
+      return r.height > 0;
     }, match);
     if (!found) { fail('找不到卡片：' + match); return; }
     await sleep(350);
