@@ -157,6 +157,16 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
 - **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 70 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **海報重做設計稿（10/27，Yolin 列為優先）**：`docs/DESIGN_海報重做.md`——12 項問題、封面 7 區＋每天 6 區（每區標資料有沒有）、
   分 4 批共 5～5.5 天；新版**連帶著的 theme 也不印類別名、不用主題插圖、不印每站 emoji**（多一題給 Yolin，第 6 節第 5 題）。沒寫程式。
+  Dispatch 裁定（10/27）：海報一律不印類別名，連帶著 theme 的也不印。
+- **「存著的 theme」可不可信（10/27 讀碼查，沒改）**：
+  - **來源只有一條**：`js/quests/generate.js` 建景點時 `spot.theme = themeForSpot(spot)`（cb0911f v1.5 起）。v1.74 以前**所有來源**（策展、非策展）都這樣存；
+    v1.74 起非策展存 `journey`，**策展的現在仍是 `themeForSpot`——名字正規式排第一，蓋過景點庫的 primary／tags**。分享匯入不帶 theme。
+    在 `js/views/*.js` 搜「theme」＋「select／option／choose／選」：沒有使用者選類別的畫面（樣式範圍內未見）。`data/places` 沒有 theme 欄位。
+  - **存著的值本身分不出來**（沒有來源欄位）；`createdAt` 也不可靠（舊版 Service Worker 會讓舊程式在部署後繼續跑）。
+    **但可以不看存著的值、重算**：`source==='curated'`＋`placeId` → 用現在的 `matchPlace(name)` 複核同一個 placeId（v1.74 以前的比對很鬆，舊的 placeId 可能是誤命中）→
+    取景點庫那筆的 `primary`／`tags` 經 `themes.json` 的 `byTag` 換成類別。每筆景點庫都有 `primary`。
+  - **用 theme 主張事情的地方（配色不算）**：行程頁標題列的類別字（`js/views/trip.js:648`）；AI 文案（`js/aicontent.js:137`）；海報主題章與 `THEME_DECO` 插圖
+    （`js/poster/index.js:239`、`:260`）；策展景點的任務句與介紹（`generate.js:269-270`、`:317`）。另外 v1.74 以前存下的任務、介紹、emoji 本身就是照猜的主題寫的（R8 當時決定舊旅程不動），量多少要讀 D1。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。
 - **第 1 步（量比例）：待 Yolin 在機器前開權限。** D1 唯讀查詢被權限分類器擋過一次，沒有重試、沒有繞過。Dispatch 裁定（10/27）：讀正式環境使用者資料的權限
