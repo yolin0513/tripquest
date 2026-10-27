@@ -1,0 +1,50 @@
+[
+  {
+    "name": "猜類別母體：新增第 10 個呼叫點",
+    "why": "將來有人在海報改回 themeForDay——就是今天一處一處撞到的形狀。預期只紅真實結果「每一處都登記了」（沒登記：js/poster/index.js）。",
+    "file": "js/poster/index.js",
+    "find": "      theme: storedThemeOf(byDaySpots.get(day)),",
+    "replace": "      theme: themeForDay(byDaySpots.get(day)),",
+    "cmd": "node scripts/guesscensustest.mjs"
+  },
+  {
+    "name": "猜類別母體：漏認 themeForTrip",
+    "why": "預期紅對照組「沒登記的 themeForTrip」，真實結果也紅（recap.js 那條登記過期）——兩條都是同一個缺陷。",
+    "file": "scripts/guesscensustest.mjs",
+    "find": "export const NAMES_RE = /\\b(themeForSpot|themeForDay|themeForTrip|stayForSpot)\\s*\\(/;",
+    "replace": "export const NAMES_RE = /\\b(themeForSpot|themeForDay|stayForSpot)\\s*\\(/;",
+    "cmd": "node scripts/guesscensustest.mjs"
+  },
+  {
+    "name": "猜類別母體：註解也算",
+    "why": "預期紅對照組「註解與定義不算」；真實結果也紅（aicontent.js 註解裡寫著 themeForSpot(第一站)）。",
+    "file": "scripts/guesscensustest.mjs",
+    "find": "    if (t.startsWith('//')) return;",
+    "replace": "    if (t.startsWith('// 不會有這種開頭')) return;",
+    "cmd": "node scripts/guesscensustest.mjs"
+  },
+  {
+    "name": "猜類別母體：過期的登記不報",
+    "why": "預期只紅對照組「登記過期」。",
+    "file": "scripts/guesscensustest.mjs",
+    "find": "    if (n === 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
+    "replace": "    if (n < 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
+    "cmd": "node scripts/guesscensustest.mjs"
+  },
+  {
+    "name": "猜類別母體：類別不檢查",
+    "why": "登記成「印成字」也放行。預期只紅對照組「類別不准（印成字）」。",
+    "file": "scripts/guesscensustest.mjs",
+    "find": "    if (!KINDS.includes(r.kind)) problems.push(",
+    "replace": "    if (false && !KINDS.includes(r.kind)) problems.push(",
+    "cmd": "node scripts/guesscensustest.mjs"
+  },
+  {
+    "name": "猜類別母體：一條登記對到兩行不報",
+    "why": "預期只紅對照組「一條登記對到兩行」。",
+    "file": "scripts/guesscensustest.mjs",
+    "find": "    if (n > 1) problems.push(`一條登記對到 ${n} 行",
+    "replace": "    if (n > 99) problems.push(`一條登記對到 ${n} 行",
+    "cmd": "node scripts/guesscensustest.mjs"
+  }
+]

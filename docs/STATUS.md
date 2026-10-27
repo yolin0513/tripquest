@@ -5,6 +5,63 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### 🔴🔴🔴 2026-10-27 交接契約：換一個全新的 Session 讀完這一節就能接著跑（v1.74.10 線上；本機 10 個 commit 沒推）
+
+**今天定下來的三條原則（Dispatch 2026-10-27，先讀）**
+1. **參考站有的欄位，不代表我們有那筆資料。** 例：參考寫「今日同行夥伴」，我們沒有「哪一天誰同行」的資料，所以只寫「同行夥伴」。
+2. **判準要寫成「使用者看得到什麼」，不是「某個物件存在」。** 節點在、但被移到畫面外、被蓋住、淡到看不清，都算沒過。
+3. **配色是裝飾，插圖與文字是主張。** 照名字猜的類別可以拿來挑顏色；印成字、送給 AI、挑特定類別的圖都不行——要用 `storedThemeOf`（只看景點自己帶著的 theme）。
+   守這條的是 `scripts/guesscensustest.mjs`：猜類別的每一個呼叫點都要登記用途，只准 color／number／curated／internal 四種。
+
+**1. 狀態（`git log origin/main..HEAD`，全部沒推；推送只用 `bash scripts/safe-push.sh`）**
+- `5062754` STATUS 文字（最醒目處的「剛好覺得怪才回頭驗」）。
+- `735aa97` 行程頁第 1 輪＋第 1 批＋和紙主題（日期列、倒數、時間軸三態、同行夥伴、減少動態、`tripday.js`）。
+- `6aa0761` 和紙收尾：`boot-theme.js`（第一個畫面就是和紙）、離線清單補 `tripday.js`／`boot-theme.js`、`shelltest`。
+- `412cd18` 海報重做設計稿（只有文件與草圖）。
+- `085cfae` 原創圖形紙飛機（日期列）、背包（頁首）放進畫面；AI 路線評估。
+- `ef11f53` 海報主題章與 AI 文案不再用猜的類別（`storedThemeOf`、`modelFrom`、`digestFrom`、`postertruthtest`）。
+- `ea04587` 設計文件 8-1／8-2。
+- `336344b` `mutate.mjs` 的 cmd 白名單（`mutcmdtest`）、建議的權限檔。
+- `10ecb51` 行程頁景點標題列不再印猜的類別；`guesstruthtest`（H2、H3）；`themeguess-count.mjs` 的 C 改正。
+- **這一節所在的 commit**：`guesscensustest`（猜類別的母體登記）＋這份交接。之後工作區應該是乾淨的（`git status --porcelain` 為空）。
+- `sw.js` 的 `VERSION` 還是 `tripquest-v1.74.10`。**全部驗完才 bump 到 v1.74.11、跑 `test:affected`、commit、`safe-push.sh`、curl 確認線上 VERSION、`npm run sweep`。**
+
+**2. 待驗清單與那支尺**
+- 清單：`docs/VERIFY_第1批.md`。格式是「編號｜要看什麼｜怎麼算通過｜怎麼驗｜紅＝什麼」；每一項先問「它紅的時候，是使用者看不到，還是只是某個節點不在？」
+- 尺：`scripts/itinviewtest.mjs` 的 `seen()`——把元素像使用者一樣捲到畫面中間，確認 ① 在視窗裡、有大小；② 正中央那一點打到的是它自己
+  （沒被黏住的日期列、標題列、底部分頁蓋住）；③ 沒被 visibility／display／opacity 藏起來（往上一路乘 opacity）；④ 字對實際的底對比 ≥ 4.5。
+- **為什麼先單獨跑兩條突變**：B1–B5 全靠 `seen()` 判定。尺本身沒證明會紅之前，B1–B5 的綠沒有意義。兩條是
+  `mut_itinview.json` 的「第 1 批：第一站藏在格子外」（節點在、只驗存在會照樣綠）與「第 1 批：用透明度淡化（字變得看不清楚）」（靜態的 palettetest 看不到 opacity）。
+  這兩條紅在預期，尺才算活的。
+
+**3. 跑的順序（全部要開瀏覽器或屬重負載，開跑前向 Dispatch 要許可；權限檔沒放進去之前會被分類器擋）**
+1. 驗尺：`node scripts/mutate.mjs --only tools/mutations/mut_itinview.json "第 1 批：第一站藏在格子外" "第 1 批：用透明度淡化（字變得看不清楚）"`
+2. 原樣跑 VERIFY 裡的自動項：`itinviewtest`、`washitest`、`motiontest`、`guesstruthtest`，以及改過的舊測試 `collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest`。
+3. B1–B5 的 8 條突變與其餘瀏覽器突變：`mut_itinview`（22）、`mut_washi`（4）、`mut_motion` 後 7 條、`mut_guesstruth`（4）；C1「拿 HEAD 舊版跑新測試要紅」。
+4. 秒級、還沒跑過的：`guesscensustest` ＋ `mut_guesscensus`（6）。
+5. `mutatetest`：**先計時**（開 2 個以上程序、耗時沒量過）。
+6. `npm run test:affected`：這次放大成**全套 70 支**、預測不出耗時＝重負載。跑完把每支耗時記下來。
+跑完**立刻**告訴 Dispatch（MealMate 等機器）。
+
+**4. 量負載的判準（Dispatch）**：扣掉 `claude.exe` 與 MCP 的 node 之後，看有沒有別人的 python／ffmpeg／tesseract／別專案的 node。
+閒置基線 CPU 9.16%（系統常駐 4.45＋觀察者 4.88＋外來 0）。瀏覽器窗格被自動打開那段時間的基準數據作廢（編輯 .svg／.html 的掛勾會用 file:// 打開 index.html；改 js／css 不會）。
+
+**5. 還沒做完的**
+- **H2 瀏覽器測試**：已寫（`guesstruthtest` H2-0～H2-2，網路層攔 body、合成金鑰、跟基準行程比類別名次數），**沒跑**。
+- **`paintRef`**：查過不用改——佔位圖 `themePlaceholder` 只是色圓與波浪，是顏色不是插圖；真的圖來自景點或使用者的照片。登記在 `guesscensustest`（color）。
+- **猜類別的完整清查**（Dispatch 10/27 要的）：母體 9 處，都登記在 `guesscensustest` 的 `REGISTRY`。印成字的曾有 3 處（海報主題章、AI 文案、行程頁標題列），都已改成 `storedThemeOf`／`s.theme`，
+  不再呼叫猜類別的函式；剩下 9 處＝color 4、number 2、curated 2、internal 1。**沒跑過。**
+- **已快取的 AI 文案**：查證結果在本檔下方「🔴 主題章」那一節；選項 (a) 只清猜過的那幾天、不重產（建議）／(b) 留著、標「可能不準」／(c) 不動。**要 Yolin 拍板**——(a) 會改到 D1 裡的真實群組。
+- 量線上比例（`scripts/themeguess-count.mjs`）：要讀正式 D1，**待 Yolin 在機器前開權限**，Session 不自己開。
+
+**6. 權限**：建議檔 `docs/claude-settings.local.proposed.json`（說明：同名 `.md`）。Yolin 在專案根目錄 PowerShell 貼：
+`Copy-Item docs\claude-settings.local.proposed.json .claude\settings.local.json`。
+Session 自己寫 `.claude/settings.local.json` 被分類器以「Self-Modification」擋下——對的：放寬權限的範圍不該由被限制的那一方決定，**被擋就停，不換方法**。
+放進去之後：讀回確認，等 Dispatch 放行再試跑上面第 3 點的第 1 步。
+
+**7. 紀律（今天踩過的）**：寫檔改檔只用 Write／Edit（不用 sed -i）；`git add` 逐路徑；commit 第一行寫明未驗與待驗清單；不要改 .svg／.html（會自動開窗格）；
+Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10/27 第二輪我照樣跑了秒級測試（affectedtest 等 7 支與 `mut_themeguess`），違反了這句，已回報。
+
 > ### 🔴🔴 先讀這一條：用結束碼判定成敗時，先確認「失敗」和「你要測的那種失敗」不是同一個碼（2026-10-08）
 >
 > **「這次是剛好覺得怪才回頭驗；沒覺得怪的話，那份錯的清單就交出去了。」**（本專案 2026-10-08：查 pushgatetest 只看結束碼的查法，第一版已經跑完、給出完整清單，
@@ -86,7 +143,7 @@
   但 `sig` 跟現在一樣時，當時每天第一站是誰就確定了，舊 prompt 的主題＝`themeForSpot(那一站)` 可以重算（`themes.json` 最後一次改在 PROMPT_V=2 之前同一天，
   所有 v2 記錄都是用現在這份規則產的）。`aiText` 是同步記錄：改了會同步給整個群組＝**改到 D1 裡的真實群組**，要 Yolin 同意。
   清掉記錄的話，建立者下次打開行程頁會自動重產（花錢）；要「空著、不自動重產」得保留記錄與 `sig`、只刪 payload 裡那幾天。
-- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 68 支（加了 `mutcmdtest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
+- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 70 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。
 - **第 1 步（量比例）：待 Yolin 在機器前開權限。** D1 唯讀查詢被權限分類器擋過一次，沒有重試、沒有繞過。Dispatch 裁定（10/27）：讀正式環境使用者資料的權限
@@ -1248,7 +1305,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **69 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **70 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——
