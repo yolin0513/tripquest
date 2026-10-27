@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/itinviewtest.mjs)",
+      "Bash(node scripts/washitest.mjs)",
+      "Bash(node scripts/motiontest.mjs)",
+      "Bash(node scripts/collapsetest.mjs)",
+      "Bash(node scripts/scrolltest.mjs)",
+      "Bash(node scripts/walltest.mjs)",
+      "Bash(node scripts/imgtest.mjs)",
+      "Bash(node scripts/layouttest.mjs)",
+      "Bash(node scripts/mutate.mjs --only tools/mutations/mut_itinview.json *)",
+      "Bash(node scripts/mutate.mjs --only tools/mutations/mut_washi.json *)",
+      "Bash(node scripts/mutate.mjs --only tools/mutations/mut_motion.json *)",
+      "Bash(node scripts/run-affected.mjs)"
+    ]
+  }
+}

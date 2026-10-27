@@ -1,0 +1,42 @@
+[
+  {
+    "name": "cmd 白名單：拿掉結尾錨點",
+    "why": "尾巴接 && 的 cmd 會被放行。預期只紅 mutcmdtest 的 I1a。",
+    "file": "scripts/mutate.mjs",
+    "find": "[a-z0-9-]+\\.mjs$/;",
+    "replace": "[a-z0-9-]+\\.mjs/;",
+    "cmd": "node scripts/mutcmdtest.mjs"
+  },
+  {
+    "name": "cmd 白名單：拿掉開頭錨點",
+    "why": "開頭先跑別的指令的 cmd 會被放行。預期只紅 mutcmdtest 的 I1b。",
+    "file": "scripts/mutate.mjs",
+    "find": "= /^node scripts",
+    "replace": "= /node scripts",
+    "cmd": "node scripts/mutcmdtest.mjs"
+  },
+  {
+    "name": "cmd 白名單：名字的字元類放寬",
+    "why": "名字裡夾 shell 字元（&）的 cmd 會被放行。預期只紅 mutcmdtest 的 I1c。",
+    "file": "scripts/mutate.mjs",
+    "find": "scripts\\/[a-z0-9-]+\\.mjs$",
+    "replace": "scripts\\/[^/\\s]+\\.mjs$",
+    "cmd": "node scripts/mutcmdtest.mjs"
+  },
+  {
+    "name": "cmd 白名單：比對整個不看",
+    "why": "三個分支共同依靠的那一環（處置共用、偵測各自獨立，§5.12）。預期紅 mutcmdtest 的 I1a、I1b、I1c 三條。",
+    "file": "scripts/mutate.mjs",
+    "find": "!CMD_RE.test(m.cmd)).map",
+    "replace": "false).map",
+    "cmd": "node scripts/mutcmdtest.mjs"
+  },
+  {
+    "name": "cmd 白名單：合形狀的也拒絕",
+    "why": "放行那一面。預期只紅 mutcmdtest 的 I2。",
+    "file": "scripts/mutate.mjs",
+    "find": "if (lc.bad.length) {",
+    "replace": "if (lc.bad.length >= 0) {",
+    "cmd": "node scripts/mutcmdtest.mjs"
+  }
+]

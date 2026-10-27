@@ -75,10 +75,27 @@
   `mut_postertruth` 4/4 紅在預期（回到照名字猜、海報補「旅途」、AI 補「旅途」、反方向把主題章整個關掉）。從真實入口（做海報、攔下送往 Anthropic 的請求）的兩條在瀏覽器，待驗清單 H1、H2。
 - **還沒處理、要決定的**：① **已經快取的 AI 文案**是用猜測寫的，輸入的簽章沒變就不會重產——要它重產一次得改簽章，會花使用者金鑰的錢（每趟一次呼叫）；
   ② 任務示意插圖 `paintRef`（`quest.js`、`trip.js`）與回顧卡、景點卡的配色也照猜的類別挑——是圖與顏色、不是字，這次沒動，列待辦。
-- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 67 支、預測不出耗時＝重負載，要等瀏覽器時段與許可。
+- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 68 支（加了 `mutcmdtest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。
-- **第 1 步卡在權限**：Dispatch 10/27 第二次要求量比例；D1 唯讀查詢被權限分類器擋過一次，沒有重試、沒有繞過。要 Yolin 在權限設定允許那一條查詢，或他自己跑腳本開頭的兩行。
+- **第 1 步（量比例）：待 Yolin 在機器前開權限。** D1 唯讀查詢被權限分類器擋過一次，沒有重試、沒有繞過。Dispatch 裁定（10/27）：讀正式環境使用者資料的權限
+  **不由 Session 自己打開、Dispatch 也不替他開**，等 Yolin 回到機器前；修正本身不需要這個比例。屆時他允許那一條查詢、或自己跑 `scripts/themeguess-count.mjs` 開頭的兩行。
+
+### 2026-10-27 跑瀏覽器測試的權限：**等 Yolin 在機器前貼一行**（Session 寫不進去，這是對的）
+
+- **為什麼要權限**：`itinviewtest` 被 auto mode 分類器擋過（「Interfere With Workloads」）。專案層與使用者層都沒有任何 `permissions.allow` 規則，
+  所以是分類器擋的，不是允許清單。文件（自己核過原文）：allow 規則在判定順序第 1 步、分類器在第 3 步，「The first matching step wins」。
+- **Session 寫 `.claude/settings.local.json` 被分類器以「Self-Modification」擋下**（Dispatch 事先交代：被擋就停、不換方法）。
+  建議內容放在 `docs/claude-settings.local.proposed.json`（說明與放法：同名 `.md`）：逐支點名 8 支瀏覽器測試、不帶參數的 `run-affected.mjs`、
+  `mutate.mjs --only` 加三份指定清單。**不用 `node scripts/*.mjs`**：`*` 比對任何文字，會連部署與打正式站的腳本一起放行。
+- **Yolin 要做的**：專案根目錄 PowerShell 貼 `Copy-Item docs\claude-settings.local.proposed.json .claude\settings.local.json`。之後 Session 讀回確認、
+  等 Dispatch 放行再試跑一條最小的（`mut_itinview` 的「第 1 批：第一站藏在格子外」）。
+- **間接的門**（規則管不到被放行指令開出來的子程序）：① `mutate.mjs` 用 shell 跑清單裡的 `cmd` → **已加白名單**，只准 `node scripts/<名字>.mjs`，
+  其餘整份拒絕（防意外，不是防故意）；`scripts/mutcmdtest.mjs`（新、秒級、進鏈，鏈 68 支）15 項綠，`mut_mutcmd` 5/5 紅在預期那一條；
+  真實資料 16 份清單、113 條 cmd 全部合形狀（跟 grep 數的 113 對得上）。② `run-affected.mjs` 跑 `test:chain` 的每一支 → **Dispatch 定：不加機制**，
+  查過的結果記在那份 `.md`；`package.json` 改了鏈就要重查。
+- **還沒跑**：`mutatetest`（直接驗 `mutate.mjs` 的護欄；會開 2 個以上程序、耗時沒量過＝可能是重負載，排進機器時段）。我改的是 `mutate.mjs` 多印一行、多擋一種，
+  讀過 `mutatetest` 的比對式推論不受影響——**是推論，沒實跑**。
 
 ### 2026-10-27 行程頁改版第 1～4 項（Yolin 答 1.B、3 先不做、4 可以；Dispatch 定順序 1→5）——**本機 commit 成「未驗的檢查點」（735aa97 與其後一個），沒推；等瀏覽器時段**
 
@@ -1220,7 +1237,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **67 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **68 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

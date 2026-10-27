@@ -50,7 +50,15 @@ export function lintMutations(list) {
   }
   return { checked: list.length, bad };
 }
-const short = (s) => String(s).slice(0, 12);
+// cmd 只准「node scripts/<名字>.mjs」一種形狀（2026-10-27）：下面用 shell 跑 cmd，清單檔是改得到的資料。
+// 權限規則只認 mutate 這一行，規則管不到它開出來的子程序——清單裡順手帶了 &&、重導向、別的參數的 cmd
+// 會被一起放行。防的是意外，不是故意。
+export const CMD_RE = /^node scripts\/[a-z0-9-]+\.mjs$/;
+export function lintCmds(list) {
+  const bad = list.filter((m) => typeof m.cmd !== 'string' || !CMD_RE.test(m.cmd)).map((m) => m.name);
+  return { checked: list.length, bad };
+}
+const short =(s) => String(s).slice(0, 12);
 
 function fsyncWrite(file, data, flag = 'w') {
   const fd = fs.openSync(file, flag);
@@ -152,6 +160,10 @@ async function main() {
   console.log(`檢查 ${lint.checked}/${all.length} 條突變，${lint.bad.length} 條只改空白或行尾`);
   if (lint.checked !== all.length || !all.length) { console.log('✗ 檢查的筆數不等於清單的筆數——檢查器壞了'); return 4; }
   if (lint.bad.length) { console.log(`✗ 這些突變只改了空白或行尾（統一行尾後判斷「是不是原樣」會看不出差別），拒絕：${lint.bad.join('、')}`); return 2; }
+  const lc = lintCmds(all);
+  console.log(`檢查 ${lc.checked}/${all.length} 條 cmd，${lc.bad.length} 條不是「node scripts/<名字>.mjs」`);
+  if (lc.checked !== all.length) { console.log('✗ 檢查的 cmd 筆數不等於清單的筆數——檢查器壞了'); return 4; }
+  if (lc.bad.length) { console.log(`✗ 這些突變的 cmd 不是「node scripts/<名字>.mjs」（會用 shell 執行），整份拒絕：${lc.bad.join('、')}`); return 2; }
   const list = all.filter((m) => !names.length || names.includes(m.name));
   if (!list.length) { console.log('✗ 一條突變都沒選到'); return 2; }
   const editsOf = (m) => m.edits || [{ find: m.find, replace: m.replace }];
