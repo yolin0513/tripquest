@@ -1,0 +1,44 @@
+[
+  {
+    "name": "離線清單：漏列新檔",
+    "why": "v1.74.11 真的漏過（js/tripday.js）。預期只紅 shelltest 真檔案的 S2「每一支都在離線清單」。",
+    "file": "sw.js",
+    "find": "  './js/tripday.js',",
+    "replace": "",
+    "cmd": "node scripts/shelltest.mjs"
+  },
+  {
+    "name": "檢查器：例外過期也不報",
+    "why": "預期只紅對照組「例外已經在清單（過期）」。",
+    "file": "scripts/shelltest.mjs",
+    "find": "  const stale = Object.keys(exempt).filter((f) => set.has('./' + f) || !files.includes(f));",
+    "replace": "  const stale = [];",
+    "cmd": "node scripts/shelltest.mjs"
+  },
+  {
+    "name": "挑選器：shelltest 不在底線",
+    "why": "只動 js、沒動 sw.js 時就挑不到它（它不算涵蓋任何 js）。預期只紅 affectedtest 的「只動 js、沒動 sw.js → 照樣挑到 shelltest」。",
+    "file": "scripts/affected.mjs",
+    "find": "'gatelint', 'convtest', 'shelltest'];",
+    "replace": "'gatelint', 'convtest'];",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：shelltest 的 js 目錄引用算成涵蓋",
+    "why": "它讀整個 js/ 只為列檔名，算成涵蓋就悶住放大器 D。預期紅 affectedtest T12 的兩條（js/__nobody.js 全套、A∪B 模式點名）與「沒有任何測試點名的程式檔：0 個」那條不會紅（真檔案都有人點名）。",
+    "file": "scripts/run-affected.mjs",
+    "find": "        ? extractRefs(text, exists).filter((p) => p !== 'js' && !p.startsWith('js/'))",
+    "replace": "        ? extractRefs(text, exists).filter(() => true)",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "檢查器：不看 index.html 直接載入的",
+    "why": "預期只紅對照組「index.html 直接載入的沒列」（真檔案那兩支本來就都在清單，照樣綠）。",
+    "file": "scripts/shelltest.mjs",
+    "find": "  const directMissing = direct.filter((f) => !set.has('./' + f));",
+    "replace": "  const directMissing = [];",
+    "cmd": "node scripts/shelltest.mjs"
+  }
+]

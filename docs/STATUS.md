@@ -58,7 +58,10 @@
 >   這次是剛好覺得怪，沒覺得怪的話那份錯的清單就交出去了。
 > - **借來的案例不能當自己的正樣本**：本專案沒有 s05（那是別的專案的情境），「已知只看碼」那一方用的是合成樣本，照實標明。
 
-### 2026-10-27 行程頁改版第 1～4 項（Yolin 答 1.B、3 先不做、4 可以；Dispatch 定順序 1→5）——**全部在工作區、未 commit，等瀏覽器時段**
+### 2026-10-27 行程頁改版第 1～4 項（Yolin 答 1.B、3 先不做、4 可以；Dispatch 定順序 1→5）——**本機 commit 成「未驗的檢查點」（735aa97 與其後一個），沒推；等瀏覽器時段**
+
+> Dispatch 2026-10-27 授權：本機 commit 檢查點、第一行寫明未驗與待驗清單檔名，**不要 push**。瀏覽器時段要等他放行（影片那邊在量獨占機器的基準，
+> 開瀏覽器會靜默污染數據）；`itinviewtest` B1–B5、瀏覽器突變、`test:affected` 全套都排在那個時段。驗完才 bump `VERSION`（→ v1.74.11）、`safe-push.sh`。
 
 Dispatch 裁定（原話摘要）：日期控制要「看得見全部天數的橫向日期列」，不是下拉、不是上一天／下一天；進頁面自動選中今天；當天時間軸自動捲到現在這一站；
 「不必再提折衷方案」。和紙主題「粉彩色不能當文字顏色……只能當底色或色塊，字一律用墨色」。航班、住宿、待辦、必去、交通標籤延後另開一輪。
@@ -110,6 +113,17 @@ Dispatch 裁定（原話摘要）：日期控制要「看得見全部天數的�
   - **「當日合計」沒做**：花費沒有「第幾天」，依設計文件第 0.5 節移到第 3 批（Dispatch 這輪把它列在第 1 批，已回報）。
   - 兩個原創圖形的草圖：`docs/sketches/原創圖形草圖.svg`，**沒放進畫面**，等 Yolin。
   - **待驗清單**：`docs/VERIFY_第1批.md`（判準一律是「使用者看得到什麼」；截圖項目寫明截哪張、看哪裡）。
+- **第 2 批 和紙主題收尾（2026-10-27，不開瀏覽器）**：
+  - **第一個畫面就是和紙**：`js/boot-theme.js`（新，`<head>` 裡同步執行的一般 script；CSP 不准內嵌）。原本主題由 `prefs.js` 的 `apply()` 套，它在 app.js 這個 module 裡、
+    整頁解析完才跑——選了和紙的人每次打開都先閃一下深藍。`washitest` 加 W7（`<body>` 一出現就記 `<html>` 的 data-theme；W1 那次是對照組、要記到沒有），
+    `mut_washi` 加一條（拿掉 boot-theme 的設定，預期只紅 W7——W3「最後是和紙」照樣過）。**都沒跑（瀏覽器）。**
+  - 🔴 **既有缺陷（第 1 輪引入、還沒推上線）**：`js/tripday.js` 被行程頁 import，卻**沒列進 `sw.js` 的 `SHELL_ASSETS`**——裝好後只開過首頁就離線，行程頁會整個載不起來；
+    有網路時一切正常，所以沒有任何測試紅。已補（連 `boot-theme.js`）。新增 **`scripts/shelltest.mjs`（秒級、進鏈與底線）**：每支 js 都在離線清單（例外登記制：
+    `js/invite.js`——沒有任何地方 import，要不要刪另議）、清單裡的路徑都有檔、`index.html` 直接載入的也在清單；7 個對照組、13 項綠；拿 HEAD 的 `sw.js` 跑紅在 S2／S4。
+  - **挑選器跟著改**：shelltest 讀整個 `js/` 目錄只為列檔名，算成涵蓋會悶住放大器 D（affectedtest T12 當場紅了 2 條）——`run-affected.mjs` 的 `loadRepo` 不把它的 js 引用算涵蓋；
+    它改放進**底線**（新增 js 檔不一定改到 sw.js，只有每次都跑才抓得到）。修好之後 affectedtest 揭露 `js/boot-theme.js` 沒有任何測試點名——`washitest` 的 W7 補上。
+    affectedtest 加「只動 js、沒動 sw.js → 照樣挑到 shelltest」。`mut_shell.json` 5 條 5/5 紅在預期（離線清單 3、挑選器 2；affectedtest 的總結行要寫 `done`）。
+  - 鏈 66 支（STATUS 支數已同步）。**已知限制**：`manifest.webmanifest` 的 `theme_color`／`background_color` 是靜態 `#0f1523`，加到主畫面後冷啟動畫面仍是深藍（待驗清單 B12，給 Yolin 判斷）。
 - **海報重做＋繪本風（Yolin 2026-10-27 新增，參考兩份行程頁的錄影）**：設計提案在 `docs/DESIGN_繪本風改版.md`（三批＋估工）。
   🔴 **參考裡的角色（三麗鷗、吉依卡哇）一個都不用**，只學風格（Dispatch 定）。**任何第三方角色、吉祥物、商標、品牌圖像都不得入庫**（界線寫在設計文件最前面）。
   角色方案 Yolin 選 (c)：時間軸放旅伴頭像（回答「誰跟我去」），日期軸與頁首各一個原創圖形（回答「現在在哪一天」／App 識別），**就這兩個**，做完看效果再談加。AI：Yolin 定「有綁金鑰用 AI、沒綁用本機生成」；
@@ -1169,7 +1183,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **65 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **66 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

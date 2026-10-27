@@ -1,6 +1,6 @@
 // 淺色「和紙」主題從使用者的入口驗（npm run washitest；會開瀏覽器）
 //
-// 涵蓋的程式：css/style.css、js/prefs.js、js/views/settings.js
+// 涵蓋的程式：css/style.css、js/prefs.js、js/views/settings.js、js/boot-theme.js
 //
 // 樣式表的靜態對比由 palettetest 驗（秒級）；那支看不到「這條規則實際疊在什麼上面」。
 // 這支驗瀏覽器**實際算出來**的顏色：每一個畫面上看得到的字，對它實際的底（往上找到不透明的底，
@@ -9,6 +9,9 @@
 //   W1 對照組：沒選過 → 深色（<html> 沒有 data-theme、底是 #0f1523）
 //   W2 設定頁點「淺色（和紙）」→ 立刻換：data-theme=washi、底 #fffcf6、網址列顏色 #fffcf6、那顆按鈕選中
 //   W3 重開 App 仍是和紙
+//   W7 第一個畫面就是和紙，不先閃一下深色：<body> 剛被插進來的那一刻，<html> 就已經有 data-theme=washi
+//      （prefs.js 的 apply() 在 app.js 這個 module 裡，要等整頁解析完才跑；靠的是 head 裡同步執行的 boot-theme.js）。
+//      對照組：W1 那次載入（沒選過）同一個時刻記到的是「沒有 data-theme」
 //   W4 和紙下逐頁掃字的對比（首頁、旅程頁、設定頁、建立頁）：掃到的字 > 0、全部 ≥ 4.5；
 //      底是圖片的跳過、印出跳過幾個（不是 0 也不算錯，但要看得到）
 //   W5 和紙＋高對比：高對比的說明字跟著改成「背景更白、文字更黑」；底變純白；再掃一次
@@ -130,11 +133,22 @@ try {
       await s.put({ id: uuid(), type: 'quest', tripId: tid, spotId: sid, title: name + '任務', kind: 'thing', order: 0 });
     }
   });
+  // W7 用：之後每一次載入，<body> 一出現就記下 <html> 當下的 data-theme（只記第一次）
+  await page.evaluateOnNewDocument(() => {
+    const rec = () => {
+      if ('__bodyTheme' in window || !document.body) return;
+      window.__bodyTheme = document.documentElement.dataset.theme ?? null;
+    };
+    new MutationObserver(rec).observe(document, { childList: true, subtree: true });
+  });
+  const bodyTheme = (page) => page.evaluate(() => ('__bodyTheme' in window ? window.__bodyTheme : '（沒記到）'));
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.trip-card');
 
   // ---- W1 對照組 ----
+  const bt1 = await bodyTheme(page);
+  yes(bt1 === null, `W7 對照組：沒選過時，<body> 出現那一刻沒有 data-theme（實得 ${bt1}）`);
   let t = await theme(page);
   yes(t.attr === null && t.bg === 'rgb(15, 21, 35)' && t.meta === '#0f1523', `W1 沒選過是深色（data-theme ${t.attr}、底 ${t.bg}、網址列 ${t.meta}）`);
 
@@ -159,6 +173,8 @@ try {
   await page.waitForSelector('.trip-card');
   t = await theme(page);
   yes(t.attr === 'washi' && t.bg === 'rgb(255, 252, 246)', `W3 重開仍是和紙（data-theme ${t.attr}、底 ${t.bg}）`);
+  const bt3 = await bodyTheme(page);
+  yes(bt3 === 'washi', `W7 重開時 <body> 出現那一刻就已經是和紙，不先閃深色（實得 ${bt3}）`);
 
   // ---- W4 逐頁掃 ----
   await scanPages(page, 'W4 和紙');

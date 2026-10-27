@@ -116,6 +116,10 @@ console.log('\n[T12] 放大器 D：沒人涵蓋的程式檔');
     'D 用「A∪B」模式時：不是全套、畫面組與資料組（含 synctest）全挑、點名 js/__nobody.js', JSON.stringify(ab.notes));
   const c = pick(['js/itinerary.js']);
   yes(!c.full && c.selected.includes('itintest'), '對照組：改有人涵蓋的 js/itinerary.js → 不觸發 D（挑到 itintest）', JSON.stringify(c.fullReasons));
+  // v1.74.11 的情境：只動 js（新檔被行程頁 import），沒動 sw.js → 放大器 C 不會觸發；
+  // 漏列離線清單只有 shelltest 抓得到，所以它不能靠「剛好改到 sw.js」才被挑中
+  const nw = pick(['js/tripday.js', 'js/views/trip.js']);
+  yes(!nw.full && nw.selected.includes('shelltest'), '只動 js、沒動 sw.js → 照樣挑到 shelltest（離線清單漏列只有它抓得到）', JSON.stringify(nw.selected));
 }
 
 // ---------- 修訂二：目錄引用不展開閉包，放大器 D 恢復作用 ----------

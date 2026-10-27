@@ -16,6 +16,14 @@
     "cmd": "node scripts/washitest.mjs"
   },
   {
+    "name": "和紙：第一個畫面先閃深色",
+    "why": "boot-theme.js 不設 data-theme，等 app.js 載完才由 prefs.js 套上。重開後最後照樣是和紙（W3 照樣過），只有剛打開那一下是深藍。預期只紅 washitest 的 W7「<body> 出現那一刻就已經是和紙」。",
+    "file": "js/boot-theme.js",
+    "find": "      document.documentElement.setAttribute('data-theme', 'washi');",
+    "replace": "",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
     "name": "和紙：高對比的說明沒跟著改",
     "why": "和紙下寫「背景更深、文字更白」是錯的話。預期只紅 washitest 的 W5 說明那一條。",
     "file": "js/views/settings.js",

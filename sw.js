@@ -23,6 +23,8 @@ const SHELL_ASSETS = [
   './js/ids.js',
   './js/identity.js',
   './js/prefs.js',
+  './js/boot-theme.js',
+  './js/tripday.js',
   './js/daterange.js',
   './js/ai.js',
   './js/aikeys.js',

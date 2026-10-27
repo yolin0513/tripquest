@@ -42,17 +42,22 @@
 | B7 | 和紙主題：行程頁最底下一道波浪，在底部分頁上面看得到、不蓋住任何字或按鈕 | 人看：捲到最底，波浪完整、最後一站的按鈕點得到 | 截圖：和紙、行程頁捲到最底 | — |
 | B8 | 時間軸在特大字級不擠：時間欄、點、卡片不重疊 | `layouttest` 掃不到重疊；人看截圖 | 自動：`layouttest`（重負載）；截圖：特大字級行程頁 | 字疊在點上 |
 | B9 | 深色主題下附近／求救頁的卡片多了底色（補上沒定義的 `--card`） | 人看：卡片有底、「選中」那格看得出來 | 截圖：深色、附近頁選一個類別、求救頁 | — |
+| B10 | 選了和紙的人重開 App：**第一眼就是白紙，不先閃一下深藍** | `<body>` 剛出現那一刻 `<html>` 已經是 `data-theme=washi`；沒選過的那次同一時刻是沒有（對照組） | 自動：`washitest` W7 | 每次打開都先閃深藍再變白（W3「最後是和紙」照樣過，只有 W7 抓得到） |
+| B11 | 裝好 App、有網路時**只開過首頁**就離線，再點進行程頁：行程頁照常打開 | 行程頁的日期列與時間軸都在 | 人工：DevTools 勾 Offline 後點進行程頁（`shelltest` 是靜態的、只證明清單有列，不證明 SW 真的預存到） | 行程頁白屏（`tripday.js` 沒預存，v1.74.10 以前就是這樣） |
+| B12 | 和紙主題下，手機加到主畫面後**冷啟動的啟動畫面**仍是深藍 | 已知限制、不算錯：`manifest.webmanifest` 的 `theme_color`／`background_color` 是靜態的 `#0f1523`，不能隨使用者選的主題換 | 人看：記下實機上看到的樣子，給 Yolin 判斷要不要改成中性色 | — |
 
 ## C. 證明會紅（§5.1）
 
 | # | 做什麼 | 通過 |
 |---|---|---|
 | C1 | 拿 HEAD（修正前）跑 `motiontest`、`itinviewtest`、`washitest` | 新加的那幾條紅（其餘照舊） |
-| C2 | 瀏覽器突變：`mut_motion` 後 7 條、`mut_itinview` 全部（19 條）、`mut_washi` 3 條 | 每條紅在 `why` 寫的那幾條；紅錯地方照實改 `why` 或改測試 |
+| C2 | 瀏覽器突變：`mut_motion` 後 7 條、`mut_itinview` 全部（19 條）、`mut_washi` 4 條（含 boot-theme 那條：預期只紅 W7） | 每條紅在 `why` 寫的那幾條；紅錯地方照實改 `why` 或改測試 |
 | C3 | 改過的舊測試原樣跑：`collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest` | 綠 |
-| C4 | 部署前 `npm run test:affected` | 放大成全套 65 支、沒量過耗時 → 重負載，要許可；跑完把每支耗時記下來 |
+| C4 | 部署前 `npm run test:affected` | 放大成全套 66 支、沒量過耗時 → 重負載，要許可；跑完把每支耗時記下來 |
 
 ## 已經驗過的（秒級，2026-10-27）
 
 `tripdaytest` 39 項（第 1 批新加 14 條，實作前先跑過 14 條全紅）、`palettetest` 27 項、`motioncsstest` 20 項綠；
 `mut_tripday` 新加 5 條 5/5 紅在預期、`mut_palette` 8/8、`mut_motion` CSS 那 5 條 5/5。
+和紙收尾那一輪（同日）：`shelltest` 13 項綠（拿 HEAD 的 `sw.js` 跑紅在 S2 漏列 `js/boot-theme.js`、`js/tripday.js` 與 S4 漏列 `js/boot-theme.js`）；
+`affectedtest` 106 項綠；`mut_shell` 5/5 紅在 `why` 寫的那一條（兩條挑選器、三條離線清單）。`washitest` W7 與 `mut_washi` 的 boot-theme 那條**沒跑**（瀏覽器）。
