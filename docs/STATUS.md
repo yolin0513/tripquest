@@ -10,8 +10,9 @@
 **今天定下來的三條原則（Dispatch 2026-10-27，先讀）**
 1. **參考站有的欄位，不代表我們有那筆資料。** 例：參考寫「今日同行夥伴」，我們沒有「哪一天誰同行」的資料，所以只寫「同行夥伴」。
 2. **判準要寫成「使用者看得到什麼」，不是「某個物件存在」。** 節點在、但被移到畫面外、被蓋住、淡到看不清，都算沒過。
-3. **配色是裝飾，插圖與文字是主張。** 照名字猜的類別可以拿來挑顏色；印成字、送給 AI、挑特定類別的圖都不行——要用 `storedThemeOf`（只看景點自己帶著的 theme）。
-   守這條的是 `scripts/guesscensustest.mjs`：猜類別的每一個呼叫點都要登記用途，只准 color／number／curated／internal 四種。
+3. **配色是裝飾，插圖與文字是主張。** 照名字猜的類別可以拿來挑顏色；印成字、送給 AI、挑特定類別的圖、出任務都不行——要用 `trustedTheme`／`trustedThemeOf`
+   （從景點庫重算；**存著的 `spot.theme` 也是猜的，不准看**——同一天查到，原本寫的 `storedThemeOf` 作廢）。
+   守這條的是 `scripts/guesscensustest.mjs`（猜類別的每一個呼叫點登記用途）與 `scripts/themetrusttest.mjs`（讀存著的 `.theme` 的每一處登記用途）。
 
 **1. 狀態（`git log origin/main..HEAD`，全部沒推；推送只用 `bash scripts/safe-push.sh`）**
 - `5062754` STATUS 文字（最醒目處的「剛好覺得怪才回頭驗」）。
@@ -37,10 +38,11 @@
 **3. 跑的順序（全部要開瀏覽器或屬重負載，開跑前向 Dispatch 要許可；權限檔沒放進去之前會被分類器擋）**
 1. 驗尺：`node scripts/mutate.mjs --only tools/mutations/mut_itinview.json "第 1 批：第一站藏在格子外" "第 1 批：用透明度淡化（字變得看不清楚）"`
 2. 原樣跑 VERIFY 裡的自動項：`itinviewtest`、`washitest`、`motiontest`、`guesstruthtest`，以及改過的舊測試 `collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest`。
-3. B1–B5 的 8 條突變與其餘瀏覽器突變：`mut_itinview`（22）、`mut_washi`（4）、`mut_motion` 後 7 條、`mut_guesstruth`（4）；C1「拿 HEAD 舊版跑新測試要紅」。
-4. 秒級、還沒跑過的：`guesscensustest`、`affectedtest`（補了 VERIFY D1 那條）＋ `mut_guesscensus`（8；最後兩條驗挑選器，VERIFY D 節）。
+3. B1–B5 的 8 條突變與其餘瀏覽器突變：`mut_itinview`（22）、`mut_washi`（4）、`mut_motion` 後 7 條、`mut_guesstruth`（5）；C1「拿 HEAD 舊版跑新測試要紅」。
+4. 秒級、還沒跑過的：`guesscensustest`、`affectedtest`（補了 VERIFY D1、E5 兩條）＋ `mut_guesscensus`（8；最後兩條驗挑選器，VERIFY D 節）；
+   可信類別（VERIFY E 節）：`themetrusttest`、`postertruthtest`＋`mut_themetrust`（14）、`mut_postertruth`（4）。`guesstruthtest`＋`mut_guesstruth`（5）在第 2、3 步（瀏覽器）。
 5. `mutatetest`：**先計時**（開 2 個以上程序、耗時沒量過）。
-6. `npm run test:affected`：這次放大成**全套 70 支**、預測不出耗時＝重負載。跑完把每支耗時記下來。
+6. `npm run test:affected`：這次放大成**全套 71 支**（加了 `themetrusttest`）、預測不出耗時＝重負載。跑完把每支耗時記下來。
 跑完**立刻**告訴 Dispatch（MealMate 等機器）。
 
 **4. 量負載的判準（Dispatch）**：扣掉 `claude.exe` 與 MCP 的 node 之後，看有沒有別人的 python／ffmpeg／tesseract／別專案的 node。
@@ -154,7 +156,7 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
   - **寫入的路（還沒寫，待放行）**：照 `workers/worker.mjs` 墓碑那段的做法——每筆先 `UPDATE groups SET seq = seq + 1 … RETURNING seq`，再
     `UPDATE records SET seq=?, updated_at=?, json=? WHERE group_id=? AND id=? AND seq=<乾跑讀到的舊 seq>`（樂觀鎖：期間有人改過就不寫、報出來）。
     json 裡的 `updatedAt` 同步改成寫入時刻，客戶端 `recWins` 才會收新的那份。備份與寫完重讀照閘門④⑤。
-- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 70 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
+- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 71 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`、`themetrusttest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **海報重做設計稿（10/27，Yolin 列為優先）**：`docs/DESIGN_海報重做.md`——12 項問題、封面 7 區＋每天 6 區（每區標資料有沒有）、
   分 4 批共 5～5.5 天；新版**連帶著的 theme 也不印類別名、不用主題插圖、不印每站 emoji**（多一題給 Yolin，第 6 節第 5 題）。沒寫程式。
   Dispatch 裁定（10/27）：海報一律不印類別名，連帶著 theme 的也不印。
@@ -167,6 +169,29 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
     取景點庫那筆的 `primary`／`tags` 經 `themes.json` 的 `byTag` 換成類別。每筆景點庫都有 `primary`。
   - **用 theme 主張事情的地方（配色不算）**：行程頁標題列的類別字（`js/views/trip.js:648`）；AI 文案（`js/aicontent.js:137`）；海報主題章與 `THEME_DECO` 插圖
     （`js/poster/index.js:239`、`:260`）；策展景點的任務句與介紹（`generate.js:269-270`、`:317`）。另外 v1.74 以前存下的任務、介紹、emoji 本身就是照猜的主題寫的（R8 當時決定舊旅程不動），量多少要讀 D1。
+  - **Dispatch 核准（10/27）：新增可信類別、四處全換、海報第一批也用它。已寫、一條都沒跑**（待驗清單 E 節）：
+    `js/theme.js` 的 `trustedTheme(spot, lookup)` 回 `{ key, placeId, recheck, via, reason }`（拿不到的理由：not-curated／no-lookup／place-gone／recheck-mismatch／no-tag-map／neutral）、
+    `trustedThemeOf(spots, lookup)`；查表 `generate.js` 的 `loadPlaceLookup()`／`placeLookupSync()`（`matchPlace` 拆出同步的 `matchLoaded`）。
+    換過去的：`trip.js` 標題列、`aicontent.js` 的 `digestFrom`（`ensureTripText` 先載景點庫）、`poster/index.js` 的 `modelFrom`（兩個 render 先載）、`generate.js` 建景點與 `themedQuestsForSpot`。
+    測試：新 `scripts/themetrusttest.mjs`（雙向 R0–R7＋讀 `.theme` 的登記制 19 處，進鏈與底線）、`postertruthtest` 改寫（P0–P7）、`guesstruthtest` 種子改成存著猜的 theme 的舊景點＋真的梧棲漁港；
+    突變 `mut_themetrust` 14、`mut_postertruth` 4、`mut_guesstruth` 5（多一條「回到只看帶著的」）、`mut_guesscensus` 第一條 find 跟著改。`guesscensustest` 拿掉 generate.js 兩條登記（7 處）。
+  - **重算擋不到的（照實講）**：建立景點時名字就被換成景點庫的名字（v1.74 以前也是），使用者當初打的字沒有存——**v1.74 以前鬆比對的誤命中，複核抓不到**
+    （拿景點庫的名字再比，一定比得回同一筆）。複核擋得到的只有：使用者改過名字、景點庫刪了或改了那筆。要擋誤命中得從現在起把使用者打的字存下來（新欄位＝資料結構，要投票），只對新資料有用。
+  - **行為改變**：景點庫 135 筆裡 38 筆名字猜的跟景點庫分類不同（讀 data 算的）。例：清水寺、金閣寺名字猜古蹟，景點庫 primary 是 sight→中性，**改完不印類別、出中性句型**；
+    梧棲漁港名字猜海濱、景點庫是美食；日本環球影城名字猜成古蹟（「城」結尾），景點庫 checkin→都市。中性的變多是預期的（寧可不說），但新建行程的題目會跟著變，要人看（E7）。
+- **如果要處理 v1.74 以前（以及到這一版為止的策展景點）照猜的類別寫下的舊資料，會怎麼做（10/27 寫，Dispatch 轉 Yolin；先不做）**：
+  - **判準**（每一種都從景點庫重算可信類別、不看存著的值；只看「照類別產的」那幾種來源）：
+    ① 任務：`source==='template'`（照類別句型出的）或 `'must'`（必吃題的措辭依類別），而且景點是非策展（v1.74 規則本來就不出題）、或策展但存著的 theme ≠ 可信類別（拿不到算 journey）。
+    `curated`（景點庫人工題）、`generic`（代表照）、`custom`、`photo`、`ai`、`shared` 不動。**有任何照片（submission）的任務一律不動。**
+    ② 介紹：`spot.blurb` 不是 `blurbManual`、不是 `aiBlurb`、不等於景點庫的 blurb，而且同上「非策展或類別不同」→ 照類別句型寫的。
+    ③ emoji：非策展、不是 📍 → v1.74 以前照名字猜的（`nameEmoji`／`typeEmoji`）；策展的 emoji 來自景點庫的 primary，不動。
+  - **範圍**：D1 全部群組的 spot、quest 記錄，**含家人正在用的那組**；乾跑分群組、分三種、分「行程已結束／進行中／未出發」各印筆數，不印內容。
+  - **要不要重產**：建議**不自動重產**。非策展照 v1.74 規則留白；策展的類別不同那幾筆，清掉之後行程頁的「補齊任務」現在會照可信類別出，由使用者自己按。
+    介紹清成空字串（畫面本來就處理沒有介紹）、emoji 換 📍。
+  - **怎麼寫**：同 AI 文案那件的五道閘（先乾跑、Dispatch／Yolin 看數字才放行；判不出的另列不動；雙向對照組；寫前備份＋sha256；寫完重讀）＋同一條寫入路（seq 樂觀鎖）。任務用墓碑刪，不硬刪。
+  - **風險**：①使用者改過字的模板任務 `source` 照樣是 template，**分不出來**——會被當成照類別寫的清掉（乾跑時只能數、不能排除；這是最大的風險，可能要改成「只清還沒出發的行程」）；
+    ②家人會看到任務、介紹不見——**消失和沒有長得一樣**，他們會以為資料掉了，已結束的行程尤其（建議已結束的不動）；
+    ③任務刪除是墓碑、會同步給整組，要復原只能靠備份重寫；④量要讀 D1 才知道（`themeguess-count.mjs` 再加這三種的計數，還沒寫）。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。
 - **第 1 步（量比例）：待 Yolin 在機器前開權限。** D1 唯讀查詢被權限分類器擋過一次，沒有重試、沒有繞過。Dispatch 裁定（10/27）：讀正式環境使用者資料的權限
@@ -1328,7 +1353,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **70 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **71 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

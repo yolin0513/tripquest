@@ -1,11 +1,11 @@
 [
   {
     "name": "AI 請求：回到照名字猜第一站",
-    "why": "2026-10-27 修正前的寫法（tripDigest 每天附 themeForSpot(第一站)，帶著的 theme 不看）。預期紅 guesstruthtest 的 H2-1（山林自然、古蹟人文、海濱比基準多）與 H2-2（山林自然比基準多）。",
+    "why": "2026-10-27 修正前的寫法（tripDigest 每天附 themeForSpot(第一站)）。預期紅 guesstruthtest 的 H2-1（山林自然、古蹟人文、海濱比基準多）與 H2-2（梧棲漁港猜成海濱、美食沒有比基準多）。",
     "file": "js/aicontent.js",
     "edits": [
-      { "find": "import { themeMeta, storedThemeOf } from './theme.js';", "replace": "import { themeMeta, storedThemeOf, themeForSpot } from './theme.js';" },
-      { "find": "    theme: storedThemeOf(list) ? themeMeta(storedThemeOf(list)).label : '',", "replace": "    theme: themeMeta(list[0] ? themeForSpot(list[0]) : 'journey').label," }
+      { "find": "import { themeMeta, trustedThemeOf } from './theme.js';", "replace": "import { themeMeta, trustedThemeOf, themeForSpot } from './theme.js';" },
+      { "find": "    theme: trustedThemeOf(list, lookup) ? themeMeta(trustedThemeOf(list, lookup)).label : '',", "replace": "    theme: themeMeta(list[0] ? themeForSpot(list[0]) : 'journey').label," }
     ],
     "cmd": "node scripts/guesstruthtest.mjs"
   },
@@ -19,18 +19,26 @@
   },
   {
     "name": "行程頁標題列：回到印猜的類別",
-    "why": "2026-10-27 修正前：標題列印 s.theme || themeForSpot(s) 的類別名。預期只紅 guesstruthtest 的 H3-1。",
+    "why": "2026-10-27 修正前：標題列印 s.theme || themeForSpot(s) 的類別名。預期紅 guesstruthtest 的 H3-1、H3-2（梧棲漁港印成海濱）。",
     "file": "js/views/trip.js",
-    "find": "  const shown = s.theme ? themeMeta(s.theme) : null;",
+    "find": "  const shown = trusted ? themeMeta(trusted) : null;",
     "replace": "  const shown = tm;",
     "cmd": "node scripts/guesstruthtest.mjs"
   },
   {
-    "name": "行程頁標題列：帶著的也不印",
+    "name": "行程頁標題列：可信的也不印",
     "why": "反方向：整個不印也會讓 H3-1 過。預期只紅 guesstruthtest 的 H3-2。",
     "file": "js/views/trip.js",
-    "find": "  const shown = s.theme ? themeMeta(s.theme) : null;",
-    "replace": "  const shown = s.theme ? null : null;",
+    "find": "  const shown = trusted ? themeMeta(trusted) : null;",
+    "replace": "  const shown = trusted ? null : null;",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "行程頁標題列：回到只看帶著的 theme（2026-10-27 第一次修正的寫法）",
+    "why": "帶著的 theme 也是猜的。預期紅 guesstruthtest 的 H3-1（乙寺、丙海印出存著的古蹟人文、海濱）、H3-2（梧棲漁港印成海濱）。",
+    "file": "js/views/trip.js",
+    "find": "  const shown = trusted ? themeMeta(trusted) : null;",
+    "replace": "  const shown = s.theme ? themeMeta(s.theme) : null;",
     "cmd": "node scripts/guesstruthtest.mjs"
   }
 ]

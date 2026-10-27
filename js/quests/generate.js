@@ -20,7 +20,7 @@
 // 沒有任務的地點在行程頁上有「＋新增任務」與「＋照片」兩個一步就到的入口。
 
 import { uuid } from '../ids.js';
-import { loadThemes, themeForSpot } from '../theme.js';
+import { loadThemes, trustedTheme } from '../theme.js';
 import { loadPhrases, makeCtx, composeBlurb, composeQuests } from './compose.js';
 
 let _index = null;
@@ -139,6 +139,20 @@ function looseHit(curated, input) {
 // 自由文字比對到策展地點（行程文字解析用）
 export async function matchPlace(name, cityHint = '') {
   await loadAllForSearch();
+  return matchLoaded(name, cityHint);
+}
+
+// 可信類別（theme.js 的 trustedTheme）要的查表：景點庫全部載好之後，兩支都是同步的。
+// 沒載好就是 null——trustedTheme 拿到 null 一律當作沒有可信類別（保守方向），不會退回照名字猜。
+export async function loadPlaceLookup() {
+  await loadAllForSearch();
+  return placeLookupSync();
+}
+export function placeLookupSync() {
+  return _allLoadedForSearch ? { placeById, matchPlace: matchLoaded } : null;
+}
+
+function matchLoaded(name, cityHint = '') {
   const n = norm(name);
   if (n.length < 2) return null;
   const nb = norm(String(name).replace(BRANCH, ''));      // 去掉分店後綴的版本
@@ -263,9 +277,11 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
     // 主題判定 + 依主題組文案（同一趟不重複句型）。
     // **只有策展命中的地點走這一段** —— 主題會決定外觀與文案語氣，對沒命中的地點
     // 那就是一個猜測，而 `themeForSpot()` 的 byName 規則正是把「白雲山鹿」變成山的那一條。
+    // 命中的也不用 themeForSpot：它的名字正規式排第一，會蓋過景點庫自己的分類（「梧棲漁港」景點庫是美食、
+    // 名字猜成海濱）。改用 trustedTheme，只從景點庫的 primary／tags 換（2026-10-27，Dispatch 核准）。
     const themed = [];
     if (place) {
-      spot.theme = themeForSpot(spot);
+      spot.theme = trustedTheme(spot, placeLookupSync()).key || 'journey';
       themed.push(...composeQuestSet(spot, spot.theme, ctx, place));
       if (!spot.blurb) spot.blurb = composeBlurb(spot, spot.theme, ctx);
     } else {
@@ -313,8 +329,9 @@ export const photoQuestId = (spotId) => 'q-photo-' + spotId;
 // **只替策展命中的地點補** —— 其餘地點一律留白，由使用者自己新增（R1／R7）。
 export async function themedQuestsForSpot(spot, tripId) {
   if (!spot || spot.source !== 'curated') return [];
-  await Promise.all([loadThemes(), loadPhrases()]);
-  const theme = spot.theme || themeForSpot(spot);
+  const [lookup] = await Promise.all([loadPlaceLookup(), loadThemes(), loadPhrases()]);
+  // 存著的 spot.theme 不看（舊資料是照名字猜的），從景點庫重算；拿不到可信類別就用中性的 journey 句型
+  const theme = trustedTheme(spot, lookup).key || 'journey';
   const ctx = makeCtx(String(tripId) + ':regen:' + spot.id);
   return composeQuests({ ...spot, must: spot.must || [] }, theme, ctx, { max: 4 });
 }

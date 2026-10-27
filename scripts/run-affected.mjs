@@ -57,9 +57,10 @@ export function loadRepo(root = ROOT) {
     // 算進去的話它會「涵蓋」一大片程式檔，放大器 D 就被它悶住了。它只認自己 import 的 helper。
     // shelltest 讀整個 js/ 目錄只為了列檔名、不執行任何一支；算成涵蓋的話同樣會悶住放大器 D。它在底線裡，每版照跑。
     // guesscensustest 同一個形狀：讀整個 js/ 找猜類別的呼叫點（只讀字、不執行），也在底線裡。
+    // themetrusttest 同上（讀整個 js/ 找讀 .theme 的地方）；它 import 的 theme.js、generate.js 一起被濾掉沒關係——在底線裡，每次都跑。
     refs[t.name] = t.name === 'affectedtest'
       ? extractRefs(text, exists).filter((p) => p.startsWith('scripts/'))
-      : t.name === 'shelltest' || t.name === 'guesscensustest'
+      : t.name === 'shelltest' || t.name === 'guesscensustest' || t.name === 'themetrusttest'
         ? extractRefs(text, exists).filter((p) => p !== 'js' && !p.startsWith('js/'))
         : extractRefs(text, exists);
   }

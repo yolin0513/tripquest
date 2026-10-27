@@ -10,7 +10,9 @@
 //   number   推算停留分鐘數，畫面標明是推算
 //   curated  只在對得上策展景點庫時才走到（v1.74 規則允許自動出題）
 //   internal theme.js 內部，它的呼叫端另外登記
-// 印成字、送給 AI、選特定類別的圖——這三種**沒有登記的類別**：要給使用者看的一律用 storedThemeOf（只看帶著的 theme）。
+// 印成字、送給 AI、選特定類別的圖——這三種**沒有登記的類別**：要給使用者看的一律用 trustedTheme（從景點庫重算；
+// 帶著的 theme 也是猜的，2026-10-27 查到——讀存著的 .theme 的地方由 themetrusttest 登記）。
+// curated 類別目前沒有任何登記在用（generate.js 改用 trustedTheme）；留著，類別清單不跟著登記增減。
 // 新增一個呼叫點沒登記 → 紅；登記了卻對不到 → 紅（過期）；一條登記對到兩行 → 紅；類別不在那四種 → 紅。
 // 先跑對照組（.logs/ 底下造真的 .js 檔，走同一個讀檔與掃描），沒過就停、不採信真實結果。
 
@@ -22,9 +24,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const NAMES_RE = /\b(themeForSpot|themeForDay|themeForTrip|stayForSpot)\s*\(/;
 export const KINDS = ['color', 'number', 'curated', 'internal'];
 
+// 2026-10-27：generate.js 那兩處（建立景點、補任務）改用 trustedTheme（從景點庫重算），不再呼叫 themeForSpot，登記拿掉。
 export const REGISTRY = [
-  { file: 'js/quests/generate.js', needle: 'spot.theme = themeForSpot(spot);', kind: 'curated', why: '在 if (place) 裡：對得上策展景點庫才決定景點的 theme' },
-  { file: 'js/quests/generate.js', needle: 'const theme = spot.theme || themeForSpot(spot);', kind: 'curated', why: 'themedQuestsForSpot 第一行就擋掉非策展的地點' },
   { file: 'js/route.js', needle: 'stayForSpot(s)', kind: 'number', why: '停留分鐘數，plan.js 標「停留未設，先用 X 推算」' },
   { file: 'js/theme.js', needle: 'const key = guessed || spot.theme || themeForSpot(spot, themes);', kind: 'number', why: 'stayForSpot 內部' },
   { file: 'js/theme.js', needle: '.map((s) => s.theme || themeForSpot(s, themes));', kind: 'internal', why: 'majorityTheme（themeForDay／themeForTrip 的本體），呼叫端另外登記' },

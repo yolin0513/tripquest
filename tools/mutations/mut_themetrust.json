@@ -1,0 +1,116 @@
+[
+  {
+    "name": "可信類別：不複核名字",
+    "why": "對上景點庫但名字已經比不回同一筆，照樣給類別。預期紅 themetrusttest 的 R2、R7（全都拿不到那半）。",
+    "file": "js/theme.js",
+    "find": "  if (!again || again.id !== placeId) return res(null, { reason: 'recheck-mismatch' });",
+    "replace": "  if (false && (!again || again.id !== placeId)) return res(null, { reason: 'recheck-mismatch' });",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "可信類別：不看 source",
+    "why": "帶 placeId 但 source 不是 curated 的也給。預期只紅 R3。",
+    "file": "js/theme.js",
+    "find": "  if (!spot || spot.source !== 'curated' || !placeId) return res(null, { reason: 'not-curated' });",
+    "replace": "  if (!spot || !placeId) return res(null, { reason: 'not-curated' });",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "可信類別：名字正規式排第一（回到 themeForSpot）",
+    "why": "就是 2026-10-27 查到的那條路：名字猜的蓋過景點庫。預期紅 R1（梧棲漁港變 coast）、R6（清水寺變 heritage）、R7（可信那半變 coast）。",
+    "file": "js/theme.js",
+    "find": "  const key = byTag[src[1]];",
+    "replace": "  const key = themeForSpot(spot, themes);",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "可信類別：景點庫裡找不到也往下走",
+    "why": "placeId 對不到景點時當成空物件。預期只紅 R4（理由變成 recheck-mismatch，不是 place-gone）。",
+    "file": "js/theme.js",
+    "find": "  const place = lookup.placeById(placeId);",
+    "replace": "  const place = lookup.placeById(placeId) || {};",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "可信類別：中性的 journey 也當成類別",
+    "why": "清水寺 sight → journey 也回傳，畫面會印「🧳 旅途」。預期只紅 R6。",
+    "file": "js/theme.js",
+    "find": "  if (key === 'journey') return res(null, { recheck: true, via, reason: 'neutral' });",
+    "replace": "  if (false && key === 'journey') return res(null, { recheck: true, via, reason: 'neutral' });",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "查表：景點庫沒載好也回一個查表",
+    "why": "placeLookupSync 不看有沒有載好。預期只紅 R5 的前置與 R5（理由變成 place-gone）。",
+    "file": "js/quests/generate.js",
+    "find": "  return _allLoadedForSearch ? { placeById, matchPlace: matchLoaded } : null;",
+    "replace": "  return { placeById, matchPlace: matchLoaded };",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "多數決：拿不到可信類別的退回存著的 theme",
+    "why": "預期只紅 R7（全都拿不到那半變成 nature）。",
+    "file": "js/theme.js",
+    "find": "  const list = (spots || []).map((s) => trustedTheme(s, lookup, themes).key).filter(Boolean);",
+    "replace": "  const list = (spots || []).map((s) => trustedTheme(s, lookup, themes).key || (s && s.theme)).filter(Boolean);",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "登記制：新增一處印存著的 theme",
+    "why": "將來有人在行程頁標題列改回印 s.theme——就是今天的形狀。預期只紅真實結果「每一處都登記了」（沒登記：js/views/trip.js）。",
+    "file": "js/views/trip.js",
+    "find": "  const shown = trusted ? themeMeta(trusted) : null;",
+    "replace": "  const shown = s.theme ? themeMeta(s.theme) : null;",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "登記制：漏認 storedThemeOf",
+    "why": "預期只紅對照組「沒登記的 storedThemeOf 呼叫」（js/ 底下現在沒有呼叫端，真實結果不受影響）。",
+    "file": "scripts/themetrusttest.mjs",
+    "find": "export const READ_RE = /\\.theme\\b|\\bstoredThemeOf\\s*\\(/;",
+    "replace": "export const READ_RE = /\\.theme\\b/;",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "登記制：註解也算",
+    "why": "預期紅對照組「註解、定義、.themes 不算」；真實結果也紅（theme.js、trip.js 的註解寫著 spot.theme／s.theme）。",
+    "file": "scripts/themetrusttest.mjs",
+    "find": "    if (t.startsWith('//')) return;",
+    "replace": "    if (t.startsWith('// 不會有這種開頭')) return;",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "登記制：類別不檢查",
+    "why": "登記成「印成字」也放行。預期只紅對照組「類別不准（印成字）」。",
+    "file": "scripts/themetrusttest.mjs",
+    "find": "    if (!KINDS.includes(r.kind)) problems.push(",
+    "replace": "    if (false && !KINDS.includes(r.kind)) problems.push(",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "挑選器：themetrusttest 的 js 目錄引用算成涵蓋",
+    "why": "它讀整個 js/ 只為找讀 .theme 的地方，算成涵蓋就悶住放大器 D。預期紅 affectedtest T12（js/__nobody.js 該放大成全套卻沒有），同 mut_guesscensus 的那條。",
+    "file": "scripts/run-affected.mjs",
+    "find": "      : t.name === 'shelltest' || t.name === 'guesscensustest' || t.name === 'themetrusttest'",
+    "replace": "      : t.name === 'shelltest' || t.name === 'guesscensustest'",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：themetrusttest 不在底線",
+    "why": "不在底線就只有改到它自己時才會被挑到。預期只紅 affectedtest 的「只動一支 js（route.js）→ 照樣挑到 themetrusttest」。",
+    "file": "scripts/affected.mjs",
+    "find": "'guesscensustest', 'themetrusttest', 'validate-places',",
+    "replace": "'guesscensustest', 'validate-places',",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "登記制：過期的登記不報",
+    "why": "預期只紅對照組「登記過期」。",
+    "file": "scripts/themetrusttest.mjs",
+    "find": "    if (n === 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
+    "replace": "    if (n < 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
+    "cmd": "node scripts/themetrusttest.mjs"
+  }
+]

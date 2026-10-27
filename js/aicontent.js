@@ -11,7 +11,8 @@
 import * as store from './store.js';
 import { aiOn, aiComplete, aiJSON } from './ai.js';
 import { myDeviceId } from './identity.js';
-import { themeMeta, storedThemeOf } from './theme.js';
+import { themeMeta, trustedThemeOf } from './theme.js';
+import { loadPlaceLookup, placeLookupSync } from './quests/generate.js';
 
 // 只有行程建立者（貼了金鑰那台）會真的呼叫 AI；舊行程沒記 createdByDevice → 放行
 function isCreator(trip) {
@@ -117,13 +118,14 @@ function ensure(tripId, key, sig, generate) {
 
 // ---------- 行程模型（給 prompt 用的精簡版）----------
 function tripDigest(tripId) {
-  return digestFrom(store.get(tripId), store.spotsOf(tripId));
+  return digestFrom(store.get(tripId), store.spotsOf(tripId), placeLookupSync());
 }
 
 // 純函式（scripts/postertruthtest.mjs 直接餵合成行程）。
-// 主題只給景點**自己帶著**的（storedThemeOf）；沒帶就不給——AI 不知道那是猜的，會當成事實寫進「每天一句」。
-// 2026-10-27 之前這裡每天都附 themeForSpot(第一站) 照名字猜的類別名。
-export function digestFrom(trip, spotList) {
+// 主題只給可信類別（trustedThemeOf：從景點庫重算）；拿不到就不給——AI 不知道那是猜的，會當成事實寫進「每天一句」。
+// 2026-10-27 之前這裡每天都附 themeForSpot(第一站) 照名字猜的類別名；同一天改成景點帶著的 theme，
+// 又查到帶著的也是猜的，再改成重算。lookup 沒給（景點庫沒載好）→ 一律不給主題。
+export function digestFrom(trip, spotList, lookup = null) {
   const spots = spotList.slice().sort((a, b) => (a.day || 1) - (b.day || 1) || (a.order || 0) - (b.order || 0));
   const byDay = new Map();
   for (const s of spots) {
@@ -134,7 +136,7 @@ export function digestFrom(trip, spotList) {
   const days = [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([day, list]) => ({
     day,
     region: list[0]?.region || trip.region || '',
-    theme: storedThemeOf(list) ? themeMeta(storedThemeOf(list)).label : '',
+    theme: trustedThemeOf(list, lookup) ? themeMeta(trustedThemeOf(list, lookup)).label : '',
     spots: list.map((s) => s.name),
   }));
   return { title: trip.title || '我們的旅程', region: trip.region || '', days, spots };
@@ -161,6 +163,9 @@ export function tripTextDayList(d) {
 
 // payload: { subtitle, dayLines:{[day]:string}, videoIntro, videoOutro, narration:{[day]:string} }
 export async function ensureTripText(tripId) {
+  // 每天的主題要從景點庫重算（trustedThemeOf），先載好；載不到 → placeLookupSync() 是 null → 不給主題。
+  // 這個 await 在 ensure() 之前，不影響 ensure() 裡「查快取到登記 inFlight 之間不能 await」那條。
+  await loadPlaceLookup().catch(() => {});
   const d = tripDigest(tripId);
   if (!d.days.length) return null;
   const sig = tripTextSig(d);

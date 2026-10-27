@@ -70,9 +70,44 @@ export function themeForTrip(spots, themes = _themes) {
   return majorityTheme(spots, themes);
 }
 
-// 只看景點**自己帶著**的 theme（建立時對得上景點庫才決定的），不照名字猜。
-// 一個都沒帶（從分享連結匯入的、v1.74 以前的舊資料）→ null：呼叫端不印主題章、不把主題告訴 AI。
-// 給使用者看的字一律用這支，不用 themeForDay／themeForTrip（那兩支沒帶 theme 就照名字猜）。
+// 「可信類別」——給使用者看的字、送給 AI 的、依類別出的任務與介紹，一律用這支（scripts/themetrusttest.mjs 用登記制守）。
+// **不看存著的 spot.theme**：2026-10-27 查到存著的值全部是 themeForSpot() 猜的（v1.74 以前每個景點都存、
+// 之後對上景點庫的也還是名字正規式排第一，會蓋過景點庫自己的分類），存的值本身分不出是不是猜的。
+// 改從景點庫重算：
+//   1. 只看 source 是 curated、帶 placeId 的景點
+//   2. 那筆還在景點庫裡（placeById）
+//   3. 用現在的比對規則拿景點名字再比一次，還是同一筆（使用者改過名字、或景點庫改過，就不算）
+//   4. 取景點庫那筆的 primary、再來 tags，經 themes.json 的 byTag 換成類別；換出來是中性的 journey 也當作沒有
+// 已知限制：建立時景點名字就被換成景點庫的名字（generate.js），使用者當初打的字沒存下來——
+// v1.74 以前比對很鬆時的誤命中，第 3 步複核不出來（拿景點庫的名字再比，一定比得回同一筆）。
+// lookup：{ placeById(id), matchPlace(name, cityHint) }，兩支都要同步；由 generate.js 的 loadPlaceLookup() 先載好。
+// 沒有 lookup → 一律當作沒有（保守方向）。回傳一律帶來源，下一個人看得出這個類別是怎麼來的。
+export function trustedTheme(spot, lookup, themes = _themes) {
+  const placeId = (spot && spot.placeId) || null;
+  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, ...extra });
+  if (!spot || spot.source !== 'curated' || !placeId) return res(null, { reason: 'not-curated' });
+  if (!lookup || !themes) return res(null, { reason: 'no-lookup' });
+  const place = lookup.placeById(placeId);
+  if (!place) return res(null, { reason: 'place-gone' });
+  const again = lookup.matchPlace(spot.name || '', spot.region || '');
+  if (!again || again.id !== placeId) return res(null, { reason: 'recheck-mismatch' });
+  const byTag = (themes.map && themes.map.byTag) || {};
+  const src = [['primary', place.primary], ...(place.tags || []).map((t) => ['tag', t])].find(([, t]) => t && byTag[t]);
+  if (!src) return res(null, { recheck: true, reason: 'no-tag-map' });
+  const key = byTag[src[1]];
+  const via = src[0] + ':' + src[1];
+  if (key === 'journey') return res(null, { recheck: true, via, reason: 'neutral' });
+  return res(key, { recheck: true, via });
+}
+
+// 一組景點（一天、一整趟）的可信類別：多數決，只算拿得到可信類別的；一個都沒有 → null（不印、不告訴 AI）。
+export function trustedThemeOf(spots, lookup, themes = _themes) {
+  const list = (spots || []).map((s) => trustedTheme(s, lookup, themes).key).filter(Boolean);
+  return list.length ? pickMajority(list) : null;
+}
+
+// 只看景點自己帶著的 theme。**不准拿來決定使用者看得到的東西**（帶著的也是猜的，見 trustedTheme）；
+// js/ 底下已經沒有呼叫端，留給 scripts/aicache-dryrun.mjs、themeguess-count.mjs 數「當時存了什麼」。
 export function storedThemeOf(spots) {
   const list = (spots || []).map((s) => s && s.theme).filter(Boolean);
   return list.length ? pickMajority(list) : null;

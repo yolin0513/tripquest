@@ -3,7 +3,7 @@
     "name": "猜類別母體：新增第 10 個呼叫點",
     "why": "將來有人在海報改回 themeForDay——就是今天一處一處撞到的形狀。預期只紅真實結果「每一處都登記了」（沒登記：js/poster/index.js）。",
     "file": "js/poster/index.js",
-    "find": "      theme: storedThemeOf(byDaySpots.get(day)),",
+    "find": "      theme: trustedThemeOf(byDaySpots.get(day), lookup),",
     "replace": "      theme: themeForDay(byDaySpots.get(day)),",
     "cmd": "node scripts/guesscensustest.mjs"
   },

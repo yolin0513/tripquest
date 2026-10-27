@@ -9,10 +9,11 @@
 // 所以拿一趟名字猜不出任何類別的行程當基準，比每個類別名在 body 裡出現幾次：
 //   H2-0 前置：三趟都真的攔到「行程表海報」那個請求（母體非空）；猜得出的那幾個名字，照名字猜真的會猜成具體類別（資料有能力讓測試紅）
 //   H2-1 從分享連結匯入的行程（景點都不帶 theme、名字以山／寺／海結尾）：每個類別名出現的次數＝基準——猜出來的類別沒進 body
-//   H2-2 反向：同一份但第 1 天第一站自己帶著 food（名字照樣會被猜成山林自然）：「美食」比基準多、「山林自然」＝基準
+//   （2026-10-27 同一天改：帶著的 theme 也是猜的，判準改成可信類別 trustedTheme；匯入那趟另兩站改成存著猜的 theme 的舊景點）
+//   H2-2 反向：第 1 天第一站換成景點庫裡真的梧棲漁港（存著猜的 coast、景點庫是 food）：「美食」比基準多、「海濱」＝基準
 //        ——證明讀得到 body、帶著的主題照樣送（只驗 H2-1 的話，「什麼主題都不送」也會過）
 //   H3-1 匯入的那趟：行程頁三個景點標題列上看得到的字裡，沒有任何類別名（以前印「🌿 山林自然」之類）
-//   H3-2 反向：帶著 food 的那一站，標題列看得到「美食」
+//   H3-2 反向：可信的那一站，標題列看得到景點庫的「美食」
 // 突變見 tools/mutations/mut_guesstruth.json。
 
 import { spawn } from 'node:child_process';
@@ -101,21 +102,23 @@ try {
     { name: '乙', day: 2, order: 0, source: 'shared' },
     { name: '丙', day: 3, order: 0, source: 'shared' },
   ];
+  // 甲山：分享匯入（不帶 theme）；乙寺、丙海：v1.74 以前建的舊景點，存著當時照名字猜的 theme（帶著的也不可信，2026-10-27）
   const GUESSABLE = [
     { name: '甲山', day: 1, order: 0, source: 'shared' },
-    { name: '乙寺', day: 2, order: 0, source: 'shared' },
-    { name: '丙海', day: 3, order: 0, source: 'shared' },
+    { name: '乙寺', day: 2, order: 0, source: 'auto', theme: 'heritage' },
+    { name: '丙海', day: 3, order: 0, source: 'auto', theme: 'coast' },
   ];
-  const CARRIED = [{ ...GUESSABLE[0], name: '丁山', theme: 'food', source: 'curated' }, GUESSABLE[1], GUESSABLE[2]];
+  // 可信的那一站用景點庫裡真的「梧棲漁港」（tc-wuqi）：景點庫是 food；存著的是照名字猜的 coast
+  const CARRIED = [{ name: '梧棲漁港', region: '台中市', day: 1, order: 0, source: 'curated', placeId: 'tc-wuqi', theme: 'coast' }, GUESSABLE[1], GUESSABLE[2]];
 
   // 前置：資料有能力讓測試紅——照名字猜，猜得出的三個是具體類別，基準的三個猜不出
   const guess = await page.evaluate(async (names) => {
     const t = await import('./js/theme.js');
     await t.loadThemes();
     return names.map((n) => t.themeForSpot({ name: n }));
-  }, ['甲山', '乙寺', '丙海', '丁山', '甲', '乙', '丙']);
-  yes(guess.slice(0, 4).join(',') === 'nature,heritage,coast,nature' && guess.slice(4).every((g) => g === 'journey'),
-    `H2-0 前置：照名字猜，甲山／乙寺／丙海／丁山會被猜成具體類別、甲／乙／丙猜不出（實得 ${guess.join(',')}）`);
+  }, ['甲山', '乙寺', '丙海', '梧棲漁港', '甲', '乙', '丙']);
+  yes(guess.slice(0, 4).join(',') === 'nature,heritage,coast,coast' && guess.slice(4).every((g) => g === 'journey'),
+    `H2-0 前置：照名字猜，甲山／乙寺／丙海／梧棲漁港會被猜成具體類別（梧棲漁港猜 coast、景點庫是 food）、甲／乙／丙猜不出（實得 ${guess.join(',')}）`);
 
   const base = await visit('基準', BASELINE);
   const guessed = await visit('匯入', GUESSABLE);
@@ -129,15 +132,15 @@ try {
   yes(hit(guessed) && d1.length === 0,
     `H2-1 匯入的行程（不帶 theme）：送出去的 body 裡 ${LABELS.length} 個類別名的次數都＝基準`, d1.join('；'));
 
-  const food = THEMES.food.label, nature = THEMES.nature.label;
-  yes(hit(carried) && count(carried.body, food) > count(base.body, food) && count(carried.body, nature) === count(base.body, nature),
-    `H2-2 反向：第 1 天第一站帶著 food → 「${food}」比基準多（${count(base.body, food)} → ${count(carried.body, food)}）、「${nature}」＝基準（${count(base.body, nature)} → ${count(carried.body, nature)}）`);
+  const food = THEMES.food.label, coast = THEMES.coast.label;
+  yes(hit(carried) && count(carried.body, food) > count(base.body, food) && count(carried.body, coast) === count(base.body, coast),
+    `H2-2 反向：第 1 天第一站是可信的梧棲漁港 → 「${food}」比基準多（${count(base.body, food)} → ${count(carried.body, food)}）、存著的「${coast}」＝基準（${count(base.body, coast)} → ${count(carried.body, coast)}）`);
 
   const labelsIn = (t) => LABELS.filter(([, l]) => (t || '').includes(l)).map(([, l]) => l);
   yes(guessed.heads.every((t) => t !== null) && guessed.heads.every((t) => labelsIn(t).length === 0),
     `H3-1 匯入的行程：三個景點標題列都找到了，字裡沒有任何類別名（實得 ${guessed.heads.map((t) => t === null ? '找不到' : `「${t}」`).join('、')}）`);
   yes(carried.heads[0] !== null && labelsIn(carried.heads[0]).join(',') === food,
-    `H3-2 反向：帶著 food 的「丁山」標題列看得到「${food}」（實得「${carried.heads[0]}」）`);
+    `H3-2 反向：可信的「梧棲漁港」標題列看得到景點庫的「${food}」、不是存著的「${coast}」（實得「${carried.heads[0]}」）`);
 } catch (e) {
   yes(false, '例外：' + ((e && e.stack) || e));
 } finally {

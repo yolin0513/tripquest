@@ -16,7 +16,7 @@
 import path from 'node:path';
 
 // ---------- 底線（R2）：不論改了什麼，每版都跑 ----------
-export const BASELINE = ['affectedtest', 'guesscensustest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest', 'gatelint', 'convtest', 'shelltest'];   // guesscensustest：照名字猜類別的每一個呼叫點都要登記用途（新增的呼叫點可能落在任何一支 js，只有每次都跑才抓得到；2026-10-27 一處一處撞到三次）；shelltest：每支 js 都在 SW 離線清單（新增 js 檔不一定會改到 sw.js，漏列時有網路照樣正常，只有每次都跑才抓得到；v1.74.11 漏過 tripday.js）；gatelint：推送閘的壞寫法掃描（共用慣例 v9 §5.16），不論改了什麼每版都跑；convtest：共用慣例副本跟主檔一致（主檔在別的 repo，它改了本 repo 什麼都沒動，只有每次都跑才抓得到）
+export const BASELINE = ['affectedtest', 'guesscensustest', 'themetrusttest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest', 'gatelint', 'convtest', 'shelltest'];   // themetrusttest：讀存著的 .theme 的每一處都要登記用途，給使用者看的一律走可信類別（同 guesscensustest 的理由，2026-10-27）；guesscensustest：照名字猜類別的每一個呼叫點都要登記用途（新增的呼叫點可能落在任何一支 js，只有每次都跑才抓得到；2026-10-27 一處一處撞到三次）；shelltest：每支 js 都在 SW 離線清單（新增 js 檔不一定會改到 sw.js，漏列時有網路照樣正常，只有每次都跑才抓得到；v1.74.11 漏過 tripday.js）；gatelint：推送閘的壞寫法掃描（共用慣例 v9 §5.16），不論改了什麼每版都跑；convtest：共用慣例副本跟主檔一致（主檔在別的 repo，它改了本 repo 什麼都沒動，只有每次都跑才抓得到）
 
 // ---------- 放大器（R4） ----------
 // imgtest：案例 ②（v1.41）就是 trip.js 的畫面結構改動讓它紅的（修訂 1-C）

@@ -9,7 +9,8 @@ import * as db from '../db.js';
 import { drawParagraph, paragraphHeight, clip } from './text.js';
 import { PRESETS, CJK_STACK, styleFor } from './presets.js';
 import * as deco from './deco.js';
-import { loadThemes, storedThemeOf, themeMeta } from '../theme.js';
+import { loadThemes, trustedTheme, trustedThemeOf, themeMeta } from '../theme.js';
+import { loadPlaceLookup, placeLookupSync } from '../quests/generate.js';
 import { aiPayload } from '../aicontent.js';
 import { nth } from '../ui.js';
 
@@ -24,6 +25,7 @@ export function buildModel(tripId) {
   return modelFrom({
     trip, spots: store.spotsOf(tripId), members: store.membersOf(trip.groupId),
     aiTx: aiPayload(tripId, 'tripText') || {}, questsOf: store.questsOf, submissionsOf: store.submissionsOf,
+    lookup: placeLookupSync(),
   });
 }
 
@@ -35,9 +37,10 @@ export function stampText(day) {
 }
 
 // 純函式（scripts/postertruthtest.mjs 直接餵合成行程）。
-// 主題一律只看景點自己帶著的 theme（storedThemeOf）：沒帶就是 null，不印主題章——
-// 2026-10-27 查到：從分享連結匯入的景點不帶 theme，舊寫法照名字猜，猜出來的類別名印在海報上。
-export function modelFrom({ trip, spots, members, aiTx = {}, questsOf, submissionsOf }) {
+// 主題一律用可信類別（trustedTheme／trustedThemeOf：從景點庫重算，不看存著的 theme）：拿不到就是 null，
+// 不印主題章、不畫主題插圖、配色退回中性。2026-10-27 查到：分享匯入的景點不帶 theme、舊寫法照名字猜；
+// 帶著的 theme 也是建立時照名字猜的。lookup 沒給（景點庫沒載好）→ 全部 null。
+export function modelFrom({ trip, spots, members, aiTx = {}, questsOf, submissionsOf, lookup = null }) {
   const bestQuestHint = (spotId) => questsOf(spotId)[0]?.hint || '';
   const pickPhotoHash = (spot) => {
     // 使用者拍的（該景點任一任務的第一張）→ 景點示意圖
@@ -61,20 +64,20 @@ export function modelFrom({ trip, spots, members, aiTx = {}, questsOf, submissio
       startTime: spotTimes(s).startTime, endTime: spotTimes(s).endTime,
       photoHash: pickPhotoHash(s), emoji: s.emoji || '📍',
       region: s.region || '',
-      theme: s.theme || null,
+      theme: trustedTheme(s, lookup).key,
     });
   }
   const days = [...byDay.entries()].sort((a, b) => a[0] - b[0])
     .map(([day, items]) => ({
       day, region: items[0]?.region || trip.region || '', items,
-      theme: storedThemeOf(byDaySpots.get(day)),
+      theme: trustedThemeOf(byDaySpots.get(day), lookup),
       aiLine: (aiTx.dayLines && aiTx.dayLines[day]) || '',
     }));
   return {
     title: trip.title || '我們的旅程',
     dateRange: [trip.startDate, trip.endDate].filter(Boolean).join(' – '),
     people: members.length, spotCount: spots.length, dayCount: days.length,
-    tripTheme: storedThemeOf(spots),
+    tripTheme: trustedThemeOf(spots, lookup),
     subtitle: aiTx.subtitle || '',
     aiText: !!(aiTx.subtitle || (aiTx.dayLines && Object.keys(aiTx.dayLines).length)) || spots.some((s) => s.aiBlurb),
     days,
@@ -257,7 +260,7 @@ async function drawDay(ctx, p, dp, d, y, rnd, seedKey) {
   ctx.fill();
   deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd);
   // 當天主題章
-  // 只有那天的景點帶著 theme 才印；沒帶（d.theme 是 null）就不印——寧可少一個裝飾，不印一個可能錯的分類
+  // 只有那天拿得到可信類別才印；拿不到（d.theme 是 null）就不印——寧可少一個裝飾，不印一個可能錯的分類
   const stamp = stampText(d);
   ctx.textAlign = 'right'; ctx.fillStyle = dp.sub;
   ctx.font = F(p, 700, 24);
@@ -431,6 +434,7 @@ export async function renderPoster(tripId, { presetId = 'watercolor', onProgress
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();
   await loadThemes();
+  await loadPlaceLookup().catch(() => {});   // 可信類別要從景點庫重算；載不到 → 不印主題章
   await warmPosterAi(tripId);
   const model = buildModel(tripId);
   if (!model.days.length) throw new Error('這個行程還沒有景點');
@@ -483,6 +487,7 @@ export async function renderPreview(canvas, tripId, presetId, page = 0) {
   const preset = PRESETS[presetId] || PRESETS.watercolor;
   await ensureFont();
   await loadThemes();
+  await loadPlaceLookup().catch(() => {});   // 預覽跟成品要一樣：同樣先載好景點庫
   const model = buildModel(tripId);
   for (const d of model.days) for (const it of d.items) it.img = it.photoHash ? await loadImg(it.photoHash.hash) : null;
   const groups = posterGroups(model);

@@ -123,6 +123,7 @@ console.log('\n[T12] 放大器 D：沒人涵蓋的程式檔');
   // 新增的猜類別呼叫點可能落在任何一支 js；guesscensustest 不算涵蓋任何 js，只能靠底線每次都被挑中（2026-10-27）
   const gc = pick(['js/route.js']);
   yes(!gc.full && gc.selected.includes('guesscensustest'), '只動一支 js（route.js）→ 照樣挑到 guesscensustest（猜類別的呼叫點新增在哪都抓得到）', JSON.stringify(gc.selected));
+  yes(!gc.full && gc.selected.includes('themetrusttest'), '只動一支 js（route.js）→ 照樣挑到 themetrusttest（讀 .theme 的地方新增在哪都抓得到）', JSON.stringify(gc.selected));
 }
 
 // ---------- 修訂二：目錄引用不展開閉包，放大器 D 恢復作用 ----------

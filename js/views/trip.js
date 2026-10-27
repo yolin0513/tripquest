@@ -8,14 +8,14 @@ import { shooterOf } from '../badges.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import * as pos from '../pos.js';
 import { askShare } from './posconsent.js';
-import { generateForTrip, themedQuestsForSpot, photoQuestId } from '../quests/generate.js';
+import { generateForTrip, themedQuestsForSpot, photoQuestId, loadPlaceLookup, placeLookupSync } from '../quests/generate.js';
 import { blobURL } from '../photos.js';
 import { enrichTrip, refImageFor, creditLine } from '../enrich.js';
 import { addPhotoButtons } from '../addphoto.js';
 import { activeMemberId, ensureMember } from '../claim.js';
 import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
-import { loadThemes, themeForSpot, themeMeta, themePlaceholder } from '../theme.js';
+import { loadThemes, themeForSpot, themeMeta, themePlaceholder, trustedTheme } from '../theme.js';
 import { loadEmergency } from '../emergency.js';
 import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
@@ -80,6 +80,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   await loadThemes().catch(() => {});
+  await loadPlaceLookup().catch(() => {});   // 標題列的類別字要從景點庫重算；載不到就不印（placeLookupSync 回 null）
 
   setTop({
     title: t.title,
@@ -642,10 +643,11 @@ function spotSection(s, tripId, focusId, hereId) {
   } catch { /* noop */ }
 
   // 照名字猜的類別只拿來挑顏色（顏色是裝飾、不主張「這是什麼地方」，Dispatch 2026-10-27）；
-  // 寫成字的只有景點自己帶著的 theme——從分享連結匯入的、v1.74 以前的舊資料都沒帶，以前這裡會印出猜的類別名
+  // 寫成字的只有可信類別（trustedTheme：從景點庫重算，不看存著的 s.theme——存著的也是猜的，2026-10-27 查到）
   const tk = s.theme || themeForSpot(s);
   const tm = themeMeta(tk);
-  const shown = s.theme ? themeMeta(s.theme) : null;
+  const trusted = trustedTheme(s, placeLookupSync()).key;
+  const shown = trusted ? themeMeta(trusted) : null;
   const when = spotTimes(s).label;
   const chev = h('span', { class: 'qc-chev' }, open ? '▾' : '▸');
   const sec = h('section', {
