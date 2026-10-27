@@ -16,5 +16,23 @@
     "replace": "    if (oldK !== newK) { B++; Bspecific++; }",
     "cmd": "node scripts/themeguess-count.mjs",
     "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "量測：C 回到第一版（第一站帶著 theme 就不算）",
+    "why": "2026-10-27 更正前的寫法：舊 AI 連帶著的 theme 都不看，第一版卻只算第一站沒帶的。預期對照組 C 對不上（應 2 實得 1）、回 3。",
+    "file": "scripts/themeguess-count.mjs",
+    "find": "    if (oldAi !== 'journey' && oldAi !== newK) C++;",
+    "replace": "    if (!list[0].theme && oldAi !== 'journey') C++;",
+    "cmd": "node scripts/themeguess-count.mjs",
+    "done": "^(✓|✗) 對照組"
+  },
+  {
+    "name": "量測：C 猜對的也算",
+    "why": "第一站帶著的 theme 跟名字猜的剛好一樣，舊 AI 送的是對的，不該算。預期對照組 C 對不上（應 2 實得 3）、回 3。",
+    "file": "scripts/themeguess-count.mjs",
+    "find": "    if (oldAi !== 'journey' && oldAi !== newK) C++;",
+    "replace": "    if (oldAi !== 'journey') C++;",
+    "cmd": "node scripts/themeguess-count.mjs",
+    "done": "^(✓|✗) 對照組"
   }
 ]

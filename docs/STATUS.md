@@ -73,8 +73,19 @@
   AI（`js/aicontent.js`，抽成 `digestFrom`、`tripTextDayList`）：沒帶就不寫主題，帶著的照寫。
 - **第 4 步 測試**：`scripts/postertruthtest.mjs`（新、秒級、進鏈，鏈 67 支）12 項綠；P0 前置確認合成名字在舊寫法下真的會被猜成 nature、第 3 天在舊寫法下是 nature。
   `mut_postertruth` 4/4 紅在預期（回到照名字猜、海報補「旅途」、AI 補「旅途」、反方向把主題章整個關掉）。從真實入口（做海報、攔下送往 Anthropic 的請求）的兩條在瀏覽器，待驗清單 H1、H2。
-- **還沒處理、要決定的**：① **已經快取的 AI 文案**是用猜測寫的，輸入的簽章沒變就不會重產——要它重產一次得改簽章，會花使用者金鑰的錢（每趟一次呼叫）；
-  ② 任務示意插圖 `paintRef`（`quest.js`、`trip.js`）與回顧卡、景點卡的配色也照猜的類別挑——是圖與顏色、不是字，這次沒動，列待辦。
+- **第二輪（10/27，工作區）**：
+  - **H2 從真實入口驗**：`scripts/guesstruthtest.mjs`（新、瀏覽器、進鏈，69 支）——打開行程頁、網路層攔下送往 Anthropic 的請求 body，跟名字猜不出類別的基準行程比每個類別名的次數；
+    `mut_guesstruth` 4 條。**都沒跑（瀏覽器）**。
+  - 🔴 **查 `paintRef` 時發現另一處猜測上畫面（線上現況）**：行程頁每個景點標題列印 `s.theme || themeForSpot(s)` 的「emoji＋類別名」——匯入的、舊資料的景點都印猜的類別。
+    已改：字只印景點自己帶著的 theme；顏色照舊用猜的（Dispatch：顏色不主張任何事）。同一支測試 H3-1／H3-2 驗。
+  - **`paintRef` 不用改（更正我上一則的說法）**：它的佔位圖 `themePlaceholder` 只是三個色圓＋兩道波浪，**沒有海灘、山、廟的形狀**——是顏色，不是插圖；
+    真的圖（`refImageFor`）來自景點自己的圖或使用者的照片，不看類別。照 Dispatch 的判準屬於「配色」，留著。
+  - `scripts/themeguess-count.mjs` 的 C **第一版算少了**：舊 AI 連第一站帶著的 theme 都不看，第一版卻只算第一站沒帶的。已改＋對照組補兩種形狀，`mut_themeguess` 4/4 紅。
+- **已快取的 AI 文案（查完、待 Yolin 拍板，選項見回報）**：只有 `tripText`（海報副標、每天一句、影片片頭片尾、每天字卡）的 prompt 帶過主題；
+  景點介紹、任務、照片字幕、回顧四種從沒送過主題。記錄只存 `sig`（標題＋每天的地區與景點名的雜湊，**不含主題**）與產出，不存當時的輸入；
+  但 `sig` 跟現在一樣時，當時每天第一站是誰就確定了，舊 prompt 的主題＝`themeForSpot(那一站)` 可以重算（`themes.json` 最後一次改在 PROMPT_V=2 之前同一天，
+  所有 v2 記錄都是用現在這份規則產的）。`aiText` 是同步記錄：改了會同步給整個群組＝**改到 D1 裡的真實群組**，要 Yolin 同意。
+  清掉記錄的話，建立者下次打開行程頁會自動重產（花錢）；要「空著、不自動重產」得保留記錄與 `sig`、只刪 payload 裡那幾天。
 - **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 68 支（加了 `mutcmdtest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **之後的順序（Yolin 2026-10-27「進度照你建議安排」）**：這一項 → 本機版海報（4.5～5 天）→ AI 路線 3 文案 → 路線 1 只決定裁切 → 路線 2 SVG 實驗（人工看過才顯示）。
   「MCP 接外部生圖、Claude Design／Slides」已評估、已排除，理由在設計文件第 8-2 節。
@@ -1237,7 +1248,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
-- `npm test` 是完整的鏈 **68 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **69 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

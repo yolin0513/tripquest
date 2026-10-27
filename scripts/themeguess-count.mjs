@@ -9,7 +9,8 @@
 // 算的是「修正前的程式」在這份資料上會做什麼（用 js/theme.js 裡還留著的 themeForDay／themeForSpot）：
 //   A 有幾天，至少一站沒帶 theme（主題章的多數決裡混進了猜測）
 //   B 有幾天，舊的主題章跟「只看帶著的 theme」不一樣（猜測改變了印出來的字）；其中印成具體類別（不是「旅途」）的有幾天
-//   C 有幾天，舊的 AI prompt 送了照名字猜的具體類別名（舊寫法只看第一站、而且連帶著的 theme 都不看）
+//   C 有幾天，舊的 AI prompt 送了跟「只看帶著的 theme」不一樣的具體類別名。舊寫法只看第一站、照名字猜，
+//     **第一站自己帶著 theme 也照樣猜**（2026-10-27 更正：第一版只算第一站沒帶 theme 的，漏了「帶著 food、名字猜成 nature」）
 // 限制：只看得到同步到雲端的行程；只存在某支手機上、沒建群組的行程量不到。
 // 跑之前先跑一組合成資料的對照組（答案事先寫好），對不上就停、不印真實資料的結果。
 import fs from 'node:fs';
@@ -42,8 +43,8 @@ export function count(records) {
     const oldK = theme.themeForDay(list);
     const newK = theme.storedThemeOf(list);
     if (oldK !== newK) { B++; if (oldK !== 'journey') Bspecific++; }
-    const first = list[0];
-    if (!first.theme && theme.themeForSpot(first) !== 'journey') C++;
+    const oldAi = theme.themeForSpot(list[0]);
+    if (oldAi !== 'journey' && oldAi !== newK) C++;
   }
   const tripsWithSpots = new Set(spots.map((s) => s.tripId)).size;
   return {
@@ -70,18 +71,22 @@ const SYN = [
   { type: 'spot', id: 'c', tripId: 'T1', day: 2, order: 0, name: '丙店', theme: 'food', source: 'curated' },
   // T2 第 1 天：都沒帶、名字猜不出（journey）→ A +1、B +1（舊印「旅途」、新不印）但不算具體、C 不算
   { type: 'spot', id: 'd', tripId: 'T2', day: 1, order: 0, name: '丁', source: 'shared' },
+  // T2 第 3 天：第一站帶 food、名字會被猜成 nature → 舊 AI 送了 nature → C +1（第一版漏算的形狀）；A、B 都不算
+  { type: 'spot', id: 'g', tripId: 'T2', day: 3, order: 0, name: '庚山', theme: 'food', source: 'curated' },
+  // T2 第 4 天：第一站帶 nature、名字也猜成 nature → 舊 AI 送的剛好是對的 → 都不算（反向）
+  { type: 'spot', id: 'h', tripId: 'T2', day: 4, order: 0, name: '辛山', theme: 'nature', source: 'curated' },
   // 已刪的景點、已刪行程的景點 → 都不算
   { type: 'spot', id: 'e', tripId: 'T2', day: 2, order: 0, name: '戊山', deleted: true },
   { type: 'spot', id: 'f', tripId: 'T3', day: 1, order: 0, name: '己山' },
 ];
-const want = { trips: 2, tripsWithSpots: 2, spots: 4, spotsNoTheme: 3, spotsShared: 3, days: 3, A: 2, B: 2, Bspecific: 1, C: 1 };
+const want = { trips: 2, tripsWithSpots: 2, spots: 6, spotsNoTheme: 3, spotsShared: 3, days: 5, A: 2, B: 2, Bspecific: 1, C: 2 };
 const got = count(SYN);
 const bad = Object.keys(want).filter((k) => got[k] !== want[k]);
 if (bad.length) {
   console.log('✗ 對照組對不上，不跑真實資料：' + bad.map((k) => `${k} 應 ${want[k]} 實得 ${got[k]}`).join('；'));
   process.exit(3);
 }
-console.log('✓ 對照組（合成 3 趟、6 站，答案事先寫好）全對');
+console.log('✓ 對照組（合成 3 趟、8 站，答案事先寫好）全對');
 
 const file = process.argv[2];
 if (!file) { console.log('（沒給檔案：只跑了對照組）'); process.exit(0); }

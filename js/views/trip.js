@@ -641,8 +641,12 @@ function spotSection(s, tripId, focusId, hereId) {
     else if (stored === '0') open = false;
   } catch { /* noop */ }
 
+  // 照名字猜的類別只拿來挑顏色（顏色是裝飾、不主張「這是什麼地方」，Dispatch 2026-10-27）；
+  // 寫成字的只有景點自己帶著的 theme——從分享連結匯入的、v1.74 以前的舊資料都沒帶，以前這裡會印出猜的類別名
   const tk = s.theme || themeForSpot(s);
   const tm = themeMeta(tk);
+  const shown = s.theme ? themeMeta(s.theme) : null;
+  const when = spotTimes(s).label;
   const chev = h('span', { class: 'qc-chev' }, open ? '▾' : '▸');
   const sec = h('section', {
     class: 'qcollapse' + (open ? ' open' : '') + (isHere ? ' is-here' : ''),
@@ -662,10 +666,10 @@ function spotSection(s, tripId, focusId, hereId) {
         h('span', { class: 'qc-emoji' }, s.emoji || '📍'),
         h('span', { class: 'qc-name' }, s.name,
           isHere ? h('span', { class: 'qc-here' }, '📍 現在這一站') : null,
-          h('span', { class: 'qc-theme' },
-            // 從行程表匯入的才有時間；沒有就不佔位置
-            spotTimes(s).label ? '🕘 ' + spotTimes(s).label + ' · ' : '',
-            tm.emoji + ' ' + tm.label)),
+          // 從行程表匯入的才有時間；時間與類別都沒有就整行不放
+          (when || shown) ? h('span', { class: 'qc-theme' },
+            when ? '🕘 ' + when + (shown ? ' · ' : '') : '',
+            shown ? shown.emoji + ' ' + shown.label : '') : null),
         h('span', {
           class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
         }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
