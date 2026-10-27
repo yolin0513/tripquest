@@ -1,0 +1,122 @@
+[
+  {
+    "name": "時間軸：不截斷",
+    "why": "一天幾站就列幾行，固定高度的 D5 會被撐出去。預期紅 posterlayouttest 的 L4（6 站、12 站那兩條，與「前 5 站」那條）。",
+    "file": "js/poster/layout.js",
+    "find": "  const rows = day.items.slice(0, TIMELINE_MAX).map((it) => ({ time: it.startTime || '', name: it.name }));",
+    "replace": "  const rows = day.items.map((it) => ({ time: it.startTime || '', name: it.name }));",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "時間軸：截斷了但不寫「還有 N 站」",
+    "why": "放不下的站無聲消失——設計稿第 2 節明訂不准。預期只紅 L4 的 6 站、12 站那兩條。",
+    "file": "js/poster/layout.js",
+    "find": "moreText: more ? `還有 ${more} 站` : ''",
+    "replace": "moreText: ''",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "時間軸：沒填時間的站補一個時間",
+    "why": "時間選填、不補。預期只紅 L5。",
+    "file": "js/poster/layout.js",
+    "find": "  const rows = day.items.slice(0, TIMELINE_MAX).map((it) => ({ time: it.startTime || '', name: it.name }));",
+    "replace": "  const rows = day.items.slice(0, TIMELINE_MAX).map((it) => ({ time: it.startTime || '12:00', name: it.name }));",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "時間軸：每站放回 emoji",
+    "why": "預期只紅 L14（版面裡出現 emoji 欄位）。",
+    "file": "js/poster/layout.js",
+    "find": "  const rows = day.items.slice(0, TIMELINE_MAX).map((it) => ({ time: it.startTime || '', name: it.name }));",
+    "replace": "  const rows = day.items.slice(0, TIMELINE_MAX).map((it) => ({ time: it.startTime || '', name: it.name, emoji: it.emoji || '📍' }));",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "日期：沒有出發日就寫「第 N 天」冒充日期",
+    "why": "預期只紅 L6（沒有出發日那條、不存在的日期那條）。",
+    "file": "js/poster/layout.js",
+    "find": "  if (!y || !m || !d || !(day >= 1)) return '';",
+    "replace": "  if (!y || !m || !d || !(day >= 1)) return `第 ${day} 天`;",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "頁首：當日路線列出每一站（不用 dayRoute）",
+    "why": "跟行程頁不同一支。預期只紅 L7。",
+    "file": "js/poster/layout.js",
+    "find": "route: dayRoute(day.items) }",
+    "replace": "route: day.items.map((it) => it.name).join(' → ') }",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "封面：沒有副標也留著 C3",
+    "why": "空的一區、而且總高度超過 1350。預期紅 L2（接不起來）、L8（副標那條）。",
+    "file": "js/poster/layout.js",
+    "find": "      ...(hasSub ? [{ id: 'C3', h: 60, text: model.subtitle }] : []),",
+    "replace": "      { id: 'C3', h: 60, text: model.subtitle },",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "每天：沒有副照片也留著 D3",
+    "why": "預期紅 L2（D2 已經讓高度又多一區）、L12（收起來那條）。",
+    "file": "js/poster/layout.js",
+    "find": "    ...(side.length ? [{ id: 'D3', h: d3h, photos: side }] : []),",
+    "replace": "    { id: 'D3', h: d3h, photos: side },",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "照片：示意圖不貼標籤",
+    "why": "景點示意圖看起來像自己拍的。預期紅 L11（只有示意圖那條）、L12（只剩 1 張那條）。",
+    "file": "js/poster/layout.js",
+    "find": "tag: it.photoHash.user ? '' : '示意圖'",
+    "replace": "tag: ''",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "照片：使用者照片不優先",
+    "why": "照順序取，排在前面的示意圖蓋過家人拍的。預期紅 L11（主照片那條、封面那條）、L12（副照片那條）。",
+    "file": "js/poster/layout.js",
+    "find": "  const ordered = [...withPhoto.filter((it) => it.photoHash.user), ...withPhoto.filter((it) => !it.photoHash.user)];",
+    "replace": "  const ordered = withPhoto;",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "照片：副照片重複主照片",
+    "why": "預期只紅 L12（副照片那條）。",
+    "file": "js/poster/layout.js",
+    "find": "  const side = photos.slice(1);",
+    "replace": "  const side = photos.slice(0, 2);",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "同行夥伴：頭像不設上限",
+    "why": "9 位全畫，擠出固定寬度。預期只紅 L10 的 6 個上限那條。",
+    "file": "js/poster/layout.js",
+    "find": "chips: members.slice(0, CHIPS_MAX)",
+    "replace": "chips: members",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "頁尾：總張數沒算封面",
+    "why": "「第 4／3 張」。預期只紅 L13。",
+    "file": "js/poster/layout.js",
+    "find": "  const total = model.days.length + 1;",
+    "replace": "  const total = model.days.length;",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "數字格：照片數每個任務最多算 1 張",
+    "why": "數錯的數字。預期只紅 L9。",
+    "file": "js/poster/index.js",
+    "find": "k + submissionsOf(q.id).length",
+    "replace": "k + Math.min(1, submissionsOf(q.id).length)",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  },
+  {
+    "name": "張數：回到 3 天以上才一天一張",
+    "why": "2026-10-27 以前的分組（1～2 天是一張長圖）。預期紅 L1（每一種天數都沒有封面那一張）與其後依賴張數的 L2、L13。",
+    "file": "js/poster/layout.js",
+    "find": "  return [coverPage(model), ...model.days.map((d, i) => dayPage(model, d, i + 1, total))];",
+    "replace": "  return model.days.map((d, i) => dayPage(model, d, i + 1, total));",
+    "cmd": "node scripts/posterlayouttest.mjs"
+  }
+]

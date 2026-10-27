@@ -16,6 +16,11 @@
 4. **海報一律不印類別，連可信的也不印**（Dispatch 2026-10-27 最終裁定，蓋過同一天「第一批也用可信類別」那句）：沒有主題章、主題插圖、每站 emoji；
    可信類別在海報上只決定配色。`js/poster/presets.js` 的 `styleFor` 插圖與時間軸一律中性；`postertruthtest` P2／P8／P9 守。
 
+**海報 P1 版型（2026-10-27 寫完、一條都沒跑；待驗清單 F 節）**：固定 4:5 1080×1350，封面＋每天一張（不論幾天；舊的「1～2 天一張長圖、≥3 天一天一張」作廢）。
+版面是純函式 `js/poster/layout.js`（`pagesFrom`：每一區固定高度、放不下寫「還有 N 站」「＋N 位」、沒有的資料整區收起來）；`js/poster/index.js` 只照版面畫（`drawPage`，每一區 clip）。
+新測試 `scripts/posterlayouttest.mjs`（L1–L14，進鏈）＋`mut_posterlayout`（15）；`v147shots` 的海報段改成新規格（張數＋1、「封面 / 共 4 張」、每張 1080×1350）。
+沒做（照設計稿第 4 節是 P2／P3）：讚數挑照片、只有縮圖的提示、和紙單一風格與手寫字型、canvas 讀像素的對比斷言。
+
 **這整件事值不值得做的依據：景點庫 135 筆裡，有 38 筆（28%）「照名字猜」跟「景點庫分類」不一樣**（讀 `data/` 算的，2026-10-27）。
 那是舊做法錯誤率的**下界**——只算得到景點庫裡有的；景點庫以外的地點連對照的標準都沒有。例：梧棲漁港景點庫是美食、名字猜海濱；清水寺景點庫是中性、名字猜古蹟。
 
@@ -48,9 +53,10 @@
 2. 原樣跑 VERIFY 裡的自動項：`itinviewtest`、`washitest`、`motiontest`、`guesstruthtest`，以及改過的舊測試 `collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest`。
 3. B1–B5 的 8 條突變與其餘瀏覽器突變：`mut_itinview`（22）、`mut_washi`（4）、`mut_motion` 後 7 條、`mut_guesstruth`（5）；C1「拿 HEAD 舊版跑新測試要紅」。
 4. 秒級、還沒跑過的：`guesscensustest`、`affectedtest`（補了 VERIFY D1、E5 兩條）＋ `mut_guesscensus`（8；最後兩條驗挑選器，VERIFY D 節）；
-   可信類別（VERIFY E 節）：`themetrusttest`、`postertruthtest`＋`mut_themetrust`（14）、`mut_postertruth`（9）。`guesstruthtest`＋`mut_guesstruth`（5）在第 2、3 步（瀏覽器）。
+   可信類別（VERIFY E 節）：`themetrusttest`、`postertruthtest`＋`mut_themetrust`（14）、`mut_postertruth`（9）。
+   海報 P1（VERIFY F 節）：`posterlayouttest`＋`mut_posterlayout`（15）；`v147shots`（瀏覽器，第 2 步一起跑）。`guesstruthtest`＋`mut_guesstruth`（5）在第 2、3 步（瀏覽器）。
 5. `mutatetest`：**先計時**（開 2 個以上程序、耗時沒量過）。
-6. `npm run test:affected`：這次放大成**全套 71 支**（加了 `themetrusttest`）、預測不出耗時＝重負載。跑完把每支耗時記下來。
+6. `npm run test:affected`：這次放大成**全套 72 支**（加了 `themetrusttest`、`posterlayouttest`）、預測不出耗時＝重負載。跑完把每支耗時記下來。
 跑完**立刻**告訴 Dispatch（MealMate 等機器）。
 
 **4. 量負載的判準（Dispatch）**：扣掉 `claude.exe` 與 MCP 的 node 之後，看有沒有別人的 python／ffmpeg／tesseract／別專案的 node。
@@ -164,7 +170,7 @@ Dispatch 說「跑任何東西等放行」時，連秒級測試也不跑——10
   - **寫入的路（還沒寫，待放行）**：照 `workers/worker.mjs` 墓碑那段的做法——每筆先 `UPDATE groups SET seq = seq + 1 … RETURNING seq`，再
     `UPDATE records SET seq=?, updated_at=?, json=? WHERE group_id=? AND id=? AND seq=<乾跑讀到的舊 seq>`（樂觀鎖：期間有人改過就不寫、報出來）。
     json 裡的 `updatedAt` 同步改成寫入時刻，客戶端 `recWins` 才會收新的那份。備份與寫完重讀照閘門④⑤。
-- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 71 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`、`themetrusttest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
+- **這次部署前**：照每版流程跑 `test:affected`——這次放大成全套 72 支（加了 `mutcmdtest`、`guesstruthtest`、`guesscensustest`、`themetrusttest`、`posterlayouttest`）、預測不出耗時＝重負載，要等瀏覽器時段與許可。
 - **海報重做設計稿（10/27，Yolin 列為優先）**：`docs/DESIGN_海報重做.md`——12 項問題、封面 7 區＋每天 6 區（每區標資料有沒有）、
   分 4 批共 5～5.5 天；新版**連帶著的 theme 也不印類別名、不用主題插圖、不印每站 emoji**（多一題給 Yolin，第 6 節第 5 題）。沒寫程式。
   Dispatch 裁定（10/27）：海報一律不印類別名，連帶著 theme 的也不印。

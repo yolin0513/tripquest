@@ -82,6 +82,7 @@ const SHELL_ASSETS = [
   './js/poster/text.js',
   './js/poster/deco.js',
   './js/poster/presets.js',
+  './js/poster/layout.js',
   './js/views/poster.js',
   './js/views/plan.js',
   './js/views/home.js',

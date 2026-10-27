@@ -22,7 +22,7 @@ export default async function poster(tripId) {
   const frame = h('div', { class: 'poster-frame' }, canvas);
   const styleRow = h('div', { class: 'music-pick' });
   const busy = h('div', { class: 'form-hint center', hidden: true });
-  // ≥3 天的行程，匯出是一天一張 —— 預覽也一張一張翻，跟成品一致
+  // 匯出是封面一張＋一天一張 —— 預覽也一張一張翻，跟成品一致
   const pagePrev = h('button', { class: 'btn btn-soft pager-btn', onclick: () => { page--; refresh(-1); } }, '‹ 前一張');
   const pageLbl = h('span', { class: 'pager-lbl' });
   const pageNext = h('button', { class: 'btn btn-soft pager-btn', onclick: () => { page++; refresh(1); } }, '下一張 ›');
@@ -68,10 +68,10 @@ export default async function poster(tripId) {
       page = info.page;
       pager.hidden = info.pages <= 1;
       frame.classList.toggle('paged', info.pages > 1);
-      // 「第 1 天」＋「1 / 3 張」講的是同一件事 —— 一句就好。
+      // 「第 1 天」＋「共 N 張」一句講完（P1 起封面也是一張，所以單位是張、不是天）。
       // 兩端用 visibility 藏（不是 disabled）：第一張根本沒有「前一張」可去，
       // 灰掉的按鈕還是會被按；用 visibility 而非移除，中間的字才不會左右跳。
-      pageLbl.textContent = `${info.label} / 共 ${qty(info.pages, '天')}`;
+      pageLbl.textContent = `${info.label} / 共 ${qty(info.pages, '張')}`;
       pagePrev.style.visibility = info.page === 0 ? 'hidden' : 'visible';
       pageNext.style.visibility = info.page >= info.pages - 1 ? 'hidden' : 'visible';
       if (ghost) {
@@ -102,7 +102,7 @@ export default async function poster(tripId) {
     h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => doExport('share') }, '📤 存成圖片 / 傳給家人'),
     h('button', { class: 'btn btn-soft btn-block', onclick: () => doExport('print') }, '🖨️ 存高解析度（列印用）'),
     h('p', { class: 'form-hint center' }, '照片用你們自己拍的；還沒拍的用該景點的維基百科公開圖片。全部在手機本機產生。'),
-    h('p', { class: 'form-hint center' }, '沒有拍攝時間嗎？可到每個景點的「編輯」裡填上，海報會顯示時間軸。'),
+    h('p', { class: 'form-hint center' }, '想在時間軸寫上幾點到？可到每個景點的「編輯」裡填時間；沒填的站只寫名字。'),
   ));
 
   refresh();
@@ -134,7 +134,7 @@ export default async function poster(tripId) {
         if (results.length > 1) await new Promise((res) => setTimeout(res, 400));
         void i;
       }
-      toast(results.length > 1 ? `已存 ${results.length} 張（一天一張）` : '已存成圖片');
+      toast(`已存 ${results.length} 張（封面＋一天一張）`);
     } catch (e) {
       overlay.remove();
       console.error(e);

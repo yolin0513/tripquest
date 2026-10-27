@@ -172,12 +172,14 @@ try {
       return { pages: first.pages, seenDays, exported: out.length, labels: out.map((x) => x.label),
         lastPng: nDays === 3 ? canvas.toDataURL('image/jpeg', 0.85) : null, lastLabel: lastPage.label };
     }, nDays);
-    yes(r.pages === nDays, `${nDays} 天 → 預覽有 ${r.pages} 張可以翻（舊版只畫前 2 天）`, JSON.stringify(r));
-    yes(r.seenDays.length === nDays && r.seenDays[nDays - 1].includes(`${nDays}`), `翻到最後一張是第 ${nDays} 天（${r.seenDays.join('、')}）`);
-    yes(r.exported === nDays, `匯出 ${r.exported} 張（每天一張，一天不少）`, r.labels.join('、'));
+    // P1 版型（2026-10-27）：封面一張＋每天一張，不論幾天
+    yes(r.pages === nDays + 1, `${nDays} 天 → 預覽有 ${r.pages} 張可以翻（封面＋每天一張）`, JSON.stringify(r));
+    yes(r.seenDays.length === nDays + 1 && r.seenDays[0] === '封面' && r.seenDays[nDays].includes(`${nDays}`),
+      `第一張是封面、翻到最後一張是第 ${nDays} 天（${r.seenDays.join('、')}）`);
+    yes(r.exported === nDays + 1, `匯出 ${r.exported} 張（封面＋每天一張，一天不少）`, r.labels.join('、'));
     if (r.lastPng) await savePng(`海報-3天-預覽翻到第3天`, r.lastPng);
   }
-  // 2 天：單張、不出現翻頁
+  // 2 天：P1 起不再是一張長圖——封面＋2 天＝3 張，每張都是 1080×1350
   const two = await page.evaluate(async () => {
     const s = await import('./js/store.js');
     const { uuid } = await import('./js/ids.js');
@@ -188,9 +190,14 @@ try {
     for (let d = 1; d <= 2; d++) await s.put({ id: uuid(), type: 'spot', tripId: tid, name: `D${d}`, emoji: '📍', day: d, order: 0 });
     const canvas = document.createElement('canvas');
     const info = await pi.renderPreview(canvas, tid, 'watercolor', 0);
-    return { pages: info.pages, exported: (await pi.renderPoster(tid, {})).length };
+    const out = await pi.renderPoster(tid, {});
+    const sizes = [];
+    for (const o of out) { const bm = await createImageBitmap(o.blob); sizes.push(bm.width + 'x' + bm.height); }
+    return { pages: info.pages, exported: out.length, canvas: canvas.width + 'x' + canvas.height, sizes };
   });
-  yes(two.pages === 1 && two.exported === 1, '2 天維持單張（預覽 1 張、匯出 1 張）');
+  yes(two.pages === 3 && two.exported === 3, `2 天 → 封面＋2 天＝3 張（預覽 ${two.pages}、匯出 ${two.exported}）`);
+  yes(two.canvas === '1080x1350' && two.sizes.length === 3 && two.sizes.every((x) => x === '1080x1350'),
+    `每一張都是固定 4:5 1080×1350（預覽 ${two.canvas}；匯出 ${two.sizes.join('、')}）`);
 
   // 海報頁 UI：翻頁列真的出現、按鈕能翻。
   // 三天的長度故意差很大（7 / 1 / 4 個景點）—— 驗收標準是「翻頁時按鈕位置不動」
@@ -219,10 +226,16 @@ try {
   // 另一條斷言專門確認不斷行空白真的在（只看文字會看不出來）
   const NB = String.fromCharCode(160);
   const spaced = (s) => s.split(NB).join(' ');
-  yes(spaced(pgr.lbl) === '第 1 天 / 共 3 天', `翻頁列文字一句講完：「${spaced(pgr.lbl)}」`);
-  yes(pgr.lbl === `第${NB}1${NB}天 / 共 3${NB}天`, '翻頁列的「第 1 天」「3 天」數字與單位之間是不斷行空白（不會被拆到兩行）',
+  // P1 起第一張是封面，單位是「張」（封面＋3 天＝4 張）
+  yes(spaced(pgr.lbl) === '封面 / 共 4 張', `翻頁列文字一句講完：「${spaced(pgr.lbl)}」`);
+  yes(pgr.lbl === `封面 / 共 4${NB}張`, '翻頁列的「4 張」數字與單位之間是不斷行空白（不會被拆到兩行）',
     JSON.stringify(pgr.lbl.split('').map((c) => c.charCodeAt(0))));
   yes(pgr.prevVis === 'hidden', '第一張時「‹ 前一張」是藏起來的');
+  await page.click('.pager-btn:last-of-type');
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 1 天 / 共 4 張', { timeout: 20000 });
+  await sleep(500);
+  const lbl1 = await page.evaluate(() => document.querySelector('.pager-lbl').textContent);
+  yes(lbl1 === `第${NB}1${NB}天 / 共 4${NB}張`, '翻到第 1 天：「第 1 天」數字與單位之間也是不斷行空白');
   // 翻頁時版面不可以跳：記下按鈕與預覽框的位置，翻兩次逐一比對
   const boxOf = async (sel) => { const b = await (await page.$(sel)).boundingBox(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; };
   const canvasFits = () => page.evaluate(() => {
@@ -234,7 +247,7 @@ try {
   const frame0 = await boxOf('.poster-frame');
   yes(await canvasFits(), '第 1 天（7 個景點）：預覽縮在固定高度的框裡');
   await page.click('.pager-btn:last-of-type');
-  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 2 天 / 共 3 天', { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 2 天 / 共 4 張', { timeout: 20000 });
   await sleep(500);
   const btn1 = await boxOf('.pager-btn:last-of-type');
   const frame1 = await boxOf('.poster-frame');
@@ -244,7 +257,7 @@ try {
   await page.screenshot({ path: fileURLToPath(new URL('海報頁-翻頁-短的一天置中.png', OUT)) });
   console.log('  📸 海報頁-翻頁-短的一天置中');
   await page.click('.pager-btn:last-of-type');
-  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 3 天 / 共 3 天', { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.pager-lbl').textContent.split(String.fromCharCode(160)).join(' ') === '第 3 天 / 共 4 張', { timeout: 20000 });
   await sleep(500);
   const btn2 = await boxOf('.pager-btn:last-of-type');
   yes(JSON.stringify(btn2) === JSON.stringify(btn0), '翻到第 3 天按鈕位置還是一動不動');

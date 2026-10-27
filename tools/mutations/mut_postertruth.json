@@ -59,8 +59,8 @@
     "name": "繪製：主題章在畫的那一半自己拿類別名",
     "why": "模型裡沒有類別名，但畫的那一半用 d.theme 自己查 themeMeta 印出來。預期只紅 P9。",
     "file": "js/poster/index.js",
-    "find": "  deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd);",
-    "replace": "  deco.blob(ctx, PAD + 40, bandY + 44, 90, dp.blobColors[0], rnd); if (d.theme) ctx.fillText(themeMeta(d.theme).label, W - PAD - 4, bandY + 52);",
+    "find": "  const p = styleFor(preset, themeMeta(page.theme));",
+    "replace": "  const p = styleFor(preset, themeMeta(page.theme)); if (page.theme) ctx.fillText(themeMeta(page.theme).label, PW - PAD, 120);",
     "cmd": "node scripts/postertruthtest.mjs"
   },
   {
