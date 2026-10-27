@@ -60,8 +60,8 @@
     "name": "挑選器：guesscensustest 不在底線",
     "why": "它不算涵蓋任何 js，不在底線就只有改到它自己時才會被挑到——新增的呼叫點落在任何一支 js 都抓不到。預期只紅 affectedtest 的「只動一支 js（route.js）→ 照樣挑到 guesscensustest」（「只改 docs → 恰好底線」比的是 BASELINE 本身，不會紅）。",
     "file": "scripts/affected.mjs",
-    "find": "export const BASELINE = ['affectedtest', 'guesscensustest', 'validate-places',",
-    "replace": "export const BASELINE = ['affectedtest', 'validate-places',",
+    "find": "export const BASELINE = ['affectedtest', 'guesscensustest', 'themetrusttest',",
+    "replace": "export const BASELINE = ['affectedtest', 'themetrusttest',",
     "cmd": "node scripts/affectedtest.mjs",
     "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
   }
