@@ -24,6 +24,22 @@
     "cmd": "node scripts/dayjumptest.mjs"
   },
   {
+    "name": "接線：景點設定頁存檔不記",
+    "why": "純函式都對、但存檔時沒呼叫。預期只紅 plantest 的「行程頁上的名字同步更新」「行程頁上的時間也同步更新」（改的那站在第 2 天、行程頁停在第 1 天）。",
+    "file": "js/views/spot.js",
+    "find": "    try { markDayJump(localStorage, tripId, store.getRaw(spotId).day || 1); } catch { /* noop */ }\n",
+    "replace": "",
+    "cmd": "node scripts/plantest.mjs"
+  },
+  {
+    "name": "接線：行程頁不讀記號",
+    "why": "純函式都對、但行程頁沒呼叫。預期只紅 plantest 的「行程頁上的名字同步更新」「行程頁上的時間也同步更新」。",
+    "file": "js/views/trip.js",
+    "find": "const jump = takeDayJump(localStorage, tripId, dayNums);",
+    "replace": "const jump = null;",
+    "cmd": "node scripts/plantest.mjs"
+  },
+  {
     "name": "沒有時間欄位也照用",
     "why": "算不出過期沒的記號被當成沒過期。預期只紅 dayjumptest 的「J3 記號沒有時間」。",
     "file": "js/tripday.js",
