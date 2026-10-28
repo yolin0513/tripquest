@@ -91,14 +91,14 @@
     "name": "挑選器：themetrusttest 的 js 目錄引用算成涵蓋",
     "why": "它讀整個 js/ 只為找讀 .theme 的地方，算成涵蓋就悶住放大器 D。預期紅 affectedtest T12（js/__nobody.js 該放大成全套卻沒有），同 mut_guesscensus 的那條。",
     "file": "scripts/run-affected.mjs",
-    "find": "      : t.name === 'shelltest' || t.name === 'guesscensustest' || t.name === 'themetrusttest'",
-    "replace": "      : t.name === 'shelltest' || t.name === 'guesscensustest'",
+    "find": "export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'themetrusttest', 'viewentrytest'];",
+    "replace": "export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'viewentrytest'];",
     "cmd": "node scripts/affectedtest.mjs",
     "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
   },
   {
     "name": "挑選器：themetrusttest 不在底線",
-    "why": "不在底線就只有改到它自己時才會被挑到。預期只紅 affectedtest 的「只動一支 js（route.js）→ 照樣挑到 themetrusttest」。",
+    "why": "不在底線就只有改到它自己時才會被挑到。預期只紅 affectedtest 的「只動一支 js（route.js）→ 照樣挑到 themetrusttest」。（2026-10-28 起另紅「只掃描的 N 支測試都在底線裡」——那條是那天新加的通用檢查）",
     "file": "scripts/affected.mjs",
     "find": "'guesscensustest', 'themetrusttest', 'validate-places',",
     "replace": "'guesscensustest', 'validate-places',",

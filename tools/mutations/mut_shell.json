@@ -17,10 +17,10 @@
   },
   {
     "name": "挑選器：shelltest 不在底線",
-    "why": "只動 js、沒動 sw.js 時就挑不到它（它不算涵蓋任何 js）。預期只紅 affectedtest 的「只動 js、沒動 sw.js → 照樣挑到 shelltest」。",
+    "why": "只動 js、沒動 sw.js 時就挑不到它（它不算涵蓋任何 js）。預期只紅 affectedtest 的「只動 js、沒動 sw.js → 照樣挑到 shelltest」。（2026-10-28 起另紅「只掃描的 N 支測試都在底線裡」——那條是那天新加的通用檢查）",
     "file": "scripts/affected.mjs",
-    "find": "'gatelint', 'convtest', 'shelltest'];",
-    "replace": "'gatelint', 'convtest'];",
+    "find": "'gatelint', 'convtest', 'shelltest', 'viewentrytest'];",
+    "replace": "'gatelint', 'convtest', 'viewentrytest'];",
     "cmd": "node scripts/affectedtest.mjs",
     "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
   },

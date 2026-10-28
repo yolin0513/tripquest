@@ -13,7 +13,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges, ORPHAN_RE, ORPHAN_OK, findOrphans } from './affected.mjs';
-import { loadRepo } from './run-affected.mjs';
+import { loadRepo, SCAN_ONLY } from './run-affected.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0;
@@ -114,6 +114,10 @@ console.log('\n[T12] 放大器 D：沒人涵蓋的程式檔');
   yes(!ab.full && AMP_A_TESTS.every((t) => ab.selected.includes(t)) && ab.selected.includes('synctest')
     && ab.notes.some((s) => s.includes('js/__nobody.js')),
     'D 用「A∪B」模式時：不是全套、畫面組與資料組（含 synctest）全挑、點名 js/__nobody.js', JSON.stringify(ab.notes));
+  // 只掃描的測試不算涵蓋（才不會悶住 D）——代價是它們不會因為改了 js 被挑中，所以一律要在底線裡。
+  // 2026-10-28：viewentrytest 進鏈時沒排除，D 被悶住；下一支「掃整個目錄」的測試會再來一次（待辦：挑選器自己分辨，見 STATUS）
+  const notBase = SCAN_ONLY.filter((n) => !BASELINE.includes(n));
+  yes(SCAN_ONLY.length > 0 && notBase.length === 0, `只掃描的 ${SCAN_ONLY.length} 支測試都在底線裡（不算涵蓋，就只能靠底線被挑中）`, '不在底線的：' + notBase.join('、'));
   const c = pick(['js/itinerary.js']);
   yes(!c.full && c.selected.includes('itintest'), '對照組：改有人涵蓋的 js/itinerary.js → 不觸發 D（挑到 itintest）', JSON.stringify(c.fullReasons));
   // v1.74.11 的情境：只動 js（新檔被行程頁 import），沒動 sw.js → 放大器 C 不會觸發；

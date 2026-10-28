@@ -1,0 +1,38 @@
+[
+  {
+    "name": "放大器 D 關掉（全套模式）",
+    "why": "「改了沒人涵蓋的檔就跑全套」這道保險被關掉時，其他測試全是綠的——只有它自己的斷言看得到。預期只紅 affectedtest 的「改沒有任何測試涵蓋的 js/__nobody.js → 全套，而且點名這個檔」（A∪B 模式走另一支、不受影響）。",
+    "file": "scripts/affected.mjs",
+    "find": "      if (dMode === 'full') fullReasons.push(`放大器 D：${f} 沒有任何一支測試涵蓋`);",
+    "replace": "      if (dMode === 'full') { /* 突變：不放大 */ }",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "放大器 D 關掉（A∪B 模式）",
+    "why": "同上，另一種模式。預期只紅 affectedtest 的「D 用「A∪B」模式時…點名 js/__nobody.js」。",
+    "file": "scripts/affected.mjs",
+    "find": "        notes.push(`放大器 D：${f} 沒有任何一支測試涵蓋 → 加跑畫面組＋資料組`);\n        for (const t of AMP_A_TESTS) add(t, `放大器 D：${f}（沒人認領）`);",
+    "replace": "        void AMP_A_TESTS;",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：viewentrytest 的 js 目錄引用算成涵蓋",
+    "why": "2026-10-28 實際發生的那一次：它印的「掃了 js/ 底下…」被認成整個 js 目錄的引用，每支 js 都「有人涵蓋」，放大器 D 被悶住。預期紅 affectedtest T12 的兩條（js/__nobody.js 全套、A∪B 模式點名）。",
+    "file": "scripts/run-affected.mjs",
+    "find": "export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'themetrusttest', 'viewentrytest'];",
+    "replace": "export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'themetrusttest'];",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：viewentrytest 不在底線",
+    "why": "不算涵蓋又不在底線，就只有改到它自己時才會被挑到——新的繞路落在哪一支 js 都抓不到。預期只紅 affectedtest 的「只掃描的 N 支測試都在底線裡」。",
+    "file": "scripts/affected.mjs",
+    "find": "'gatelint', 'convtest', 'shelltest', 'viewentrytest'];",
+    "replace": "'gatelint', 'convtest', 'shelltest'];",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  }
+]

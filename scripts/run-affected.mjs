@@ -27,6 +27,8 @@ import { predict, classify, loadTimes, saveTimes, loadHistory, appendHistory } f
 // 2026-10-02 照「餘裕至少 3 倍、用最長那次算」改成 1800（3.1 倍；tools/timeout-margin.mjs 列整張表）。--timeout-sec 可改。
 // 超過就整棵程序樹殺掉、回 7：**沒有結果**——不是通過，也不是紅。
 export const DEFAULT_TIMEOUT_SEC = 1800;
+// 只掃描、不執行 js 的測試：它們讀整個 js/ 目錄，引用不算成「涵蓋」（否則悶住放大器 D）；一律要在底線裡（affectedtest 驗）
+export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'themetrusttest', 'viewentrytest'];
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -58,9 +60,11 @@ export function loadRepo(root = ROOT) {
     // shelltest 讀整個 js/ 目錄只為了列檔名、不執行任何一支；算成涵蓋的話同樣會悶住放大器 D。它在底線裡，每版照跑。
     // guesscensustest 同一個形狀：讀整個 js/ 找猜類別的呼叫點（只讀字、不執行），也在底線裡。
     // themetrusttest 同上（讀整個 js/ 找讀 .theme 的地方）；它 import 的 theme.js、generate.js 一起被濾掉沒關係——在底線裡，每次都跑。
+    // viewentrytest 同上（讀整個 js/ 找繞過路由器的地方；它印的「掃了 js/ 底下…」被認成整個 js 目錄的引用，2026-10-28 實際悶住過放大器 D）。
+    // 這份清單裡的每一支都必須在底線裡——affectedtest 會驗，不然排除涵蓋之後就沒人挑它了。
     refs[t.name] = t.name === 'affectedtest'
       ? extractRefs(text, exists).filter((p) => p.startsWith('scripts/'))
-      : t.name === 'shelltest' || t.name === 'guesscensustest' || t.name === 'themetrusttest'
+      : SCAN_ONLY.includes(t.name)
         ? extractRefs(text, exists).filter((p) => p !== 'js' && !p.startsWith('js/'))
         : extractRefs(text, exists);
   }
