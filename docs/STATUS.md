@@ -59,6 +59,12 @@
   **同一種寫法的盤點（一次性搜尋＋人工看，在搜的樣式範圍內）**：scripts/ 裡 14 個「找不到就回 false 或什麼都不做」的 helper、呼叫 65 處、沒接回傳值 33 處。
   在測試鏈裡、還沒改的：importtest clickText 5 處、membergonetest pressModal 4 處、installtest clickText 3 處沒接；scrolltest 的 tapTab 找不到時自己什麼都不做（不看回傳值也看不出）。
   不在鏈裡的工具（gallery、importshots、installshots、livecheck-import）另 15 處。**都還沒改**——併進「285 處點擊」那個待辦。
+- **layouttest 舊 CSS 比對（2026-10-28 18:00–18:24，機器空著時跑，`.logs/layout_now.log`、`.logs/layout_oldcss.log`）**：
+  現在的版本 17 個問題（與早上相同、分類相同）；只把 `css/style.css` 換回 fbcdb6a（其餘照現在的程式）**93 個**（text-spill 37、overlap 6、text-clip 48、bad-wrap 1、btn-wrap-squeezed 1）。
+  **2094347 的 CSS 沒有造成這 17 個，反而消掉了 76 個**；剩下的 17 個在舊 CSS 下全部也有（舊 CSS 下範圍更大），是更早就有的。
+  17 個的分類（照測試輸出判斷，沒看截圖）：① 景點標題列 `.qc-name` 在 320px、字級 l／xl 被擠到寬 0（text-spill 14＋與「✓ 完成」overlap 1）——
+  同一列的表情、進度膠囊、展開箭頭、「導航」按鈕都不縮，產品 bug；② 「1」換行「張」——數字與量詞拆開，產品 bug（小）；
+  ③ 設定頁「淺色（和紙）」折兩行（320 m／l／xl、360 xl、390 xl）——和紙主題那兩顆並排按鈕，產品 bug（小）。**測試本身的問題：這 17 個裡沒看到。** 都還沒修。
 - **機器被別人量測時的規矩（2026-10-28，影片端獨占量測被我 17:02–17:13 約 11 分鐘、十幾場瀏覽器污染，14 個單元要重跑）**：
   ① 開瀏覽器或跑重負載**之前**，先在回報裡列出要開哪幾場、各多久，等 Dispatch 確認機器空著；清單寫在動手前，不是事後回溯。
   ② **待辦：會被機器狀態影響的測試要在檔頭標出來。** 一次性搜尋（`yes(` 裡拿耗時比門檻）只找到 worktreeguardtest、mutatetest 兩處斷言耗時（上限 30／60 秒，量的是「逾時有沒有殺掉」）。
