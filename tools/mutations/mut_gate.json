@@ -6,41 +6,41 @@
       { "find": "set -eo pipefail", "replace": "set -e" },
       { "find": "if ! git push origin \"$PIN:refs/heads/main\" > \"$TMP/push\" 2>&1; then", "replace": "if ! git push origin \"$PIN:refs/heads/main\" 2>&1 | tail -n 1 > \"$TMP/push\"; then" }
     ],
-    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "2900 秒＝改壞後實測最長 1443.3 秒（帳本 seq 214，「自查只看 HEAD」，2026-10-28）× 安全係數 2、進位到百秒。係數取 2：同一條第二次量 1102.9 秒（seq 218），同一條兩次差 31%，2 倍蓋得過。原樣 pushgatetest 最長 266.8 秒（test-times.json），改壞後最大比值 5.41 倍。其餘改壞後實測：seq 219 1161.8、seq 220 1004.8、seq 209 359.2 秒；「忽略對照組」「推送閘不看自查結果」改壞後沒量過（時限照同一個數）"
   },
   {
     "name": "自查只看 HEAD",
     "file": "scripts/prepush-scan.mjs",
     "find": "process.exitCode = scan({ range: process.argv[2] || '' });",
     "replace": "process.exitCode = scan({ range: '' });",
-    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "2900 秒＝改壞後實測最長 1443.3 秒（帳本 seq 214，「自查只看 HEAD」，2026-10-28）× 安全係數 2、進位到百秒。係數取 2：同一條第二次量 1102.9 秒（seq 218），同一條兩次差 31%，2 倍蓋得過。原樣 pushgatetest 最長 266.8 秒（test-times.json），改壞後最大比值 5.41 倍。其餘改壞後實測：seq 219 1161.8、seq 220 1004.8、seq 209 359.2 秒；「忽略對照組」「推送閘不看自查結果」改壞後沒量過（時限照同一個數）"
   },
   {
     "name": "檢查器壞了與命中回同一個值",
     "file": "scripts/prepush-scan.mjs",
     "find": "if (broken.length) { log(`擋下：檢查器壞了（${broken.join('、')}）`); return 4; }",
     "replace": "if (broken.length) { log(`擋下：檢查器壞了（${broken.join('、')}）`); return 1; }",
-    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "2900 秒＝改壞後實測最長 1443.3 秒（帳本 seq 214，「自查只看 HEAD」，2026-10-28）× 安全係數 2、進位到百秒。係數取 2：同一條第二次量 1102.9 秒（seq 218），同一條兩次差 31%，2 倍蓋得過。原樣 pushgatetest 最長 266.8 秒（test-times.json），改壞後最大比值 5.41 倍。其餘改壞後實測：seq 219 1161.8、seq 220 1004.8、seq 209 359.2 秒；「忽略對照組」「推送閘不看自查結果」改壞後沒量過（時限照同一個數）"
   },
   {
     "name": "拿掉最後比對遠端那一關",
     "file": "scripts/safe-push.sh",
     "find": "if [ \"$PIN\" != \"$AFTER\" ]; then",
     "replace": "if false; then",
-    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "2900 秒＝改壞後實測最長 1443.3 秒（帳本 seq 214，「自查只看 HEAD」，2026-10-28）× 安全係數 2、進位到百秒。係數取 2：同一條第二次量 1102.9 秒（seq 218），同一條兩次差 31%，2 倍蓋得過。原樣 pushgatetest 最長 266.8 秒（test-times.json），改壞後最大比值 5.41 倍。其餘改壞後實測：seq 219 1161.8、seq 220 1004.8、seq 209 359.2 秒；「忽略對照組」「推送閘不看自查結果」改壞後沒量過（時限照同一個數）"
   },
   {
     "name": "忽略對照組",
     "file": "scripts/prepush-scan.mjs",
     "find": "  if (!ctrlHit) broken.push(name);\n",
     "replace": "",
-    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "2900 秒＝改壞後實測最長 1443.3 秒（帳本 seq 214，「自查只看 HEAD」，2026-10-28）× 安全係數 2、進位到百秒。係數取 2：同一條第二次量 1102.9 秒（seq 218），同一條兩次差 31%，2 倍蓋得過。原樣 pushgatetest 最長 266.8 秒（test-times.json），改壞後最大比值 5.41 倍。其餘改壞後實測：seq 219 1161.8、seq 220 1004.8、seq 209 359.2 秒；「忽略對照組」「推送閘不看自查結果」改壞後沒量過（時限照同一個數）"
   },
   {
     "name": "推送閘不看自查結果",
     "file": "scripts/safe-push.sh",
     "find": "if [ \"$CHECK\" -ne 0 ]; then",
     "replace": "if false; then",
-    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "2900 秒＝改壞後實測最長 1443.3 秒（帳本 seq 214，「自查只看 HEAD」，2026-10-28）× 安全係數 2、進位到百秒。係數取 2：同一條第二次量 1102.9 秒（seq 218），同一條兩次差 31%，2 倍蓋得過。原樣 pushgatetest 最長 266.8 秒（test-times.json），改壞後最大比值 5.41 倍。其餘改壞後實測：seq 219 1161.8、seq 220 1004.8、seq 209 359.2 秒；「忽略對照組」「推送閘不看自查結果」改壞後沒量過（時限照同一個數）"
   }
 ]
