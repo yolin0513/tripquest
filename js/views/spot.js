@@ -102,6 +102,9 @@ export default async function spot(tripId, spotId, { drawPage, setTop }) {
     if (startMin !== tm.startMin || stayMin !== tm.stayMin) {
       await offerTimeFixQuests();
     }
+    // 回行程頁時停在剛改的這一站那一天（不然新打開一律回今天，他改的第 2 天看不到）。
+    // 只用一次、10 分鐘內有效：之後照常「新打開＝帶我到今天」。
+    try { localStorage.setItem('tripquest.dayJump.' + tripId, JSON.stringify({ day: store.getRaw(spotId).day || 1, at: Date.now() })); } catch { /* noop */ }
     toast('已儲存');
     back(`/trip/${tripId}/plan`);
   };

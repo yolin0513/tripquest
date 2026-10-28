@@ -214,6 +214,14 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     try {
       const stored = Number(localStorage.getItem(selKey));
       if (dayNums.includes(stored)) sel = stored;
+      // 剛在景點設定頁改過某一站 → 停在那一站那一天（spot.js 存的，只用一次）
+      const jk = 'tripquest.dayJump.' + tripId;
+      const jump = JSON.parse(localStorage.getItem(jk) || 'null');
+      localStorage.removeItem(jk);
+      if (jump && Date.now() - jump.at < 10 * 60 * 1000 && dayNums.includes(jump.day)) {
+        sel = jump.day;
+        localStorage.setItem(selKey, String(sel));
+      }
     } catch { /* noop */ }
 
     const daySecs = new Map();
@@ -1206,7 +1214,7 @@ async function removeTrip(tripId, t) {
 // 這趟旅程在本機留下的所有 localStorage 旗標
 function clearTripKeys(tripId) {
   const spotIds = store.spotsOf(tripId).map((s) => s.id);
-  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here', 'daySel'].map((k) => `tripquest.${k}.${tripId}`);
+  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here', 'daySel', 'dayJump'].map((k) => `tripquest.${k}.${tripId}`);
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
