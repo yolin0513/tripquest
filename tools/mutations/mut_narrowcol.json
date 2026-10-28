@@ -6,8 +6,8 @@
     "find": ".qc-inner { container-type: inline-size; }\n",
     "replace": "",
     "cmd": "node scripts/layouttest.mjs",
-    "timeoutMs": 1500000,
-    "timeoutBasis": "改壞後實測最長 746.6 秒（ledger seq 231，2026-10-28 23:41–23:54；同輪 seq 230 724.2、seq 232 673.4 秒）× 2、進位；原樣最長 751.1 秒（tools/test-times.json），比值 0.99——改壞不會變慢。三條期間外來負載平均 11.9／12.7／1.6%、最大 24.7%，都在事前門檻內（平均不超過基線 12.0+8.3、單窗不超過 35%），耗時採計"
+    "timeoutMs": 1400000,
+    "timeoutBasis": "改壞後乾淨的實測只有一次：673.4 秒（ledger seq 232，2026-10-28 23:54–00:05，系統與外來負載都約 1%）× 2、進位；原樣最長 751.1 秒（tools/test-times.json），比值 0.90。同輪 seq 230 724.2、seq 231 746.6 秒標受干擾、不採計：取樣器把 系統目錄（%SystemRoot%） 底下的程序算進系統，那兩條期間系統負載約 23%、23:51 掉到約 7%、23:55 起約 1%，時間對得上 Yolin 的 SQL Server 安裝（推論，取樣器沒記系統那一塊是哪些程序）"
   },
   {
     "name": "景點標題列：拿掉折行",
@@ -16,8 +16,8 @@
     "find": "  flex-wrap: wrap; row-gap: 6px;\n}\n.qc-toggle:active",
     "replace": "}\n.qc-toggle:active",
     "cmd": "node scripts/layouttest.mjs",
-    "timeoutMs": 1500000,
-    "timeoutBasis": "改壞後實測最長 746.6 秒（ledger seq 231，2026-10-28 23:41–23:54；同輪 seq 230 724.2、seq 232 673.4 秒）× 2、進位；原樣最長 751.1 秒（tools/test-times.json），比值 0.99——改壞不會變慢。三條期間外來負載平均 11.9／12.7／1.6%、最大 24.7%，都在事前門檻內（平均不超過基線 12.0+8.3、單窗不超過 35%），耗時採計"
+    "timeoutMs": 1400000,
+    "timeoutBasis": "改壞後乾淨的實測只有一次：673.4 秒（ledger seq 232，2026-10-28 23:54–00:05，系統與外來負載都約 1%）× 2、進位；原樣最長 751.1 秒（tools/test-times.json），比值 0.90。同輪 seq 230 724.2、seq 231 746.6 秒標受干擾、不採計：取樣器把 系統目錄（%SystemRoot%） 底下的程序算進系統，那兩條期間系統負載約 23%、23:51 掉到約 7%、23:55 起約 1%，時間對得上 Yolin 的 SQL Server 安裝（推論，取樣器沒記系統那一塊是哪些程序）"
   },
   {
     "name": "layouttest 第 8 條整個不報",
@@ -26,7 +26,7 @@
     "find": "      if (!stacked && tops.length >= 3 && nChars >= 4 && nChars / tops.length < 2.5) {",
     "replace": "      if (false) {",
     "cmd": "node scripts/layouttest.mjs",
-    "timeoutMs": 1500000,
-    "timeoutBasis": "改壞後實測最長 746.6 秒（ledger seq 231，2026-10-28 23:41–23:54；同輪 seq 230 724.2、seq 232 673.4 秒）× 2、進位；原樣最長 751.1 秒（tools/test-times.json），比值 0.99——改壞不會變慢。三條期間外來負載平均 11.9／12.7／1.6%、最大 24.7%，都在事前門檻內（平均不超過基線 12.0+8.3、單窗不超過 35%），耗時採計"
+    "timeoutMs": 1400000,
+    "timeoutBasis": "改壞後乾淨的實測只有一次：673.4 秒（ledger seq 232，2026-10-28 23:54–00:05，系統與外來負載都約 1%）× 2、進位；原樣最長 751.1 秒（tools/test-times.json），比值 0.90。同輪 seq 230 724.2、seq 231 746.6 秒標受干擾、不採計：取樣器把 系統目錄（%SystemRoot%） 底下的程序算進系統，那兩條期間系統負載約 23%、23:51 掉到約 7%、23:55 起約 1%，時間對得上 Yolin 的 SQL Server 安裝（推論，取樣器沒記系統那一塊是哪些程序）"
   }
 ]
