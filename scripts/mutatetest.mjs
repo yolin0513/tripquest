@@ -306,6 +306,10 @@ if (want('H')) {
     const closing = ledger().filter((e) => e.name === '被停掉的' && e.event === 'done').pop();
     yes(closing && closing.result === 'no-result' && /沒跑完/.test(closing.reason || ''), `H 帳本記成 no-result、理由寫沒跑完（實得 ${closing ? `${closing.result}／${closing.reason}` : '沒有那一筆'}）——不是 red`);
     yes(r.code === 1 && /✗ 被停掉的：沒跑完（沒有最後那一行總結）——沒有結果/.test(r.out) && !/✓ 被停掉的：紅了/.test(r.out), `H 輸出寫明沒跑完、沒有寫成紅了（實得 ${r.code}）`, r.out.slice(-300));
+    // 沒有結果時看得到原因：探針被停掉前印的那一行要出現在 mutate 的輸出裡，而且全文存進 .logs/
+    const tf = closing && P(`.logs/mutate-noresult.${closing.seq}.log`);
+    yes(/^ {5}│ ✗ 前面一節本來就會失敗$/m.test(r.out) && tf && fs.existsSync(tf) && fs.readFileSync(tf, 'utf8').includes('✗ 前面一節本來就會失敗'),
+      'H 沒有結果時印出子程序輸出的最後幾行、全文存進 .logs/mutate-noresult.<第幾次>.log', r.out.slice(-300));
     // 反向：同一份清單裡跑到底的「會紅的」照樣記成 red
     const r2 = run(HL, '會紅的');
     const c2 = ledger().filter((e) => e.name === '會紅的' && e.event === 'done').pop();

@@ -227,6 +227,14 @@ async function main() {
     const reds = (r.out || '').split('\n').filter((l) => l.startsWith('✗')).slice(0, 4);
     if (result === 'red') console.log(`✓ ${m.name}：紅了（exit ${r.status}）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
     else { bad++; console.log(`✗ ${m.name}：${result === 'no-result' ? `${r.timedOut ? '逾時被殺' : '沒跑完（沒有最後那一行總結）'}——沒有結果（不算紅、也不算跑過）` : '沒紅（照樣全綠）'}`); }
+    // 沒有結果時把子程序的輸出留下來：不然看不出是丟了例外、被殺、還是測試本來就不印總結行
+    // （2026-10-28：scrolltest 兩條突變連兩天「沒有結果」，其實都紅了，只是 scrolltest 不印總結行）
+    if (result === 'no-result') {
+      const outFile = path.join(LOGS, `mutate-noresult.${seq}.log`);
+      fs.writeFileSync(outFile, r.out || '');
+      const tail = (r.out || '').split('\n').map((l) => l.trimEnd()).filter(Boolean).slice(-8);
+      console.log(`     子程序輸出最後 ${tail.length} 行（全文在 .logs/${path.basename(outFile)}）：\n${tail.map((l) => '     │ ' + l.slice(0, 160)).join('\n')}`);
+    }
   }
   if (!onlyMode) {
     let after;
