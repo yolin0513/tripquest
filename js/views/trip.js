@@ -677,10 +677,12 @@ function spotSection(s, tripId, focusId, hereId) {
           (when || shown) ? h('span', { class: 'qc-theme' },
             when ? '🕘 ' + when + (shown ? ' · ' : '') : '',
             shown ? shown.emoji + ' ' + shown.label : '') : null),
-        h('span', {
-          class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
-        }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
-        chev,
+        // 進度與箭頭包成一組：一列放不下時整組折到第二行，不會只掉一個箭頭在左下角
+        h('span', { class: 'qc-side' },
+          h('span', {
+            class: 'qc-prog' + (allDone ? ' done' : (p.done ? ' part' : '')),
+          }, p.total ? (allDone ? '✓ 完成' : `${p.done}/${p.total}`) : '—'),
+          chev),
       ),
       spotMapButton(s),
       // 這裡本來有一顆「編輯」，但它會把長輩帶到景點頁 —— 而拍照按鈕在那裡，

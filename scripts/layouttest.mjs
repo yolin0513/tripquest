@@ -316,6 +316,16 @@ try {
           }
         }
       }
+
+      // 8. 欄寬只剩一兩個字：文字被排成直排（2026-10-28）
+      //    文字都在框裡、沒畫出去，text-spill 與 text-clip 都抓不到；但「拍下蘭陽博物館」一個字一行地往下排，等於讀不到。
+      //    （實際截圖：320px 寬時任務名欄寬 34px，標準字到特大字都是；景點名框寬 10～26px 時也是這個樣子。）
+      //    判準：至少 3 行、至少 4 個字，平均每行不到 2.5 個字。對照組在主迴圈之前（直排一定要抓、正常折三行不能抓）。
+      const nChars = fullText.replace(/[\\s\\u3000]/g, '').length;
+      if (!stacked && tops.length >= 3 && nChars >= 4 && nChars / tops.length < 2.5) {
+        out.push({ kind: 'narrow-column', where: label(el),
+          detail: '「' + txt(el) + '」' + nChars + ' 個字排成 ' + tops.length + ' 行，框寬 ' + Math.round(box.width) + 'px' });
+      }
     }
 
     // 5. 兩段文字互相重疊
@@ -437,6 +447,34 @@ try {
     const hit = (cls) => ctl.some((x) => x.kind === 'bad-wrap' && x.where === '.' + cls);
     yes(hit('lt-ctl-short'), '第 6 條對照組：短片語斷在「3／天」一定要抓到');
     yes(!hit('lt-ctl-long'), '第 6 條對照組：長說明（超過 40 字、含句號）裡斷在「7／天」不能抓');
+  }
+
+  // ---------- 第 8 條（欄寬只剩一兩個字）的對照組：兩個方向，跑的是同一個 CHECK（2026-10-28）----------
+  // 窄到一個字一行的「拍下蘭陽博物館」一定要抓；正常寬度折成三行的一段字不能抓。前置先量出兩個樣本各排成幾行。
+  {
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/#/settings`, { waitUntil: 'networkidle0' }).catch(() => {});
+    await page.waitForSelector('.page, .hero', { timeout: 15000 }).catch(() => {});
+    const pre8 = await page.evaluate(() => {
+      const mk = (cls, text, w) => {
+        const d = document.createElement('div');
+        d.className = cls; d.textContent = text;
+        d.style.cssText = `font-size:20px;width:${w};padding:0;margin:0;border:0;white-space:normal;overflow-wrap:anywhere;`;
+        document.body.prepend(d);
+        return d;
+      };
+      const lines = (el) => { const r = document.createRange(); r.selectNodeContents(el); return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size; };
+      const n = mk('lt-ctl-narrow', '拍下蘭陽博物館', '1.4em');
+      const w = mk('lt-ctl-wide', '拍下蘭陽博物館最有代表性的一幕，站遠一點把整體帶進畫面', '9em');
+      return { narrow: lines(n), wide: lines(w) };
+    });
+    yes(pre8.narrow >= 5 && pre8.wide >= 3,
+      `第 8 條對照組前置：窄樣本真的排成 ${pre8.narrow} 行（一個字一行）、寬樣本真的折成 ${pre8.wide} 行`, JSON.stringify(pre8));
+    const ctl8 = await page.evaluate(CHECK);
+    const hit8 = (cls) => ctl8.some((x) => x.kind === 'narrow-column' && x.where === '.' + cls);
+    yes(hit8('lt-ctl-narrow'), '第 8 條對照組：一個字一行的直排一定要抓到');
+    yes(!hit8('lt-ctl-wide'), '第 8 條對照組：正常寬度折成三行的一段字不能抓');
   }
 
   let combos = 0;

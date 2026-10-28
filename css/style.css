@@ -1201,10 +1201,16 @@ textarea.field { resize: vertical; line-height: 1.6; }
   appearance: none; border: 0; background: transparent; color: inherit; font: inherit;
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
   padding: 16px 14px; cursor: pointer; text-align: left;
+  /* 2026-10-28：放不下時把進度膠囊與箭頭折到第二行，名字保住寬度。
+     不折的話，320px＋大字時名字被擠到 0～15px、變成一個字一行的直排，「✓ 完成」還壓在字上（layouttest、實際截圖）。 */
+  flex-wrap: wrap; row-gap: 6px;
 }
 .qc-toggle:active { background: var(--bg-elev-2); }
 .qc-emoji { font-size: 1.5rem; flex: none; }
-.qc-name { font-size: 1.1rem; font-weight: 800; flex: 1; min-width: 0; line-height: 1.25; }
+/* 基準寬 4em：一列排不下「表情＋4 個字＋進度與箭頭」時，進度與箭頭整組換行，名字拿回這一列。
+   基準寬再大（試過 5.5em），320px 特大字時連表情都會被擠到名字上面自己一行。 */
+.qc-name { font-size: 1.1rem; font-weight: 800; flex: 1 1 4em; min-width: 0; line-height: 1.25; }
+.qc-side { flex: none; display: flex; align-items: center; gap: 10px; margin-left: auto; }   /* 折到第二行時靠右 */
 .qc-prog {
   flex: none; font-size: 0.9rem; font-weight: 800; padding: 4px 12px; border-radius: 999px;
   background: var(--bg-elev-2); color: var(--muted);
@@ -1907,6 +1913,16 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qline.open .qline-chev { transform: rotate(90deg); }
 
 .qline-act { grid-area: act; display: flex; align-items: center; padding-right: 6px; }
+/* 2026-10-28：窄的時候兩顆按鈕移到任務名下面一列（靠右）。
+   縮圖、箭頭、兩顆按鈕都是固定 px，加起來約 200px；320px 寬時任務名只剩 34px，一個字一行地直排下去
+   （實際截圖；layouttest 沒有抓「欄寬只剩一兩個字」的規則，所以沒報）。
+   門檻用 em：字越大越早換成兩列。15.5em ≈ 標準字 293px、大字 332px、特大字 387px——390 寬標準字仍是一列。 */
+.qc-inner { container-type: inline-size; }
+@container (max-width: 15.5em) {
+  .qline { grid-template-columns: 1fr; grid-template-areas: "head" "act" "more"; }
+  .qline-head { padding-right: 8px; }
+  .qline-act { justify-content: flex-end; padding: 0 8px 8px; }
+}
 .addphoto-icons { display: flex; gap: 5px; }
 .apx {
   width: 46px; height: 46px; border-radius: 12px; flex: none;
