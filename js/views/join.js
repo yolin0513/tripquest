@@ -1,4 +1,3 @@
-import { setTop, render } from '../app.js';
 import { h, toast, spinnerBox, modal, confirmDialog } from '../ui.js';
 import { navigate } from '../router.js';
 import { importShareCode, peekShareCode, peekInvite, joinInvite, parseShortInvite, parseInviteText, fetchInviteSummary } from '../share.js';
@@ -16,7 +15,7 @@ import { openInstallGuide } from './installguide.js';
 // 全新的空 App —— 旅程「不見了」。而且主畫面圖示打開的是 manifest 的 start_url，
 // 不是這個帶邀請碼的網址，所以連自動重加的機會都沒有。
 // 所以 iPhone 上把順序倒過來：**先裝、再加入**，並且把邀請連結複製到剪貼簿當橋。
-export default async function join(query) {
+export default async function join(query, { drawPage, setTop }) {
   setTop({ title: '加入旅程', back: false });
   const syncCode = query.j;
   const copyCode = query.d;
@@ -30,11 +29,11 @@ export default async function join(query) {
     // 加入流程自己有退避重試（見 render 之後那段）。
     info = { sync: true, group: '', title: short.title || '行程', spots: 0, quests: 0, members: 0, dates: [], who: [], preview: [] };
   } else {
-    render(h('div', { class: 'page' }, spinnerBox('正在讀這個邀請…', '大行程可能要等一下')));
+    drawPage(h('div', { class: 'page' }, spinnerBox('正在讀這個邀請…', '大行程可能要等一下')));
     try {
       info = syncCode ? await peekInvite(syncCode) : await peekShareCode(copyCode);
     } catch (e) {
-      render(h('div', { class: 'page' }, h('div', { class: 'empty' },
+      drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' },
         h('p', {}, '這個邀請連結無法解析'),
         h('p', { class: 'form-hint' }, e.message),
         h('button', { class: 'btn btn-soft', onclick: () => navigate('/') }, '回首頁'))));
@@ -170,7 +169,7 @@ export default async function join(query) {
       ? '你的照片會存在自己手機，也會同步一份到旅伴共用的伺服器。'
       : '加入後會在你的裝置建立一份任務清單，照片只留在自己手機。'),
   );
-  render(page);
+  drawPage(page);
 
   // 短連結：摘要（日期／旅伴／景點）在背景跟伺服器拿，到了原地補畫。
   // 三種失敗長相分開講：403＝連結被截斷（重傳才有救）、離線＝等網路就好、

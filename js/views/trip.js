@@ -1,7 +1,6 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, ring, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty } from '../ui.js';
-import { navigate, back, navRestoredScroll } from '../router.js';
+import { navigate, back, navRestoredScroll, refreshPage } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
 import { shooterOf } from '../badges.js';
@@ -73,10 +72,10 @@ async function pickCountry(tripId) {
   const actions = entries.map(([code, v]) => ({ label: `${v.name}（報警 ${v.police || v.all}）`, value: code }));
   actions.push({ label: '取消', value: null });
   const pick = await modal({ title: '目的地國家', body: h('p', { class: 'sm muted' }, '用來顯示正確的當地緊急電話。'), actions });
-  if (pick) { await store.patch(tripId, { country: pick }); toast('已設定'); settings(tripId); }
+  if (pick) { await store.patch(tripId, { country: pick }); toast('已設定'); refreshPage(); }
 }
 
-export default async function trip(tripId, { fresh = false } = {}) {
+export default async function trip(tripId, { fresh = false, drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   await loadThemes().catch(() => {});
@@ -131,7 +130,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
           h('p', { class: 'claim-nudge-p' }, '先告訴大家「這是誰的手機」，你拍的照片才會算在你名下，旅伴也才看得到你已經加入。'),
           h('button', {
             class: 'btn btn-primary btn-block',
-            onclick: async () => { const got = await ensureMember(tripId, { force: true }); if (got) toast('好了，旅伴現在看得到你了'); trip(tripId); },
+            onclick: async () => { const got = await ensureMember(tripId, { force: true }); if (got) toast('好了，旅伴現在看得到你了'); refreshPage(); },
           }, '選擇我是誰'))
       : null,
 
@@ -250,7 +249,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
     wxReady = fillWeather(wxSlot, container, tripId, t);
   }
 
-  render(container);
+  drawPage(container);
 
   // 進來時把「今天」帶到眼前。天氣條是後來才填的、會把下面的內容往下推，
   // 所以等它填完（或最多等 700ms）再捲，不然捲到一半畫面又被推走。
@@ -279,7 +278,7 @@ export default async function trip(tripId, { fresh = false } = {}) {
       // v1.73.6：這裡跟 watchHere 是同一個病，而且黑名單更短（只有四個）。
       // warmTripContent 要等 AI 回應、幾秒鐘才回來，這期間使用者早就換頁了 ——
       // 回來就把人家的畫面畫掉。改用同一個白名單判斷：網址正好是行程頁本身才重畫。
-      if (changed && onTripPage(tripId)) trip(tripId);
+      if (changed && onTripPage(tripId)) refreshPage();
     }).catch(() => {});
   }
 }
@@ -433,7 +432,7 @@ async function pickHereSpot(tripId) {
   else { await store.setHereSpot(tripId, res, actor); toast(`現在這一站：${store.get(res)?.name || ''}`); }
   // 不傳 fresh：選完通常是接著要點導航，畫面這時候跳走反而礙事。
   // 自動捲動留到「下一次重新打開這趟行程」再做。
-  trip(tripId);
+  refreshPage();
 }
 
 // 今天是這趟的第幾天：0 = 還沒開始、-1 = 已結束、null = 沒設日期、正整數 = 進行中
@@ -712,14 +711,14 @@ function spotAddRow(s, tripId, questCount) {
     h('button', {
       class: 'btn btn-soft btn-sm', onclick: async () => {
         const { addQuestDialog } = await import('./plan.js');
-        if (await addQuestDialog(tripId, s.id)) trip(tripId);
+        if (await addQuestDialog(tripId, s.id)) refreshPage();
       },
     }, '＋ 新增任務'),
     // 照片仍然掛在任務底下：第一次選照片時才把中性的照片任務建起來（ensureQuest）
     questCount ? null : addPhotoButtons(tripId, photoQuestId(s.id), {
       compact: true,
       ensureQuest: () => ensurePhotoQuest(s),
-      onDone: () => trip(tripId),
+      onDone: () => refreshPage(),
     }),
   );
 }
@@ -769,7 +768,7 @@ function watchHere(tripId) {
     const now = tripSignature(tripId);
     if (now === last) return;
     last = now;
-    trip(tripId);
+    refreshPage();
   });
   // 而且離開就退訂 —— 光靠上面那道守衛，訂閱會一直掛著（plan.js 與 sos.js
   // 都有做這件事，只有這裡沒有）。守衛是第二道防線，不是唯一那道。
@@ -1065,7 +1064,7 @@ function questLine(q, spot, themeKey) {
             class: 'qline-link', onclick: () => navigate(`/quest/${q.id}`),
           }, `看照片（${subs.length} 張）`) : null,
         ),
-        addPhotoButtons(q.tripId, q.id, { compact: true, onDone: () => trip(q.tripId) }),
+        addPhotoButtons(q.tripId, q.id, { compact: true, onDone: () => refreshPage() }),
       ),
     ));
   };
@@ -1106,7 +1105,7 @@ function questLine(q, spot, themeKey) {
     // 想再拍一張的人會在原本的位置找不到東西。
     // 完成狀態改由縮圖（換成他自己拍的那張）與列上的「✓ 已完成」表示。
     h('div', { class: 'qline-act' },
-      addPhotoButtons(q.tripId, q.id, { icons: true, onDone: () => trip(q.tripId) })),
+      addPhotoButtons(q.tripId, q.id, { icons: true, onDone: () => refreshPage() })),
     more,
   );
   return row;
@@ -1235,7 +1234,7 @@ function posShareRow(tripId, t) {
         toast('已停止分享，伺服器上的位置也刪掉了');
       }
       draw();
-      trip(tripId);                                     // 行程頁的常駐指示要跟著變
+      refreshPage();                                     // 行程頁的常駐指示要跟著變
     });
     mount(box,
       h('div', {},
@@ -1256,7 +1255,7 @@ function posBanner(tripId) {
     h('span', {}, '📍 正在跟旅伴分享你的位置'),
     h('button', {
       class: 'pos-banner-off',
-      onclick: async () => { await pos.setSharing(tripId, false); toast('已停止分享'); trip(tripId); },
+      onclick: async () => { await pos.setSharing(tripId, false); toast('已停止分享'); refreshPage(); },
     }, '停止'),
   );
 }
@@ -1289,7 +1288,7 @@ async function doShare(tripId) {
 }
 
 // ---------- 旅程設定 ----------
-export async function settings(tripId) {
+export async function settings(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '旅程設定' });
@@ -1320,15 +1319,15 @@ export async function settings(tripId) {
     if (wikiToggle.checked) enrichTrip(tripId).catch(() => {});
   });
 
-  render(h('div', { class: 'page form' },
+  drawPage(h('div', { class: 'page form' },
     settingRow('旅程名稱', h('button', { class: 'btn btn-soft', onclick: async () => {
       const v = await promptDialog('旅程名稱', { value: t.title });
-      if (v) { store.patch(tripId, { title: v }); toast('已更新'); settings(tripId); }
+      if (v) { store.patch(tripId, { title: v }); toast('已更新'); refreshPage(); }
     } }, t.title || '未命名')),
 
     settingRow('旅程日期', h('button', { class: 'btn btn-soft', onclick: async () => {
       const res = await pickDateRange({ start: t.startDate, end: t.endDate });
-      if (res) { await store.patch(tripId, { startDate: res.start, endDate: res.end }); toast('已更新日期'); settings(tripId); }
+      if (res) { await store.patch(tripId, { startDate: res.start, endDate: res.end }); toast('已更新日期'); refreshPage(); }
     } }, t.startDate ? rangeLabel(t.startDate, t.endDate) : '選擇')),
 
     settingRow('目的地國家（緊急電話用）', h('button', { class: 'btn btn-soft', onclick: () => pickCountry(tripId) },
@@ -1358,7 +1357,7 @@ export async function settings(tripId) {
 
     h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '進階：自帶金鑰（可選）'),
     h('div', { class: 'sub-label' }, 'AI 加值'),
-    aiConfigCard(tripId, () => settings(tripId)),
+    aiConfigCard(tripId, () => refreshPage()),
     h('div', { class: 'sub-label' }, '地圖加值'),
     mapsConfigCard(tripId),
     keyNotice(),

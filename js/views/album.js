@@ -1,4 +1,3 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, confirmDialog, fmtBytes, modal, qty } from '../ui.js';
 import { navigate } from '../router.js';
@@ -24,14 +23,14 @@ const mmss = (sec) => {
   return `${qty(Math.floor(s / 60), '分')} ${qty(String(s % 60).padStart(2, '0'), '秒')}`;
 };
 
-export default async function album(tripId) {
+export default async function album(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '回憶' });
 
   const slides = collectSlides(tripId);
   if (!slides.length) {
-    render(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '還沒有照片可以做成影片'))));
+    drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '還沒有照片可以做成影片'))));
     return;
   }
 
@@ -254,7 +253,7 @@ export default async function album(tripId) {
     onclick: () => { advBody.hidden = !advBody.hidden; advToggle.textContent = advBody.hidden ? '更多儲存方式 ▾' : '更多儲存方式 ▴'; },
   }, '更多儲存方式 ▾');
 
-  render(h('div', { class: 'page' },
+  drawPage(h('div', { class: 'page' },
     h('div', { class: 'section-label', style: 'margin-top:0' }, '影片'),
     h('div', { class: 'album-frame' }, canvas, bar, timeLbl),
     meta,

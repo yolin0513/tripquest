@@ -13,7 +13,6 @@
 //
 // 這一頁是規劃用（年輕人操作），密度可以高；產出給長輩看的行程頁維持既有原則。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, modal } from '../ui.js';
 import { navigate } from '../router.js';
@@ -23,7 +22,7 @@ import { haversine, fmtDist } from '../geo.js';
 import { stayOptions } from '../spottime.js';
 import { enrichTrip } from '../enrich.js';
 
-export default async function findspot(tripId, query = {}) {
+export default async function findspot(tripId, query = {}, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '搜尋景點' });
@@ -85,7 +84,7 @@ export default async function findspot(tripId, query = {}) {
     onclick: () => openManual(),
   }, '✍️ 查不到嗎？手動輸入地點');
 
-  render(h('div', { class: 'page compact' },
+  drawPage(h('div', { class: 'page compact' },
     h('div', { class: 'fs-bar' }, input, searchBtn),
     h('p', { class: 'form-hint' }, '輸入名稱或地名後按「搜尋」。景點與地標都查得到；巷弄小店在免費地圖上常常沒有，查不到就用手動輸入。'),
     results,

@@ -1,7 +1,6 @@
 // 回顧與成就 —— 回憶影片 / 成就徽章 / 最終回顧 的入口頁（底部「回顧」分頁）。
 // 旅程進行中：成就可以先看，影片與最終回顧等全部完成或旅程結束後才開放。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, qty } from '../ui.js';
 import { navigate } from '../router.js';
@@ -15,7 +14,7 @@ function tripEnded(t) {
   return new Date(t.endDate + 'T23:59:59') < new Date();
 }
 
-export default async function memories(tripId) {
+export default async function memories(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
 
@@ -35,7 +34,7 @@ export default async function memories(tripId) {
   const me = activeMemberId(tripId) || (store.membersOf(t.groupId)[0] || {}).id;
   const myBadges = me ? earnedBadges(tripId, me).length : 0;
 
-  render(h('div', { class: 'page' },
+  drawPage(h('div', { class: 'page' },
     // v1.57.3 排版（使用者回饋）：
     //   · 一進來第一畫面就要看到「可以按的成果入口」——長輩不捲動就看不到下面。
     //     順序：影片相簿 → 海報 → 最終回顧（入口都有一致的卡片外觀＋›），

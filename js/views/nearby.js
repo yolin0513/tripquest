@@ -10,7 +10,6 @@
 // TDX 要註冊金鑰；日本沒有可靠的免費來源。所以這頁只給靜態資料並講明白，
 // 即時資訊列為未來的自帶金鑰選配。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, mount } from '../ui.js';
 import { currentPosition, navUrl, fmtDist } from '../geo.js';
@@ -19,7 +18,7 @@ import { nearbyParkingGoogle, placesErr } from '../places.js';
 import { getMapsKey, mapsBudget, addMapsCalls } from '../aikeys.js';
 import { haversine } from '../geo.js';
 
-export default async function nearbyView(tripId) {
+export default async function nearbyView(tripId, { drawPage, setTop }) {
   setTop({ title: '找附近' });
   const spots = tripId ? store.spotsOf(tripId).filter((s) => s.lat != null && s.lng != null) : [];
   const page = h('div', { class: 'page nl' });
@@ -53,7 +52,7 @@ export default async function nearbyView(tripId) {
   const note = h('div', { class: 'nl-note', hidden: true });
   const listBox = h('div', { class: 'nl-list' });
   page.append(centerSel, centerLine, catBar, note, listBox);
-  render(page);
+  drawPage(page);
 
   async function pickCenter(v) {
     if (v === 'gps') {

@@ -1,18 +1,17 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, qty } from '../ui.js';
 import { navigate } from '../router.js';
 import { renderPreview, renderPoster, presetList, warmPosterAi } from '../poster/index.js';
 import { downloadBlob, nativeShare } from '../share.js';
 
-export default async function poster(tripId) {
+export default async function poster(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '行程海報' });
 
   const spots = store.spotsOf(tripId);
   if (!spots.length) {
-    render(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '這個行程還沒有景點'))));
+    drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '這個行程還沒有景點'))));
     return;
   }
 
@@ -90,7 +89,7 @@ export default async function poster(tripId) {
   }
 
 
-  render(h('div', { class: 'page' },
+  drawPage(h('div', { class: 'page' },
     h('p', { class: 'muted center', style: 'margin:0 0 10px' }, '把行程做成一張海報，存下來傳 LINE 或列印。'),
     pager,
     frame,

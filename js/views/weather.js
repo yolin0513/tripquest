@@ -1,9 +1,8 @@
 // 目的地天氣 —— 每天預報 + 「跟出發地差多少、要帶什麼」的提醒。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, spinnerBox } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { forecast, buildAdvice, wxIcon, wxText, hereTempNow, getHome } from '../weather.js';
 import { currentPosition } from '../geo.js';
 
@@ -33,14 +32,14 @@ export function tripForecastDays(trip, allDays) {
   return allDays.slice(0, 5).map((d, i) => ({ ...d, _tripDay: i + 1 }));
 }
 
-export default async function weather(tripId) {
+export default async function weather(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
   if (!trip) { navigate('/', { replace: true }); return; }
   setTop({ title: '天氣提醒' });
 
   const dc = destCoords(tripId);
   const page = h('div', { class: 'page' });
-  render(page);
+  drawPage(page);
 
   if (!dc) {
     page.append(h('div', { class: 'empty' }, h('p', {}, '這個行程的景點沒有座標，無法查天氣。'),
@@ -53,7 +52,7 @@ export default async function weather(tripId) {
   const f = await forecast(dc.lat, dc.lng);
   if (!f) {
     page.replaceChildren(h('div', { class: 'empty' }, h('p', {}, '查不到天氣（可能離線）。'),
-      h('button', { class: 'btn btn-soft', onclick: () => weather(tripId) }, '重試')));
+      h('button', { class: 'btn btn-soft', onclick: () => refreshPage() }, '重試')));
     return;
   }
 

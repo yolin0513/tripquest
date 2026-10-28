@@ -3,14 +3,39 @@
 // 「返回」= 回到使用者上一個實際造訪的畫面（用瀏覽器 history），不是硬寫的父層。
 // 只在 App 內走過至少一步時才 history.back()；直接深連結進來就退到 fallback。
 
+import { mount } from './ui.js';
+
 const routes = [];
 let notFound = null;
 let current = null;
 
-// 「這一頁載很久」時要畫什麼 —— 由 app.js 注入（router 本身刻意零相依，
-// 直接 import app.js 會變成循環相依）。
-let slowIndicator = null;
-export function setSlowIndicator(fn) { slowIndicator = fn; }
+// 主畫面只有一個入口：這裡。
+//
+// 每一次換頁（resolve）都有一個編號 gen。畫面函式不自己寫 #view、不自己改頂列，而是拿路由器
+// 給它的 drawPage(node)、setTop(opts)——只在「這一次仍是最新的一次」才真的畫，否則丟掉。
+// 起因（2026-10-28，settletest）：行程頁還在載景點庫時使用者點了「分帳」，分帳頁先畫好，
+// 行程頁晚一步畫完、把它蓋掉——網址是分帳、畫面是行程。原本 gen 只擋得住捲動，擋不住畫。
+// 畫面要重畫自己也不直接呼叫自己，一律 refreshPage()，同樣經過 gen。
+// scripts/viewentrytest.mjs 盯著「有沒有人繞過這裡」。
+const view = document.getElementById('view');
+
+function spinner() {
+  const box = document.createElement('div');
+  box.className = 'center-fill';
+  const s = document.createElement('div');
+  s.className = 'spinner';
+  box.append(s);
+  return box;
+}
+
+// 頂列（標題、右上角按鈕）也是畫面的一部分，同樣只准最新的那一次改（settletest 實測：
+// 過期的行程頁把分帳頁的「記一筆」換成「旅程設定」，點下去被帶去設定頁）。
+// 頂列怎麼畫由 app.js 注入（router 不 import app.js，會循環相依）。
+let topbar = null;
+export function setTopbar(fn) { topbar = fn; }
+
+// 開機時（路由器還沒啟動、store 還在載）先放一個轉圈圈；啟動之後就不准再用它
+export function bootLoading() { if (gen === 0) mount(view, spinner()); }
 
 // 這個 App session 內，透過 push（非 replace）前進了幾步
 let depth = 0;
@@ -87,12 +112,25 @@ function parse(hash) {
 }
 
 let gen = 0;
-async function resolve() {
+// again：畫面要重畫自己（refreshPage）——同一個網址、不是導覽，所以不動捲動位置、fresh 是 false
+async function resolve({ again = false } = {}) {
   const my = ++gen;
   const { raw, path, query } = parse();
-  const restore = scrollMemory.has(raw) ? scrollMemory.get(raw) : null;
-  restoredScroll = restore != null;
-  curRaw = raw;
+  const restore = again ? null : (scrollMemory.has(raw) ? scrollMemory.get(raw) : null);
+  if (!again) {
+    restoredScroll = restore != null;
+    curRaw = raw;
+  }
+  const drawPage = (node) => {
+    if (my !== gen) return false;      // 已經有更新的一次換頁 → 這一份過期了，不畫
+    mount(view, node);
+    return true;
+  };
+  const setTop = (opts) => {
+    if (my !== gen || !topbar) return false;
+    topbar(opts);
+    return true;
+  };
 
   for (const r of routes) {
     const m = path.match(r.rx);
@@ -100,17 +138,20 @@ async function resolve() {
       const params = {};
       r.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1])));
       current = { path, params, query, pattern: r.pattern };
-      if (restore == null) window.scrollTo(0, 0);
-      // view 函式是 async 的（載幣別、算矩陣、抓天氣…）。在它呼叫 render() 之前，
+      if (restore == null && !again) window.scrollTo(0, 0);
+      // view 函式是 async 的（載幣別、算矩陣、抓天氣…）。在它呼叫 drawPage() 之前，
       // 畫面上停的是上一頁的內容 —— 冷啟動或從空白進來時就是**全空、也沒有轉圈圈**，
       // 使用者分不出「在載入」與「壞掉了」（線上巡檢就是這樣量到分帳頁 0 字的）。
       // 但也不能無條件先畫 loading：多數頁面是同步就渲染完的，那會變成閃一下。
       // 所以只有慢到 250ms 還沒畫東西才補上轉圈圈。
-      let slow = setTimeout(() => { if (slowIndicator && my === gen) slowIndicator(); }, 250);
-      try { await r.handler({ params, query, path, fresh: true }); }
+      // **只在畫面真的還是空的時候畫** —— 很多 view 是「先畫好再繼續 await」
+      // （行程頁畫完才去算移動時間），不檢查的話轉圈圈會把已經畫好的頁面蓋掉。
+      let slow = setTimeout(() => { if (my === gen && !view.firstChild) mount(view, spinner()); }, 250);
+      try { await r.handler({ params, query, path, fresh: !again, drawPage, setTop }); }
       catch (e) { console.error(e); }
       finally { clearTimeout(slow); slow = null; }
-      if (restore != null) {
+      // 這一次已經被更新的換頁取代 → 不捲（不然會把下一頁捲到這一頁記住的位置）
+      if (restore != null && my === gen) {
         window.scrollTo(0, restore);
         // 有些畫面會在 render 之後才把內容補進來（照片、天氣條），再校正一次
         requestAnimationFrame(() => { if (my === gen) window.scrollTo(0, restore); });
@@ -122,6 +163,10 @@ async function resolve() {
 }
 
 export function currentRoute() { return current; }
+
+// 畫面重畫自己（改了資料、AI 文案回來…）：重跑目前網址那一頁，經過同一個 gen。
+// 呼叫的時候使用者若已經換到別頁，重畫的是別頁（無害），不會把舊頁蓋上去。
+export function refreshPage() { return resolve({ again: true }); }
 
 function onHashChange() {
   const { raw } = parse();

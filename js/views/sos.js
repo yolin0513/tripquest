@@ -1,7 +1,6 @@
 // 緊急求助 —— 走失求助畫面 + 當地緊急電話 + 附近的警局 / 醫院 / 藥局。
 // 設計：超大字、可離線（快取最後位置與查詢結果）、給路人 / 警察看也看得懂。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, mount, avatar } from '../ui.js';
 import { back } from '../router.js';
@@ -13,7 +12,7 @@ import * as pos2 from '../pos.js';
 import { hashHue } from '../ids.js';
 import { loadEmergency, emergencyFor, countryOfTrip, getContacts } from '../emergency.js';
 
-export default async function sos(tripId) {
+export default async function sos(tripId, { drawPage, setTop }) {
   setTop({ title: '緊急求助' });
   await loadEmergency().catch(() => {});
 
@@ -25,7 +24,7 @@ export default async function sos(tripId) {
   }
 
   const page = h('div', { class: 'page sos' });
-  render(page);
+  drawPage(page);
 
   // ---- 1. 走失求助卡 ----
   const companions = await collectCompanions(trip);

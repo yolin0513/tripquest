@@ -1,14 +1,13 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, promptDialog, KIND_META } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { subPhoto } from '../photoimg.js';
 import { openTagger } from '../phototag.js';
 import { refImageFor } from '../enrich.js';
 import { themeForSpot, loadThemes } from '../theme.js';
 import { paintRef } from './trip.js';
 
-export default async function quest(questId) {
+export default async function quest(questId, { drawPage, setTop }) {
   const q = store.get(questId);
   if (!q) { navigate('/', { replace: true }); return; }
   const spot = store.get(q.spotId);
@@ -31,7 +30,7 @@ export default async function quest(questId) {
 
   const grid = h('div', { class: 'photo-grid' });
 
-  render(h('div', { class: 'page' },
+  drawPage(h('div', { class: 'page' },
     h('div', { class: 'quest-focus' },
       heroPhoto,
       h('span', { class: 'tag quest-focus-kind' }, `${km.icon} ${km.label}`),
@@ -75,7 +74,7 @@ async function paintGrid(grid, questId, tripId) {
     grid.append(h('figure', { class: 'photo-cell' },
       h('button', {
         class: 'photo-cell-btn',
-        onclick: async () => { if (await openTagger(tripId, sub.id, subs)) quest(questId); },
+        onclick: async () => { if (await openTagger(tripId, sub.id, subs)) refreshPage(); },
       }, subPhoto(sub, { className: '', alt: store.photoCaption(sub) || '' })),
       untagged ? h('span', { class: 'untag-dot' }, '未標記') : null,
       likes ? h('span', { class: 'mini-likes' }, '❤️ ' + likes) : null,
@@ -91,5 +90,5 @@ async function editQuest(questId) {
   const hint = await promptDialog('提示', { value: q.hint || '', multiline: true });
   await store.patch(questId, { title: title || q.title, hint: hint ?? q.hint });
   toast('已更新');
-  quest(questId);
+  refreshPage();
 }

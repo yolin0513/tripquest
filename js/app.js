@@ -1,13 +1,12 @@
 // 進入點：註冊 SW、初始化 store、掛路由、管理頂列
 
-import { route, setNotFound, startRouter, navigate, currentRoute, back, resetHistory, setSlowIndicator } from './router.js';
+import { route, setNotFound, startRouter, navigate, currentRoute, back, resetHistory, bootLoading, setTopbar } from './router.js';
 import * as store from './store.js';
 import { mount, h, toast, smoothScrollTo } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
 import { initIdentity } from './identity.js';
 import { backpack } from './glyphs.js';
 
-const view = document.getElementById('view');
 const backBtn = document.getElementById('backBtn');
 const topTitle = document.getElementById('topTitle');
 const topActionBtn = document.getElementById('topActionBtn');
@@ -58,7 +57,8 @@ function fallbackFor(r) {
   return '/';
 }
 
-export function setTop({ title, back = true, action = null }) {
+// 不匯出：畫面改頂列一律用路由器給的 setTop（綁著那一次換頁，過期的不准改，見 router.js）
+function setTop({ title, back = true, action = null }) {
   // 標題左邊放背包（App 識別，原創圖形，見 js/glyphs.js）；字放在自己的 span 裡，長了照樣截斷
   topTitle.replaceChildren(backpack(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));
   document.title = title ? `${title}｜TripQuest` : 'TripQuest 旅圖任務';
@@ -73,12 +73,8 @@ export function setTop({ title, back = true, action = null }) {
   }
 }
 
-export function render(node) {
-  mount(view, node);
-}
-export function renderLoading() {
-  mount(view, h('div', { class: 'center-fill' }, h('div', { class: 'spinner' })));
-}
+// 主畫面不在這裡畫：畫面函式用路由器給的 drawPage(node)、setTop(opts)，重畫自己用 refreshPage()（見 router.js）
+setTopbar(setTop);
 
 // ---- 底部功能列（依所在位置切換：首頁層 vs 旅程層）----
 const tabbar = document.getElementById('tabbar');
@@ -138,29 +134,30 @@ function renderTabs() {
 window.addEventListener('hashchange', renderTabs);
 
 // ---- 路由表 ----
-route('/', async () => (await import('./views/home.js')).default());
-route('/new', async () => (await import('./views/create.js')).default());
-route('/join', async ({ query }) => (await import('./views/join.js')).default(query));
+// 每個畫面最後一個參數是 { drawPage, setTop }：路由器給的、綁著這一次換頁的畫筆與頂列（見 router.js）
+route('/', async ({ drawPage, setTop }) => (await import('./views/home.js')).default({ drawPage, setTop }));
+route('/new', async ({ drawPage, setTop }) => (await import('./views/create.js')).default({ drawPage, setTop }));
+route('/join', async ({ query, drawPage, setTop }) => (await import('./views/join.js')).default(query, { drawPage, setTop }));
 // fresh 只有「真的導覽到這一頁」時才是 true —— 頁面內部自己重繪（補完景點圖、AI 文案
-// 回來）不算，不然畫面會在使用者看到一半時又自己捲一次。
-route('/trip/:id', async ({ params, fresh }) => (await import('./views/trip.js')).default(params.id, { fresh }));
-route('/trip/:id/settings', async ({ params }) => (await import('./views/trip.js')).settings(params.id));
-route('/trip/:id/people', async ({ params }) => (await import('./views/people.js')).default(params.id));
-route('/trip/:id/album', async ({ params }) => (await import('./views/album.js')).default(params.id));
-route('/trip/:id/poster', async ({ params }) => (await import('./views/poster.js')).default(params.id));
-route('/trip/:id/plan', async ({ params }) => (await import('./views/plan.js')).default(params.id));
-route('/trip/:id/findspot', async ({ params, query }) => (await import('./views/findspot.js')).default(params.id, query));
-route('/trip/:id/sos', async ({ params }) => (await import('./views/sos.js')).default(params.id));
-route('/trip/:id/nearby', async ({ params }) => (await import('./views/nearby.js')).default(params.id));
-route('/sos', async () => (await import('./views/sos.js')).default(null));
-route('/trip/:id/weather', async ({ params }) => (await import('./views/weather.js')).default(params.id));
-route('/trip/:id/expenses', async ({ params }) => (await import('./views/expenses.js')).default(params.id));
-route('/trip/:id/badges', async ({ params }) => (await import('./views/badges.js')).default(params.id));
-route('/trip/:id/recap', async ({ params }) => (await import('./views/recap.js')).default(params.id));
-route('/trip/:id/memories', async ({ params }) => (await import('./views/memories.js')).default(params.id));
-route('/trip/:id/spot/:spotId', async ({ params }) => (await import('./views/spot.js')).default(params.id, params.spotId));
-route('/quest/:id', async ({ params }) => (await import('./views/quest.js')).default(params.id));
-route('/settings', async () => (await import('./views/settings.js')).default());
+// 回來，走 refreshPage）不算，不然畫面會在使用者看到一半時又自己捲一次。
+route('/trip/:id', async ({ params, fresh, drawPage, setTop }) => (await import('./views/trip.js')).default(params.id, { fresh, drawPage, setTop }));
+route('/trip/:id/settings', async ({ params, drawPage, setTop }) => (await import('./views/trip.js')).settings(params.id, { drawPage, setTop }));
+route('/trip/:id/people', async ({ params, drawPage, setTop }) => (await import('./views/people.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/album', async ({ params, drawPage, setTop }) => (await import('./views/album.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/poster', async ({ params, drawPage, setTop }) => (await import('./views/poster.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/plan', async ({ params, drawPage, setTop }) => (await import('./views/plan.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/findspot', async ({ params, query, drawPage, setTop }) => (await import('./views/findspot.js')).default(params.id, query, { drawPage, setTop }));
+route('/trip/:id/sos', async ({ params, drawPage, setTop }) => (await import('./views/sos.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/nearby', async ({ params, drawPage, setTop }) => (await import('./views/nearby.js')).default(params.id, { drawPage, setTop }));
+route('/sos', async ({ drawPage, setTop }) => (await import('./views/sos.js')).default(null, { drawPage, setTop }));
+route('/trip/:id/weather', async ({ params, drawPage, setTop }) => (await import('./views/weather.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/expenses', async ({ params, drawPage, setTop }) => (await import('./views/expenses.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/badges', async ({ params, drawPage, setTop }) => (await import('./views/badges.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/recap', async ({ params, drawPage, setTop }) => (await import('./views/recap.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/memories', async ({ params, drawPage, setTop }) => (await import('./views/memories.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/spot/:spotId', async ({ params, drawPage, setTop }) => (await import('./views/spot.js')).default(params.id, params.spotId, { drawPage, setTop }));
+route('/quest/:id', async ({ params, drawPage, setTop }) => (await import('./views/quest.js')).default(params.id, { drawPage, setTop }));
+route('/settings', async ({ drawPage, setTop }) => (await import('./views/settings.js')).default({ drawPage, setTop }));
 setNotFound(() => {
   // 版本混搭的保險絲：/trip/<id>/ 底下對不上的路，退回該行程頁而不是首頁——
   // 新版畫面配舊版路由表的空窗期（SW 換版當下），點到新入口至少留在原地附近。
@@ -175,11 +172,8 @@ setNotFound(() => {
 // ---- 啟動 ----
 (async function boot() {
   applyPrefs();
-  // 換頁時如果 view 函式 250ms 還沒畫出東西就補轉圈圈（見 router.js）。
-  // **只在畫面真的還是空的時候畫** —— 很多 view 是「先 render() 再繼續 await」
-  // （行程頁 render 完才去算移動時間），不檢查的話轉圈圈會把已經畫好的頁面蓋掉。
-  setSlowIndicator(() => { if (!view.firstChild) renderLoading(); });
-  renderLoading();
+  // 換頁時 view 函式 250ms 還沒畫出東西就補轉圈圈，由 router.js 自己處理
+  bootLoading();
   await store.init();
   await initIdentity();       // 讓裝置身分與 localStorage / IndexedDB 一致
   startRouter();

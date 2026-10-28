@@ -1,0 +1,63 @@
+[
+  {
+    "name": "路由器：畫面不看是不是最新的一次",
+    "why": "2026-10-28 settletest 的根因：過期的行程頁晚一步畫完、蓋掉分帳頁。預期紅 settletest（分帳頁的內容讀不到；行程頁的景點庫 await 還在，所以每次都會發生）。",
+    "file": "js/router.js",
+    "find": "    if (my !== gen) return false;      // 已經有更新的一次換頁 → 這一份過期了，不畫",
+    "replace": "    // （突變）不檢查 gen",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "路由器：頂列不看是不是最新的一次",
+    "why": "遷移途中 settletest 抓到的第二個洞：過期的行程頁把分帳頁右上角的「記一筆」換成「旅程設定」，點下去被帶到設定頁。預期紅 settletest 的「記帳表單沒打開」那一條（例外）。",
+    "file": "js/router.js",
+    "find": "    if (my !== gen || !topbar) return false;",
+    "replace": "    if (!topbar) return false;",
+    "cmd": "node scripts/settletest.mjs"
+  },
+  {
+    "name": "靜態檢查：A 類不再抓呼叫",
+    "why": "檢查被關掉時，對照組的繞路樣本要照樣被發現。預期紅 viewentrytest 的「對照組：A 新檔直接 render」「對照組：A 新檔直接改頂列」。",
+    "file": "scripts/viewentrytest.mjs",
+    "find": "        hits.push({ kind: 'A', file: r, line: lineOf(code, m.index), what: `${n}(…)` });",
+    "replace": "        void m;",
+    "cmd": "node scripts/viewentrytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)"
+  },
+  {
+    "name": "靜態檢查：B 類不再抓自我重畫",
+    "why": "同上。預期只紅 viewentrytest 的「對照組：B 畫面自我重畫」。",
+    "file": "scripts/viewentrytest.mjs",
+    "find": "          hits.push({ kind: 'B', file: r, line: lineOf(code, m.index), what: `${t}(…)` });",
+    "replace": "          void m;",
+    "cmd": "node scripts/viewentrytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)"
+  },
+  {
+    "name": "靜態檢查：C 類不再抓參數",
+    "why": "同上。預期只紅 viewentrytest 的「對照組：C 畫面函式沒收下 drawPage」。",
+    "file": "scripts/viewentrytest.mjs",
+    "find": "        sigMiss.push({ kind: 'C', file: `js/views/${v}.js`, line: lineOf(src, m.index), what: `${m[1]}(…) 參數沒有 ${need}` });",
+    "replace": "        void need;",
+    "cmd": "node scripts/viewentrytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)"
+  },
+  {
+    "name": "靜態檢查：去註解改回 .*$（CRLF 的檔註解拿不掉）",
+    "why": "2026-10-28 實測的漏洞：app.js 是 CRLF，註解裡的 setTop(…) 被當成呼叫。預期紅 viewentrytest 的「對照組：CRLF 檔的註解也不算」，以及 A 那一條（app.js 註解裡的 setTop(…)）。",
+    "file": "scripts/viewentrytest.mjs",
+    "find": "\\/\\/[^\\r\\n]*/, '$1')",
+    "replace": "\\/\\/.*$/, '$1')",
+    "cmd": "node scripts/viewentrytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)"
+  },
+  {
+    "name": "真的繞路：行程頁選完「現在這一站」改回直接呼叫自己",
+    "why": "檢查要抓得到真實程式裡的繞路，不只抓得到對照組。預期只紅 viewentrytest 的「B 畫面自我重畫 0 處」（對照組全綠）。",
+    "file": "js/views/trip.js",
+    "find": "再做。\n  refreshPage();\n}",
+    "replace": "再做。\n  trip(tripId);\n}",
+    "cmd": "node scripts/viewentrytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)"
+  }
+]

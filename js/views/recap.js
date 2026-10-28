@@ -1,6 +1,5 @@
 // 行程最終回顧 —— 一份可留念的成果報告 + 可匯出的回顧卡。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, avatar, spinnerBox, qty } from '../ui.js';
 import { navigate } from '../router.js';
@@ -10,14 +9,14 @@ import { downloadBlob, nativeShare } from '../share.js';
 import { buildRecap } from '../recap.js';
 import { loadThemes, themeForTrip, themeMeta } from '../theme.js';
 
-export default async function recap(tripId) {
+export default async function recap(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
   if (!trip) { navigate('/', { replace: true }); return; }
   setTop({ title: '行程回顧' });
   await loadThemes().catch(() => {});
 
   const page = h('div', { class: 'page' });
-  render(page);
+  drawPage(page);
   page.append(spinnerBox('正在整理這趟的回顧…', '要算路線、找美食、查當時的天氣'));
 
   const r = await buildRecap(tripId);

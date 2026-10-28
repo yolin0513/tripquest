@@ -1,4 +1,3 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast } from '../ui.js';
 import { navigate } from '../router.js';
@@ -8,7 +7,7 @@ import { enrichTrip } from '../enrich.js';
 import { dateRangeField } from '../daterange.js';
 import { myDeviceId } from '../identity.js';
 
-export default async function create() {
+export default async function create({ drawPage, setTop }) {
   setTop({ title: '建立新旅程' });
 
   const state = {
@@ -324,7 +323,7 @@ export default async function create() {
     }
   }
 
-  render(h('div', { class: 'page form' },
+  drawPage(h('div', { class: 'page form' },
     field('旅程名稱', titleField),
     field('哪幾天去？', dateField),
     fieldGroup('有誰要一起', h('div', {}, memberList, memberField)),

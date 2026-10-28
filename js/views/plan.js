@@ -5,13 +5,12 @@
 //   2. 每個景點的 ▲ ▼（同一天內移動）—— 給不想拖曳的人的替代路徑
 // 調整只改 spot 的 day / order，任務與照片掛在 spotId 上，進度完全跟著走。
 
-import { setTop, render } from '../app.js';
 import { spotTimes, dayStartOf, DAY_START_DEFAULT } from '../spottime.js';
 import { travelMatrix, chainTimes, timeConflicts, suggestOrder, longHaul, fmtMin, fmtRange, fmtDur } from '../route.js';
 import { loadThemes } from '../theme.js';
 import * as store from '../store.js';
 import { h, mount, toast, promptDialog, confirmDialog, modal, nth } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
 import { generateForTrip } from '../quests/generate.js';
@@ -49,7 +48,7 @@ const tKey = (tripId, day) => `${tripId}:${day}`;
 // 這一天的檢查結果（跟 TRANSIT 一樣：推導值，只放記憶體）。
 const ISSUES = new Map();
 
-export default async function plan(tripId) {
+export default async function plan(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '調整行程' });
@@ -98,12 +97,12 @@ export default async function plan(tripId) {
         });
         ov.remove();
         toast(r.found ? `找到 ${r.found} 個位置${r.still ? `，還有 ${r.still} 個查不到` : ''}` : '這次沒有查到新的位置', 4200);
-        plan(tripId);
+        refreshPage();
       } catch (e) { ov.remove(); toast('查詢失敗：' + e.message); }
     },
   }, `📍 自動找出景點位置（還有 ${missingGeo} 個沒有）`) : null;
 
-  render(h('div', { class: 'page' },
+  drawPage(h('div', { class: 'page' },
     h('p', { class: 'plan-tip' }, '按住 ☰ 拖曳可以換順序，同一天內換前後也可以用 ▲ ▼。'),
     geoBtn,
     list,

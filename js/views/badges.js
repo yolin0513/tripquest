@@ -1,6 +1,5 @@
 // 成就徽章牆 —— 每個人各自的徽章，已達成上色、未達成灰底加提示。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, mount } from '../ui.js';
 import { navigate } from '../router.js';
@@ -9,18 +8,18 @@ import { avatar } from '../ui.js';
 import { BADGES, earnedBadges, statsFor } from '../badges.js';
 import { activeMemberId } from '../claim.js';
 
-export default async function badges(tripId) {
+export default async function badges(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
   if (!trip) { navigate('/', { replace: true }); return; }
   setTop({ title: '成就徽章' });
 
   const members = store.membersOf(trip.groupId);
-  if (!members.length) { render(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '先加旅伴。')))); return; }
+  if (!members.length) { drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' }, h('p', {}, '先加旅伴。')))); return; }
 
   let who = activeMemberId(tripId) || members[0].id;
 
   const page = h('div', { class: 'page' });
-  render(page);
+  drawPage(page);
 
   const draw = () => {
     const earned = earnedBadges(tripId, who);

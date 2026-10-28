@@ -1,7 +1,6 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, ring, fmtDate, avatar, toast } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { isStandalone, shouldOfferInstall } from '../install.js';
 import { countdownText } from '../tripday.js';
@@ -18,7 +17,7 @@ async function joinFromLink() {
   await joinByCode();
 }
 
-export default function home() {
+export default function home({ drawPage, setTop }) {
   setTop({ title: 'TripQuest', back: false });
   const trips = store.trips();
   const std = isStandalone();
@@ -28,7 +27,7 @@ export default function home() {
   // 這時候最該給的不是「建立新旅程」，是「把剛剛那個邀請貼進來」。
   const justInstalledEmpty = std && trips.length === 0;
 
-  render(h('div', { class: 'page' },
+  drawPage(h('div', { class: 'page' },
     h('div', { class: 'hero' },
       h('h2', {}, '把旅行變成拍照任務'),
       h('p', { class: 'muted lg' }, '一起完成、一起回味'),
@@ -66,7 +65,7 @@ export default function home() {
           onclick: async () => {
             const { openInstallGuide } = await import('./installguide.js');
             await openInstallGuide({ after: '裝好之後，主畫面就會有 TripQuest 的圖示。' });
-            home();
+            refreshPage();
           },
         }, '📲 把 TripQuest 放到主畫面')
       : null,

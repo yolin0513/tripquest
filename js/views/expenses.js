@@ -1,15 +1,14 @@
 // 分帳 —— 記一筆、看總覽、看「誰該給誰多少」。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, modal, confirmDialog } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { avatar } from '../ui.js';
 import { loadCurrencies, currencyInfo, currencyForCountry, getRates, fmtMoney } from '../fx.js';
 import { tripExpenses, saveExpense, deleteExpense, settleTrip, CATEGORIES, categoryOf, sharesFallback } from '../expenses.js';
 
-export default async function expenses(tripId) {
+export default async function expenses(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
   if (!trip) { navigate('/', { replace: true }); return; }
   setTop({ title: '分帳', action: { icon: '＋', label: '記一筆', onClick: () => openEdit(tripId, null) } });
@@ -18,7 +17,7 @@ export default async function expenses(tripId) {
   const members = store.membersOf(trip.groupId);
   if (members.length < 1) {
     // 要包在 .page 裡 —— 少了它就沒有底部留白，內容會被底部功能列蓋住
-    render(h('div', { class: 'page' }, h('div', { class: 'empty' },
+    drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' },
       h('p', {}, '先在「旅程設定」加旅伴，才能分帳。'),
       h('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: () => navigate(`/trip/${tripId}/settings`) }, '去旅程設定加旅伴'))));
     return;
@@ -28,7 +27,7 @@ export default async function expenses(tripId) {
   const list = tripExpenses(tripId);
 
   const page = h('div', { class: 'page' });
-  render(page);
+  drawPage(page);
 
   if (!list.length) {
     page.append(
@@ -138,7 +137,7 @@ async function changeBase(tripId, cur) {
   const actions = C.list.map((c) => ({ label: `${c.code}　${c.name}`, value: c.code }));
   actions.push({ label: '取消', value: null });
   const pick = await modal({ title: '用哪個幣別顯示總帳？', actions });
-  if (pick) { await store.patch(tripId, { baseCurrency: pick }); toast('已切換'); expenses(tripId); }
+  if (pick) { await store.patch(tripId, { baseCurrency: pick }); toast('已切換'); refreshPage(); }
 }
 
 // ---------- 記一筆 / 編輯 ----------
@@ -239,7 +238,7 @@ async function openEdit(tripId, existing) {
   });
 
   if (res === 'del') {
-    if (await confirmDialog('刪除這筆花費？', { danger: true, okLabel: '刪除' })) { await deleteExpense(existing.id); toast('已刪除'); expenses(tripId); }
+    if (await confirmDialog('刪除這筆花費？', { danger: true, okLabel: '刪除' })) { await deleteExpense(existing.id); toast('已刪除'); refreshPage(); }
     return;
   }
   if (res !== 'save') return;
@@ -251,7 +250,7 @@ async function openEdit(tripId, existing) {
   }
   await saveExpense({ ...st, id: existing?.id, amount: amt, title: titleEl.value.trim() });
   toast('已記錄');
-  expenses(tripId);
+  refreshPage();
 }
 
 // 分帳頁查名字用的函式（見 expenses() 裡的說明）。

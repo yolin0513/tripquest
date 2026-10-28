@@ -1,7 +1,6 @@
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, avatar, toast, chooseFrom } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { subPhoto } from '../photoimg.js';
 import { ensureMember, activeMemberId } from '../claim.js';
@@ -57,7 +56,7 @@ function arrange(all, view) {
   return { list, spotOf };
 }
 
-export default async function people(tripId) {
+export default async function people(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '照片牆' });
@@ -76,7 +75,7 @@ export default async function people(tripId) {
       class: 'untag-cta',
       onclick: async () => {
         const first = untagged[0];
-        if (await openTagger(tripId, first.id, allSubs)) people(tripId);
+        if (await openTagger(tripId, first.id, allSubs)) refreshPage();
       },
     },
       h('span', { class: 'untag-cta-main' },
@@ -99,7 +98,7 @@ export default async function people(tripId) {
     : (filtered ? `${subs.length}／${allSubs.length} 張` : `${allSubs.length} 張照片`);
 
   if (allSubs.length) {
-    const apply = (patch) => { saveView(tripId, { ...view, ...patch }); people(tripId); };
+    const apply = (patch) => { saveView(tripId, { ...view, ...patch }); refreshPage(); };
 
     const counts = new Map();
     for (const s of allSubs) {
@@ -160,11 +159,11 @@ export default async function people(tripId) {
       h('p', {}, '這個條件下沒有照片'),
       h('button', {
         class: 'btn btn-primary',
-        onclick: () => { saveView(tripId, { ...view, spot: '', untagged: false }); people(tripId); },
+        onclick: () => { saveView(tripId, { ...view, spot: '', untagged: false }); refreshPage(); },
       }, '看全部照片')));
   }
 
-  render(page);
+  drawPage(page);
 
   if (view.mode === 'grid') {
     if (subs.length) page.append(gridView(tripId, t, subs, spotOf, members.length > 1));
@@ -227,9 +226,9 @@ function gridView(tripId, trip, subs, spotOf, multi) {
         class: 'pg-cell pg-wait', dataset: { i: String(i) }, 'aria-label': `第 ${idx + 1} 張照片`,
         onclick: async () => {
           const { changed } = await openViewer(tripId, subs, i, {
-            onTag: async (s) => { if (await openTagger(tripId, s.id, subs)) people(tripId); },
+            onTag: async (s) => { if (await openTagger(tripId, s.id, subs)) refreshPage(); },
           });
-          if (changed) people(tripId);
+          if (changed) refreshPage();
         },
       },
         h('img', { alt: '', hidden: true, draggable: false }),
@@ -271,7 +270,7 @@ async function feedItem(sub, tripId, allSubs, multi) {
     class: 'fi-photo-btn',
     onclick: async () => {
       const { changed } = await openViewer(tripId, allSubs, allSubs.indexOf(sub), {
-        onTag: async (s) => { if (await openTagger(tripId, s.id, allSubs)) people(tripId); },
+        onTag: async (s) => { if (await openTagger(tripId, s.id, allSubs)) refreshPage(); },
       });
       if (changed) redraw();
     },

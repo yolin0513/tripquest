@@ -1,8 +1,7 @@
-import { setTop, render } from '../app.js';
 import { keepOriginals, originalUsage, dropOriginals } from '../photoexport.js';
 import * as store from '../store.js';
 import { h, toast, confirmDialog, promptDialog, modal, fmtBytes } from '../ui.js';
-import { navigate } from '../router.js';
+import { navigate, refreshPage } from '../router.js';
 import { estimate, isPersisted, requestPersist, wipeAll } from '../db.js';
 import { importBundle, importShareCode, joinInvite, parseInviteText } from '../share.js';
 import { getPrefs, setPref, FS_LABELS, THEME_LABELS, systemReducesMotion } from '../prefs.js';
@@ -21,7 +20,7 @@ const HOME_CITIES = [
   { name: '宜蘭', lat: 24.76, lng: 121.75 }, { name: '嘉義', lat: 23.48, lng: 120.45 },
 ];
 
-export default async function settings() {
+export default async function settings({ drawPage, setTop }) {
   setTop({ title: '設定', back: false });
 
   const est = await estimate();
@@ -46,19 +45,19 @@ export default async function settings() {
     } catch (e) { toast('匯入失敗：' + e.message); }
   });
 
-  render(h('div', { class: 'page form' },
+  drawPage(h('div', { class: 'page form' },
     // ---- 看得舒服 ----
     h('div', { class: 'section-label' }, '看得舒服'),
     h('div', { class: 'form-field' },
       h('span', { class: 'form-label' }, '字體大小'),
       h('div', { class: 'seg' }, ...Object.entries(FS_LABELS).map(([k, label]) =>
-        h('button', { class: prefs.fs === k ? 'on' : '', onclick: () => { setPref('fs', k); settings(); } }, label))),
+        h('button', { class: prefs.fs === k ? 'on' : '', onclick: () => { setPref('fs', k); refreshPage(); } }, label))),
     ),
     h('div', { class: 'form-field' },
       h('span', { class: 'form-label' }, '畫面顏色'),
       h('div', { class: 'seg theme-seg' }, ...Object.entries(THEME_LABELS).map(([k, label]) =>
         h('button', { class: (prefs.theme === 'washi' ? 'washi' : 'dark') === k ? 'on' : '', 'data-theme-pick': k,
-          onclick: () => { setPref('theme', k); settings(); } }, label))),
+          onclick: () => { setPref('theme', k); refreshPage(); } }, label))),
       h('div', { class: 'form-hint' }, '深色適合晚上、比較不刺眼；淺色像白紙，白天在戶外比較好看。'),
     ),
     h('label', { class: 'switch-row' },
@@ -88,7 +87,7 @@ export default async function settings() {
       h('span', { style: 'font-weight:700' }, '我的名字'),
       h('button', { class: 'btn btn-soft', onclick: async () => {
         const v = await promptDialog('你的名字', { value: myName() });
-        if (v) { await setMyName(v); toast('已更新'); settings(); }
+        if (v) { await setMyName(v); toast('已更新'); refreshPage(); }
       } }, myName())),
     h('div', { class: 'setting-row' },
       h('div', {}, h('span', { style: 'font-weight:700' }, '居住地'),
@@ -116,7 +115,7 @@ export default async function settings() {
           + '匯出時就能拿到原畫質。代價是佔用空間大約變成 10 倍（一張 3–5MB）。'
           + '原始檔只留在這支手機裡，不會同步給旅伴、也不會進備份檔。'),
         h('div', { class: 'form-hint' }, origLine)),
-      checkbox(prefs.keepOriginal === true, (on) => { setPref('keepOriginal', on); settings(); })),
+      checkbox(prefs.keepOriginal === true, (on) => { setPref('keepOriginal', on); refreshPage(); })),
     orig.count ? h('button', { class: 'btn btn-ghost btn-block', onclick: async () => {
       const ok = await confirmDialog(`要刪掉已經留下來的 ${orig.count} 張原始檔嗎？可以空出 ${fmtBytes(orig.bytes)}。
 
@@ -124,7 +123,7 @@ export default async function settings() {
       if (!ok) return;
       const r = await dropOriginals();
       toast(`已刪掉 ${r.count} 張原始檔，空出 ${fmtBytes(r.freed)}`);
-      settings();
+      refreshPage();
     } }, `刪掉已留的原始檔（${fmtBytes(orig.bytes)}）`) : null,
 
     // ---- 儲存空間 ----
@@ -138,7 +137,7 @@ export default async function settings() {
       !persisted ? h('button', { class: 'btn btn-soft', onclick: async () => {
         const ok = await requestPersist();
         toast(ok ? '好了，資料會被保留' : '系統沒答應，請先把 App 加到主畫面');
-        settings();
+        refreshPage();
       } }, '要求保留資料') : null,
     ),
 
@@ -161,7 +160,7 @@ export default async function settings() {
           toast('同步中…');
           try { const r = await syncNow({ onProgress: (m) => toast(m) }); toast(r.skipped ? '目前是單機模式' : '同步完成'); }
           catch (e) { toast('同步失敗：' + e.message); }
-          settings();
+          refreshPage();
         } }, '🔄 立即同步一次') : null,
       ),
       h('p', { class: 'form-hint' }, '平常不用管它，App 會自己在背景同步。照片只有你們這群人看得到。'),

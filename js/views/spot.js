@@ -7,14 +7,13 @@
 //   · 加任務／改任務 → 「調整每天的行程」的「✏️ 改任務」（有新增、編輯、刪除）
 // 同一件事散在兩三個地方，長輩只會更難找。
 
-import { setTop, render } from '../app.js';
 import * as store from '../store.js';
 import { h, toast, modal, promptDialog, confirmDialog } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { enrichSpot } from '../enrich.js';
 import { spotTimes, stayOptions } from '../spottime.js';
 
-export default async function spot(tripId, spotId) {
+export default async function spot(tripId, spotId, { drawPage, setTop }) {
   const s = store.get(spotId);
   const t = store.get(tripId);
   if (!s || !t) { navigate('/', { replace: true }); return; }
@@ -175,7 +174,7 @@ export default async function spot(tripId, spotId) {
     navigate(`/trip/${tripId}/plan`, { replace: true });
   };
 
-  render(h('div', { class: 'page form compact' },
+  drawPage(h('div', { class: 'page form compact' },
     field('景點名稱', nameField),
     fieldGroup('幾點到', h('div', { class: 'spot-time-row' },
       h('div', { class: 'fs-hm spot-time' }, hourSel, minSel),
