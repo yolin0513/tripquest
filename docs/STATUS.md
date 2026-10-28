@@ -36,6 +36,19 @@ tripdaytest、washitest，及改過的 collapsetest、imgtest、layouttest、scr
 
 **接下來**：① scrolltest A（已修）→ ② 全套第 16～72 支（重負載）→ ③「量了沒斷言」178 處分類（掃描程式附對照組進 repo）。
 
+**全套 72 支第一次全部跑過一輪（8212bc7，一支一支接著跑）：67 綠、5 紅**（workertest 第一次紅、重跑綠＝偶發）。紅的 5 支都單獨重跑過一次、照樣紅：
+imgtest（Wikimedia 回 503）、plantest、settletest、washitest、layouttest。修的順序（Dispatch 核准）：imgtest → settletest → plantest → washitest → layouttest。
+- **imgtest（已修）**：Wikimedia 的回應改成回放 `scripts/fixtures/wiki/imgtest.json`（23 筆，2026-10-28 錄；圖片不存、回放合成 JPEG），
+  打真網路的版本是 `npm run imgtest:live`、不在鏈上；重錄 `node scripts/imgtest.mjs --record`（有斷言失敗就不寫檔）。沒錄到的請求會被點名、算紅。
+  `tools/mutations/mut_wikireplay.json` 3/3：格式變了（imageinfo 改名、query.pages 改名）與樣本少一筆都會紅——回放版不是永遠通過的測試。
+
+**🔴 今天的 bug 有 5 件來自兩個標著「未驗」的 commit：`735aa97` 4 件（itinviewtest、densitytest、plantest、washitest）、`8cb4f48` 1 件（settletest）。**
+不是巧合：權限被擋住的那段期間，驗不了的東西照樣進了倉庫；今天權限通了，那筆帳正在一次付清。**標著未驗的程式 commit（2026-10-27，11 個）**：
+`735aa97` 行程頁第 1 輪＋和紙主題、`6aa0761` 和紙收尾＋離線清單、`085cfae` 原創圖形、`ef11f53` 海報主題章與 AI 文案、`336344b` mutate 的 cmd 限制、
+`10ecb51` 行程頁標題列不印猜的類別、`10bcf23` 猜類別的母體登記、`0434f9c` 待驗清單 D1／D2、`8cb4f48` trustedTheme、`0a6288a` 海報不印類別、`4dfb22d` 海報 P1 版型。
+今天全套跑過一輪之後，它們帶進來的測試都至少跑過一次；**但「測試跑過」不等於「這個 commit 驗完」**——測試本身也是同一批沒驗過的東西寫的（今天三支測試裡有假斷言）。
+另有 `38d6c15`（2026-10-04 暫停時「程式已 commit 未驗未推」）要回頭確認是否已在之後被驗過。
+
 ### 🔴🔴🔴 2026-10-27 收工（Yolin 要重開機、更新 Claude）——**全套沒跑完；重開機後第一件事是重跑**
 
 **今天的主線（先讀這段）**：從「海報的主題章印了猜出來的類別」一路查到——**所有存著的 `spot.theme` 都是照名字猜的、建立時現在還在猜；

@@ -3,14 +3,27 @@
 // 舊做法其實一張都沒抓成功過：REST summary 的縮圖網址改尺寸會 400、回 HTML 錯誤頁，
 // storeImage 只好丟掉，畫面就一片空白。這支測試把「真的抓到圖」變成會被擋下來的事。
 // 涵蓋率的完整數字用 npm run imgcoverage（會打 300 多次 Wikimedia，比較慢）。
+//
+// 2026-10-28 起不打真網路（共用慣例 §5.6）：Wikimedia 的回應照 scripts/fixtures/wiki/imgtest.json 回放
+// （那天 Wikimedia 回 503，整套被這支擋下兩次）。要打真的：npm run imgtest:live；
+// 重錄樣本：node scripts/imgtest.mjs --record（打真網路、把 API 回應寫回樣本檔）。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { wikiMode, loadFixture, installWiki, saveFixture } from './wikireplay.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const MODE = wikiMode();
+const FIXTURE = path.join(ROOT, 'scripts/fixtures/wiki/imgtest.json');
+const fixture = MODE === 'replay' ? loadFixture(FIXTURE) : null;
+const saved = {};
+const wires = new Map();          // 每一頁的攔截器狀態（offline、calls、blocked、misses）
+let fake = null;                  // 回放時給圖片請求的合成 JPEG
+const wire = async (pg) => { const w = await installWiki(pg, { mode: MODE, fixture, fake, saved }); wires.set(pg, w); return w; };
+console.log(`Wikimedia：${MODE === 'replay' ? `回放樣本（${Object.keys(fixture.responses).length} 筆，錄於 ${fixture.recorded}）` : MODE === 'record' ? '打真網路並錄樣本' : '打真網路'}`);
 const WEB = 5205;
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
 await sleep(1400);
@@ -24,6 +37,16 @@ await page.setViewport({ width: 390, height: 780 });
 page.on('pageerror', (e) => { console.log('  [pageerror]', e.message); process.exitCode = 1; });
 await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
 await page.waitForSelector('.hero');
+// 合成的 JPEG：雜訊讓它壓不小（測試要求 > 5000 bytes 才算「真的存了一張圖」）
+fake = Buffer.from(await page.evaluate(async () => {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+  const g = c.getContext('2d'); const d = g.createImageData(320, 240);
+  for (let i = 0; i < d.data.length; i += 4) { d.data[i] = (i * 7) % 251; d.data[i + 1] = (i * 13) % 241; d.data[i + 2] = (i * 3) % 239; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0);
+  const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+  return btoa(String.fromCharCode(...new Uint8Array(await b.arrayBuffer())));
+}), 'base64');
+const W = await wire(page);
 
 try {
   // ---------- 建一趟：一個查得到的景點、一個查不到的、一個美食任務 ----------
@@ -182,12 +205,8 @@ try {
   void before;
 
   // ---------- 連不到 Wikimedia 時圖還在（＝真的存本機，不是每次現抓）----------
-  await page.setRequestInterception(true);
-  const blocked = [];
-  page.on('request', (r) => {
-    if (/wikipedia\.org|wikimedia\.org/.test(r.url())) { blocked.push(r.url()); r.abort().catch(() => {}); }
-    else r.continue().catch(() => {});
-  });
+  W.offline = true; W.blocked = [];
+  const blocked = W.blocked;
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.qline');
@@ -196,7 +215,7 @@ try {
     const ph = [...document.querySelectorAll('.qline-thumb')];
     return { cards: ph.length, withBg: ph.filter((p) => p.style.backgroundImage).length };
   });
-  await page.setRequestInterception(false);
+  W.offline = false;
   if (offline.cards > 0 && offline.withBg === offline.cards) ok(`完全連不到 Wikimedia 時，${offline.cards} 張卡片的圖照樣顯示（擋掉 ${blocked.length} 個請求）`);
   else fail(`連不到 Wikimedia 時圖不見了：${offline.withBg}/${offline.cards}`);
 
@@ -206,6 +225,7 @@ try {
     const pg = await ctx.newPage();
     await pg.setViewport({ width: 390, height: 780 });
     pg.on('pageerror', (e) => { console.log('  [pageerror]', e.message); process.exitCode = 1; });
+    await wire(pg);
     await pg.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
     await pg.waitForSelector('.hero');
     return pg;
@@ -258,12 +278,8 @@ try {
   // ---------- 連不到 Wikimedia 時，不可以把景點永久標成「沒有圖」 ----------
   const N = await dev();
   const netTid = await seedOld(N);
-  await N.setRequestInterception(true);
-  const onReq = (r) => {
-    if (/wikipedia\.org|wikimedia\.org/.test(r.url())) r.abort().catch(() => {});
-    else r.continue().catch(() => {});
-  };
-  N.on('request', onReq);
+  const wN = wires.get(N);
+  wN.offline = true;
   await openTrip(N, netTid, 8000);
   const cut = await spotState(N, netTid);
   if (cut.every((x) => !x.hero && x.v === 0 && !x.noHero)) ok('連不到 Wikimedia 時：不留任何標記，之後才有機會重補');
@@ -276,8 +292,7 @@ try {
   else fail(`斷網時有空白卡片：${cutUI.withBg}/${cutUI.cards}`);
 
   // 網路恢復 → 重開行程頁就補回來
-  N.off('request', onReq);
-  await N.setRequestInterception(false);
+  wN.offline = false;
   await openTrip(N, netTid);
   const healed = await spotState(N, netTid);
   if (healed.every((x) => x.hero)) ok('網路恢復後再打開行程頁：圖自動補上');
@@ -294,13 +309,10 @@ try {
   // ---------- 關掉「景點示意圖」開關就不抓 ----------
   const F2 = await dev();
   const offTid = await seedOld(F2, { allowWiki: false });
-  await F2.setRequestInterception(true);
-  let wikiCalls = 0;
-  F2.on('request', (r) => {
-    if (/wikipedia\.org|wikimedia\.org/.test(r.url())) wikiCalls++;
-    r.continue().catch(() => {});
-  });
+  const wF = wires.get(F2);
+  wF.calls = 0;
   await openTrip(F2, offTid, 6000);
+  const wikiCalls = wF.calls;
   if (wikiCalls === 0) ok('行程設定關掉「景點示意圖」就完全不對外連線');
   else fail(`關掉了還打了 ${wikiCalls} 次`);
 
@@ -341,6 +353,18 @@ try {
   const wrong = vol.filter((x) => /volcan|eyjafjal|ash|steak|buddha/i.test(x.url));
   if (!wrong.length) ok(`店名含真實條目關鍵字時不會亂配圖（${vol.map((x) => x.name + (x.url ? '有圖' : '無圖')).join('、')}）`);
   else fail('抓到不相干的圖：' + JSON.stringify(wrong));
+
+  // 回放：每一個打出去的 Wikimedia 請求都要有錄好的回應——沒錄到的被擋掉，會讓上面某條假紅或假綠，所以點名
+  const misses = [...wires.values()].flatMap((w) => w.misses);
+  const calls = [...wires.values()].reduce((a, w) => a + w.calls, 0);
+  if (MODE === 'replay') {
+    if (calls > 0 && misses.length === 0) ok(`Wikimedia 請求全部由樣本回答（${calls} 個請求、樣本 ${Object.keys(fixture.responses).length} 筆、0 個沒錄到）`);
+    else fail(`有 ${misses.length} 個 Wikimedia 請求樣本裡沒有（共 ${calls} 個）——重錄：node scripts/imgtest.mjs --record\n   ${misses.slice(0, 5).join('\n   ')}`);
+  }
+  if (MODE === 'record') {
+    if (process.exitCode) fail('有斷言失敗——不寫樣本檔（不要把一份壞掉的回應錄成標準答案）');
+    else ok(`錄好樣本：${saveFixture(FIXTURE, saved)} 筆 → scripts/fixtures/wiki/imgtest.json`);
+  }
 
   console.log('\n示意圖測試結束');
 } catch (e) {

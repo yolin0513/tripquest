@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Wikimedia 格式變了：imageinfo 改名",
+    "why": "回放的樣本不能變成永遠通過：Wikimedia 把圖片資訊的欄位改名時，App 讀不到圖與出處，imgtest 要紅。預期紅「景點沒抓到示意圖」「缺出處資訊」那幾條。（2026-10-28 事後更正：圖照樣從另一條路抓到，紅的是「缺出處資訊」「維基圖沒有標出處」「美食任務沒圖」與「樣本裡沒有」——讀不到 imageinfo 就沒有作者與授權）",
+    "file": "scripts/wikireplay.mjs",
+    "find": "body: hit.body, headers",
+    "replace": "body: hit.body.replaceAll('\"imageinfo\"', '\"imageInfo\"'), headers",
+    "cmd": "node scripts/imgtest.mjs",
+    "done": "^示意圖測試結束"
+  },
+  {
+    "name": "Wikimedia 格式變了：query.pages 改名",
+    "why": "查詢結果的外層結構改了（pages → page），App 什麼都讀不到。預期紅「沒抓到介紹句」「景點沒抓到示意圖」那幾條。",
+    "file": "scripts/wikireplay.mjs",
+    "find": "body: hit.body, headers",
+    "replace": "body: hit.body.replaceAll('\"pages\"', '\"page\"'), headers",
+    "cmd": "node scripts/imgtest.mjs",
+    "done": "^示意圖測試結束"
+  },
+  {
+    "name": "樣本少了一筆（章魚燒的搜尋）",
+    "why": "樣本沒錄到的請求要被點名，不能靜靜擋掉。預期紅「Wikimedia 請求全部由樣本回答」（另有「美食任務沒圖」）。",
+    "file": "scripts/fixtures/wiki/imgtest.json",
+    "find": "gsrsearch=%E7%AB%A0%E9%AD%9A%E7%87%92+filetype",
+    "replace": "gsrsearch=REMOVED+filetype",
+    "cmd": "node scripts/imgtest.mjs",
+    "done": "^示意圖測試結束"
+  }
+]

@@ -31,6 +31,7 @@
     "themetrusttest": "node scripts/themetrusttest.mjs",
     "posterlayouttest": "node scripts/posterlayouttest.mjs",
     "imgtest": "node scripts/imgtest.mjs",
+    "imgtest:live": "node scripts/imgtest.mjs --live",
     "imgcoverage": "node scripts/imgcoverage.mjs",
     "imgsample": "node scripts/imgsample.mjs",
     "test": "node scripts/run-affected.mjs --all",
