@@ -1,9 +1,9 @@
 [
   {
     "name": "mutlint：find 次數不對不再記成死掉",
-    "why": "2026-10-28 新加的第 3 件檢查被關掉時，清單上的死突變又會無聲無息。預期 mutlint 紅在「對照組沒過」（find 找不到、find 不只一處、edits 裡第二處找不到 三種對照組判 false），回 4。",
+    "why": "2026-10-28 新加的第 3 件檢查被關掉時，清單上的死突變又會無聲無息。預期 mutlint 紅在「對照組沒過」（find 找不到、find 不只一處、edits 裡第二處找不到 三種對照組判 false），回 4。（同日加量尺時這一行改寫過，find 跟著改——改的當下 mutlint 自己就把這條點名成死掉）",
     "file": "scripts/mutlint.mjs",
-    "find": "        else if (n !== 1) dead.push(`${f}｜${m.name}：find 在 ${m.file} 出現 ${n} 次`);",
+    "find": "        else if (n !== 1) { dead.push(`${f}｜${m.name}：find 在 ${m.file} 出現 ${n} 次`); alive = false; }",
     "replace": "        else void n;",
     "cmd": "node scripts/mutlint.mjs",
     "done": "^mutlint 結束：回 \\d+"
@@ -12,8 +12,35 @@
     "name": "mutlint：一處 find 都沒查（整段跳過）",
     "why": "母體變空、死掉 0 處——「沒查」長得跟「全活著」一樣。預期 mutlint 紅在「對照組沒過」（齊全那一種要求 find 查了 1 處），回 4。",
     "file": "scripts/mutlint.mjs",
-    "find": "    if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) { patchFormat++; continue; }",
-    "replace": "    if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) { patchFormat++; continue; }\n    continue;",
+    "find": "      if (refs.has(f)) oldCommit++; else orphan++;\n      continue;\n    }",
+    "replace": "      if (refs.has(f)) oldCommit++; else orphan++;\n      continue;\n    }\n    continue;",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  },
+  {
+    "name": "量尺：沒有腳本會套的（③）被算成守現行程式（①）",
+    "why": "Dispatch 指定的那一向：91 份不會再被執行的補丁混進「守現行程式」，總數看起來比實際大。預期 mutlint 紅在「對照組沒過」（量尺：偽裝成①的③歸③＝false），回 4。",
+    "file": "scripts/mutlint.mjs",
+    "find": "      if (refs.has(f)) oldCommit++; else orphan++;",
+    "replace": "      if (refs.has(f)) oldCommit++; else live++;",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  },
+  {
+    "name": "量尺：守推送閘的不再另計",
+    "why": "推送閘只有幾條突變在守這件事會被大數字蓋掉。預期 mutlint 紅在「對照組沒過」（量尺：真的①不被踢出、推送閘那條有算＝false），回 4。",
+    "file": "scripts/mutlint.mjs",
+    "find": "      if (alive) { live++; if (GATE_FILES.includes(m.file)) liveGate++; } else deadMut++;",
+    "replace": "      if (alive) { live++; } else deadMut++;",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  },
+  {
+    "name": "量尺：真的 ① 被踢出去",
+    "why": "另一向：活著的突變沒算進 ①。預期 mutlint 紅在「對照組沒過」（量尺：真的①不被踢出＝false），回 4。",
+    "file": "scripts/mutlint.mjs",
+    "find": "      if (alive) { live++; if (GATE_FILES.includes(m.file)) liveGate++; } else deadMut++;",
+    "replace": "      if (alive) { if (GATE_FILES.includes(m.file)) liveGate++; } else deadMut++;",
     "cmd": "node scripts/mutlint.mjs",
     "done": "^mutlint 結束：回 \\d+"
   }

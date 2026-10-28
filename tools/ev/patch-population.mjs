@@ -11,7 +11,13 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
-const DRIVERS = ['six_mut.sh', 'f9_mut.sh', 'f9_mut2.sh', 'f10_mut.sh', 'di_mut.sh', 'last_mut.sh'];
+// 匯出給 scripts/mutlint.mjs 的量尺用（2026-10-28）：「哪幾份補丁有驅動會套」只在這裡算一次，不另寫一份會漂移的副本
+export const DRIVERS = ['six_mut.sh', 'f9_mut.sh', 'f9_mut2.sh', 'f10_mut.sh', 'di_mut.sh', 'last_mut.sh'];
+export const driverRefs = () => {
+  const used = new Set();
+  for (const d of DRIVERS) referenced(fs.readFileSync(path.join(HERE, d), 'utf8')).forEach((x) => used.add(x));
+  return used;
+};
 
 export function referenced(text) {
   const out = new Set();
@@ -31,6 +37,10 @@ function generated() {
   return out;
 }
 
+const isMain = path.resolve(process.argv[1] || '').toLowerCase() === fileURLToPath(import.meta.url).toLowerCase();
+if (isMain) main();
+
+function main() {
 // 對照組：for 迴圈展開
 const ctl = referenced('for k in a b; do run "x-$k" "$P" $SP=pzz_$k.json; done\nrun y "$P" $SP=pyy_one.json');
 if ([...ctl].sort().join() !== 'pyy_one.json,pzz_a.json,pzz_b.json') { console.log('✗ 對照組沒過（迴圈展開）'); process.exit(4); }
@@ -59,3 +69,4 @@ if (process.argv.includes('--applied')) {
   bad = bad || notApplied.length > 0 || extra.length > 0 || applied.size !== used.size;
 }
 process.exitCode = bad ? 1 : 0;
+}

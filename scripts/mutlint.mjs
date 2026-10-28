@@ -11,7 +11,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { lintMutations } from './mutate.mjs';
+import { driverRefs } from '../tools/ev/patch-population.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const DIR = path.join(ROOT, 'tools', 'mutations');
@@ -38,11 +40,20 @@ function findCount(root, m, e) {
   return text.split(e.find).length - 1;
 }
 
-export function scanDir(d, notMutations = NOT_MUTATIONS, root = ROOT) {
+// 4.（2026-10-28，Dispatch）量尺：每次都印出三類，**第 3 類不計入任何突變總數**——
+//    ① 守現行程式：mutate.mjs 格式、每處 find 在現在的檔裡剛好一處（mutate 跑得起來的）；另印其中守推送閘的幾條
+//    ② 只能套在舊 commit：補丁格式、tools/ev 的驅動會套（套在驅動釘住的舊 commit 上，是歷史證據、不守現行程式）
+//    ③ 沒有任何腳本會套：補丁格式、沒有驅動引用——不會再被執行
+//    「有沒有驅動會套」由 tools/ev/patch-population.mjs 的 driverRefs() 算（同一份判準，不另寫副本）。
+//    當天查到：③ 有 91 份，原本跟 ① 混在同一個「母體 N 條」裡，輸出上分不出來。
+export const GATE_FILES = ['scripts/safe-push.sh', 'scripts/prepush-scan.mjs', 'scripts/pushgatetest.mjs', 'scripts/verified-reg.mjs'];
+
+export function scanDir(d, notMutations = NOT_MUTATIONS, root = ROOT, refs = driverRefs()) {
   const files = fs.readdirSync(d).filter((f) => f.endsWith('.json')).sort();
   const others = fs.readdirSync(d).filter((f) => !f.endsWith('.json'));
   const problems = [];
   let pop = 0, checked = 0, unrecognized = 0, findChecked = 0, patchFormat = 0;
+  let live = 0, liveGate = 0, oldCommit = 0, orphan = 0, deadMut = 0;
   const bad = [], used = [], known = [], dead = [];
   for (const f of files) {
     if (notMutations.includes(f)) { known.push(f); continue; }
@@ -56,27 +67,45 @@ export function scanDir(d, notMutations = NOT_MUTATIONS, root = ROOT) {
     const r = lintMutations(ms);
     checked += r.checked;
     for (const n of r.bad) bad.push(`${f}：${n}`);
-    if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) { patchFormat++; continue; }
+    if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) {
+      patchFormat++;
+      if (refs.has(f)) oldCommit++; else orphan++;
+      continue;
+    }
     for (const m of ms) {
-      if (typeof m.file !== 'string' || !m.file) { dead.push(`${f}｜${m.name}：沒寫 file`); continue; }
+      if (typeof m.file !== 'string' || !m.file) { dead.push(`${f}｜${m.name}：沒寫 file`); deadMut++; continue; }
+      let alive = true;
       for (const e of (m.edits || [{ find: m.find }])) {
         findChecked++;
         const n = findCount(root, m, e);
-        if (n === null) dead.push(`${f}｜${m.name}：讀不到 ${m.file}`);
-        else if (n !== 1) dead.push(`${f}｜${m.name}：find 在 ${m.file} 出現 ${n} 次`);
+        if (n === null) { dead.push(`${f}｜${m.name}：讀不到 ${m.file}`); alive = false; }
+        else if (n !== 1) { dead.push(`${f}｜${m.name}：find 在 ${m.file} 出現 ${n} 次`); alive = false; }
       }
+      if (alive) { live++; if (GATE_FILES.includes(m.file)) liveGate++; } else deadMut++;
     }
   }
   for (const f of others) problems.push(`${f}（不是 JSON，放錯地方）`);
   for (const f of notMutations) if (!files.includes(f)) problems.push(`${f}（登記成非突變檔，但目錄裡沒有——登記過期）`);
   if (checked !== pop) problems.push(`檢查 ${checked} 條，不等於母體 ${pop} 條`);
   if (used.length + known.length + unrecognized !== files.length) problems.push(`分類加總 ${used.length + known.length + unrecognized} 份，不等於 JSON 總數 ${files.length} 份`);
-  return { files: files.length, used: used.length, known: known.length, unrecognized, pop, checked, bad, problems, findChecked, patchFormat, dead };
+  // 對帳：各類是逐條數出來的，加總要等於另一個來源數出來的條數（母體 pop 是 asMutations 的長度，補丁份數是另一個計數器）。
+  // mutate 格式死掉的不在 ① ② ③，另計 deadMut。
+  const mutateFmt = pop - patchFormat;
+  if (live + deadMut !== mutateFmt || oldCommit + orphan !== patchFormat) {
+    problems.push(`量尺分類對不上：① ${live}＋死掉 ${deadMut}，mutate 格式 ${mutateFmt}；② ${oldCommit}＋③ ${orphan}，補丁 ${patchFormat}`);
+  }
+  return { files: files.length, used: used.length, known: known.length, unrecognized, pop, checked, bad, problems, findChecked, patchFormat, dead, live, liveGate, oldCommit, orphan, mutateFmt, deadMut };
 }
 
-export const describeScan = (label, r) => `${label}：JSON ${r.files} 份＝突變 ${r.used}＋登記的非突變 ${r.known}＋認不出 ${r.unrecognized}；`
-  + `母體 ${r.pop} 條、檢查 ${r.checked} 條、只改空白或行尾 ${r.bad.length} 條${r.bad.length ? '（' + r.bad.join('；') + '）' : ''}；`
-  + `find 查了 ${r.findChecked} 處、其中找不到或不只一處 ${r.dead.length} 處（補丁格式 ${r.patchFormat} 份不適用：套在指定的舊 commit 上）`
+// 量尺（給人看的那一行）：每個數字都寫分母；不知道的寫「未知」，不省略
+export const describeGauge = (r) => `量尺：① 守現行程式 ${r.live} 條（mutate 格式 ${r.mutateFmt} 條中；find 死掉 ${r.deadMut} 條），`
+  + `其中守推送閘 ${r.liveGate} 條——推送閘擋法總數：未知（沒有清單，${r.liveGate} 條夠不夠無從判斷）；`
+  + `② 只能套在舊 commit ${r.oldCommit} 份（補丁格式 ${r.patchFormat} 份中；歷史證據，不守現行程式）；`
+  + `③ 沒有任何腳本會套 ${r.orphan} 份（補丁格式 ${r.patchFormat} 份中；不計入任何突變總數）`;
+
+export const describeScan = (label, r) => `${label}：JSON ${r.files} 份＝突變清單 ${r.used}＋登記的非突變 ${r.known}＋認不出 ${r.unrecognized}；`
+  + `格式檢查 ${r.checked}／${r.pop} 條（含 ③，這不是突變總數）、只改空白或行尾 ${r.bad.length} 條${r.bad.length ? '（' + r.bad.join('；') + '）' : ''}；`
+  + `find 查了 ${r.findChecked} 處、其中找不到或不只一處 ${r.dead.length} 處（補丁格式 ${r.patchFormat} 份不查 find：沒有「現在的檔」可比，分類見量尺）`
   + `${r.problems.length ? '；問題：' + r.problems.join('；') : ''}`;
 
 // 對照組：判斷本身，加上四種母體情境（齊全、漏一筆、讀不懂、登記過期），比對的是「點名的那一句」
@@ -119,21 +148,60 @@ export function controls(tmp, log = console.log) {
   ];
   for (const [label, files, notM, ok] of cases) {
     mk(files);
-    const r = scanDir(tmp, notM, srcRoot);
+    const r = scanDir(tmp, notM, srcRoot, new Set());
     results[label] = ok(r) && (label !== '齊全' || (r.dead.length === 0 && r.findChecked === 1 && r.patchFormat === 1));
     log(describeScan(`對照組（${label}）`, r) + `＝${results[label]}`);
   }
   for (const [label, xjs, ok] of deadCases) {
     if (ok) { mk(BASE, xjs); }
     else mk({ ...BASE, 'a_mut.json': [{ name: 'a', file: 'x.js', edits: [{ find: 'a', replace: 'b' }, { find: '不存在的一段', replace: 'z' }] }] }, xjs);
-    const r = scanDir(tmp, ['d1_out.json'], srcRoot);
+    const r = scanDir(tmp, ['d1_out.json'], srcRoot, new Set());
     results[label] = ok ? ok(r) : (r.dead.length === 1 && /^a_mut\.json｜a：find 在 x\.js 出現 0 次$/.test(r.dead[0]) && r.findChecked === 2);
     log(describeScan(`對照組（${label}）`, r) + `＝${results[label]}`);
+  }
+  // 量尺的雙向對照：
+  //   偽裝成 ① 的 ③：補丁格式、from 剛好在現在的 x.js 裡一處（看起來活著）、沒有驅動引用 → 必須歸 ③，不得歸 ①
+  //   真的 ①：mutate 格式、find 活著 → 必須歸 ①，不得被踢出去；守推送閘的那條要算進「其中守推送閘」
+  //   ②：有驅動引用的補丁 → 歸 ②
+  {
+    mk({
+      'a_mut.json': [{ name: 'a', file: 'x.js', find: 'a', replace: 'b' }],
+      'g_mut.json': [{ name: 'g', file: 'scripts/safe-push.sh', find: 'set -eo pipefail', replace: 'set -e' }],
+      'old_mut.json': [{ from: 'const', to: 'let' }],
+      'fake_mut.json': [{ from: 'a', to: 'b' }],
+    });
+    fs.mkdirSync(path.join(srcRoot, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(srcRoot, 'scripts', 'safe-push.sh'), 'set -eo pipefail\n');
+    const r = scanDir(tmp, [], srcRoot, new Set(['old_mut.json']));
+    results['量尺：偽裝成①的③歸③'] = r.orphan === 1 && r.live === 2;
+    results['量尺：真的①不被踢出、推送閘那條有算'] = r.live === 2 && r.liveGate === 1 && r.deadMut === 0;
+    results['量尺：有驅動引用的歸②'] = r.oldCommit === 1 && r.problems.length === 0;
+    log(describeGauge(r) + `＝${results['量尺：偽裝成①的③歸③']}／${results['量尺：真的①不被踢出、推送閘那條有算']}／${results['量尺：有驅動引用的歸②']}`);
   }
   fs.rmSync(tmp, { recursive: true, force: true });
   fs.rmSync(srcRoot, { recursive: true, force: true });
   log(`對照組：${Object.entries(results).map(([k, v]) => `${k}＝${v}`).join('、')}`);
   return Object.values(results).every(Boolean);
+}
+
+// 時限安全邊際：只印、不判紅（耗時來源在 .logs/、不入庫，換一台機器就不一樣）。
+// 數字由 tools/timeout-margin.mjs 算（逾時 ÷ 跑過最長的一次；不另寫一份）；突變清單裡寫了 timeoutBasis 的，照抄它的依據。
+function timeoutMargin() {
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'timeout-margin.mjs')], { encoding: 'utf8' });
+  const out = r.stdout || '';
+  const low = (out.match(/^不到 3 倍：(\d+) 列$/m) || [])[1];
+  const unk = (out.match(/^沒量過（不猜）：(.*)$/m) || [])[1];
+  const unkN = unk ? unk.split('、').filter((s) => /）$/.test(s)).length : null;
+  const basis = [];
+  for (const f of fs.readdirSync(DIR).filter((x) => x.endsWith('.json'))) {
+    let j; try { j = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')); } catch { continue; }
+    const seen = new Set();
+    for (const m of Array.isArray(j) ? j : []) if (m && typeof m.timeoutBasis === 'string' && !seen.has(m.timeoutBasis)) { seen.add(m.timeoutBasis); basis.push(`${f}：${m.timeoutBasis}`); }
+  }
+  // timeout-margin.mjs 有「不到 3 倍」時回 1、對照組沒過回 4——只有讀得到那一行、而且不是 4 才採用
+  if (r.status === 4 || low == null) return `時限安全邊際：未知（tools/timeout-margin.mjs 回 ${r.status}、讀不到「不到 3 倍」那一行）`;
+  return `時限安全邊際（逾時 ÷ 跑過最長一次，tools/timeout-margin.mjs）：不到 3 倍 ${low} 列；沒量過 ${unkN ?? '未知'} 項＝未知`
+    + (basis.length ? `；有寫依據的時限：${basis.join('；')}` : '');
 }
 
 function main() {
@@ -143,6 +211,8 @@ function main() {
   console.log(describeScan(path.relative(ROOT, DIR).split(path.sep).join('/'), r));
   if (!r.files || !r.pop) { console.log('✗ 母體是空的'); return 4; }
   if (!r.findChecked) { console.log('✗ 一處 find 都沒查到——母體是空的不是「沒有死掉的突變」'); return 4; }
+  console.log(describeGauge(r));
+  console.log(timeoutMargin());
   for (const x of r.dead) console.log(`  ✗ 死掉的突變：${x}`);
   if (r.problems.length || r.bad.length || r.dead.length) { console.log('✗ 有問題——非 0 結束'); return 1; }
   console.log('通過');
