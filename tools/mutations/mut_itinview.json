@@ -146,10 +146,19 @@
   },
   {
     "name": "自動捲動：沒把日期列算進去",
-    "why": "捲完那一站被黏住的日期列蓋住。預期紅 scrolltest A 的「在日期列下面」。",
+    "why": "捲完那一站被黏住的日期列蓋住。預期紅 scrolltest A 的「在日期列下面」。（2026-10-28 事後更正：時間軸改窄之後 App 捲的是天的標題，實際紅的是新加的「天的標題列沒被日期列蓋住」）",
     "file": "js/views/trip.js",
     "find": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60) + (stripEl ? stripEl.offsetHeight : 0);",
     "replace": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60);",
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
+  },
+  {
+    "name": "scrolltest 前置：現在這一站改回最後一站",
+    "why": "最後一站會被文件底卡住，停的位置由頁面長度決定，上面那條突變就驗不到。預期只紅 scrolltest A 的「前置：捲動沒有被文件底卡住」。",
+    "file": "scripts/scrolltest.mjs",
+    "find": "    const pick = secs.find((x) => x.getBoundingClientRect().top + window.scrollY > window.innerHeight + 40) || secs[secs.length - 1];",
+    "replace": "    const pick = secs[secs.length - 1];",
     "cmd": "node scripts/scrolltest.mjs",
     "done": "^折疊與自動捲動測試結束"
   },

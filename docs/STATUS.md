@@ -29,9 +29,12 @@ tripdaytest、washitest，及改過的 collapsetest、imgtest、layouttest、scr
 **2 條自動捲動突變：一直都是紅的，是判「跑完了沒」的那一層從沒判對過。** scrolltest 不印總結行、清單沒寫 `done`，所以每次都記成「沒有結果」
 （安全的方向，所以沒人發現）。昨天推給負載是錯的，撤回。已加 `done`；mutate 沒有結果時會印子程序最後 8 行、全文存 `.logs/`（2f40e29，突變證明過）。
 - **「照日期找」那條：紅了。「沒把日期列算進去」那條：在新的時間軸版面下沒紅**（舊 CSS 下紅）——推論：版面變矮之後，捲到「那一天的標題」時那一站已經看得到，
-  scrolltest A 只驗那一站、不驗天的標題有沒有被日期列蓋住，突變的效果沒被量到。**這條防線因為這次的版面改動失效了，待修（等核准）。**
+  scrolltest A 只驗那一站、不驗天的標題有沒有被日期列蓋住，突變的效果沒被量到。**這條防線因為這次的版面改動失效了。**
+- **已修（實測）**：真正的原因比上面的推論多一層——頁面變矮後「最後一站」捲動被文件底卡住（scrollY 停在最大值 1270），
+  停的位置由頁面長度決定、剛好等於正確答案。改成：現在這一站挑「第一個在畫面外的站」；加前置「捲動沒有被文件底卡住」；
+  加「天的標題列沒被日期列蓋住」（App 捲到天的標題時，被蓋的是天的標題）。自動捲動兩條 2/2 紅；前置那條另配一條突變，1/1 只紅前置。
 
-**接下來**：① scrolltest A 那條的修法（等核准）→ ② 全套第 16～72 支（重負載）→ ③「量了沒斷言」178 處分類（掃描程式附對照組進 repo）。
+**接下來**：① scrolltest A（已修）→ ② 全套第 16～72 支（重負載）→ ③「量了沒斷言」178 處分類（掃描程式附對照組進 repo）。
 
 ### 🔴🔴🔴 2026-10-27 收工（Yolin 要重開機、更新 Claude）——**全套沒跑完；重開機後第一件事是重跑**
 
@@ -1473,6 +1476,11 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 ## 測試
 
+- **🔴 驗證通則（Dispatch 2026-10-28）：改完版面（CSS、DOM 結構、會改變頁面長短或元素位置的東西），重跑相關的突變，確認它們還會紅。**
+  修一個 bug 可能同時弄掉一道防線，而且是靜悄悄的：測試全綠、突變清單也在，只是那一條再也紅不起來。
+  實例：densitytest 那次把時間軸改窄，頁面變矮，scrolltest A 的「現在這一站」（最後一站）捲動時被文件底卡住，停的位置剛好跟正確答案一樣，
+  「沒把日期列算進去」那條突變就不紅了（2094347）。**診斷法**：把版面暫時改回舊版再跑那條突變——舊版紅、新版不紅，就證明突變本身沒壞，是防線的涵蓋範圍變了。
+  修法是補前置斷言，讓「情境沒成立」自己會紅（這次加的是「捲動沒有被文件底卡住」，並配一條只紅它的突變）。
 - `npm test` 是完整的鏈 **72 支**（定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到

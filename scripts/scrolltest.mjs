@@ -180,11 +180,15 @@ try {
     ok(`只展開今天第一個未完成的景點（${openNames[0]}），其他收合`);
   } else fail('景點展開狀態不對：' + JSON.stringify(a.spots));
 
-  // ②：現在這一站指定成今天的最後一站（第 6 站），一開頁一定在畫面外 → 要捲到看得到它
+  // ②：現在這一站指定成今天「第一個在畫面外的站」→ 要捲到看得到它。
+  // 不用最後一站：2026-10-28 時間軸改窄、頁面變矮之後，最後一站捲不到日期列下面（被文件底卡住，
+  // scrollY 停在最大值），停的位置剛好跟正確答案一樣，「沒把日期列算進去」那條突變就紅不起來了。
   await A.page.evaluate(async (t) => {
     const s = await import('./js/store.js');
-    const last = s.spotsOf(t).filter((x) => x.day === 2).sort((x, y) => x.order - y.order).pop();
-    await s.setHereSpot(t, last.id, null);
+    const ids = new Set(s.spotsOf(t).filter((x) => x.day === 2).map((x) => x.id));
+    const secs = [...document.querySelectorAll('.daycollapse.open .qcollapse')].filter((x) => ids.has(x.dataset.spot));
+    const pick = secs.find((x) => x.getBoundingClientRect().top + window.scrollY > window.innerHeight + 40) || secs[secs.length - 1];
+    await s.setHereSpot(t, pick.dataset.spot, null);
   }, tidA);
   await openTrip(A.page, tidA);
   const pos = await A.page.evaluate(() => {
@@ -193,18 +197,29 @@ try {
     const stripB = document.querySelector('.daystrip').getBoundingClientRect().bottom;
     const tabH = document.getElementById('tabbar').offsetHeight;
     const r = head ? head.getBoundingClientRect() : null;
+    const dh = document.querySelector('.daycollapse.open .dc-head');
+    const d = dh ? dh.getBoundingClientRect() : null;
     return { has: !!head, top: r ? Math.round(r.top) : null, bottom: r ? Math.round(r.bottom) : null,
+      dayTop: d ? Math.round(d.top) : null, dayBottom: d ? Math.round(d.bottom) : null,
+      topbarH: document.getElementById('topbar').offsetHeight,
+      maxY: Math.round(document.documentElement.scrollHeight - window.innerHeight),
       docTop: r ? Math.round(r.top + window.scrollY) : null,
       stripB: Math.round(stripB), limit: Math.round(window.innerHeight - tabH), vh: window.innerHeight, y: Math.round(window.scrollY) };
   });
   // 前置：那一站在文件裡的位置真的在第一個畫面以下（否則「有捲」證明不了什麼）
   if (pos.has && pos.docTop > pos.vh) ok(`前置：現在這一站在第一個畫面以下（文件位置 ${pos.docTop}px > 畫面高 ${pos.vh}px）`);
   else fail('前置不成立：現在這一站本來就在第一個畫面裡，或找不到它：' + JSON.stringify(pos));
+  // 前置：沒被文件底卡住（卡住的話停在哪裡由頁面長度決定，不是由 App 算的目標決定，下一條就驗不到東西）
+  if (pos.y < pos.maxY - 4) ok(`前置：捲動沒有被文件底卡住（scrollY ${pos.y} < 最大 ${pos.maxY}）`);
+  else fail(`前置不成立：捲到文件底了（scrollY ${pos.y}、最大 ${pos.maxY}），停的位置驗不出 App 算得對不對`);
   if (pos.y > 100) ok(`進行中：自動捲到現在這一站（捲了 ${pos.y}px）`);
   else fail('沒有自動捲動：scrollY=' + pos.y);
   if (pos.top >= pos.stripB - 4 && pos.bottom <= pos.limit) ok(`停的位置看得到那一站：在日期列下面、底部分頁上面（top ${pos.top}、日期列底 ${pos.stripB}、可見下緣 ${pos.limit}）`);
   else fail(`停的位置不對（被日期列蓋住或在畫面外）：${JSON.stringify(pos)}`);
-  // 判準是「App 呼叫了 window.scrollTo 幾次、跨了多久」，不是 scroll 事件的取樣數
+  // App 捲的目標有兩種：天的標題（那一站跟著看得到時）或那一站本身。上一條只驗那一站，
+  // 捲到天的標題時被日期列蓋住的是天的標題——要嘛完整露出在日期列下面，要嘛整個捲過標題列上面。
+  if (pos.dayTop !== null && (pos.dayTop >= pos.stripB - 4 || pos.dayBottom <= pos.topbarH + 2)) ok(`天的標題列沒被日期列蓋住（top ${pos.dayTop}、日期列底 ${pos.stripB}）`);
+  else fail(`天的標題列被日期列蓋住：${JSON.stringify(pos)}`);  // 判準是「App 呼叫了 window.scrollTo 幾次、跨了多久」，不是 scroll 事件的取樣數
   //（後者會被瀏覽器合併，負載一高就只剩 1 次 —— 那是 v1.73.2 之前的偽失敗來源）。
   // smoothScrollTo 是 320ms 的 rAF 動畫，一定不只一次呼叫、一定跨得過 0 毫秒。
   // 「捲動是平滑的」要在頁面靜下來之後量：開頁當下 smoothScrollTo 的第一個 rAF
