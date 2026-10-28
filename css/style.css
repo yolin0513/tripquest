@@ -1050,6 +1050,10 @@ textarea.field { resize: vertical; line-height: 1.6; }
   padding: 12px 16px; font-weight: 800; cursor: pointer; flex: 1; min-height: var(--tap);
 }
 .seg button.on { background: var(--primary); color: var(--primary-ink); }
+/* 2026-10-28：「淺色（和紙）」在 320px 與大字時被並排擠成兩行（layouttest btn-wrap-squeezed）。
+   字不折，放不下時第二顆整顆換到下一行，兩顆各佔一整列。 */
+.theme-seg { flex-wrap: wrap; }
+.theme-seg button { flex: 1 1 auto; white-space: nowrap; }
 
 .danger-zone { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); }
 .danger-zone .btn { margin-top: 12px; }
@@ -1909,6 +1913,7 @@ textarea.field { resize: vertical; line-height: 1.6; }
    狀態列本來就短，折成兩行完全可以接受；蓋住數字不行。 */
 .qline-sub { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
 .qline.done .qline-sub { color: var(--ok-text); }
+.qline-qty { white-space: nowrap; }
 .qline-chev { flex: none; color: var(--muted); font-size: 0.8rem; width: 10px; text-align: center; }
 .qline.open .qline-chev { transform: rotate(90deg); }
 

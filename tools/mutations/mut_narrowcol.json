@@ -7,7 +7,7 @@
     "replace": "",
     "cmd": "node scripts/layouttest.mjs",
     "timeoutMs": 2400000,
-    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過"
+    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過——待機器空閒時重量（2026-10-28 19:15 那輪在 Yolin 開始用筆電前中止，一條都沒跑到）"
   },
   {
     "name": "景點標題列：拿掉折行",
@@ -17,7 +17,7 @@
     "replace": "}\n.qc-toggle:active",
     "cmd": "node scripts/layouttest.mjs",
     "timeoutMs": 2400000,
-    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過"
+    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過——待機器空閒時重量（2026-10-28 19:15 那輪在 Yolin 開始用筆電前中止，一條都沒跑到）"
   },
   {
     "name": "layouttest 第 8 條整個不報",
@@ -27,6 +27,6 @@
     "replace": "      if (false) {",
     "cmd": "node scripts/layouttest.mjs",
     "timeoutMs": 2400000,
-    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過"
+    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過——待機器空閒時重量（2026-10-28 19:15 那輪在 Yolin 開始用筆電前中止，一條都沒跑到）"
   }
 ]

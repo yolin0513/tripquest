@@ -1100,7 +1100,9 @@ function questLine(q, spot, themeKey) {
       h('span', { class: 'qline-title' }, q.title,
         null),   // 「AI 出題」的 ✨ 標示已依使用者要求移除
       h('span', { class: 'qline-sub' },
-        done ? `✓ 已完成　${qty(subs.length, '張')}` : '還沒拍',
+        // 「1 張」包成不斷行的一段：qty 用的是不換行空白，但 .qline-sub 有 overflow-wrap:anywhere，
+        // 擠的時候照樣會在「1」與「張」之間斷開（layouttest bad-wrap，320px 大字）
+        ...(done ? ['✓ 已完成　', h('span', { class: 'qline-qty' }, qty(subs.length, '張'))] : ['還沒拍']),
         likeCount ? `　❤️ ${likeCount}` : ''),
     ),
     h('span', { class: 'qline-chev' }, '▸'),
