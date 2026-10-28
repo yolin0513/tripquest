@@ -11,8 +11,8 @@
   {
     "name": "T2：畫面不顯示 unconverted",
     "file": "js/views/expenses.js",
-    "find": "const unconvLines = (s.unconverted || []).map((u) =>",
-    "replace": "const unconvLines = [].map((u) =>",
+    "find": "const noteLines = (s.unconverted || []).map((u) =>",
+    "replace": "const noteLines = [].map((u) =>",
     "cmd": "node scripts/settletest.mjs"
   },
   {
