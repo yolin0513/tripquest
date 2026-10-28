@@ -197,7 +197,8 @@ try {
   const hint = await page.evaluate(() => [...document.querySelectorAll('label.switch-row')].find((x) => x.textContent.includes('高對比模式'))?.textContent || '');
   yes(hint.includes('背景更白、文字更黑'), `W5 和紙下高對比的說明是「背景更白、文字更黑」（${hint.includes('背景更深') ? '還寫著背景更深' : hint.slice(0, 20)}）`);
   const box = await page.evaluateHandle(() => [...document.querySelectorAll('label.switch-row')].find((x) => x.textContent.includes('高對比模式'))?.querySelector('input[type=checkbox]') || null);
-  if (box.asElement()) { await box.asElement().click(); await sleep(200); }
+  if (!box.asElement()) throw new Error('找不到設定頁「高對比模式」那一列的開關（label.switch-row input[type=checkbox]）');
+  await box.asElement().click(); await sleep(200);
   t = await theme(page);
   yes(t.attr === 'washi' && t.bg === 'rgb(255, 255, 255)', `W5 和紙＋高對比：底變純白（${t.bg}）`);
   await scanPages(page, 'W5 和紙＋高對比');

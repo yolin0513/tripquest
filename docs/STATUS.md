@@ -52,6 +52,13 @@
   原因：layouttest 已知紅 17 處（來源未定：2094347 的 CSS 還是更早，要拿 fbcdb6a 舊 CSS 跑 12 分鐘那次才分得出），它在受影響範圍裡，
   `test:affected` 會停在它那裡、後面的沒跑，拿不到完整結果。**恢復條件**：layouttest 原因查清楚並修好（或確認是既有問題、經 Dispatch 決定怎麼處理）之後，
   在推送前跑一次 `test:affected` 全綠。**推送之前一定要恢復**——停用期間的 commit 一個都不准推。
+- **washitest 修好（ca9fe55）＋通則：瀏覽器測試的「找元素／點元素」helper，找不到或點不到一律丟例外、點名是哪一個。**
+  根因：設定分頁只在「我的旅程」那一層，washitest 在旅程頁找「設定」找不到，自己寫的 clickText 回 false、呼叫處沒接，下一步等 30 秒逾時，紀錄只剩 `Waiting failed`。
+  改成走使用者的路（旅程頁先按左上角返回）；clickText 搬進 `scripts/userclick.mjs`，用 userClick 點，找不到／被蓋住都丟例外（W8 對照組＋mut_clicktext 3 條，都只紅預期那一句）。
+  要「記成 ✗、繼續跑」的地方用 userClick（回 { ok, why }）；導覽步驟用 clickText（丟例外，測試要有最外層 catch 照樣印總結）。
+  **同一種寫法的盤點（一次性搜尋＋人工看，在搜的樣式範圍內）**：scripts/ 裡 14 個「找不到就回 false 或什麼都不做」的 helper、呼叫 65 處、沒接回傳值 33 處。
+  在測試鏈裡、還沒改的：importtest clickText 5 處、membergonetest pressModal 4 處、installtest clickText 3 處沒接；scrolltest 的 tapTab 找不到時自己什麼都不做（不看回傳值也看不出）。
+  不在鏈裡的工具（gallery、importshots、installshots、livecheck-import）另 15 處。**都還沒改**——併進「285 處點擊」那個待辦。
 - **待查（不急）：突變後為什麼慢 5.4 倍。** Dispatch 的猜測（**只是猜**）：被突變的那條檢查沒擋下，後面每個情境都真的推了一次測試遠端。
   若成立，耗時暴增本身就是「東西穿過去了」的訊號，可以變成一條額外的斷言。先記著，不做。
 - **量尺（mutlint 每次都印，Dispatch 2026-10-28）**：① 守現行程式（mutate 格式、find 活著）幾條、其中守推送閘幾條、**推送閘擋法總數：未知**；
