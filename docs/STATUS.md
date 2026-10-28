@@ -20,8 +20,17 @@
   紅在「記帳表單沒打開」；關掉 A／B／C 偵測 → 各自的對照組紅；去註解改回 `.*$` → CRLF 對照組紅；真的在 trip.js 埋一處自我重畫 → B 斷言紅。
 - **全套（e7e4786 上逐支跑，2771 秒，log 在 `.logs/full-e7e4786/`）**：69 綠、4 紅，紅的都單獨重跑過一次，結果相同（layouttest 沒有重跑，它要 12 分鐘）。
   - plantest、washitest、layouttest：早上就紅、紅法相同（layouttest 同樣 17 處：qc-name 14、overlap 1、bad-wrap 1、button 1）。
-  - **affectedtest（這次造成的）**：①鏈長度寫死 72，現在是 73；②「改沒人涵蓋的 js/__nobody.js → 全套」挑出空清單——
-    **推論**：挑選器把 viewentrytest 當成涵蓋整個 `js/`（它讀整個目錄），沒人涵蓋的檔就不存在了，放大器 D 等於被關掉。**還沒修，等 Dispatch。**
+  - **affectedtest（這次造成的，已修，Dispatch 選 A）**：①STATUS 的鏈長度 72 → 73；②放大器 D 被悶住——**實測根因**：viewentrytest 印的
+    「掃了 js/ 底下…」被 `extractRefs` 認成整個 `js/` 的引用，每支 js 都「有人涵蓋」。修法：`run-affected.mjs` 新增 `SCAN_ONLY`
+    （shelltest、guesscensustest、themetrusttest、viewentrytest），這幾支的 js 引用不算涵蓋；affectedtest 新斷言「只掃描的都在底線裡」。
+    突變 `mut_affected_d.json` 4/4 紅在預期：關掉 D（全套模式）、關掉 D（A∪B 模式）、viewentrytest 引用算成涵蓋、viewentrytest 不在底線。
+    舊的 6 條挑選器突變（mut_shell／mut_guesscensus／mut_themetrust）find 跟著改、重跑 6/6 紅。
+- **待辦 B（Dispatch 2026-10-28）：挑選器自己分辨「掃整個目錄」與「真的測某支檔」。** 理由：防的是一整類——`SCAN_ONLY` 是手寫清單，
+  下一支掃整個目錄的測試進鏈時沒人記得加，D 就再被悶一次（這是第四支撞到同一件事：shelltest、guesscensustest、themetrusttest、viewentrytest）。
+  現在至少有 affectedtest 的 `__nobody.js` 斷言會紅，但它只在那支測試剛好引用到 `js/` 整個目錄時才紅。
+- **順手查到（不是這次造成）**：4 條突變的 find 在目標檔已經找不到，mutate 跑到它們會失效——mut_gate 3 條（prepush-scan.mjs、safe-push.sh）、
+  mut_r1「T2：畫面不顯示 unconverted」（expenses.js）；在 c063c64 上就已經找不到。**mutlint 不檢查 find 是否還在**，所以一直沒人發現。待辦。
+- **layouttest 歸因還沒做完**：17 處跟早上一樣，只證明不是畫面單一入口造成的；早上那次已經含 2094347 的 CSS，要判斷是不是那次 CSS 造成，仍要換回 fbcdb6a 的 CSS 跑一次。
 
 ### 🔴 2026-10-28 重開機後：全套停在第 15 支 densitytest——產品 bug，已修（本機 commit、沒推）；第 16～72 支還沒跑
 
