@@ -1,0 +1,32 @@
+[
+  {
+    "name": "任務列：拿掉窄螢幕換兩列（container query）",
+    "why": "320px 寬時任務名欄寬回到 34px、一個字一行。預期紅在 layouttest「零版面問題」，問題清單出現 narrow-column .qline-title（行程頁 320px）；對照組照過。",
+    "file": "css/style.css",
+    "find": ".qc-inner { container-type: inline-size; }\n",
+    "replace": "",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 2400000,
+    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過"
+  },
+  {
+    "name": "景點標題列：拿掉折行",
+    "why": "320px＋大字時景點名又被擠到寬 0。預期紅在 layouttest「零版面問題」，問題清單出現 .qc-name（text-spill 或 narrow-column）；對照組照過。",
+    "file": "css/style.css",
+    "find": "  flex-wrap: wrap; row-gap: 6px;\n}\n.qc-toggle:active",
+    "replace": "}\n.qc-toggle:active",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 2400000,
+    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過"
+  },
+  {
+    "name": "layouttest 第 8 條整個不報",
+    "why": "檢查器回到看不見直排的樣子。預期只紅「第 8 條對照組：一個字一行的直排一定要抓到」（產品已修好，掃描本身不會因此多紅）。",
+    "file": "scripts/layouttest.mjs",
+    "find": "      if (!stacked && tops.length >= 3 && nChars >= 4 && nChars / tops.length < 2.5) {",
+    "replace": "      if (false) {",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 2400000,
+    "timeoutBasis": "暫定：layouttest 原樣最長 751.1 秒（tools/test-times.json）× 3、進位；改壞後耗時沒量過"
+  }
+]
