@@ -77,7 +77,8 @@
     "file": "js/views/trip.js",
     "find": "  const daySec = container.querySelector('.daycollapse.open');",
     "replace": "  const daySec = container.querySelector(`.daycollapse[data-day=\"${todayDay}\"]`);",
-    "cmd": "node scripts/scrolltest.mjs"
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
   },
   {
     "name": "第 1 批：日期列不寫週幾",
@@ -149,7 +150,8 @@
     "file": "js/views/trip.js",
     "find": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60) + (stripEl ? stripEl.offsetHeight : 0);",
     "replace": "  const topH = (document.getElementById('topbar')?.offsetHeight || 60);",
-    "cmd": "node scripts/scrolltest.mjs"
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
   },
   {
     "name": "紙飛機：不跟著選中的天",

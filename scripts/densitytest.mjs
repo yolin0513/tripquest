@@ -31,6 +31,17 @@ await page.setViewport({ width: 390, height: 844 });
 const errs = [];
 page.on('pageerror', (e) => { errs.push(e.message); console.log('  [pageerror]', e.message); });
 
+// 被截掉的任務名：拿一份不設任何截斷的複本放在同一個位置量自然高度，比畫面上的高。
+// 不靠 scrollHeight——v1.41～2026-10-28 一般字級下「人潮的…」「必吃…」明明被截掉，scrollHeight 那條照樣過。
+const cutTitles = () => page.evaluate(() => [...document.querySelectorAll('.qline-title')].filter((e) => {
+  const c = e.cloneNode(true);
+  Object.assign(c.style, { display: 'block', webkitLineClamp: 'unset', overflow: 'visible', maxHeight: 'none', height: 'auto', position: 'absolute', visibility: 'hidden', width: e.getBoundingClientRect().width + 'px' });
+  e.parentElement.appendChild(c);
+  const natural = c.getBoundingClientRect().height;
+  c.remove();
+  return natural > e.getBoundingClientRect().height + 2;
+}).map((e) => e.textContent.trim()));
+
 const openAll = () => page.evaluate(() => {
   document.querySelectorAll('.daycollapse, .qcollapse').forEach((d) => d.classList.add('open'));
 });
@@ -86,7 +97,9 @@ try {
   });
   const usable = m.vh - 136;                       // 扣掉頂列與底部分頁
   const fit = usable / m.avg;
-  yes(m.max <= 104, `收合列最高 ${m.max}px（含間距平均 ${m.avg}px）`, `max=${m.max}`);
+  // 136 的依據（2026-10-28 實測，390×844、一般字級、這份種子）：名字一行 74px、兩行 100px、
+  // 最長的「拍下 太平山 最開闊的一景」三行 127px。原本的 104 是名字最多兩行（截斷）時的值。
+  yes(m.max <= 136, `收合列最高 ${m.max}px（含間距平均 ${m.avg}px）`, `max=${m.max}`);
   yes(fit >= 4, `一個螢幕看得到 ${fit.toFixed(1)} 個任務（目標 ≥4）`);
   yes(m.sectionH < 700, `一個景點（標題＋${m.inSection} 個任務）共 ${m.sectionH}px（改版前 2308px）`);
   yes(m.head <= 90, `景點標題列 ${m.head}px`);
@@ -104,14 +117,13 @@ try {
 
   // ---------- ② 名字看得完整 ----------
   console.log('\n— 名字要看得出來 —');
-  const titles = await page.$$eval('.qline-title', (els) => els.map((e) => ({
-    text: e.textContent.trim(),
-    shown: e.scrollHeight <= e.clientHeight + 2,     // 有沒有被 line-clamp 切掉
-  })));
-  const cut = titles.filter((t) => !t.shown);
-  yes(cut.length === 0, `${titles.length} 個任務名全部顯示完整`, cut.map((t) => t.text).join('、'));
-  const foods = titles.filter((t) => t.text.startsWith('必吃')).map((t) => t.text);
-  yes(new Set(foods).size === foods.length, `同前綴的任務名彼此分得出來（${foods.join('／') || '無'}）`);
+  const titles = await page.$$eval('.qline-title', (els) => els.map((e) => e.textContent.trim()));
+  const cut = await cutTitles();
+  yes(titles.length > 0 && cut.length === 0, `名字不被截斷：${titles.length} 個任務名全部顯示完整`, cut.join('、'));
+  // textContent 是全文，被截掉也照樣不一樣——所以「分得出來」要連同「沒被截掉」一起成立才算
+  const foods = titles.filter((t) => t.startsWith('必吃'));
+  yes(foods.length >= 2 && new Set(foods).size === foods.length && !foods.some((t) => cut.includes(t)),
+    `同前綴的任務名彼此分得出來（${foods.join('／') || '無'}，畫面上沒被截掉）`, cut.join('、'));
   const fsize = await page.$eval('.qline-title', (e) => parseFloat(getComputedStyle(e).fontSize));
   yes(fsize >= 16, `任務名字級 ${fsize}px —— 縮的是圖與留白，不是字`);
 
@@ -222,14 +234,19 @@ try {
         fs: de.dataset.fs || '', contrast: de.dataset.contrast || '',
         overflow: de.scrollWidth > de.clientWidth + 2,
         smallBtn: btns.filter((b) => b.getBoundingClientRect().height < 44).length,
-        clipped: [...document.querySelectorAll('.qline-title')].filter((e) => e.scrollHeight > e.clientHeight + 2).length,
         maxH: Math.max(...rows.filter((x) => !x.classList.contains('open')).map((x) => Math.round(x.getBoundingClientRect().height))),
+        leak: rows.filter((x) => !x.classList.contains('open')).filter((x) => (x.querySelector('.qline-more')?.getBoundingClientRect().height || 0) > 1).length,
       };
     });
+    const cut = await cutTitles();
     yes(!r.overflow, `${label}：沒有橫向破版（fs=${r.fs || 'm'} contrast=${r.contrast || 'normal'}）`);
     yes(r.smallBtn === 0, `${label}：相機鈕仍然 ≥44px`);
-    yes(r.maxH <= 160, `${label}：收合列最高 ${r.maxH}px 仍在合理範圍`);
-    void r.clipped;
+    yes(cut.length === 0, `${label}：名字不被截斷`, cut.join('、'));
+    yes(r.leak === 0, `${label}：收合的列沒有把展開的內容漏出來`, `漏出來 ${r.leak} 列`);
+    // 220 的依據（2026-10-28 實測，390×844、特大字、這份種子）：名字一行的列 126px、三行 161px、
+    // 最長的「拍下 太平山 最開闊的一景」四行 196px。超過 220 ＝ 名字要折到五行以上（名字欄又被壓窄了）。
+    // 舊的 160 是 v1.41 為了抓「收合後內容漏出來」（量到 587px）訂的，沒有量過特大字；漏出來改由上一條直接驗。
+    yes(r.maxH <= 220, `${label}：收合列最高 ${r.maxH}px（名字最多四行）`);
   }
   await page.evaluate(async () => {
     const p = await import('./js/prefs.js');

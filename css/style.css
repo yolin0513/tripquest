@@ -451,13 +451,15 @@ button.card { appearance: none; font: inherit; }
 @keyframes dayin { from { opacity: 0; transform: translateY(6px); } }
 
 /* 時間軸：左邊一條線、每站一個點，有填時間才寫時間 */
-/* 欄寬用 rem：字級切到「特大」時時間字跟著變大，欄也跟著變寬，不會擠出去 */
-.timeline { --tl-col: 4rem; --tl-line: 3.3rem; list-style: none; margin: 0; padding: 0 0 0 var(--tl-col); position: relative; }
+/* 2026-10-28：左邊只留線與點、用 px 不跟字級放大；時間改寫在那一站的卡片上方。
+   原本時間寫在左邊一欄、欄寬用 rem，390 寬的手機上那一欄吃掉 76px（特大字 100px），
+   任務列的名字欄只剩 52px（特大字 28px）——「必吃：阿灶伯…」被截成「必吃…」，三個任務分不出來（densitytest）。 */
+.timeline { --tl-col: 24px; --tl-line: 8px; list-style: none; margin: 0; padding: 0 0 0 var(--tl-col); position: relative; }
 .timeline::before { content: ""; position: absolute; left: var(--tl-line); top: 1.4rem; bottom: 1.4rem; width: 0; border-left: 3px dashed var(--line); }
 .tl-item { position: relative; }
 .tl-item > .qcollapse { margin-top: 10px; }
-.tl-time { position: absolute; left: calc(-1 * var(--tl-col)); width: calc(var(--tl-line) - 0.5rem); top: 1.3rem;
-  text-align: right; font-weight: 800; font-size: 0.8rem; line-height: 1.2; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-time { display: block; margin: 12px 0 -4px; font-weight: 800; font-size: 0.85rem; line-height: 1.2; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-time:empty { display: none; }
 /* 點的中心對準線的中心：線在 --tl-line、寬 3px；點連框共 19px */
 .tl-dot { position: absolute; left: calc(var(--tl-line) - var(--tl-col) + 1.5px - 9.5px); top: 1.45rem;
   width: 13px; height: 13px; border-radius: 50%; background: var(--bg); border: 3px solid var(--primary); }
@@ -1888,11 +1890,12 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .qline-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 /* 字級不縮 —— 縮的是圖與留白。
    一行放不下就折第二行，不要截斷：「必吃：包心…／必吃：阿灶…／必吃：當歸…」
-   三個長得幾乎一樣，等於沒有名字。短名字仍然只佔一行。 */
+   三個長得幾乎一樣，等於沒有名字。短名字仍然只佔一行。
+   2026-10-28：拿掉「最多兩行」——上面那句說不截斷，這裡卻限兩行；特大字下一行只放得下四個字，
+   兩行就把「必吃：阿灶伯羊肉湯」截掉（densitytest「名字不被截斷」）。 */
 .qline-title {
   font-size: 1.05rem; font-weight: 800; line-height: 1.35;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  overflow: hidden; overflow-wrap: anywhere;
+  overflow-wrap: anywhere;
 }
 /* v1.73.5：使用者實機回報「❤️ 2」的數字被藍色相機按鈕蓋掉一半。
    原因是這一列 nowrap —— 特大字級下「✓ 已完成　1 張　❤️ 3」要 211px，

@@ -556,7 +556,7 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
     h('div', { class: 'dc-body' },
       h('div', { class: 'dc-inner' },
         crewStrip(t),
-        // 時間軸：左邊一條虛線、每站一個點；有填時間的在點旁邊寫幾點，沒填就只有點（不補猜的時間）。
+        // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
         h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
           h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),

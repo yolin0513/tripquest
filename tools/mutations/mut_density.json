@@ -1,0 +1,36 @@
+[
+  {
+    "name": "任務名：恢復最多兩行",
+    "why": "名字又被截成「必吃…」，同前綴的任務分不出來。預期紅 densitytest 的「名字不被截斷」（一般字級、特大字、特大字＋高對比）。（事前還寫了「同前綴的分得出來」也紅；實跑沒紅——名字欄修寬之後，一般字級的「必吃：…」兩行放得下，被截的是更長的「拍下 礁溪溫泉 最開闊的一景」。2026-10-28 事後更正）",
+    "file": "css/style.css",
+    "find": "  font-size: 1.05rem; font-weight: 800; line-height: 1.35;\n  overflow-wrap: anywhere;",
+    "replace": "  font-size: 1.05rem; font-weight: 800; line-height: 1.35;\n  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;\n  overflow: hidden; overflow-wrap: anywhere;",
+    "cmd": "node scripts/densitytest.mjs"
+  },
+  {
+    "name": "時間軸左欄：回到用 rem、跟字級放大",
+    "why": "名字欄又被壓到特大字只剩 28px，名字一行一個字。名字沒被截（不限行數），所以紅的是列高：預期紅 densitytest 特大字兩種的「收合列最高」。（實跑先紅在一般字級的「收合列最高」「一個螢幕看得到幾個任務」「景點標題列」——一般字級的欄也一樣被壓窄；2026-10-28 事後補記）",
+    "file": "css/style.css",
+    "find": ".timeline { --tl-col: 24px; --tl-line: 8px;",
+    "replace": ".timeline { --tl-col: 4rem; --tl-line: 3.3rem;",
+    "cmd": "node scripts/densitytest.mjs"
+  },
+  {
+    "name": "收合列：展開的內容漏出來",
+    "why": "收合的列照樣佔著大圖與說明的高度（v1.41 量到 587px 的那個 bug）。預期紅 densitytest 特大字兩種的「收合的列沒有把展開的內容漏出來」。",
+    "file": "css/style.css",
+    "find": "  grid-area: more; display: grid; grid-template-rows: 0fr;",
+    "replace": "  grid-area: more; display: grid; grid-template-rows: 1fr;",
+    "cmd": "node scripts/densitytest.mjs"
+  },
+  {
+    "name": "修正前的版面（兩處一起改回）",
+    "why": "修正前會紅：時間軸左欄回到 rem、任務名回到最多兩行，就是 2026-10-28 抓到的那個狀態。預期紅 densitytest 的「名字不被截斷」——一般字級也要紅（舊的 scrollHeight 檢查在一般字級沒紅過）。",
+    "file": "css/style.css",
+    "edits": [
+      { "find": ".timeline { --tl-col: 24px; --tl-line: 8px;", "replace": ".timeline { --tl-col: 4rem; --tl-line: 3.3rem;" },
+      { "find": "  font-size: 1.05rem; font-weight: 800; line-height: 1.35;\n  overflow-wrap: anywhere;", "replace": "  font-size: 1.05rem; font-weight: 800; line-height: 1.35;\n  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;\n  overflow: hidden; overflow-wrap: anywhere;" }
+    ],
+    "cmd": "node scripts/densitytest.mjs"
+  }
+]
