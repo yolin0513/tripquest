@@ -28,8 +28,11 @@
 - **待辦 B（Dispatch 2026-10-28）：挑選器自己分辨「掃整個目錄」與「真的測某支檔」。** 理由：防的是一整類——`SCAN_ONLY` 是手寫清單，
   下一支掃整個目錄的測試進鏈時沒人記得加，D 就再被悶一次（這是第四支撞到同一件事：shelltest、guesscensustest、themetrusttest、viewentrytest）。
   現在至少有 affectedtest 的 `__nobody.js` 斷言會紅，但它只在那支測試剛好引用到 `js/` 整個目錄時才紅。
-- **順手查到（不是這次造成）**：4 條突變的 find 在目標檔已經找不到，mutate 跑到它們會失效——mut_gate 3 條（prepush-scan.mjs、safe-push.sh）、
-  mut_r1「T2：畫面不顯示 unconverted」（expenses.js）；在 c063c64 上就已經找不到。**mutlint 不檢查 find 是否還在**，所以一直沒人發現。待辦。
+- **mutlint 補第 3 件（Dispatch 2026-10-28，排在 plantest 前）**：mutate 格式的每一處 find 在目標檔必須剛好一處，否則判紅、點名。
+  對照組 8/8 綠（新的三種：找不到、不只一處、edits 裡第二處找不到；「齊全」反向要求 0 處死掉）；真實清單上複本改掉一條 → 多出剛好那一條、改回回原數；
+  突變 `mut_mutlint_find.json` 2/2 紅在「對照組沒過」（回 4，跟現況的回 1 分得開）。補丁格式 141 份不適用（套在指定的舊 commit 上），輸出照實寫。
+  **現況：查了 197 處 find，死掉 5 條**（手寫的一次性搜尋只找到 4 條——它漏看 `edits` 格式）：mut_gate 4 條（safe-push.sh 2、prepush-scan.mjs 2）、
+  mut_r1「T2：畫面不顯示 unconverted」（expenses.js）；都不是今天造成的。**mutlint 現在照實是紅的，等這 5 條修好才會綠。**
 - **layouttest 歸因還沒做完**：17 處跟早上一樣，只證明不是畫面單一入口造成的；早上那次已經含 2094347 的 CSS，要判斷是不是那次 CSS 造成，仍要換回 fbcdb6a 的 CSS 跑一次。
 
 ### 🔴 2026-10-28 重開機後：全套停在第 15 支 densitytest——產品 bug，已修（本機 commit、沒推）；第 16～72 支還沒跑
