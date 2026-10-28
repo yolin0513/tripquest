@@ -1,0 +1,20 @@
+[
+  {
+    "name": "mutlint：find 次數不對不再記成死掉",
+    "why": "2026-10-28 新加的第 3 件檢查被關掉時，清單上的死突變又會無聲無息。預期 mutlint 紅在「對照組沒過」（find 找不到、find 不只一處、edits 裡第二處找不到 三種對照組判 false），回 4。",
+    "file": "scripts/mutlint.mjs",
+    "find": "        else if (n !== 1) dead.push(`${f}｜${m.name}：find 在 ${m.file} 出現 ${n} 次`);",
+    "replace": "        else void n;",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  },
+  {
+    "name": "mutlint：一處 find 都沒查（整段跳過）",
+    "why": "母體變空、死掉 0 處——「沒查」長得跟「全活著」一樣。預期 mutlint 紅在「對照組沒過」（齊全那一種要求 find 查了 1 處），回 4。",
+    "file": "scripts/mutlint.mjs",
+    "find": "    if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) { patchFormat++; continue; }",
+    "replace": "    if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) { patchFormat++; continue; }\n    continue;",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  }
+]
