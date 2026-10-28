@@ -12,6 +12,7 @@ import { h, toast, modal, promptDialog, confirmDialog } from '../ui.js';
 import { navigate, back } from '../router.js';
 import { enrichSpot } from '../enrich.js';
 import { spotTimes, stayOptions } from '../spottime.js';
+import { markDayJump } from '../tripday.js';
 
 export default async function spot(tripId, spotId, { drawPage, setTop }) {
   const s = store.get(spotId);
@@ -104,7 +105,7 @@ export default async function spot(tripId, spotId, { drawPage, setTop }) {
     }
     // 回行程頁時停在剛改的這一站那一天（不然新打開一律回今天，他改的第 2 天看不到）。
     // 只用一次、10 分鐘內有效：之後照常「新打開＝帶我到今天」。
-    try { localStorage.setItem('tripquest.dayJump.' + tripId, JSON.stringify({ day: store.getRaw(spotId).day || 1, at: Date.now() })); } catch { /* noop */ }
+    try { markDayJump(localStorage, tripId, store.getRaw(spotId).day || 1); } catch { /* noop */ }
     toast('已儲存');
     back(`/trip/${tripId}/plan`);
   };

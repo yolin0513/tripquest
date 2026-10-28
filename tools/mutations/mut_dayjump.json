@@ -1,0 +1,34 @@
+[
+  {
+    "name": "記號不只用一次（讀了不刪）",
+    "why": "他之後每次打開行程頁都被拉回那一天。預期紅 dayjumptest 的「J2 只用一次」與「J4 讀不懂的記號也被清掉」——兩條都靠同一行刪除（同一個擋法的兩個樣子），其餘不紅。",
+    "file": "js/tripday.js",
+    "find": "  const raw = storage.getItem(k);\n  storage.removeItem(k);\n",
+    "replace": "  const raw = storage.getItem(k);\n",
+    "cmd": "node scripts/dayjumptest.mjs"
+  },
+  {
+    "name": "記號不過期（拿掉 10 分鐘檢查）",
+    "why": "隔天打開也不是「帶我到今天」。預期只紅 dayjumptest 的「J3 過期」。",
+    "file": "js/tripday.js",
+    "find": " || now - j.at >= DAY_JUMP_MS || ",
+    "replace": " || ",
+    "cmd": "node scripts/dayjumptest.mjs"
+  },
+  {
+    "name": "時間倒退不擋（記號比現在晚也照用）",
+    "why": "手機時間被往回調，記號永遠不過期。預期只紅 dayjumptest 的「J3 時間倒退」。",
+    "file": "js/tripday.js",
+    "find": " || now < j.at) return null;",
+    "replace": ") return null;",
+    "cmd": "node scripts/dayjumptest.mjs"
+  },
+  {
+    "name": "沒有時間欄位也照用",
+    "why": "算不出過期沒的記號被當成沒過期。預期只紅 dayjumptest 的「J3 記號沒有時間」。",
+    "file": "js/tripday.js",
+    "find": "if (!j || typeof j.at !== 'number' || ",
+    "replace": "if (!j || ",
+    "cmd": "node scripts/dayjumptest.mjs"
+  }
+]

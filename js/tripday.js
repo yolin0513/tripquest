@@ -41,6 +41,25 @@ export function defaultDay({ dayNums, todayDay, focusDay }) {
   return dayNums[0];
 }
 
+// 景點設定頁存檔 → 回行程頁停在那一站那一天。只用一次、10 分鐘內有效：
+// 不限次數的話他之後每次打開都被拉回那天；不限時間的話隔天打開也不是「帶我到今天」。
+// storage 是 localStorage 那種介面（getItem／setItem／removeItem），測試傳假的。
+export const DAY_JUMP_MS = 10 * 60 * 1000;
+const dayJumpKey = (tripId) => 'tripquest.dayJump.' + tripId;
+export function markDayJump(storage, tripId, day, now = Date.now()) {
+  storage.setItem(dayJumpKey(tripId), JSON.stringify({ day, at: now }));
+}
+// 回那一天（數字），沒有、過期、讀不懂、那天已經不在行程裡 → null。讀了就刪（不管用不用得上）。
+export function takeDayJump(storage, tripId, dayNums, now = Date.now()) {
+  const k = dayJumpKey(tripId);
+  const raw = storage.getItem(k);
+  storage.removeItem(k);
+  let j = null;
+  try { j = JSON.parse(raw || 'null'); } catch { return null; }
+  if (!j || typeof j.at !== 'number' || now - j.at >= DAY_JUMP_MS || now < j.at) return null;
+  return dayNums.includes(j.day) ? j.day : null;
+}
+
 // 第 day 天是星期幾（「週五」）。沒設出發日、日期不存在、天數不對 → ''（不猜）
 const WEEK = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 export function weekdayLabel(startDate, day) {

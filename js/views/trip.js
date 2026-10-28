@@ -19,7 +19,7 @@ import { loadEmergency } from '../emergency.js';
 import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
-import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates } from '../tripday.js';
+import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
 import { paperPlane } from '../glyphs.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
@@ -215,11 +215,9 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       const stored = Number(localStorage.getItem(selKey));
       if (dayNums.includes(stored)) sel = stored;
       // 剛在景點設定頁改過某一站 → 停在那一站那一天（spot.js 存的，只用一次）
-      const jk = 'tripquest.dayJump.' + tripId;
-      const jump = JSON.parse(localStorage.getItem(jk) || 'null');
-      localStorage.removeItem(jk);
-      if (jump && Date.now() - jump.at < 10 * 60 * 1000 && dayNums.includes(jump.day)) {
-        sel = jump.day;
+      const jump = takeDayJump(localStorage, tripId, dayNums);
+      if (jump != null) {
+        sel = jump;
         localStorage.setItem(selKey, String(sel));
       }
     } catch { /* noop */ }
