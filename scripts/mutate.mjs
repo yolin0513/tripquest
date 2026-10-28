@@ -224,8 +224,12 @@ async function main() {
     const result = r.timedOut || !finished ? 'no-result' : r.status !== 0 ? 'red' : 'not-red';
     const why = r.timedOut ? `逾時 ${(m.timeoutMs || 400000) / 1000} 秒被殺` : !finished ? `沒跑完：沒有最後那一行總結（結束碼 ${r.status}，可能是被強制停掉）` : null;
     ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, ...(why ? { reason: why } : {}) });
-    const reds = (r.out || '').split('\n').filter((l) => l.startsWith('✗')).slice(0, 4);
-    if (result === 'red') console.log(`✓ ${m.name}：紅了（exit ${r.status}）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
+    // 每一次都把子程序的全文留下來（不只沒有結果的時候）：判「紅的理由對不對」要看到**全部**紅的項目——
+    // 別的情境也紅了，就是被別的規則碰巧擋下（2026-10-28：原本只印前 4 行 ✗、紅了不留全文，
+    // pushgatetest 那條第 5 行以後有沒有紅、紅在哪，事後查不到，那筆結果只好重跑）
+    fs.writeFileSync(path.join(LOGS, `mutate-out.${seq}.log`), r.out || '');
+    const reds = (r.out || '').split('\n').map((l) => l.trimEnd()).filter((l) => l.startsWith('✗'));
+    if (result === 'red') console.log(`✓ ${m.name}：紅了（exit ${r.status}；✗ ${reds.length} 行，全部列在下面；全文在 .logs/mutate-out.${seq}.log）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
     else { bad++; console.log(`✗ ${m.name}：${result === 'no-result' ? `${r.timedOut ? '逾時被殺' : '沒跑完（沒有最後那一行總結）'}——沒有結果（不算紅、也不算跑過）` : '沒紅（照樣全綠）'}`); }
     // 沒有結果時把子程序的輸出留下來：不然看不出是丟了例外、被殺、還是測試本來就不印總結行
     // （2026-10-28：scrolltest 兩條突變連兩天「沒有結果」，其實都紅了，只是 scrolltest 不印總結行）

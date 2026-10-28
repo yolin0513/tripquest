@@ -1,0 +1,18 @@
+[
+  {
+    "name": "紅了只印前 4 行 ✗（改回 2026-10-28 之前的截斷）",
+    "why": "第 5 行以後紅的項目看不到，「紅的理由對不對」判不完整。預期只紅 mutatetest 的「I 輸出列出全部 6 行 ✗」。",
+    "file": "scripts/mutate.mjs",
+    "find": ".filter((l) => l.startsWith('✗'));\n    if (result === 'red')",
+    "replace": ".filter((l) => l.startsWith('✗')).slice(0, 4);\n    if (result === 'red')",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "紅了不留全文（只在沒有結果時留）",
+    "why": "輸出被截短時事後查不到全文。預期只紅 mutatetest 的「I 全文存進 .logs/mutate-out.<第幾次>.log」。",
+    "file": "scripts/mutate.mjs",
+    "find": "    fs.writeFileSync(path.join(LOGS, `mutate-out.${seq}.log`), r.out || '');\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  }
+]

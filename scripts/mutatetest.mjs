@@ -13,6 +13,7 @@
 //   C  殺掉之後把還原紀錄刪掉、帳本留著未收尾 → 回 5、指出第幾次與哪支檔；目標檔不被動（仍是壞的）
 //   C' 同上，但人工把目標檔還原成原樣 → 照跑（不是永遠關著的閘）
 //   D  還原紀錄在、帳本沒有對應的未收尾 → 回 6；目標檔不被動
+//   I  紅了 6 項：6 行 ✗ 全部印出、全文存進 .logs/mutate-out.<第幾次>.log（原本只印前 4 行、紅了不留全文）
 //   E  正常跑完：探針跑到改壞版一次、目標檔＝原檔、沒有還原紀錄、帳本那一次有開跑也有完成
 
 import fs from 'node:fs';
@@ -61,6 +62,8 @@ fs.writeFileSync(P('zz-fixture-a.txt'), 'fixture a\n');   // 「進版控、跟 
 fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了\\n\\n0 項通過，有失敗'); process.exit(1); } console.log('1 項通過');\n");
 // 中途被強制停掉（MealMate 2026-10-02）：前面一節本來就印 ✗，接著被 taskkill /F 停掉——結束碼 1，跟斷言失敗一模一樣，只差沒有最後那一行總結
 fs.writeFileSync(P('scripts/zz-killed.mjs'), "import fs from 'node:fs'; import { execFileSync } from 'node:child_process'; fs.mkdirSync('.logs', { recursive: true }); console.log('✗ 前面一節本來就會失敗'); fs.appendFileSync('.logs/zz-marker.txt', 'printed-x\\n'); execFileSync('taskkill', ['/PID', String(process.pid), '/F'], { stdio: 'ignore' }); setTimeout(() => { fs.appendFileSync('.logs/zz-marker.txt', 'finished\\n'); console.log('1 項通過'); }, 5000);\n");
+// 紅 6 項的探針：前 4 項之後的也要留在紀錄裡（I 情境）
+fs.writeFileSync(P('scripts/zz-six.mjs'), "for (let i = 1; i <= 6; i++) console.log('✗ 第 ' + i + ' 項紅了'); console.log('\\n0 項通過，有失敗'); process.exit(1);\n");
 fs.writeFileSync(P('scripts/zz-sleep.mjs'), "import fs from 'node:fs'; fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', 'sleep\\n'); fs.writeFileSync('.logs/zz-sleep.pid', String(process.pid)); setTimeout(() => {}, 120000);\n");
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'mut 起點');
@@ -314,6 +317,26 @@ if (want('H')) {
     const r2 = run(HL, '會紅的');
     const c2 = ledger().filter((e) => e.name === '會紅的' && e.event === 'done').pop();
     yes(r2.code === 0 && c2 && c2.result === 'red', `H 反向：跑到底的「會紅的」照樣記成 red（實得 ${c2 ? c2.result : '沒有那一筆'}）`, r2.out.slice(-300));
+  }
+}
+
+console.log('\n— I 紅了的時候：每一行 ✗ 都留下來，不只前幾行 —');
+if (want('I')) {
+  pre(reset(), '前置：clone 在起點');
+  const IL = P('.logs/zz-muts-six.json');
+  fs.writeFileSync(IL, JSON.stringify([
+    { name: '紅六項的', file: 'zz-target.txt', find: 'alpha', replace: 'BROKEN', cmd: 'node scripts/zz-six.mjs' },
+  ]));
+  const r = run(IL, '紅六項的');
+  const closing = ledger().filter((e) => e.name === '紅六項的' && e.event === 'done').pop();
+  if (pre(closing && closing.result === 'red', `前置：紅六項的那一條記成 red（實得 ${closing ? closing.result : '沒有那一筆'}）`)) {
+    const six = [1, 2, 3, 4, 5, 6];
+    const printed = six.filter((i) => new RegExp(`^ {5}✗ 第 ${i} 項紅了$`, 'm').test(r.out));
+    yes(printed.length === 6 && /✗ 6 行，全部列在下面/.test(r.out),
+      `I 輸出列出全部 6 行 ✗、並寫明 6 行（列出的是第 ${printed.join('、') || '無'} 項）`, r.out.slice(-400));
+    const tf = P(`.logs/mutate-out.${closing.seq}.log`);
+    const kept = fs.existsSync(tf) ? six.filter((i) => fs.readFileSync(tf, 'utf8').includes(`✗ 第 ${i} 項紅了`)) : [];
+    yes(kept.length === 6, `I 全文存進 .logs/mutate-out.${closing.seq}.log、6 項都在（在的是第 ${kept.join('、') || '無'} 項）`);
   }
 }
 
