@@ -8,6 +8,22 @@
 // ③ 在「確認過的同一點」按下去（不交給 handle.click() 自己再算一次座標）。
 // 點不到回 { ok:false, why } 並**不按**，不丟例外——讓呼叫的測試用自己的斷言記成 ✗、照樣跑完印總結
 // （丟例外會變成「沒跑完」，突變執行器記成沒有結果、不算紅）。why 指名蓋住它的是什麼。
+// 照字找元素再像使用者一樣點（2026-10-28，washitest 撞到）：找不到、點不到都**丟例外、點名是哪一個**。
+// 原本各測試自己寫的 clickText 找不到就回 false，呼叫的地方多半沒接回傳值，於是錯誤被吞掉、
+// 下一步等畫面逾時 30 秒，紀錄上只剩「Waiting failed: 30000ms exceeded」，看不出是哪個按鈕不在。
+// 要「記成 ✗、繼續跑」的地方用上面的 userClick（回 { ok, why }）；這支給「點不到後面就沒意義」的導覽步驟，
+// 呼叫的測試要有最外層的 catch 把例外記成 ✗ 並照樣印總結（不然突變執行器會記成沒跑完）。
+export async function clickText(page, sel, text, { pause = 250 } = {}) {
+  const label = `「${text}」（${sel}）`;
+  const hd = await page.evaluateHandle((s, t) => [...document.querySelectorAll(s)].find((x) => x.textContent.includes(t)) || null, sel, text);
+  const el = hd.asElement();
+  if (!el) throw new Error(`找不到${label}——當時在 ${await page.evaluate(() => location.hash || '#/')}`);
+  const r = await userClick(page, el, label);
+  if (!r.ok) throw new Error(r.why);
+  await new Promise((res) => setTimeout(res, pause));
+  return true;
+}
+
 export async function userClick(page, handle, label = '目標') {
   if (!handle) return { ok: false, why: `找不到${label}` };
   const pt = await handle.evaluate(async (el) => {

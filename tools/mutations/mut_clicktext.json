@@ -1,0 +1,26 @@
+[
+  {
+    "name": "clickText 找不到回 false（改回原本吞掉的寫法）",
+    "why": "呼叫的地方沒接回傳值，錯誤被吞掉、下一步等 30 秒逾時、看不出是哪個按鈕。預期只紅 washitest 的「W8 找不到 → 丟例外、點名」。",
+    "file": "scripts/userclick.mjs",
+    "find": "  if (!el) throw new Error(`找不到${label}——當時在 ${await page.evaluate(() => location.hash || '#/')}`);\n",
+    "replace": "  if (!el) return false;\n",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "clickText 點不到也當成點到了",
+    "why": "被蓋住時沒按下去，卻回 true，後面等畫面逾時。預期只紅 washitest 的「W8 被蓋住 → 丟例外、點名」。",
+    "file": "scripts/userclick.mjs",
+    "find": "  if (!r.ok) throw new Error(r.why);\n",
+    "replace": "",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "washitest 在旅程頁直接找「設定」分頁（改回原本的路）",
+    "why": "設定分頁只在「我的旅程」那一層；在旅程頁找不到。預期紅在「執行中斷」，訊息點名「找不到「設定」（a.tab）——當時在 #/trip/…」（不是 30 秒逾時），之後的 W4 設定頁以後都沒跑。",
+    "file": "scripts/washitest.mjs",
+    "find": "  if (await page.evaluate(() => /^#\\/trip\\//.test(location.hash))) {",
+    "replace": "  if (false) {",
+    "cmd": "node scripts/washitest.mjs"
+  }
+]

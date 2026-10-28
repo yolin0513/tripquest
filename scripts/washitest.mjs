@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { clickText } from './userclick.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5237;
@@ -78,15 +79,13 @@ const scan = (page) => page.evaluate(() => {
   return { n, skipped, bad };
 });
 
-async function clickText(page, sel, text) {
-  const hd = await page.evaluateHandle((s, t) => [...document.querySelectorAll(s)].find((x) => x.textContent.includes(t)) || null, sel, text);
-  const el = hd.asElement();
-  if (!el) return false;
-  await el.click();
-  await sleep(250);
-  return true;
-}
+// 設定頁的入口只在「我的旅程」那一層的底部分頁上；在旅程裡，底部分頁換成這一趟的任務／照片／分帳／回顧，
+// 要先按左上角返回回「我的旅程」（使用者實際的路）。原本直接找「設定」分頁，在旅程頁找不到、錯誤被吞掉、等 30 秒逾時。
 async function toSettings(page) {
+  if (await page.evaluate(() => /^#\/trip\//.test(location.hash))) {
+    await clickText(page, '#backBtn', '‹');
+    await page.waitForFunction(() => (location.hash === '#/' || location.hash === '') && document.querySelector('a.tab'));
+  }
   const ok = await clickText(page, 'a.tab', '設定');
   await page.waitForFunction(() => location.hash === '#/settings' && document.querySelector('.theme-seg'));
   return ok;
@@ -145,6 +144,20 @@ try {
   await page.goto('about:blank');
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.trip-card');
+
+  // ---- W8 共用的 clickText 自己的對照組：找不到、被蓋住，都要丟例外並點名是哪一個（不能回 false 讓呼叫的地方吞掉） ----
+  {
+    let msg = '（沒丟例外）';
+    try { await clickText(page, 'a.tab', '不存在的分頁'); } catch (e) { msg = e.message; }
+    yes(/^找不到「不存在的分頁」（a\.tab）——當時在 #\//.test(msg), `W8 找不到 → 丟例外、點名「不存在的分頁」與當時的頁面（${msg}）`);
+    await page.evaluate(() => { const d = document.createElement('div'); d.id = 'w8cover'; d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:transparent'; document.body.append(d); });
+    msg = '（沒丟例外）';
+    try { await clickText(page, 'a.tab', '設定'); } catch (e) { msg = e.message; }
+    await page.evaluate(() => document.getElementById('w8cover')?.remove());
+    yes(/^點不到「設定」（a\.tab）（被蓋住：中心那一點是 div#w8cover）/.test(msg), `W8 被蓋住 → 丟例外、點名「設定」與蓋住它的元素，而且沒按下去（${msg}）`);
+    const h = await page.evaluate(() => location.hash || '#/');
+    yes(h === '#/', `W8 被蓋住時沒有按下去（還在 ${h}）`);
+  }
 
   // ---- W1 對照組 ----
   const bt1 = await bodyTheme(page);
