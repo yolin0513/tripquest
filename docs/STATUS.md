@@ -5,6 +5,24 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### 🔴 2026-10-28 下午：settletest 根因已修——畫面只有路由器一個入口（e7e4786，本機、沒推）；全套 73 支 69 綠 4 紅
+
+- **做法**：`js/router.js` 每次換頁給畫面 `drawPage(node)`、`setTop(opts)`，兩支都只在「仍是最新的一次」才動；
+  畫面重畫自己一律 `refreshPage()`（同網址重跑、經過 gen、不動捲動、`fresh=false`）。app.js 不再匯出
+  `render`／`renderLoading`／`setTop`。trip.js 的 `await loadPlaceLookup()` 保留（它是觸發點，不是根因）。
+- **遷移途中多抓到的**：①頂列也會被過期的那一頁蓋掉（分帳頁的「記一筆」變成「旅程設定」）→ setTop 一併收進路由器；
+  ②trip.js 的 `settings` 參數漏收 drawPage → viewentrytest 補 C 類；③viewentrytest 自己的去註解規則吃不到 CRLF 的 `\r`，
+  app.js 註解裡的 `render()` 被算成一處 → 開工前報的 67 處其實是 **66**；④旅程設定頁的位置分享開關原本呼叫 `trip()`，
+  會在設定頁的網址上畫出行程頁（改成 refreshPage 後消失）；⑤被取代的那一次換頁不再還原捲動位置。
+- **`scripts/viewentrytest.mjs`**：A 直接寫主畫面／頂列、B 畫面自我重畫、C 畫面函式沒收下畫筆，都要是 0；
+  對照組 7 項在暫存複本從命令列跑。已進測試鏈與 BASELINE。
+- **突變 `tools/mutations/mut_viewentry.json` 7/7 紅在預期**：拿掉畫面的 gen → settletest 紅；拿掉頂列的 gen → settletest
+  紅在「記帳表單沒打開」；關掉 A／B／C 偵測 → 各自的對照組紅；去註解改回 `.*$` → CRLF 對照組紅；真的在 trip.js 埋一處自我重畫 → B 斷言紅。
+- **全套（e7e4786 上逐支跑，2771 秒，log 在 `.logs/full-e7e4786/`）**：69 綠、4 紅，紅的都單獨重跑過一次，結果相同（layouttest 沒有重跑，它要 12 分鐘）。
+  - plantest、washitest、layouttest：早上就紅、紅法相同（layouttest 同樣 17 處：qc-name 14、overlap 1、bad-wrap 1、button 1）。
+  - **affectedtest（這次造成的）**：①鏈長度寫死 72，現在是 73；②「改沒人涵蓋的 js/__nobody.js → 全套」挑出空清單——
+    **推論**：挑選器把 viewentrytest 當成涵蓋整個 `js/`（它讀整個目錄），沒人涵蓋的檔就不存在了，放大器 D 等於被關掉。**還沒修，等 Dispatch。**
+
 ### 🔴 2026-10-28 重開機後：全套停在第 15 支 densitytest——產品 bug，已修（本機 commit、沒推）；第 16～72 支還沒跑
 
 **跑在 fbcdb6a、乾淨機器上（開跑前認可量 27%、跑中最高 30%）**：第 1～14 支綠（**aitest 這次綠**——昨天紅那次可能是 98～99% 的負載，推論、只有一次對照）；
