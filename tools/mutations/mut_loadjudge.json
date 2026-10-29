@@ -3,23 +3,31 @@
     "name": "系統那一塊不設門檻（回到 2026-10-28 的樣子）",
     "why": "安裝程式吃掉 20% 也判乾淨。預期只紅「系統平均超過」「系統單窗超過」兩種。",
     "file": "scripts/loadjudge.mjs",
-    "find": ", ['system', '系統', baseSystem]]) {",
-    "replace": "]) { /* 突變：系統不設門檻 */",
+    "find": ", ['system', '系統', baseSystem, ONE_CORE, MAX_WINDOW],",
+    "replace": ", /* 突變：系統不設門檻 */",
+    "cmd": "node scripts/loadjudge.mjs"
+  },
+  {
+    "name": "觀察者不設門檻（回到 2026-10-29 第二場的樣子）",
+    "why": "內建瀏覽器算在觀察者，GPU 滿載那一窗 17 也判乾淨。預期只紅「觀察者平均超過」「觀察者單窗超過」兩種。",
+    "file": "scripts/loadjudge.mjs",
+    "find": ",\n    ['observer', '觀察者', OBSERVER_BASE, OBSERVER_SLACK, OBSERVER_MAX_WINDOW]]) {",
+    "replace": "]) { /* 突變：觀察者不設門檻 */",
     "cmd": "node scripts/loadjudge.mjs"
   },
   {
     "name": "拿掉平均門檻",
-    "why": "預期只紅「系統平均超過」「外來平均超過」兩種。",
+    "why": "預期只紅「系統平均超過」「外來平均超過」「觀察者平均超過」三種。",
     "file": "scripts/loadjudge.mjs",
-    "find": "if (avg > base + ONE_CORE) why.push",
+    "find": "if (avg > base + slack) why.push",
     "replace": "if (false) why.push",
     "cmd": "node scripts/loadjudge.mjs"
   },
   {
     "name": "拿掉單窗門檻",
-    "why": "預期只紅「系統單窗超過」「外來單窗超過」兩種。",
+    "why": "預期只紅「系統單窗超過」「外來單窗超過」「觀察者單窗超過」三種。",
     "file": "scripts/loadjudge.mjs",
-    "find": "if (peak[key] > MAX_WINDOW) why.push",
+    "find": "if (peak[key] > maxWin) why.push",
     "replace": "if (false) why.push",
     "cmd": "node scripts/loadjudge.mjs"
   },
