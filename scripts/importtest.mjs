@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { clickText as mustClickText } from './userclick.mjs';   // 導覽步驟用：點不到就丟例外、點名是哪顆（不接回傳值的地方一律用這支）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5231;
@@ -284,16 +285,16 @@ try {
     await page.waitForSelector('.page.form');
     await page.evaluate(() => { document.querySelector('details').open = true; });
     await sleep(150);
-    await clickText('button', '匯入行程表');
+    await mustClickText(page,'button', '匯入行程表');
     await page.waitForSelector('.imp-src', { timeout: 5000 });
-    await clickText('.imp-src', '直接打字');
+    await mustClickText(page,'.imp-src', '直接打字');
     await page.waitForSelector('textarea.mono', { timeout: 5000 });
     await page.evaluate((t) => {
       const ta = [...document.querySelectorAll('textarea')].pop();
       ta.value = t;
       ta.dispatchEvent(new Event('input', { bubbles: true }));
     }, RAW);
-    await clickText('.modal-actions .btn', '讀讀看');
+    await mustClickText(page,'.modal-actions .btn', '讀讀看');
     await page.waitForSelector('.imp-row', { timeout: 8000 });
     await sleep(1500);                       // 等策展比對跑完
 
@@ -319,13 +320,13 @@ try {
     yes(R('金丹早餐(原力行早餐)') && R('金丹早餐(原力行早餐)').on, '真實資料：備案照樣勾，別名也留著');
 
     const titleBefore = await page.$eval('input.field[type=text]', (e) => e.value);
-    await clickText('.modal-actions .btn', '就這樣建立');
+    await mustClickText(page,'.modal-actions .btn', '就這樣建立');
     await page.waitForFunction(() => document.querySelector('.imp-bar') && !document.querySelector('.imp-bar').hidden, { timeout: 6000 });
     const titleAfter = await page.$eval('input.field[type=text]', (e) => e.value);
     eq(titleBefore, '', '真實資料：建立前旅程名稱是空的');
     eq(titleAfter, '宜蘭遊', '真實資料：旅程名稱自動填成「宜蘭遊」');
 
-    await clickText('button.btn-primary', '產生拍照任務');
+    await mustClickText(page,'button.btn-primary', '產生拍照任務');
     await page.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 20000 });
     await page.waitForSelector('.qcollapse', { timeout: 20000 });
 

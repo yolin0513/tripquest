@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdir, rm } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { clickText as mustClickText } from './userclick.mjs';   // 點不到就丟例外、點名是哪顆
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = fileURLToPath(new URL('../screenshots/_install', import.meta.url));
@@ -44,11 +45,6 @@ const dev = async (ua, { standalone = false, clipboard = '' } = {}) => {
   await pg.evaluate((u) => { (async () => { (await import('./js/sync.js')).setConfig({ mode: 'lan', url: u }); })(); }, `http://localhost:${API}`);
   return pg;
 };
-const click = (pg, sel, t) => pg.evaluate((a, x) => {
-  const e = [...document.querySelectorAll(a)].find((z) => (z.textContent || '').includes(x));
-  if (e) e.click();
-  return !!e;
-}, sel, t);
 
 try {
   const host = await dev(UA.androidChrome);
@@ -118,11 +114,11 @@ try {
     await pg.waitForSelector('.join-hint', { timeout: 15000 });
     await shot(pg, 'standalone-empty');
 
-    await click(pg, 'button', '貼上邀請連結');
+    await mustClickText(pg,'button', '貼上邀請連結');
     await pg.waitForSelector('.modal-card', { timeout: 8000 });
     await shot(pg, 'standalone-clipboard');
 
-    await click(pg, '.modal-actions .btn', '就是它');
+    await mustClickText(pg,'.modal-actions .btn', '就是它');
     await pg.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 30000 });
     await sleep(1200);
     await shot(pg, 'standalone-joined');

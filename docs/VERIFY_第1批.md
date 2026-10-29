@@ -120,6 +120,9 @@ E1–E3、E5–E6、F1–F2、F5 的突變照預期紅（themetrust、postertrut
 | C2b | `mut_guesstruth` 4 條（H2、H3 各兩條：回到猜測、整個不送／不印） | 每條紅在 `why` 寫的那一條 |
 | C2 | 瀏覽器突變：`mut_motion` 後 7 條、`mut_itinview` 全部（22 條，含紙飛機 2、背包 1）、`mut_washi` 4 條（含 boot-theme 那條：預期只紅 W7） | 每條紅在 `why` 寫的那幾條；紅錯地方照實改 `why` 或改測試 |
 | C3 | 改過的舊測試原樣跑：`collapsetest`、`scrolltest`、`walltest`、`imgtest`、`layouttest` | 綠 |
+| C5 | 2026-10-29 量錯對象與沒接回傳值的修正：原樣跑 `layouttest`（併進排隊中那一場乾淨重跑）、`membergonetest`、`importtest`、`installtest` | 綠；`layouttest` 多印「前置：分帳假資料是一筆兩人分的正常帳」✓、對話框 7 個全部打得開（含「調整上限」） |
+| C6 | `mut_measuretarget` 3 條 | 每條紅在 `why` 寫的那一條；兩條 layouttest 的耗時記下來、改掉沿用的時限依據 |
+| C7 | 改用丟例外的 `clickText` 之後，`importshots`、`installshots` 照常產圖（工具，不在測試鏈；`livecheck-import` 打真網路，手動才跑） | 跑得完；換成真的滑鼠點擊，被蓋住的按鈕現在會丟例外 |
 | C4 | 部署前 `npm run test:affected` | 放大成全套 66 支、沒量過耗時 → 重負載，要許可；跑完把每支耗時記下來 |
 
 ## 已經驗過的（秒級，2026-10-27）

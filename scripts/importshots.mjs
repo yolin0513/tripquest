@@ -14,6 +14,7 @@ import { mkdir, rm, rename } from 'node:fs/promises';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import puppeteer from 'puppeteer';
+import { clickText as mustClickText } from './userclick.mjs';   // 點不到就丟例外、點名是哪顆
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const FINAL = fileURLToPath(new URL('../screenshots/_import', import.meta.url));
@@ -62,11 +63,6 @@ const shot = async (name) => {
   await page.screenshot({ path: f });
   console.log('✓ ' + f.split(/[\\/]/).pop());
 };
-const clickText = (sel, text) => page.evaluate((s, t) => {
-  const el = [...document.querySelectorAll(s)].find((x) => (x.textContent || '').includes(t));
-  if (el) el.click();
-  return !!el;
-}, sel, text);
 const scrollBody = (frac) => page.evaluate((f) => {
   const b = document.querySelector('.modal-body');
   b.scrollTop = Math.round((b.scrollHeight - b.clientHeight) * f);
@@ -81,11 +77,11 @@ try {
   });
   await shot('advanced');
 
-  await clickText('button', '匯入行程表');
+  await mustClickText(page,'button', '匯入行程表');
   await page.waitForSelector('.imp-src');
   await shot('source');
 
-  await clickText('.imp-src', '直接打字');
+  await mustClickText(page,'.imp-src', '直接打字');
   await page.waitForSelector('textarea.mono');
   await page.evaluate((t) => {
     const ta = [...document.querySelectorAll('textarea')].pop();
@@ -94,7 +90,7 @@ try {
   }, RAW);
   await shot('paste-text');
 
-  await clickText('.modal-actions .btn', '讀讀看');
+  await mustClickText(page,'.modal-actions .btn', '讀讀看');
   await page.waitForSelector('.imp-row');
   await sleep(1600);                      // 等策展地點庫比對完，「✓」才會出現
   rows = await page.evaluate(() => document.querySelectorAll('.imp-row').length);
@@ -115,14 +111,14 @@ try {
   await scrollBody(1);
   await shot('confirm-bottom');
 
-  await clickText('.modal-actions .btn', '就這樣建立');
+  await mustClickText(page,'.modal-actions .btn', '就這樣建立');
   await page.waitForFunction(() => document.querySelector('.imp-bar') && !document.querySelector('.imp-bar').hidden);
   await page.evaluate(() => {
     document.querySelector('input.field[type=text]').scrollIntoView({ block: 'center' });
   });
   await shot('title-filled');             // 旅程名稱被自動填成「宜蘭遊」
 
-  await clickText('button.btn-primary', '產生拍照任務');
+  await mustClickText(page,'button.btn-primary', '產生拍照任務');
   await page.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 30000 });
   await page.waitForSelector('.qcollapse', { timeout: 30000 });
   await sleep(1500);

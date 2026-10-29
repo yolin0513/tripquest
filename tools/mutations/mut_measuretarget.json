@@ -1,0 +1,30 @@
+[
+  {
+    "name": "分帳假資料改回 shareIds（0 人分的異常帳）",
+    "why": "2026-10-29 前的樣子：layouttest 掃的是一筆 0 人分的異常帳、一直是綠的。預期只紅「前置：分帳假資料是一筆兩人分的正常帳」。",
+    "file": "scripts/layouttest.mjs",
+    "find": "participants: [me, dad] });",
+    "replace": "shareIds: [me] });",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 1400000,
+    "timeoutBasis": "沿用 tools/mutations/mut_narrowcol.json 的依據（layouttest 改壞後乾淨實測 673.4 秒 × 2、進位）；這兩條還沒實測，跑完要回頭改成自己的實測"
+  },
+  {
+    "name": "調整上限的開法點到別的對話框（更換金鑰）",
+    "why": "2026-10-29 前同一種錯：名叫調整上限、開的是別的對話框。預期只紅「N 個對話框全部打得開並掃過」，輸出有「調整上限：打開的是別的對話框」。",
+    "file": "scripts/layouttest.mjs",
+    "find": "=== '調整上限')?.click(),",
+    "replace": "=== '更換')?.click(),",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 1400000,
+    "timeoutBasis": "沿用 tools/mutations/mut_narrowcol.json 的依據（layouttest 改壞後乾淨實測 673.4 秒 × 2、進位）；這兩條還沒實測，跑完要回頭改成自己的實測"
+  },
+  {
+    "name": "X1 的取消按到一顆不存在的按鈕",
+    "why": "2026-10-29 前 pressModal 找不到回 false、沒人接，「X1 按取消 → 小美還在」照樣綠。預期紅在最外層的「例外：…對話框裡找不到「不存在的按鈕」按鈕」。",
+    "file": "scripts/membergonetest.mjs",
+    "find": "  await mustPress('取消');\n  yes(await alive(ids.who['小美'])",
+    "replace": "  await mustPress('不存在的按鈕');\n  yes(await alive(ids.who['小美'])",
+    "cmd": "node scripts/membergonetest.mjs"
+  }
+]

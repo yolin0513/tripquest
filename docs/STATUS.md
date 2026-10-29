@@ -6,6 +6,8 @@
 ## 目前進行中／交接（給下一個接手的 Session）
 
 ### ⏸ 等機器空出來（Dispatch 一次通知）：`test:affected` 全套一次＋layouttest 原樣乾淨重跑一次（為了第 8 條／任務列那個修法）
+- 2026-10-29 併進同一場：VERIFY C5～C7（layouttest 那一場順便驗兩個量錯對象的修正；membergonetest、importtest、installtest 在 test:affected 裡；`mut_measuretarget` 3 條，其中 2 條各一次 layouttest、約 12 分鐘）。
+- **test:affected 那一場若紅在 importtest／installtest／membergonetest 的導覽步驟**：先看是不是「被蓋住」——改用真的滑鼠點擊之後，以前照點的被蓋住的按鈕現在會丟例外，那是新抓到的，不是改壞。
 
 ### 2026-10-29 改寫本機歷史（Dispatch 選項一）
 43ba0fe 起 6 個本機 commit 用 `git filter-branch --index-filter` 只改 `docs/STATUS.md` 三段字（應用程式名稱、安裝的精確時間），改寫後最終的樹與改寫前相同（`git diff` 空）。
@@ -63,7 +65,9 @@
 2. 恢復 test:affected 並跑綠——暫停期間的 commit 都不能推。
 3. 推送閘突變慢 5.4 倍：一起看這組對比——mut_narrowcol 改壞反而比原樣**快**（673 對 751，0.90），推送閘改壞**慢** 5.4 倍；
    同樣是「改壞一條檢查」方向相反，推送閘那邊可能是東西真的穿過去、做了推送（推論）。
-4. 其餘：~~33 處 `{ok}` 沒用結果~~ 2026-10-29 重盤成 36 命中＝誤報 12＋真的 24（會假綠 1），見 `docs/OKCHECK_盤點.md`，只列未修、等 Dispatch；會受機器狀態影響的測試標檔頭；LAYOUT_COVERAGE 的 9 種＋16 頁（16 頁 2026-10-29 盤完：191 種、涵蓋 54、沒涵蓋 120、判斷不了 17，只列未補）；todo B、50 個 patch、178 分類、11 個 commit＋38d6c15、認得出自己開的瀏覽器程序、285 處點擊。
+4. 其餘：~~33 處 `{ok}` 沒用結果~~ 2026-10-29 重盤成 36 命中＝誤報 12＋真的 24（會假綠 1），**24 處已修、沒跑**（`docs/OKCHECK_盤點.md`）；
+   layouttest **量錯對象**兩處已修、沒跑：假帳欄位 `shareIds`→`participants`、「調整上限」對話框其實開的是貼金鑰——各補一條會紅的檢查，突變 `mut_measuretarget` 3 條，驗法在 VERIFY C5～C7，**併進排隊中那一場一起跑**；
+   **紀律（2026-10-29，候選通則）：報盤點數字時，產生它的腳本或搜尋式先入庫、報告寫路徑**——「33」的搜法沒留，隔天無法複核；這次的搜法入庫成 `tools/okscan.mjs`；會受機器狀態影響的測試標檔頭；LAYOUT_COVERAGE 的 9 種＋16 頁（16 頁 2026-10-29 盤完：191 種、涵蓋 54、沒涵蓋 120、判斷不了 17，只列未補）；todo B、50 個 patch、178 分類、11 個 commit＋38d6c15、認得出自己開的瀏覽器程序、285 處點擊。
 
 ### 🔴 2026-10-28 下午：settletest 根因已修——畫面只有路由器一個入口（e7e4786，本機、沒推）；全套 73 支 69 綠 4 紅
 

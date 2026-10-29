@@ -105,7 +105,8 @@ try {
       country: 'TW', startDate: '2026-10-01', endDate: '2026-10-03', aiEnabled: false,
       createdByDevice: myDeviceId(), baseCurrency: 'TWD' });
     await s.put({ id: me, type: 'member', tripId: tid, groupId: gid, displayName: '阿嬤' });
-    await s.put({ id: uuid(), type: 'member', tripId: tid, groupId: gid, displayName: '爸爸' });
+    const dad = uuid();
+    await s.put({ id: dad, type: 'member', tripId: tid, groupId: gid, displayName: '爸爸' });
     // 長名稱是版面殺手 —— 故意放幾個
     const names = [
       ['國立傳統藝術中心宜蘭園區', 1], ['蘭陽博物館', 1], ['頭城老街', 1],
@@ -149,9 +150,10 @@ try {
           actorId: k === 0 ? me : uuid(), emoji: '❤️', createdAt: Date.now() });
       }
     }
-    // 一筆分帳
+    // 一筆分帳（兩人分）。2026-10-29 前欄位寫成 shareIds，程式讀的是 participants（js/expenses.js）——
+    // 掃到的一直是一筆「0 人分」的異常帳，而 layouttest 一直是綠的。下面「前置：分帳假資料」那條守著它。
     await s.put({ id: uuid(), type: 'expense', tripId: tid, groupId: gid, title: '晚餐（羅東夜市三攤）',
-      amount: 1250, currency: 'TWD', payerId: me, at: Date.now(), category: 'food', shareIds: [me] });
+      amount: 1250, currency: 'TWD', payerId: me, at: Date.now(), category: 'food', participants: [me, dad] });
     return { tid, gid };
   });
 
@@ -393,6 +395,16 @@ try {
     }
   };
 
+  // ---------- 前置：假資料真的是想掃的那個狀態（2026-10-29）----------
+  // 從使用者看到的畫面讀（分帳明細的副標），不讀 store：欄位名寫錯時 store 裡照樣有那筆帳。
+  {
+    await page.goto('about:blank');
+    await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/expenses`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.exp-item', { timeout: 15000 }).catch(() => {});
+    const sub = await page.evaluate(() => [...document.querySelectorAll('.exp-item .muted')].map((e) => e.textContent).join('｜'));
+    yes(/· 2 人分/.test(sub), '前置：分帳假資料是一筆兩人分的正常帳（不是「0 人分」的異常帳）', sub || '畫面上沒有任何一筆帳');
+  }
+
   // ---------- 掃描 ----------
   const ROUTES = [
     ['首頁', '/'],
@@ -531,13 +543,24 @@ try {
     ['建議順序', `/trip/${ids.tid}/plan`, () => [...document.querySelectorAll('.pd-opt')][0]?.click()],
     ['刪除確認', `/trip/${ids.tid}/settings`, () => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('移除這趟'))?.click()],
     ['日期選擇', `/trip/${ids.tid}/settings`, () => [...document.querySelectorAll('.setting-row')].find((r) => r.textContent.includes('旅程日期'))?.querySelector('button')?.click()],
-    ['調整上限', `/trip/${ids.tid}/settings`, () => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('貼上 Google 金鑰'))?.click()],
+    // 第 4 欄 prep：開之前先在頁面裡造好狀態（造完重新載入）；第 5 欄 isRight：開到的是不是這一個對話框。
+    // 2026-10-29 前這裡叫「調整上限」、點的卻是「貼上 Google 金鑰」——真正的調整上限從沒被掃過，而這條一直是綠的。
+    ['貼上 Google 金鑰', `/trip/${ids.tid}/settings`, () => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('貼上 Google 金鑰'))?.click(),
+      null, () => !!document.querySelector('.modal-card input[type=password]')],
+    ['調整上限', `/trip/${ids.tid}/settings`, () => [...document.querySelectorAll('.key-acts button')].find((b) => b.textContent.trim() === '調整上限')?.click(),
+      async (tid) => { const k = await import('./js/aikeys.js'); await k.setTripKey(tid, { mapsKey: 'AI' + 'za' + 'X'.repeat(35) }); },   // 假金鑰執行時才拼，免得推送閘把它當真金鑰
+      () => (document.querySelector('.modal-card')?.textContent || '').includes('每月最多查幾次')],
     ['加一筆帳', `/trip/${ids.tid}/expenses`, () => document.getElementById('topActionBtn')?.click()],
     ['音樂授權', `/trip/${ids.tid}/album`, () => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('音樂來源與授權'))?.click()],
   ];
   let modalN = 0;
   const notOpened = [];
-  for (const [label, route, open] of MODALS) {
+  for (const [label, route, open, prep, isRight] of MODALS) {
+    if (prep) {
+      await page.goto('about:blank');
+      await page.goto(`http://localhost:${WEB}/#${route}`, { waitUntil: 'networkidle0' }).catch(() => {});
+      await page.evaluate(prep, ids.tid);
+    }
     await page.goto('about:blank');
     await page.goto(`http://localhost:${WEB}/#${route}`, { waitUntil: 'networkidle0' }).catch(() => {});
     await page.evaluate(() => { document.documentElement.dataset.fs = 'xl'; });
@@ -548,6 +571,8 @@ try {
     // 「打不開就略過」＝ 掃描器可以無聲地縮水成 0 個對話框還說通過。
     // 開不起來要當失敗：不是選擇器過期了，就是那個入口真的壞了，兩種都要知道。
     if (!shown) { console.log(`  ✗ ${label}：對話框打不開（選擇器過期或入口壞了）`); notOpened.push(label); continue; }
+    // 打開了不等於打開的是它：量錯對象比沒量更糟，因為會讓人以為量過了。
+    if (isRight && !(await page.evaluate(isRight))) { console.log(`  ✗ ${label}：打開的是別的對話框`); notOpened.push(`${label}（開錯對話框）`); continue; }
     await sleep(400);
     modalN++;
     const list = await page.evaluate(`(() => {

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { rm } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { clickText as mustClickText } from './userclick.mjs';   // 導覽步驟用：點不到就丟例外、點名是哪顆（不接回傳值的地方一律用這支）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5301, API = 8797;
@@ -218,10 +219,10 @@ try {
     yes(!(await has(pg, '把 TripQuest 放到主畫面')), '空的主畫面 App：不會再叫他安裝一次');
 
     // 剪貼簿裡就是那條邀請 → 一路加入成功
-    await clickText(pg, 'button', '貼上邀請連結');
+    await mustClickText(pg,'button', '貼上邀請連結');
     await pg.waitForSelector('.modal-card', { timeout: 8000 });
     yes(await has(pg, '找到一個邀請連結'), '剪貼簿有連結時直接問「是不是這個」');
-    await clickText(pg, '.modal-actions .btn', '就是它');
+    await mustClickText(pg,'.modal-actions .btn', '就是它');
     await pg.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 30000 });
     ok('按兩下就加入成功（不用自己貼）');
     const got = await pg.evaluate(async () => {
@@ -245,7 +246,7 @@ try {
     const pg = await dev(UA.iosSafari, { standalone: true, clipboard: '' });
     await pg.goto(`http://localhost:${WEB}/#/`, { waitUntil: 'networkidle0' });
     await pg.waitForSelector('.join-hint', { timeout: 10000 });
-    await clickText(pg, 'button', '貼上邀請連結');
+    await mustClickText(pg,'button', '貼上邀請連結');
     await pg.waitForSelector('.modal-card textarea, .modal-card input', { timeout: 8000 });
     yes(await has(pg, '貼上邀請連結'), '剪貼簿沒東西時退回手動貼上，不會卡住');
     await pg.close();

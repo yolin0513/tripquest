@@ -142,6 +142,11 @@ try {
     await sleep(300);
     return true;
   };
+  // 不接回傳值的地方一律用這支：找不到就丟例外（2026-10-29，docs/OKCHECK_盤點.md）。
+  // 原本 X1 的「按取消 → 小美還在」在取消沒按到時照樣綠——沒按取消，小美本來就在。
+  const mustPress = async (label) => {
+    if (!(await pressModal(label))) throw new Error(`對話框裡找不到「${label}」按鈕`);
+  };
   const alive = (id) => page.evaluate(async (id) => { const s = await import('./js/store.js'); return !!s.get(id); }, id);
 
   await openSettings();
@@ -167,7 +172,7 @@ try {
   yes(d1.text.includes('1 張照片') && d1.text.includes('未指定'), 'X5 小美帳與照片都有 → 同一個對話框也講照片那一句', d1.text.slice(0, 300));
   const btns = await page.$$eval('#modalRoot .modal-actions button', (bs) => bs.map((b) => b.textContent.trim()));
   yes(btns.join('／') === '取消／移除', `X1 按鈕是「移除」「取消」（${btns.join('／')}）`);
-  await pressModal('取消');
+  await mustPress('取消');
   yes(await alive(ids.who['小美']) && (await rowsNow()).includes('小美'), 'X1 按取消 → 小美還在');
 
   // 對照組：沒帳也沒照片 → 不跳、直接移除
@@ -179,13 +184,13 @@ try {
   // ---------- X4：帳只在同群組的另一趟 ----------
   const dA = await pressTrash('阿姨');
   yes(dA.open && dA.text.includes('付了 1 筆') && dA.text.includes('分攤 1 筆'), 'X4 阿姨的帳只在同群組的另一趟 → 這一趟的設定也講得出「付了 1 筆、分攤 1 筆」', dA.text.slice(0, 200));
-  await pressModal('取消');
+  await mustPress('取消');
 
   // ---------- X5：只有照片 ----------
   const dB = await pressTrash('表哥');
   yes(dB.open && dB.text.includes('1 張照片') && dB.text.includes('未指定'), 'X5 表哥只有照片 → 對話框講照片那一句', dB.text.slice(0, 200));
   yes(!dB.text.includes('分帳'), 'X5 表哥沒帳 → 不講帳', dB.text.slice(0, 200));
-  await pressModal('取消');
+  await mustPress('取消');
 
   // ---------- 真的移除小美 ----------
   const d2 = await pressTrash('小美');
@@ -262,7 +267,7 @@ try {
   });
   yes(form.payers.length >= 3 && !form.payers.some((n) => n.includes('小美')), `X6 記帳表單「誰付的」沒有小美（${form.payers.join('／')}）`);
   yes(form.parts.length >= 3 && !form.parts.some((n) => n.includes('小美')), `X6 記帳表單「分給誰」沒有小美（${form.parts.join('／')}）`);
-  await pressModal('取消');
+  await mustPress('取消');
   const pick = await page.evaluate(async (T1) => {
     const { ensureMember } = await import('./js/claim.js');
     ensureMember(T1, { force: true });                  // 不等它：它會等使用者挑

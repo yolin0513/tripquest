@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { clickText as mustClickText } from './userclick.mjs';   // 導覽步驟用：點不到就丟例外、點名是哪顆（不接回傳值的地方一律用這支）
 
 const BASE = 'https://yolin0513.github.io/tripquest/';
 let pass = 0;
@@ -58,7 +59,7 @@ try {
     ta.value = '【第1天】台北\n09:00 台北101 停留2小時\n12:00 午餐：鼎泰豐\n14:00 - 16:30 士林夜市\n【第2天】\n09:00 九份老街（搭公車 約40分鐘）\n13:00 十分瀑布';
     ta.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await clickText('.modal-actions .btn', '讀讀看');
+  await mustClickText(page, '.modal-actions .btn', '讀讀看');
   await page.waitForSelector('.imp-row', { timeout: 15000 });
 
   const rows = await page.$$eval('.imp-row', (els) => els.map((e) => ({
@@ -79,14 +80,14 @@ try {
   });
   yes(geo.top >= -1 && geo.h <= geo.vh + 1, `線上：確認視窗在畫面內（top=${Math.round(geo.top)} h=${Math.round(geo.h)} vh=${geo.vh}）`);
 
-  await clickText('.modal-actions .btn', '就這樣建立');
+  await mustClickText(page, '.modal-actions .btn', '就這樣建立');
   await page.waitForFunction(() => document.querySelector('.imp-bar') && !document.querySelector('.imp-bar').hidden, { timeout: 15000 });
   await page.evaluate(() => {
     const f = document.querySelector('input.field[type=text]');
     f.value = '線上匯入驗證';
     f.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await clickText('button.btn-primary', '產生拍照任務');
+  await mustClickText(page, 'button.btn-primary', '產生拍照任務');
   await page.waitForFunction(() => location.hash.startsWith('#/trip/'), { timeout: 40000 });
   // 網址會比畫面早一步 —— 路由處理是非同步的（載主題、讀 store）。
   // 不等實際內容就斷言，量到的還是建立頁。
@@ -126,12 +127,12 @@ try {
     await page.goto(BASE + '#/new', { waitUntil: 'networkidle0', timeout: 60000 });
     await page.waitForSelector('.page.form', { timeout: 30000 });
     await page.evaluate(() => { document.querySelector('details').open = true; });
-    await clickText('button', '匯入行程表');
+    await mustClickText(page, 'button', '匯入行程表');
     await page.waitForSelector('.imp-src', { timeout: 15000 });
     const before = outbound.length;
     const [chooser] = await Promise.all([
       page.waitForFileChooser({ timeout: 15000 }).catch((e) => ({ err: e.message })),
-      clickText('.imp-src', src),
+      mustClickText(page, '.imp-src', src),
     ]);
     // 前置：選檔視窗真的開了（情境造出來了），才驗後面
     yes(chooser && !chooser.err, `線上：選「${src}」→ 選檔視窗真的打開了（前置）`, chooser && chooser.err);
