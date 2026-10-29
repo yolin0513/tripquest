@@ -6,8 +6,8 @@
     "find": "participants: [me, dad] });",
     "replace": "shareIds: [me] });",
     "cmd": "node scripts/layouttest.mjs",
-    "timeoutMs": 1400000,
-    "timeoutBasis": "沿用 tools/mutations/mut_narrowcol.json 的依據（layouttest 改壞後乾淨實測 673.4 秒 × 2、進位）；這兩條還沒實測，跑完要回頭改成自己的實測"
+    "timeoutMs": 1500000,
+    "timeoutBasis": "改壞後乾淨實測 710 秒（帳本 seq 250，2026-10-29 15:43～15:55，loadjudge 含觀察者門檻判乾淨）；同組另一條 726 秒（seq 251）；取較長的 726 × 2、進位到百秒"
   },
   {
     "name": "調整上限的開法點到別的對話框（更換金鑰）",
@@ -16,8 +16,8 @@
     "find": "=== '調整上限')?.click(),",
     "replace": "=== '更換')?.click(),",
     "cmd": "node scripts/layouttest.mjs",
-    "timeoutMs": 1400000,
-    "timeoutBasis": "沿用 tools/mutations/mut_narrowcol.json 的依據（layouttest 改壞後乾淨實測 673.4 秒 × 2、進位）；這兩條還沒實測，跑完要回頭改成自己的實測"
+    "timeoutMs": 1500000,
+    "timeoutBasis": "改壞後乾淨實測 726 秒（帳本 seq 251，2026-10-29 15:55～16:07，loadjudge 含觀察者門檻判乾淨）× 2、進位到百秒"
   },
   {
     "name": "X1 的取消按到一顆不存在的按鈕",
