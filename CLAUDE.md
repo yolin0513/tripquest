@@ -24,8 +24,9 @@ STATUS.md 開頭有「目前進行中／交接」一節，先看那節掌握現�
    路徑**（不是最短的 goto）；回報**明確區分「實測驗證過的」與「推論的」**。
 
 5. **每版流程**——bump `sw.js` 的 `VERSION` → `npm run test:affected`（底線＋受影響）綠 →
-   commit → `bash scripts/safe-push.sh` 推送（不要自己 `git push`）→ curl 確認線上 `VERSION` → `npm run sweep` 巡檢。全面檢測（完整 `npm test`＋
-   `sweep`）由 Yolin 指定；回報不准把部分測試寫成全綠。**動到 `js/merge.js` 或 `workers/` 時：Worker
+   commit → `bash scripts/safe-push.sh` 推送（不要自己 `git push`）→ curl 確認線上 `VERSION`。**🔴 `npm run sweep` 會寫入
+   正式站，只在 Yolin 明確許可時才跑**——不是每版流程、不准接在推送閘後面（2026-10-29 明訂；寫了什麼見 `scripts/sweep.mjs` 檔頭）。
+   全面檢測（完整 `npm test`）由 Yolin 指定；回報不准把部分測試寫成全綠。**動到 `js/merge.js` 或 `workers/` 時：Worker
    先部署、客戶端後推**（反過來會造成永久分歧，v1.73.2 實測）。**動到推送閘（`safe-push.sh`／`prepush-scan.mjs`／
    `pushgatetest.mjs`／`verified-reg.mjs`）或新 clone：commit 之後先跑 `npm run pushgatetest`；動到 `build-places.mjs`／
    `importshots.mjs`／`f8verify.mjs`／`verified-reg.mjs`：commit 之後先跑 `npm run f8verify`**——不然推送閘回 5／6（F9）。

@@ -110,7 +110,7 @@ export const ORPHAN_RE = /(test|lint|check|validate|scan|verify)/i;   // verify�
 export const ORPHAN_OK = {
   f8verify: 'F8 的驗法，約 4.5 分鐘、要 PowerShell 鎖檔；推送閘在推送動到它守的三支時要求登記相符（回 6），不靠鏈',
   livetest: '打正式站（共用慣例 §5.6：打真網路的不進 npm test）；手動跑',
-  'livecheck-import': '打正式站；接在 npm run sweep 後面，每版推送後跑',
+  'livecheck-import': '打正式站、會寫入正式 D1；接在 npm run sweep 後面，只在 Yolin 明確許可時手動跑（2026-10-29 起不是每版流程）',
   'prepush-scan': '推送閘自己呼叫的公開前自查；行為由 pushgatetest 驗',
   convcheck: '共用慣例副本與主檔的比對器（函式庫）；行為由 convtest 驗（convtest 在鏈裡、也在底線）',
 };
