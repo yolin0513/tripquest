@@ -5,6 +5,14 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### ⛔ 交接快照（2026-10-29 16:30 前後）：Yolin 說推，推送閘擋下，**沒有推上去**
+- `safe-push.sh` 回 6：`scripts/importshots.mjs` 改過（今天沒接回傳值那 24 處的修正），F8 驗法沒重跑——CLAUDE.md 第 5 條本來就寫「動到 importshots.mjs，commit 之後先跑 `npm run f8verify`」，是我漏了。
+  閘門照設計擋下；遠端 main 仍是 e31db71（`git ls-remote` 確認），一個 commit 都沒出去。
+- 推之前的作息搜尋已過：origin/main..HEAD 70 個 commit 逐個 `git grep -I`、commit 訊息、`git log -S`，三個作息字樣（兩個 App 名與一個時刻；原樣不寫進 repo）0 命中；對照組 b52b57d 3/3 命中。
+  （第一次沒加 `-I`，每個 commit 都命中其中一個 App 名——是兩張 PNG 壓縮資料湊出來的三個字母，origin/main 本來就有，附錄 A.6 的巧合。）
+- **下一步**：拿到許可 → `npm run f8verify`（約 4.5 分鐘，在 .logs/f8-wt 暫存複本裡跑；會不會開瀏覽器沒確認）→ 再跑 `safe-push.sh` → 推完拿同一支搜尋搜遠端那一份 → curl 確認線上 VERSION＝v1.74.11 → `npm run sweep`（正式站，開瀏覽器）。
+- 還欠：VERIFY C1、C2（約 33 條瀏覽器突變，1.5～2 小時）、C7；取樣器改父程序鏈認 own（待辦）；分帳頁 overlap 那一族在 120 種沒涵蓋狀態裡沒逐處查。
+
 ### 🟢 2026-10-29 第三場（14:58～16:07，查詢島停著不開瀏覽器）：test:affected 74/74 全綠
 - **功能**：`run-affected --base origin/main` 完整的鏈 **74/74 支全綠**（2671 秒）；layouttest 零版面問題，兩條量錯對象的檢查 ✓。
   `mut_measuretarget` 第 1、2 條各只紅預期那一條（帳本 seq 250、251）——3 條全部照預期紅（第 3 條 seq 243）。
