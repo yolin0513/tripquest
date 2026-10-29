@@ -1,0 +1,42 @@
+[
+  {
+    "name": "系統那一塊不設門檻（回到 2026-10-28 的樣子）",
+    "why": "安裝程式吃掉 20% 也判乾淨。預期只紅「系統平均超過」「系統單窗超過」兩種。",
+    "file": "scripts/loadjudge.mjs",
+    "find": ", ['system', '系統', baseSystem]]) {",
+    "replace": "]) { /* 突變：系統不設門檻 */",
+    "cmd": "node scripts/loadjudge.mjs"
+  },
+  {
+    "name": "拿掉平均門檻",
+    "why": "預期只紅「系統平均超過」「外來平均超過」兩種。",
+    "file": "scripts/loadjudge.mjs",
+    "find": "if (avg > base + ONE_CORE) why.push",
+    "replace": "if (false) why.push",
+    "cmd": "node scripts/loadjudge.mjs"
+  },
+  {
+    "name": "拿掉單窗門檻",
+    "why": "預期只紅「系統單窗超過」「外來單窗超過」兩種。",
+    "file": "scripts/loadjudge.mjs",
+    "find": "if (peak[key] > MAX_WINDOW) why.push",
+    "replace": "if (false) why.push",
+    "cmd": "node scripts/loadjudge.mjs"
+  },
+  {
+    "name": "這段沒有取樣當成乾淨",
+    "why": "沒量到被寫成乾淨（§5.13）。預期只紅「這段沒有取樣」「格式讀不懂」兩種。",
+    "file": "scripts/loadjudge.mjs",
+    "find": "if (!rows.length) { console.log('這段沒有任何取樣——不是乾淨，是沒量到'); return 2; }",
+    "replace": "if (!rows.length) return 0;",
+    "cmd": "node scripts/loadjudge.mjs"
+  },
+  {
+    "name": "跨午夜不處理",
+    "why": "午夜後的窗被丟掉。預期只紅「跨午夜兩窗都算進去」。",
+    "file": "scripts/loadjudge.mjs",
+    "find": "if (b0 < a && s < a) s += 86400;",
+    "replace": "",
+    "cmd": "node scripts/loadjudge.mjs"
+  }
+]
