@@ -5,7 +5,14 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
-### ⛔ 交接快照（2026-10-29 16:30 前後）：Yolin 說推，推送閘擋下，**沒有推上去**
+### ⛔ 交接快照（2026-10-29 16:40）：f8verify 過了，推送閘**第二次擋下**（自查 path 18 行），還是沒推上去
+- `npm run f8verify` 16:34～16:38 全部擋下、已登記（236 秒）。**會開瀏覽器**（推論：「資料變少」那一格截到第 4/13 張才中斷；取樣器 own 那一塊 16:34:42～16:37:38 在 6～10）。`loadjudge` 判乾淨（觀察者平均 4.0）。
+- `safe-push.sh` 回 1：公開前自查 path 類命中 18 行，全是「磁碟代號＋Windows 系統目錄」這種路徑（取樣器檔頭、loadjudge 註解、突變的 timeoutBasis、STATUS；這裡刻意不寫原樣，免得再多一行），
+  其中一行是程式 `tools/loadsample.ps1` 判斷系統程序的那個 `-like` 比對。附錄 A.3「每台電腦都一樣的系統路徑」不算個資，但自查的規則是凡磁碟代號路徑都擋。遠端仍是 e31db71。
+- 兩種修法等 Dispatch 選：(1) 改寫本機歷史，把這 18 行換成不帶磁碟代號的寫法（程式那行改用 `$env:SystemRoot`），跟今天早上同一招；(2) 自查加「系統路徑」例外——動推送閘，要跑 pushgatetest、改規則要先問。
+- `sweep` 會寫正式站（建巡檢行程、接著跑 livecheck-import 開群組），9-25 的恢復條件還沒做——沒跑，等 Dispatch 選。
+
+### ⛔（舊）交接快照（2026-10-29 16:30 前後）：Yolin 說推，推送閘擋下，**沒有推上去**
 - `safe-push.sh` 回 6：`scripts/importshots.mjs` 改過（今天沒接回傳值那 24 處的修正），F8 驗法沒重跑——CLAUDE.md 第 5 條本來就寫「動到 importshots.mjs，commit 之後先跑 `npm run f8verify`」，是我漏了。
   閘門照設計擋下；遠端 main 仍是 e31db71（`git ls-remote` 確認），一個 commit 都沒出去。
 - 推之前的作息搜尋已過：origin/main..HEAD 70 個 commit 逐個 `git grep -I`、commit 訊息、`git log -S`，三個作息字樣（兩個 App 名與一個時刻；原樣不寫進 repo）0 命中；對照組 b52b57d 3/3 命中。
