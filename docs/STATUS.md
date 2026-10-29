@@ -5,7 +5,23 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
-### ⏸ 等機器空出來（Dispatch 一次通知）：`test:affected` 全套一次＋layouttest 原樣乾淨重跑一次（為了第 8 條／任務列那個修法）
+### 🔴 2026-10-29 中午排隊那一場（Dispatch 放行；查詢島同機改程式，靠取樣器＋`loadjudge` 判）
+- **功能**：`test:affected --base origin/main` 放大成全套 74 支，前 50 支全綠（含改過的 importtest 83 項、installtest 74 項、membergonetest），
+  第 51 支 **layouttest 紅、照規則停下，後 23 支沒跑**。單獨重跑 layouttest 同樣紅、同樣 3 處。
+  紅的是**新抓到的、不是改壞**：假帳改成正常的兩人分帳之後，分帳頁出現「誰給誰」那一列，「爸爸」「阿嬤」兩個名字在 320／360／390px 疊在一起
+  （分帳/320px/m、360px/l、390px/xl）。以前假帳是 0 人分、大家打平，那一列從沒出現過。產品還沒修（回報紅、不自己修）。
+  兩條量錯對象的檢查都 ✓：「前置：分帳假資料是一筆兩人分的正常帳」、「7 個對話框全部打得開並掃過」（含真正的調整上限）。
+- **耗時**：外來基線取 0.7（開跑前 60 秒有一支外來 node 佔一核 50 秒、最後一窗停了；把那 50 秒算進基線等於把干擾當正常，取嚴）。
+  test:affected 12:01:26～12:42:53（2486 秒）`loadjudge` 回 0 乾淨（外來平均 2.6、最大 11；系統 0.4）；
+  layouttest 單獨 12:42:53～12:54:49（716 秒）回 0 乾淨（外來 0.2、系統 0.4）。紀錄 `.logs/load-1029pm.txt`。
+- **降級**：沒有——兩段整段都判乾淨，19 支短逾時、48 支固定等待那份名單不必逐支套。
+- **突變**：`mut_measuretarget` 第 3 條（X1 取消按到不存在的按鈕）紅在「對話框裡找不到…」✓（帳本 seq 243）。
+  第 1、2 條**沒跑**：嚴格模式被 run-affected 寫的 `tools/test-times.json` 擋下；而且 layouttest 原樣已經紅（3 處 overlap），這時跑改壞它的突變分不出紅在哪（§5.11 原樣先綠），要等 overlap 修好。
+- **第四個修法（任務名被擠成一個字一行）在乾淨機器上驗過了**：兩次 layouttest 的問題清單都只有那 3 處 overlap，沒有 narrow-column（第 8 條）——
+  早上那句「第四個要等電腦空下來再跑一次才算數」現在算數了：四個修法都成立。
+- **test:affected 沒有全綠、不能推送。** 卡在分帳頁名字重疊這個產品問題。
+
+### ⏸（舊）等機器空出來（Dispatch 一次通知）：`test:affected` 全套一次＋layouttest 原樣乾淨重跑一次（為了第 8 條／任務列那個修法）——2026-10-29 中午已跑，結果見上
 - 2026-10-29 併進同一場：VERIFY C5～C7（layouttest 那一場順便驗兩個量錯對象的修正；membergonetest、importtest、installtest 在 test:affected 裡；`mut_measuretarget` 3 條，其中 2 條各一次 layouttest、約 12 分鐘）。
 - **test:affected 那一場若紅在 importtest／installtest／membergonetest 的導覽步驟**：先看是不是「被蓋住」——改用真的滑鼠點擊之後，以前照點的被蓋住的按鈕現在會丟例外，那是新抓到的，不是改壞。
 
