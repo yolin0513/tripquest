@@ -5,6 +5,26 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### 🔴 2026-10-29 第二場（13:45～14:25，查詢島同機開瀏覽器拍照＋跑 node 測試／突變）
+- **功能**：test:affected 全套 74 支，前 50 支綠，layouttest 紅、停下，後 23 支沒跑。
+  layouttest 從 3 處剩 **1 處**：分帳/390px/xl「爸爸」「阿嬤」疊 50×31。寬度那一半修好了（320、360 不再疊）；
+  剩的是另一族——金額掉下去之後，390px 特大字仍把「阿嬤」拆在兩行（「1」「張」那一族：字允許在任何位置斷開）（推論，從 overlap 的形狀與寬度推，沒截圖）。
+  已補第二步（名字整塊換行），**還沒跑**。兩條量錯對象的檢查照樣 ✓。
+- **耗時**：`loadjudge` 整段與四個子段都回 0「乾淨」——**不採信**。查詢島給的時間表對得上兩件取樣器看得到、但門檻放過的事：
+  它的瀏覽器算進「觀察者」（不設門檻；14:04:14 那窗 17，空機 3～4）；它的 node 一核 8.5～9.7 從 14:05:59 到 14:16:09（壓在門檻 8.4 上下，平均判過）。
+  **13:55:30～14:16:20 的耗時一律不採計**（補充依據：時間表＋觀察者那一塊的升高；不是 loadjudge 直接量到的）。這一場的 `test-times.json` 沒 commit，存在 `.logs/run1029b-test-times.json`。
+- **降級**：那段時間跑的 35 支（從 13:45 依序累加各支耗時推回起訖，推到 layouttest 結束差 8 秒），落在短逾時或固定等待名單的 30 支裡，**29 支綠降級**
+  （collapsetest、plantest、tabbartest、videotest、exporttest、recapcardtest、v147shots、geotest、settletest、formgrouptest、membergonetest、blanktest、
+  plannertest、routetest、themetest、musictest、mergetest、albumtest、nearbytest、postest、maplinktest、emptytest、removetest、livesynctest、audittest、
+  chunktest、jointest、transittest、checktest，以及 layouttest 本身——它是紅，紅的理由跟乾淨的第一場同一處，紅照採）。
+  不降級的 5 支：moneytest、curatedtest、pushgatetest、gatelint、zhtest 不在名單。
+  佐證（推論）：這 29 支在中午乾淨的第一場都綠，兩場之間程式只差 `.exp-settle` 那幾行 CSS。
+- **取樣器的盲點**整理在 `tools/loadsample.ps1` 檔頭（①～⑦）；根治 ③ 列待辦，這一場沒改。
+- **test:affected 沒有全綠、不能推送。**
+
+### 待辦（2026-10-29 新增）
+- 取樣器改從父程序鏈認 own（盲點 ③），順帶想 ④ 觀察者裡的內建瀏覽器怎麼分出來、⑤ GPU；**改了之後跟 10-28、10-29 的數字不能直接比**，改之前先把這幾場的結論定案。
+
 ### 📌 量錯對象修好之後，第一次跑就撞到從沒被掃過的 bug（2026-10-29，留著）
 假資料的欄位名稱寫錯（`shareIds`，程式讀 `participants`）→ 掃到的一直是一筆「0 人分、大家打平」的異常帳 →
 分帳頁那一列「誰該給誰多少錢」從來沒有出現過 → 那一列裡的名字重疊，**整個專案史上從來沒被掃到過**。

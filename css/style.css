@@ -1452,6 +1452,9 @@ textarea.field { resize: vertical; line-height: 1.6; }
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
 }
 .exp-settle-txt { flex: 1 1 120px; min-width: 0; }
+/* 第二步（同日第二場）：金額掉下去之後，390px 特大字仍把「阿嬤」拆在兩行（「阿」在行尾、「嬤」在下一行）——
+   這是「1」「張」那一族（字允許在任何位置斷開），不是寬度。名字整塊換行，比整行還長才在名字裡斷。 */
+.exp-settle-txt b { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
 .exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent-text); flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 /* v1.73：金額（「應收 NT$1,250.00」）的最小寬度是不可斷行的數字，名字那一欄
    min-width:0 就被壓到剩一個字的寬 —— 實機截圖是「阿」「嬤」直排、金額壓在上面。
