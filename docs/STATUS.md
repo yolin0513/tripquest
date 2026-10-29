@@ -5,6 +5,17 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### ✅／⏸ 2026-10-29 早上（Dispatch 收緊範圍：只做下面 1～3 項，查詢島同時用機器、不跑量時間的東西）
+- **1 取樣器補洞：做完。** `.logs/loadsample.ps1` 每行多印 `systop=[前三名]`（選「印出來」而不是「把安裝類改算外來」：改算外來要一份安裝程式名單，
+  是排除制、列不完；印出來是每一支都看得到）。對照組實測：基線 systop 的 powershell 0.2 → 系統目錄（%SystemRoot%） 底下的 powershell 空轉一核時 8.5、排第一；
+  命令列不含 repo 名的 node 空轉時進外來 8.4、不進 systop。突變（拿掉累加 systop 那一行）在同樣負載下 system=8.9、systop=[]——會紅。
+  **還沒做**：門檻仍只看外來，systop 只是看得見、不會擋；取樣器仍未進 repo（一次性工具，要不要進 repo 待決）。另：暫存區路徑含 repo 名，從那裡跑的 node 會被認成 own。
+- **2 test:affected：沒跑。** 推送範圍（origin/main..HEAD，57 個 commit）的 dry-run 是**全套 74 支、會開瀏覽器、預測不出（dayjumptest 沒量過）**，
+  照 §5.19 屬重負載、要許可，而且 Dispatch 今天限定不跑量時間的東西。下面那行「停用中」的**恢復條件中 layouttest 那一半已成立**（17 → 0），剩「跑一次全綠」。
+- **3 檔頭標了 9 支**（判定看經過時間的）：jointest 15 秒、workertest 8 秒、transittest 13～22 秒（上下界）、updatetest 12 秒、livesynctest 45 秒、
+  albumtest 420／700 毫秒窗口（可能誤紅也可能誤綠）、plantest 15 秒前置、worktreeguardtest 30 秒、mutatetest 60 秒（後兩支裕度大）。
+  搜的樣式：`performance.now()`、`Date.now() - `、elapsed、耗時、秒內、budget、數字門檻；**在這些樣式範圍內**。一般的 waitForSelector 預設逾時沒算進去。只是註解、沒有機器檢查。
+
 ### ⏭ 2026-10-29 明天從這裡接（Dispatch 照這份開工）
 1. **補洞（排第一，不是改進）：外來負載取樣器 `.logs/loadsample.ps1` 看不見 `系統目錄（%SystemRoot%）` 底下的負載**（msiexec 之類被算進「系統」，
    而門檻只看外來）——看不見和沒有負載的輸出一模一樣；mut_narrowcol 的 seq 230／231 是靠 Dispatch 給的背景才回頭對上時間。
@@ -57,7 +68,7 @@
   「檢查器壞了與命中回同一個值」1161.8 秒，✗ 2 行＝C2（回 1 而不是 4）、Z（逐一拿掉分支要判成檢查器壞了）；「拿掉最後比對遠端那一關」1004.8 秒，✗ 1 行＝E（回 0 而不是 3）。
   時限定案 2900 秒＝最長 1443.3（seq 214）× 係數 2，依據寫在 mut_gate.json 的 `timeoutBasis`、mutlint 每次照印。
   **注意**：`timeout-margin.mjs` 拿突變的時限除以**原樣**最長（266.8）印 10.9 倍，實際對改壞後最長只有 2.0 倍——它不看改壞後的耗時（待辦：改成讀帳本裡改壞後的實測）。
-- **⛔ `test:affected` 目前停用（2026-10-28 起，Dispatch 同意）。** 這段期間每一個本機 commit 都**沒有**跑過底線＋受影響，commit 訊息裡寫的只有單支測試。
+- **⛔ `test:affected` 目前停用（2026-10-28 起，Dispatch 同意；2026-10-29：layouttest 已 17 → 0，停用的理由消失，只差跑一次全綠——範圍是全套、屬重負載，等許可）。** 這段期間每一個本機 commit 都**沒有**跑過底線＋受影響，commit 訊息裡寫的只有單支測試。
   原因：layouttest 已知紅 17 處（來源未定：2094347 的 CSS 還是更早，要拿 fbcdb6a 舊 CSS 跑 12 分鐘那次才分得出），它在受影響範圍裡，
   `test:affected` 會停在它那裡、後面的沒跑，拿不到完整結果。**恢復條件**：layouttest 原因查清楚並修好（或確認是既有問題、經 Dispatch 決定怎麼處理）之後，
   在推送前跑一次 `test:affected` 全綠。**推送之前一定要恢復**——停用期間的 commit 一個都不准推。

@@ -1,4 +1,5 @@
 // 正式 Worker 的端到端測試（npm run workertest，v1.73.2）
+// ⏱ 受機器狀態影響（2026-10-29 標）：「錯祕鑰的過大請求也是 413」同時要求 8 秒內回應——機器忙時可能誤紅；紅在這一條先看當時負載。
 //
 // 為什麼要有這一支：`npm test` 裡所有同步測試跑的都是 `server/index.mjs`（LAN 版），
 // 而 **限流、D1 分批、safeImgType、公開相簿、/resolve 這些只存在於 `workers/worker.mjs`**。
