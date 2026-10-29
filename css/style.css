@@ -1444,12 +1444,15 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* v1.73：特大字級下 2rem = 50px，「NT$1,250.00」要 340px，320px 的手機直接切掉
    尾巴（實機截圖看到的是「NT$1,250.0」）。改成同時受視窗寬度封頂。 */
 .exp-total-num { font-size: min(2rem, 9.5vw); font-weight: 900; margin: 4px 0; overflow-wrap: anywhere; }
+/* v1.74.11：跟下面 .exp-person、.exp-item 同一個毛病的第三處——金額不可斷行，「A 給 B」那一欄被擠到一兩個字寬，
+   兩個名字各折成直排、疊在一起（layouttest overlap，320～390px 大字）。以前沒抓到：假帳寫錯欄位、大家打平，這一列從沒出現過。
+   同樣的解法：排不下就讓金額掉到下一行靠右。 */
 .exp-settle {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
 }
-.exp-settle-txt { flex: 1; min-width: 0; }
-.exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent-text); }
+.exp-settle-txt { flex: 1 1 120px; min-width: 0; }
+.exp-settle-amt { font-weight: 900; font-size: 1.1rem; color: var(--accent-text); flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 /* v1.73：金額（「應收 NT$1,250.00」）的最小寬度是不可斷行的數字，名字那一欄
    min-width:0 就被壓到剩一個字的寬 —— 實機截圖是「阿」「嬤」直排、金額壓在上面。
    讓整列可以換行：排得下就同一列，排不下金額自己掉到下一行靠右。 */
