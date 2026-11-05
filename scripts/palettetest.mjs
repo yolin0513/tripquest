@@ -46,6 +46,7 @@ const ALL_THEMES = {
   '.switch-row input[type="checkbox"]:checked::after': NO_TEXT,
   '.poster-frame': NO_TEXT + '（海報畫布的外框，裡面是 canvas）',
   '.apx-cam': EMOJI + '（📷）',
+  '#sosFab': EMOJI + '（🆘，index.html；2026-11-05 以前誤列在「深色既有的對比不足」）',
   '.qbig-photo.has-img .qbig-emoji': EMOJI,
   '.quest-focus-photo.has-img .qf-emoji': EMOJI,
   '.qbig-photo.has-img::after': ON_PHOTO,
@@ -63,11 +64,13 @@ const ALL_THEMES = {
 };
 // 二、只放行深色主題：v1.74.11 之前就有的對比不足，這一版不改深色的外觀（另案，已回報）。
 // 「對頁面最差的底」是保守算法：那個字實際也許只放在較深的底上。
+// 2026-11-05 第一段修正（--primary-text 調亮、--heart-ink 改深色字）之後過了的 12 處已拿掉：
+// .here-pick-tick .pick-row-tick .crew-new .chip-add .crumb-btn .music-src a .drb-edit .plan-addspot .wx-day-rain .ig-ic .qline-link .pos-banner-off
+// （#sosFab 是 🆘 表情符號，移到上面「只有表情符號」那一類。）剩下的等 Yolin 看過方向再改。
 const DARK_KNOWN = [
-  '.btn-danger', '.tag-btn.danger', '.tag-er', '.here-pick-tick', '.pick-row-tick', '.qbig.done .qbig-status',
-  '.crew-new', '.chip-add', '.crumb-btn', '.tag-hot', '.music-src a', '.drb-edit', '.qc-prog.done', '.plan-addspot',
-  '#sosFab', '.wx-day-rain', '.exp-person-bal.neg', '.numpad-del', '.qrow.done .qrow-icon', '.ig-ic', '.qline-link',
-  '.pos-banner-off',
+  '.btn-danger', '.tag-btn.danger', '.tag-er', '.qbig.done .qbig-status',
+  '.tag-hot', '.qc-prog.done',
+  '.exp-person-bal.neg', '.numpad-del', '.qrow.done .qrow-icon',
 ];
 export const EXEMPT = { ...ALL_THEMES };
 for (const s of DARK_KNOWN) for (const t of ['深色', '深色＋高對比']) EXEMPT[`${t}｜${s}`] = '深色主題既有的對比不足，另案';

@@ -20,15 +20,18 @@
   --ring-fill: #4f8dff;
   /* 文字專用的顏色：只准用在 color。深色主題等於原本那幾個色，和紙主題換成深墨色——
      粉彩（珊瑚粉、山吹黃、若竹綠）只能當底色或色塊，當字對比不夠（palettetest 擋）。 */
-  --primary-text: #4f8dff;
+  /* --primary-text 2026-11-05 從 #4f8dff 調亮：原本放在最淺的卡片底（--bg-elev-2）上只有 3.84，長輩看不清楚 */
+  --primary-text: #6fa3ff;
   --accent-text: #ffb454;
   --ok-text: #4fd6a6;
   --danger-text: #ff6b6b;
   --heart-text: #ff6b8b;
   --warn-text: #ffb14e;
   --mark-text: #d4a017;
+  /* 新成員徽章「新」：白字在亮粉上只有 2.72，2026-11-05 改深色字。
+     --danger-ink 只有 SOS 鈕用，而 SOS 鈕的內容是 🆘 表情符號、字色畫不出來——改它看不到差別，不改。 */
   --danger-ink: #fff;
-  --heart-ink: #fff;
+  --heart-ink: #2b0812;
   /* 附近／求救那幾頁一直在用 --fg、--card，卻從沒定義過（palettetest P1 抓到）：
      字照樣繼承得到，但卡片沒有底色、「選中」的那格也沒有變色。補上定義。 */
   --fg: var(--text);
