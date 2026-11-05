@@ -527,6 +527,14 @@ function crewStrip(t) {
       h('span', { class: 'tl-chip-name' }, m.displayName || '旅伴')))));
 }
 
+// 當日地圖的照片圖釘：這一站所有任務裡最新的一張投稿（沒照片的投稿不算）
+function latestSpotSub(s) {
+  const qids = new Set(store.questsOf(s.id).map((q) => q.id));
+  return store.submissionsOfTrip(s.tripId)
+    .filter((x) => qids.has(x.questId) && (x.thumbHash || x.photoHash))
+    .sort((a, b) => (b.takenAt || b.createdAt || 0) - (a.takenAt || a.createdAt || 0))[0] || null;
+}
+
 // 「天」這一層：v1.74.11 起是日期列選中的那一天（class open ＝ 正在顯示），景點排成時間軸
 function dayCollapse(day, daySpots, tripId, t, ctx) {
   const dp = dayProgress(daySpots);
@@ -562,7 +570,11 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
     h('div', { class: 'dc-body' },
       h('div', { class: 'dc-inner' },
         // 當日示意地圖：有座標的站才畫得上去，沒座標的在圖下列出來（js/daymap.js）
-        dayMap(daySpots, (s) => spotTimes(s).startTime || ''),
+        dayMap(daySpots, (s) => spotTimes(s).startTime || '', {
+          hasPhoto: (s) => !!latestSpotSub(s),
+          // 縮圖優先（同步保證會到的那一份），拿不到再試全圖；都拿不到回空字串 → 圖釘維持圓點
+          photoOf: async (s) => { const sub = latestSpotSub(s); return sub ? ((await blobURL(sub.thumbHash)) || (await blobURL(sub.photoHash))) : ''; },
+        }),
         crewStrip(t),
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。

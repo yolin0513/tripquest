@@ -481,9 +481,17 @@ button.card { appearance: none; font: inherit; }
 .dm-svg { display: block; width: 100%; height: auto; border-radius: 16px; border: 2px solid var(--line); }
 .dm-bg { fill: var(--bg-elev); }
 .dm-deco { fill: var(--bg-elev-2); opacity: 0.7; }
-.dm-route { fill: none; stroke: var(--primary); stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; stroke-linejoin: round; }
+.dm-seg { stroke: var(--primary); stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; }
+.dm-seg.is-gap { stroke: var(--line); stroke-width: 2; stroke-dasharray: 2 6; }
 .dm-pin-dot { fill: var(--accent); stroke: var(--bg); stroke-width: 3; }
+.dm-pin-ring { fill: var(--bg); stroke: var(--accent); stroke-width: 3; }
 .dm-pin-n { fill: #2a1a00; font-size: 12px; font-weight: 800; }
+.dm-pin-n.is-small { font-size: 10px; }
+.dm-km { fill: var(--muted); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
+.dm-compass-ring { fill: var(--bg-elev); stroke: var(--line); stroke-width: 2; }
+.dm-compass-n { fill: var(--danger); }
+.dm-compass-t { fill: var(--text); font-size: 10px; font-weight: 800; }
+.dm-note { margin: 6px 2px 0; font-size: 0.82rem; line-height: 1.5; color: var(--muted); }
 .dm-label { fill: var(--text); font-size: 14px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
 .dm-missing { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; line-height: 1.5; }
 .dm-missing-label { font-weight: 800; }
