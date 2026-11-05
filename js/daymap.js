@@ -7,7 +7,7 @@
 // 不照景點名字畫任何地標插圖（照名字畫就是猜，v1.74 原則）；底圖只有通用的紙紋與色塊。
 import { h } from './ui.js';
 import { reducesMotion } from './prefs.js';
-import { legModeOf, LEG_ICON } from './legs.js';
+import { legModeOf, LEG_ICON, LEG_LABEL } from './legs.js';
 
 const W = 340, H = 220, PAD = 34;
 export const FS = 14;
@@ -287,11 +287,12 @@ export function dayPlayer(m, ad, g, playKey) {
     const s = steps[i];
     // 移動：只有「上一個放得上的站」到「這一個放得上的站」才畫移動；減少動態效果時直接跳
     if (s.pin && last && !reducesMotion()) {
-      set('move', s.n, '', `往第 ${s.n} 站`);
       const from = last, my = gen;
       // 這一段設了交通方式（而且還算數，見 dayMapModel）才換圖示；沒設、或中間夾著沒位置的站，游標維持圓點
       const seg = m.segs.find((x) => x.from === from.n && x.to === s.n);
       const mode = (seg && seg.mode) || null;
+      // 播放列的字跟著寫怎麼去（只寫使用者選的；沒選就只寫「往第 N 站」）
+      set('move', s.n, '', `往第 ${s.n} 站` + (mode && LEG_LABEL[mode] ? `\n${LEG_ICON[mode] ? LEG_ICON[mode] + ' ' : ''}${LEG_LABEL[mode]}` : ''));
       box.dataset.mode = mode || '';
       const t0 = performance.now();
       const tick = (now) => {
