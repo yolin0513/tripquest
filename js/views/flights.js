@@ -49,7 +49,7 @@ export default async function flightsView(tripId, { drawPage, setTop }) {
       h('input', { class: 'field', value: v[k] || '', oninput: (e) => { v[k] = e.target.value; }, 'data-k': k, ...props }));
     const err = h('p', { class: 'fl-err', role: 'alert' });
     addBtn.hidden = true;
-    mount(formBox, h('form', { class: 'fl-form card', onsubmit: async (e) => {
+    mount(formBox, h('form', { class: 'fl-form', onsubmit: async (e) => {
       e.preventDefault();
       const msg = checkFlight(v);
       err.textContent = msg;

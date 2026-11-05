@@ -525,7 +525,9 @@ button.card { appearance: none; font: inherit; }
 .stay-form-t { margin: 0; }
 .stay-field { display: flex; flex-direction: column; gap: 4px; }
 .stay-label { font-weight: 800; }
-.stay-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* minmax(0,1fr)＋min-width:0：日期／時間輸入框的最小寬度比半個畫面寬，用 1fr 會把整頁撐到 413px、手機整頁縮小（2026-11-06 量到） */
+.stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; }
 .stay-err { margin: 0; color: var(--danger, #e66); font-weight: 800; }
 .stay-err:empty { display: none; }
 .stay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -549,9 +551,15 @@ button.card { appearance: none; font: inherit; }
 .fl-sec { margin: 6px 0 0; font-weight: 900; }
 .fl-field { display: flex; flex-direction: column; gap: 4px; }
 .fl-label { font-weight: 800; }
-.fl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.fl-field, .stay-field { min-width: 0; }
 .fl-err { margin: 0; color: var(--danger, #e66); font-weight: 800; }
 .fl-err:empty { display: none; }
+/* 表單長、「存」會落在底部分頁列後面（_flightshots 實測點到了「照片」分頁）→ 動作列黏在分頁列上方，跟 .picked-bar 同一套 */
+/* 表單不用 .card（那是可點的列表卡：置中對齊、按下會縮）——2026-11-06 截圖看到欄位被擠到中間 */
+.fl-form, .stay-form { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); }
+.fl-actions, .stay-actions { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); z-index: 5;
+  background: var(--bg-elev-2); border: 1px solid var(--line); border-radius: 14px; padding: 8px; margin: 0 -6px; }
 .fl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .fl-foot { margin-top: 16px; }
 

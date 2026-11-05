@@ -51,7 +51,7 @@ export default async function staysView(tripId, { drawPage, setTop }) {
       h('input', { class: 'field', value: v[k] || '', oninput: (e) => { v[k] = e.target.value; }, ...props }));
     const err = h('p', { class: 'stay-err', role: 'alert' });
     addBtn.hidden = true;
-    mount(formBox, h('form', { class: 'stay-form card', onsubmit: async (e) => {
+    mount(formBox, h('form', { class: 'stay-form', onsubmit: async (e) => {
       e.preventDefault();
       const msg = checkStay(v);
       err.textContent = msg;
