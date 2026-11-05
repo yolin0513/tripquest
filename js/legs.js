@@ -12,7 +12,9 @@ export const LEG_MODES = ['walk', 'train', 'bus', 'car', 'boat', 'plane', 'other
 export const LEG_LABEL = { walk: '走路', train: '電車・捷運', bus: '公車', car: '開車・計程車', boat: '船', plane: '飛機', other: '其他' };
 // 電車原本是 🚃：縮到地圖上的實際大小（22px）跟公車 🚌 都是「方盒＋一排窗」分不開（2026-11-05 截圖），改側面長車頭。
 // 判準是「七種填成單色、實際大小並排還分得開」，不是「換一個不一樣的」——scripts/_legsil.mjs 兩兩比輪廓。
-export const LEG_ICON = { walk: '🚶', train: '🚄', bus: '🚌', car: '🚗', boat: '⛴️', plane: '✈️', other: '' };
+// 2026-11-05 實測（_legsil 搜了 4320 種組合）：🚄／🚗／⛴️ 填成單色後都是「一團橫長方塊」，彼此兩兩太像；
+// 換成正面電車 🚆（圓頂直立）、正面汽車 🚘（矮寬、看得到兩輪）、帆船 ⛵（三角形）——這組是候選裡最分得開的。
+export const LEG_ICON = { walk: '🚶', train: '🚆', bus: '🚌', car: '🚘', boat: '⛵', plane: '✈️', other: '' };
 
 // prev：當天排在前面的那一站（沒有就是 null，每天第一站沒有進站段）；spot：到達站。
 // 回傳代號或 null。
