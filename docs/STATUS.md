@@ -29,6 +29,20 @@
   照 10-29 自己訂的判準（≥ 200 行就算夠），**C2 那批可能已經累積夠了**（推論；要人看 diff 判斷有多少是行為）。
 - **🔴 新加一份突變清單，下一次 `test:affected` 會放大成全套**（實測 `run-affected --base origin/main --dry`：74/74，理由「沒有規則認領的檔：tools/mutations/mut_mutstale.json」）。
   10-27 起每加一份清單都這樣（見下面「新突變檔沒有規則認領 → 放大成全套」）。要不要給 `tools/mutations/*.json` 一條較窄的規則是縮小範圍，照 §5.18.1 要正確性依據＋雙向突變——列進「等 Yolin」。
+- **能跑（秒級、不開瀏覽器，2026-11-05 實跑）**：mutlint、affectedtest 109、gatelint、shelltest 13、zhtest 27、convtest 8、guesscensustest 11、themetrusttest 20、
+  validate-places（135 個地點、0 錯）、loadjudge 自我測試 11、palettetest 27、motioncsstest 20、tripdaytest 39、postertruthtest 20、posterlayouttest 34、mutcmdtest 15——
+  全部回 0、都印出最後的總結行（跑完，不是半途崩潰）。**瀏覽器測試一支都沒跑**（同機量測中）。
+- **🔴 靜默失效的工具點擊（讀程式確認、沒實跑）**：`.dc-head` 10-27 起沒有點擊處理（`js/views/trip.js:549` 註解「標題不再能點」），點了什麼都不會發生、也不丟錯。
+  還在點它的：`scripts/shotxl.mjs:74`（要展開所有天→現在其他天不會展開，截圖少內容）、`scripts/gallery.mjs:168`、`:185`（要展開第 1 天→第 1 天沒選中時不會展開）、
+  `scripts/importshots.mjs:129`（同樣寫法；它是 f8verify 登記的檔，動了要重跑 f8verify＝開瀏覽器，今晚不碰）。三支都不在鏈裡，沒有任何東西會紅。
+  修法（推論）：改點日期列那一格（`.daystrip` 裡的第 N 格），或乾脆不展開、截選中的那一天；要開瀏覽器驗，排進下一個瀏覽器時段。
+- **早上要 Yolin（或 Dispatch）決定的事（守夜整理；細節在各處）**：
+  1. **itinview 兩條自動捲動＋C2 那批瀏覽器突變**：從帳本算，`mut_itinview` 23 條裡 22 條「過期」、`mut_motion` 12 條裡 10 條、`mut_tripday` 16 條全部；
+     照 10-29 的判準可能已累積夠（約 239 行，上限）。建議：下一個瀏覽器時段先跑 itinview 那兩條（約 6 分鐘），再整批跑過期的那些（要許可、重負載，耗時待估）。
+  2. **新突變清單讓 `test:affected` 放大成全套**：下一次推送前要跑 74 支（開瀏覽器）。選項：A 照現狀（每次推都可能全套）；B 給 `tools/mutations/*.json` 一條規則——
+     只挑那份清單 `cmd` 裡點名的測試＋mutlint（縮小範圍，照 §5.18.1 要寫正確性依據＋雙向突變）。建議 B，但要先看有沒有清單的 `cmd` 會牽動別的檔。
+  3. **本機比遠端多的 commit 沒推**（`git log origin/main..HEAD`；全部只有文件與只讀工具，守夜時 `prepush-scan` 通過）。推要 Yolin 說。
+  4. 舊的還在等：⓪-a 回顧插圖照片離不離開裝置、⓪-b 深色主題 22 處對比、⓪-c 海報與繪本風、主題猜測比例要 D1 唯讀權限、快取 AI 文案清理的乾跑要 D1 唯讀（見「等 Yolin 回覆」與 10-27 那節）。
 - **STATUS 與實際的落差（2026-11-05 查）**：檔頭版本停在 v1.74.10（已改）；10-27 幾節標題寫「工作區、未 commit」——實際已在 735aa97 起 commit、10-29 隨 v1.74.11 上線（各節標題已加註）。
 
 ### （舊）✅ 2026-10-29 17:21 推上去了（Yolin 說推）：74 個 commit，遠端 HEAD e090c06，線上 v1.74.11；`sweep` 照指示沒跑
