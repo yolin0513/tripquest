@@ -24,6 +24,7 @@ import { paperPlane } from '../glyphs.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
 import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
+import { buyCounts } from '../buylist.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -152,6 +153,8 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     h('div', { class: 'stack', style: 'margin-top:6px' },
       // 找附近（v1.59）：自駕最常用——獨立入口、不塞 SOS（緊急頁不放生活設施）
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
+      // 待買清單（2026-11-05 投票）：有東西才寫還剩幾項；一項都沒有就只寫名字，不寫「0 項」
+      buyButton(tripId),
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
       // 「把任務分享給旅伴」移到旅程設定（v1.59.1）——分享＝邀請旅伴加入，
       // 語意屬於「旅伴與電話」那一區；行程頁保持「出遊當下」的操作。
@@ -663,6 +666,12 @@ async function fillWeather(slot, container, tripId, trip) {
 // 兩站之間「怎麼去」的那一列。prev＝現在排在前面的那一站；顯示與否完全交給 legModeOf：
 // 記下的前一站不是現在這一站（重排、刪站、換天）就當成沒設定——舊選擇不套到沒人選過的路段上。
 // 沒設定就寫「還沒設定」，不預選任何一種（不拿最常見的去填）。
+function buyButton(tripId) {
+  const { total, left } = buyCounts(tripId);
+  const sub = total === 0 ? '' : (left === 0 ? '・全部買齊了' : `・還有 ${left} 項沒買`);
+  return h('button', { class: 'btn btn-soft btn-block buy-entry', onclick: () => navigate(`/trip/${tripId}/buy`) }, `🛒 待買清單${sub}`);
+}
+
 function legRow(prev, s, i) {
   const cur = legModeOf(prev, s);
   const name = (x) => x.name || '（沒有名字）';

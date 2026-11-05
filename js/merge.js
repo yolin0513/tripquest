@@ -65,6 +65,14 @@ export const TRACKED = {
   quest: {
     text: ['title', 'hint'],
   },
+  // 以下是 2026-11-05 投票的新型別（docs/VOTE_2026-11-05_航班待買住宿.md，進 TRACKED 2:1）。
+  // **全新型別、沒有任何舊記錄**：每筆都由新版 put 寫、_f 一開始就齊，不是「把既有型別升級」
+  //（那是 94–97 行警告的不安全情況）。要不要追蹤只能在第一版決定，以後不能改。
+  // ⚠ 現役 Worker 會刪掉未知型別的 _f（sanitizeF）→ **Worker 一定要先部署**，客戶端後推。
+  buy: {
+    text: ['text'],
+    done: ['done', 'doneBy'],
+  },
 };
 
 export const groupsOf = (type) => TRACKED[type] || null;

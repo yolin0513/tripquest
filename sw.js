@@ -59,6 +59,8 @@ const SHELL_ASSETS = [
   './js/weather.js',
   './js/fx.js',
   './js/expenses.js',
+  './js/buylist.js',
+  './js/views/buy.js',
   './js/badges.js',
   './js/recap.js',
   './js/views/sos.js',

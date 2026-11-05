@@ -148,6 +148,7 @@ route('/trip/:id/poster', async ({ params, drawPage, setTop }) => (await import(
 route('/trip/:id/plan', async ({ params, drawPage, setTop }) => (await import('./views/plan.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/findspot', async ({ params, query, drawPage, setTop }) => (await import('./views/findspot.js')).default(params.id, query, { drawPage, setTop }));
 route('/trip/:id/sos', async ({ params, drawPage, setTop }) => (await import('./views/sos.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/buy', async ({ params, drawPage, setTop }) => (await import('./views/buy.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/nearby', async ({ params, drawPage, setTop }) => (await import('./views/nearby.js')).default(params.id, { drawPage, setTop }));
 route('/sos', async ({ drawPage, setTop }) => (await import('./views/sos.js')).default(null, { drawPage, setTop }));
 route('/trip/:id/weather', async ({ params, drawPage, setTop }) => (await import('./views/weather.js')).default(params.id, { drawPage, setTop }));

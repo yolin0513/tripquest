@@ -488,6 +488,24 @@ button.card { appearance: none; font: inherit; }
 .tl-leg-route { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 0 6px; font-size: 0.9rem; color: var(--muted); font-weight: 700; }
 .tl-leg-min:empty { display: none; }
 .tl-leg-min { color: var(--text); }
+/* 待買清單（js/views/buy.js） */
+.buy-addrow { display: flex; gap: 8px; align-items: stretch; }
+.buy-input { flex: 1; min-width: 0; min-height: 52px; font-size: 1.05rem; }
+.buy-add { flex: none; min-height: 52px; white-space: nowrap; }
+.buy-sum { margin: 14px 2px 6px; font-weight: 800; font-size: 1.05rem; }
+.buy-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.buy-item { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px; border-radius: 14px;
+  border: 2px solid var(--line); background: var(--card, var(--bg)); }
+.buy-check { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 3px solid var(--primary-text, var(--primary));
+  background: transparent; color: #fff; font-size: 1.5rem; font-weight: 900; line-height: 1; cursor: pointer; }
+.buy-item.is-done .buy-check { background: var(--primary); border-color: var(--primary); }
+.buy-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.buy-text { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
+.buy-item.is-done .buy-text { text-decoration: line-through; color: var(--muted); }
+.buy-who { font-size: 0.85rem; color: var(--muted); }
+.buy-more { flex: none; width: 44px; height: 44px; border-radius: 12px; border: none; background: transparent; color: var(--muted);
+  font-size: 1.4rem; cursor: pointer; }
+.buy-foot { margin-top: 16px; }
 
 /* 同行夥伴：每一天時間軸的開頭（回答「誰跟我去」；用旅伴自己的頭像） */
 /* 當日示意地圖（js/daymap.js）：字一律用文字變數；底只有紙紋色塊，不畫地標 */
