@@ -79,6 +79,12 @@ export const TRACKED = {
     addr: ['address'],
     note: ['note'],
   },
+  flight: {
+    no: ['flightNo'],
+    dep: ['depDate', 'depTime', 'depPlace'],   // 日期、時間、地點同一組：不合出沒人填過的組合
+    arr: ['arrDate', 'arrTime', 'arrPlace'],
+    note: ['note'],
+  },
 };
 
 export const groupsOf = (type) => TRACKED[type] || null;

@@ -63,6 +63,8 @@ const SHELL_ASSETS = [
   './js/views/buy.js',
   './js/stays.js',
   './js/views/stays.js',
+  './js/flights.js',
+  './js/views/flights.js',
   './js/badges.js',
   './js/recap.js',
   './js/views/sos.js',

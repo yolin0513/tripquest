@@ -530,6 +530,30 @@ button.card { appearance: none; font: inherit; }
 .stay-err:empty { display: none; }
 .stay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .stay-foot { margin-top: 16px; }
+/* 航班（js/views/flights.js） */
+.fl-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.fl-empty { font-weight: 800; font-size: 1.05rem; margin: 6px 2px; }
+.fl-card { border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; background: var(--card, var(--bg)); }
+.fl-head { display: flex; align-items: center; gap: 8px; }
+.fl-ic { font-size: 1.4rem; }
+.fl-no { flex: 1; min-width: 0; margin: 0; font-size: 1.35rem; letter-spacing: .04em; overflow-wrap: anywhere; }
+.fl-edit { flex: none; min-height: 40px; padding: 4px 12px; }
+.fl-cd { margin: 8px 0 4px; display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--primary); color: #fff; font-weight: 900; font-size: 1.05rem; }
+.fl-legs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.fl-end { margin: 0; font-weight: 700; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.fl-tag { flex: none; font-size: 0.85rem; font-weight: 800; color: var(--muted); border: 2px solid var(--line); border-radius: 8px; padding: 0 6px; }
+.fl-local { margin: 6px 0 0; }
+.fl-note { margin: 6px 0 0; overflow-wrap: anywhere; }
+.fl-form { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.fl-form-t { margin: 0; }
+.fl-sec { margin: 6px 0 0; font-weight: 900; }
+.fl-field { display: flex; flex-direction: column; gap: 4px; }
+.fl-label { font-weight: 800; }
+.fl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fl-err { margin: 0; color: var(--danger, #e66); font-weight: 800; }
+.fl-err:empty { display: none; }
+.fl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.fl-foot { margin-top: 16px; }
 
 /* 同行夥伴：每一天時間軸的開頭（回答「誰跟我去」；用旅伴自己的頭像） */
 /* 當日示意地圖（js/daymap.js）：字一律用文字變數；底只有紙紋色塊，不畫地標 */

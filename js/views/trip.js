@@ -26,6 +26,7 @@ import { tripOverviewMap } from '../overmap.js';
 import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
 import { buyCounts } from '../buylist.js';
 import { staysOf } from '../stays.js';
+import { flightsOf, nextFlight, flightCountdown } from '../flights.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -155,6 +156,8 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       // 找附近（v1.59）：自駕最常用——獨立入口、不塞 SOS（緊急頁不放生活設施）
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
       // 待買清單（2026-11-05 投票）：有東西才寫還剩幾項；一項都沒有就只寫名字，不寫「0 項」
+      // 航班（同一次投票）：有下一班（今天或之後）就寫它的倒數；一班都沒有只寫名字
+      flightButton(tripId),
       buyButton(tripId),
       // 住宿（同一次投票）：有幾間就寫幾間；一間都沒有只寫名字
       h('button', { class: 'btn btn-soft btn-block stay-entry', onclick: () => navigate(`/trip/${tripId}/stays`) },
@@ -670,6 +673,12 @@ async function fillWeather(slot, container, tripId, trip) {
 // 兩站之間「怎麼去」的那一列。prev＝現在排在前面的那一站；顯示與否完全交給 legModeOf：
 // 記下的前一站不是現在這一站（重排、刪站、換天）就當成沒設定——舊選擇不套到沒人選過的路段上。
 // 沒設定就寫「還沒設定」，不預選任何一種（不拿最常見的去填）。
+function flightButton(tripId) {
+  const nf = nextFlight(tripId);
+  const sub = nf ? `・${nf.flightNo ? nf.flightNo + ' ' : ''}${flightCountdown(nf)}` : (flightsOf(tripId).length ? `・${flightsOf(tripId).length} 段` : '');
+  return h('button', { class: 'btn btn-soft btn-block fl-entry', onclick: () => navigate(`/trip/${tripId}/flights`) }, `✈️ 航班${sub}`);
+}
+
 function buyButton(tripId) {
   const { total, left } = buyCounts(tripId);
   const sub = total === 0 ? '' : (left === 0 ? '・全部買齊了' : `・還有 ${left} 項沒買`);
