@@ -30,6 +30,18 @@
   `node scripts/mutate.mjs --only tools/mutations/mut_itinview.json "自動捲動：照日期找、不照正在顯示的那天" "自動捲動：沒把日期列算進去"`——
   再整批跑過期的（會開瀏覽器、重負載、要許可；耗時待估）。不開瀏覽器的過期突變（palettetest、loadjudge、aicache-dryrun、affected、mutate 等）可以先跑，但今天照指示不跑整批。
 - **劃掉的條件**：`mutstale` 跑出來「過期」的都重跑過、紅在 `why` 寫的那一條；沒紅的照實記下來並處理（不是改預期）。
+- **「帳本沒紀錄」33 條的盤點（2026-11-05 下午，只讀）**：find 都還對得到（mutlint 0 條死掉）。依守它的測試分，額度重置後的順序建議照「不開瀏覽器、短」先跑：
+  | 清單 | 條數 | cmd 的測試 | 開瀏覽器？ | 單支上次耗時 |
+  |---|---|---|---|---|
+  | mut_mutlint_find | 3 | mutlint | 不開 | 0.7 秒 |
+  | mut_worker | 2 | workertest | 不開 | 44.6 秒 |
+  | mut_gate | 2 | pushgatetest | 不開，但開多個程序 | 267.5 秒（每條約 4.5 分鐘＝重負載） |
+  | mut_r1／mut_r24／mut_r5 | 2＋9＋4 | moneytest、settletest | settletest 開 | 0.1＋20.9 秒 |
+  | mut_member | 9 | membergonetest | 開 | 11.6 秒 |
+  | mut_plan | 2 | plantest | 開 | 20.7 秒 |
+  耗時取自 `tools/test-times.json`（突變時可能更久，只是下限）。
+- **2026-11-05 我自己讓 4 條變過期、當場重跑了**：改 `scripts/run-affected.mjs`（B 規則）讓守「目錄引用不算涵蓋」的 4 條（mut_affected_d、mut_guesscensus、mut_shell、mut_themetrust
+  各一條，目標都是 run-affected.mjs）變成過期；它們守的正是剛改的那支、不開瀏覽器，照「回歸只跑被改到的」單獨重跑：4/4 都紅在 `why` 寫的 T12 那兩條（帳本 seq 269～272），回到紅·檔同。
 
 ### 🌙 2026-11-05 守夜（同機查詢島在跑效能量測 → 不開瀏覽器、不跑長時間吃 CPU 的東西、不 push；中途得知 Yolin 在線上，要他決定的事當下就經 Dispatch 問）
 - **開工時的現況（實測）**：工作區乾淨；本機比遠端多 2 個只有文件的 commit（c3f91b7、08bf4d7），遠端 main＝e090c06，線上 v1.74.11（10-29 curl）。
