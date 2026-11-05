@@ -12,11 +12,14 @@
   `run-affected --base origin/main --approved`：**挑到 16/74、實際跑完 16 支**——開頭標記 1/16～16/16 都在、每支結尾都有工作區守衛那一行、行首 ✗ 0、回 0；
   11:19:33～11:21:32，預估 111 秒、實際 118 秒；開瀏覽器的是 tabbartest、nearbytest、emptytest。跑完程序清單裡瀏覽器程序 0 個。
 - **推之後兩種方式各問一次遠端**：`safe-push.sh` 自己比對「遠端 main ＝ 本機 HEAD」回 0；另外 `git ls-remote https://github.com/yolin0513/tripquest.git refs/heads/main` → f5f49ba…，與本機 HEAD 相同。
-- **線上版本：沒驗到——「線上仍是 v1.74.11」是推論**（App 沒改）。curl 線上 `sw.js` 兩次都失敗，見下一條；Dispatch 請查詢島開瀏覽器時順手讀，拿到答案再改這一行。
-- **🔴 這台機器連不到 `github.io`、連得到 `github.com`（2026-11-05 實測）**：curl 線上 `sw.js` 回 35「Connection was reset」（兩次，含 `--retry 2`），
-  PowerShell `Invoke-WebRequest` 也失敗「基礎連接已關閉」；同一時間 `git push`、`git ls-remote` 對 github.com 正常。沒追原因。
-  **影響**：在這台機器上，任何「用指令驗線上狀態」的步驟（每版流程最後的 curl 確認 VERSION、livetest 之類）都會失敗，**失敗的樣子是連線被重設、不是「版本不對」**——
-  不要讀成「線上掛了」去修一個沒壞的東西。要確認線上，改用瀏覽器開或請另一台機器查，並在回報裡寫明是用什麼確認的。
+- **線上版本：已確認 `tripquest-v1.74.11`**——Dispatch 從 Pages 實際供應的那份 `sw.js` 讀到（第 6 行 `const VERSION = 'tripquest-v1.74.11';`），不是 repo 裡那份。
+  查詢島從 github.com 讀 repo main 也是 v1.74.11（那是 repo 的，不是線上的；它自己有講明）。本 Session 的 curl 沒讀到，見下一條。
+- **🔴 這台機器（本 Session 與查詢島兩個工作階段都一樣）連不到 `github.io`，`github.com` 正常（2026-11-05 實測）**：
+  本 Session curl 線上 `sw.js` 回 35「Connection was reset」（兩次，含 `--retry 2`）、PowerShell `Invoke-WebRequest` 失敗「基礎連接已關閉」；查詢島同樣被重設。
+  同一時間 `git push`、`git ls-remote` 對 github.com 正常。沒追原因。
+  **失敗的樣子是連線被重設、不是「版本不對」——誰把它讀成「線上掛了」，就會去修一個沒壞的東西。**
+  **要驗線上狀態，這台機器上的指令行不通，得換別的途徑**（例：請 Dispatch 讀 Pages 供應的那份；從 github.com 讀 repo 只證明 repo、不證明線上）。
+  每版流程最後那一步「curl 確認線上 VERSION」在這台機器上會失敗；回報要寫明線上是用什麼途徑確認的。
 
 ### 🔴 待辦（常設，做完才能劃掉）：97 條突變的「紅」已經過期——看起來有守著，其實不知道
 - **是什麼**：這些突變紅過，但它們改壞的那支檔後來又改了；那次的紅不代表現在的程式。**在重跑之前，不要把它們當成「有守著」。**
@@ -1807,7 +1810,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 那是推論，不是查的。Session `--dry` 實測 16/74 支、預測器判 6 支開瀏覽器（實查真的開的是 3 支底線），同機查詢島正在量效能，於是**沒推、回報前提不成立**，Dispatch 改排瀏覽器時段（選 A）。
 照的是 §5.19「許可拿不到時寧可不部署，不得跳過或縮減部署前的測試」：為了符合「只跑秒級的」去縮減測試，壞掉的會是流程本身。
 → commit → **`bash scripts/safe-push.sh` 推送**（公開前自查＋推送＋比對遠端，
-不要自己 `git push`；見下面「推送閘」）→ curl 確認線上 VERSION → 截圖放
+不要自己 `git push`；見下面「推送閘」）→ curl 確認線上 VERSION（**2026-11-05 起這台機器連不到 github.io，curl 會被重設——改請 Dispatch 讀 Pages 供應的那份，見本檔最上面**）→ 截圖放
 （推送之後那一步**用 `&&` 接在推送閘後面**、不接管線：`bash scripts/safe-push.sh && <curl 確認線上 VERSION>`——
 推送閘任何一關失敗，後面的線上確認就不會跑，免得對著沒推上去的舊版驗、看起來還是綠的；共用慣例 v7 §2.5）
 （**🔴 2026-10-29 Yolin 明訂：`npm run sweep` 從每版流程拿掉、不准接在推送閘後面。** 它預設會寫入正式站——
