@@ -6,7 +6,25 @@ import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { avatar } from '../ui.js';
 import { loadCurrencies, currencyInfo, currencyForCountry, getRates, fmtMoney } from '../fx.js';
-import { tripExpenses, saveExpense, deleteExpense, settleTrip, CATEGORIES, categoryOf, sharesFallback } from '../expenses.js';
+import { tripExpenses, saveExpense, deleteExpense, settleTrip, CATEGORIES, categoryOf, sharesFallback, normDay, dayTotals } from '../expenses.js';
+
+// 這趟有幾天：日期區間與景點排到的最後一天，取大的；都沒有就是 0（表單不放「哪一天」）
+function tripDayCount(trip) {
+  let n = 0;
+  if (trip.startDate && trip.endDate) {
+    const a = new Date(trip.startDate + 'T00:00:00'), b = new Date(trip.endDate + 'T00:00:00');
+    const d = Math.round((b - a) / 86400000) + 1;
+    if (d >= 1 && d <= 366) n = d;
+  }
+  for (const s of store.spotsOf(trip.id)) if (normDay(s.day || 1) > n) n = normDay(s.day || 1);
+  return n;
+}
+function dayDateText(trip, day) {
+  if (!trip.startDate) return '';
+  const d = new Date(trip.startDate + 'T00:00:00');
+  d.setDate(d.getDate() + (day - 1));
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 export default async function expenses(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
@@ -72,6 +90,17 @@ export default async function expenses(tripId, { drawPage, setTop }) {
     rates ? h('p', { class: 'form-hint' }, `匯率更新：${fmtFxDate(rates.updatedAt)}${rates.stale ? '（離線快取）' : ''}`) : null,
   ));
 
+  // ---- 每天花多少（只有標了第幾天的才分得進去；沒標的照實寫筆數，不猜它是哪一天） ----
+  const dt = dayTotals(list, base, rates);
+  if (dt.days.length) {
+    page.append(h('div', { class: 'section-label' }, '每天花多少'));
+    page.append(h('div', { class: 'stack exp-days' }, ...dt.days.map((d) => h('div', { class: 'exp-day', dataset: { day: String(d.day) } },
+      h('span', { class: 'exp-day-n' }, `第 ${d.day} 天`, dayDateText(trip, d.day) ? h('span', { class: 'muted sm' }, ' ' + dayDateText(trip, d.day)) : null),
+      h('span', { class: 'exp-day-c muted sm' }, `${d.count} 筆` + (d.unconverted ? `，另有 ${d.unconverted} 筆查不到匯率沒算` : '')),
+      h('span', { class: 'exp-day-amt' }, d.count ? fmtMoney(d.total, base) : '算不出來')))));
+    if (dt.noDay) page.append(h('p', { class: 'form-hint exp-noday' }, `另有 ${dt.noDay} 筆沒標日期，沒有分進哪一天。`));
+  }
+
   // ---- 結清方案 ----
   page.append(h('div', { class: 'section-label' }, '結清方案（最少轉帳）'));
   // 使用者最可能只看這一區就去轉帳，所以同一句再講一次
@@ -123,7 +152,7 @@ export default async function expenses(tripId, { drawPage, setTop }) {
       h('span', { class: 'exp-item-cat' }, cat.emoji),
       h('span', { class: 'exp-item-main' },
         h('span', { class: 'exp-item-title' }, e.title),
-        h('span', { class: 'muted sm' }, `${nameOf(e.payerId)} 付 · ${partN} 人分`
+        h('span', { class: 'muted sm' }, (normDay(e.day) ? `第 ${normDay(e.day)} 天 · ` : '') + `${nameOf(e.payerId)} 付 · ${partN} 人分`
           + (sharesFallback(e) ? ' · 份數都是 0，先照平均分' : ''))),
       h('span', { class: 'exp-item-amt' }, fmtMoney(e.amount, e.currency)),
     );
@@ -173,6 +202,17 @@ async function openEdit(tripId, existing) {
   const drawPay = () => payRow.replaceChildren(...members.map((m) =>
     h('button', { class: (st.payerId === m.id ? 'on ' : '') + 'chip-sm', onclick: () => { st.payerId = m.id; drawPay(); } }, m.displayName)));
   drawPay();
+
+  // 哪一天：不預選（投票分歧採保守）——新的一筆是「不標」，舊的照它原本存的；選了可以再點「不標」取消
+  st.day = normDay(st.day);
+  const nDays = Math.max(tripDayCount(trip), st.day || 0);
+  const dayRow = h('div', { class: 'quick-pick exp-dayrow' });
+  const drawDay = () => dayRow.replaceChildren(
+    h('button', { class: (st.day == null ? 'on ' : '') + 'chip-sm', type: 'button', dataset: { day: '' }, onclick: () => { st.day = null; drawDay(); } }, '不標'),
+    ...Array.from({ length: nDays }, (_, i) => i + 1).map((d) =>
+      h('button', { class: (st.day === d ? 'on ' : '') + 'chip-sm', type: 'button', dataset: { day: String(d) }, onclick: () => { st.day = d; drawDay(); } },
+        `第 ${d} 天` + (dayDateText(trip, d) ? ` ${dayDateText(trip, d)}` : ''))));
+  drawDay();
 
   const partWrap = h('div', { class: 'stack' });
   st.participants = st.participants || members.map((m) => m.id);
@@ -224,6 +264,8 @@ async function openEdit(tripId, existing) {
     field('這筆是什麼', titleEl),
     fieldGroup('分類', catRow),
     fieldGroup('誰付的', payRow),
+    // 放在「誰付的」後面：settletest、membergonetest 依順序取第 1、2 排（分類、付款人）
+    nDays ? fieldGroup('哪一天', dayRow) : null,
     fieldGroup('分給誰', h('div', {}, partWrap, splitToggle)),
   );
 

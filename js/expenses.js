@@ -40,11 +40,37 @@ export async function saveExpense(e) {
     participants: Array.isArray(e.participants) ? e.participants : [],
     shares: e.shares || null,       // { memberId: weight }；null = 平均
     note: (e.note || '').slice(0, 200),
+    // 第幾天（2026-11-05 投票 3:0）：使用者自己選的；沒選就是 null——不從 createdAt 推、表單也不預選
+    day: normDay(e.day),
     createdAt: e.createdAt || Date.now(),
   };
   if (e.id && store.get(e.id)) await store.patch(e.id, rec);
   else await store.put(rec);
   return rec;
+}
+
+// 第幾天：正整數才算；其餘（沒填、0、小數、字串亂碼）一律 null＝沒標
+export function normDay(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= 366 ? n : null;
+}
+
+// 每天花多少（以 baseCurrency 計）。沒標日期的不分給任何一天，只回筆數（畫面寫「另有 N 筆沒標日期」）；
+// 查不到匯率的不加進那天的合計，回筆數（畫面照實寫，不當 0）。
+export function dayTotals(expenses, baseCurrency, ratesObj) {
+  const byDay = new Map();
+  let noDay = 0;
+  for (const e of expenses) {
+    const d = normDay(e.day);
+    if (d == null) { noDay++; continue; }
+    const amt = Number(e.amount) || 0;
+    const v = e.currency === baseCurrency ? amt : convert(amt, e.currency, baseCurrency, ratesObj);
+    const x = byDay.get(d) || { day: d, total: 0, count: 0, unconverted: 0 };
+    if (v == null) x.unconverted++; else { x.total += v; x.count++; }
+    byDay.set(d, x);
+  }
+  return { days: [...byDay.values()].sort((a, b) => a.day - b.day), noDay };
 }
 
 export async function deleteExpense(id) {

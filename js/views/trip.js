@@ -740,7 +740,11 @@ function spotSection(s, tripId, focusId, hereId) {
           // 從行程表匯入的才有時間；時間與類別都沒有就整行不放
           (when || shown) ? h('span', { class: 'qc-theme' },
             when ? '🕘 ' + when + (shown ? ' · ' : '') : '',
-            shown ? shown.emoji + ' ' + shown.label : '') : null),
+            shown ? shown.emoji + ' ' + shown.label : '') : null,
+          // 使用者自己標的（不是猜的）：只在 === true 時顯示，沒標就什麼都不寫
+          (s.important === true || s.booked === true) ? h('span', { class: 'qc-tags' },
+            s.important === true ? h('span', { class: 'qc-tag tag-important' }, '⭐ 重要') : null,
+            s.booked === true ? h('span', { class: 'qc-tag tag-booked' }, '✅ 訂好位') : null) : null),
         // 進度與箭頭包成一組：一列放不下時整組折到第二行，不會只掉一個箭頭在左下角
         h('span', { class: 'qc-side' },
           h('span', {
@@ -778,6 +782,15 @@ async function ensurePhotoQuest(s) {
 // 加照片的兩顆只給**沒有任務**的地點：有任務的地點每一列自己就有拍照／從相簿選
 // （那是先前定下來不能退讓的一條：加照片要一眼看到、一次點到），再放一組只會把
 // 卡片變高 —— 實測一個五個任務的景點會從 657px 變成 719px，densitytest 的門檻是 700。
+function tagToggle(s, key, onText, offText) {
+  const on = s[key] === true;
+  return h('button', {
+    class: 'btn btn-sm tag-toggle ' + (on ? 'btn-primary is-on' : 'btn-soft'), type: 'button',
+    dataset: { tag: key }, 'aria-pressed': String(on),
+    onclick: async () => { await store.patch(s.id, { [key]: !on }); refreshPage(); },
+  }, on ? onText : offText);
+}
+
 function spotAddRow(s, tripId, questCount) {
   return h('div', { class: 'qline-add' + (questCount ? '' : ' empty') },
     h('button', {
@@ -786,6 +799,10 @@ function spotAddRow(s, tripId, questCount) {
         if (await addQuestDialog(tripId, s.id)) refreshPage();
       },
     }, '＋ 新增任務'),
+    // 重要／訂好位：自己點才有，再點一下取消。放在這一列（不另起一列）——卡片高度有門檻（densitytest）
+    h('div', { class: 'tag-row' },
+      tagToggle(s, 'important', '⭐ 重要', '☆ 標成重要'),
+      tagToggle(s, 'booked', '✅ 訂好位', '訂好位了嗎？')),
     // 照片仍然掛在任務底下：第一次選照片時才把中性的照片任務建起來（ensureQuest）
     questCount ? null : addPhotoButtons(tripId, photoQuestId(s.id), {
       compact: true,

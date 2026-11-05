@@ -1589,6 +1589,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .exp-item-main { flex: 1 1 120px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .exp-item-title { font-weight: 700; overflow-wrap: anywhere; }
 .exp-item-amt { font-weight: 800; font-variant-numeric: tabular-nums; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
+/* 每天花多少：同 .exp-person 的排法（金額不可斷行、排不下掉到下一行靠右） */
+.exp-day { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.exp-day-n { font-weight: 800; flex: 0 0 auto; }
+.exp-day-c { flex: 1 1 80px; min-width: 0; }
+.exp-day-amt { font-weight: 800; font-variant-numeric: tabular-nums; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 
 .exp-form .form-field { margin-bottom: 16px; }
 .numpad-row { display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -1981,6 +1986,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
   margin: 2px 0 8px;
 }
 .qline-add > .btn { min-height: 48px; }
+/* 重要／訂好位：兩顆並排、擠不下就上下排（基準寬用 em，大字自己換行，不把字折斷） */
+.tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-row .btn { min-height: 44px; flex: 1 1 8em; }
+.qc-tags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.qc-tag { font-size: 0.78rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--text); background: var(--bg); white-space: nowrap; }
 /* 加照片的兩顆沿用 .addphoto-row（拍照／從相簿選），只把外距收掉 —— 這一列本身有間距。
    320px（最窄的手機）並排放不下「🖼️ 從相簿選」，字會折成兩行（layouttest 抓到）：
    給一個 flex-basis，擠不下就自己換行上下排，不要把字折斷。 */
