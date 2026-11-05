@@ -489,7 +489,7 @@ function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick, overview = false }
     const dstr = dayDate(t, d);
     const wk = weekdayLabel(t.startDate, d);
     const isToday = todayDay === d && todayDay > 0;
-    // 第三行：當天的第一站（使用者排的名字；沒有就不放這一行）
+    // 2026-11-05 Yolin：日期列不列站名（原本第三行是當天第一站）。讀屏的 aria-label 照樣念得到第一站。
     const first = dayRoute(byDay.get(d).slice(0, 1));
     cells.set(d, h('button', {
       class: 'ds-day' + (isToday ? ' is-today' : '') + (done ? ' done' : ''),
@@ -499,7 +499,6 @@ function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick, overview = false }
     },
       h('span', { class: 'ds-num' }, `第 ${d} 天`),
       h('span', { class: 'ds-sub' }, isToday ? `今天${wk ? ' ' + wk : ''}` : (dstr ? `${dstr} ${wk}`.trim() : (done ? '✓ 完成' : `${byDay.get(d).length} 站`))),
-      first ? h('span', { class: 'ds-first' }, first) : null,
     ));
   }
   // 紙飛機（原創圖形，js/glyphs.js）：停在選中那一格正上方、機頭朝右（下一天）；換天時飛過去（減少動態時直接跳）

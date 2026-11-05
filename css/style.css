@@ -422,9 +422,6 @@ button.card { appearance: none; font: inherit; }
 .ds-day.is-today { border-color: var(--primary); }
 .ds-day.on { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
 .ds-day.on .ds-sub { color: var(--primary-ink); }
-/* 第三行：當天第一站。格子不跟著名字變寬，長的截斷（全名在 aria-label 與當日標題卡上） */
-.ds-first { font-size: 0.78rem; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7.5em; }
-.ds-day.on .ds-first { color: var(--primary-ink); }
 .ds-day:active { transform: scale(0.96); }
 .ds-day:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 

@@ -199,8 +199,9 @@ try {
   yes(v.ok && v.text.endsWith(wk1), `B1 日期列第 1 天那格看得到日期與「${wk1}」（${v.why}；字「${v.text}」）`);
   v = await seen(page, '.daystrip .ds-day[data-day="2"] .ds-sub');
   yes(v.ok && v.text === `今天 ${wk2}`, `B1 第 2 天（今天）那格寫「今天 ${wk2}」（${v.why}；字「${v.text}」）`);
-  v = await seen(page, '.daystrip .ds-day[data-day="2"] .ds-first');
-  yes(v.ok && v.text === '乙一', `B1 第 2 天那格看得到當天第一站「乙一」（${v.why}；字「${v.text}」）`);
+  // 2026-11-05 Yolin：日期列不列站名（刻意改的）。先確認那一格在、而且有字，再驗站名不在格子裡
+  const cell2 = await page.evaluate(() => { const c = document.querySelector('.daystrip .ds-day[data-day="2"]'); return c ? { text: c.textContent, first: !!c.querySelector('.ds-first') } : null; });
+  yes(!!cell2 && cell2.text.includes('第 2 天') && !cell2.text.includes('乙一') && !cell2.first, `B1 第 2 天那格在、但不寫當天第一站「乙一」（字「${cell2 && cell2.text}」）`);
   v = await seen(page, '.daycollapse.open .dc-route');
   yes(v.ok && v.text === '乙一 → 乙二', `B2 當日標題卡看得到「乙一 → 乙二」（${v.why}；字「${v.text}」）`);
   v = await seen(page, '.daycollapse.open .tl-crew-label');
