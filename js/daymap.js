@@ -224,14 +224,27 @@ export function dayPlayer(m, ad, g, playKey) {
   const where = h('span', { class: 'dm-where' }, '按「播放」，照當天的順序走一遍');
   const prog = h('span', { class: 'dm-prog' }, `共 ${total} 站`);
   const btn = h('button', { class: 'btn dm-play', type: 'button' }, '▶ 播放');
-  const box = h('div', { class: 'dm-player', dataset: { phase: 'idle', step: '0' }, 'aria-live': 'polite' },
-    btn, h('div', { class: 'dm-now' }, clock, where), prog);
+  // 進度條：**一格一站**（不是時間軸）——兩站之間的時刻是算出來的，拉到「兩站中間」就得編一個時間給他看。
+  // 拖到哪一站就停在那一站（跟播到那一站一樣：有位置的游標過去、沒位置的寫明）；播放中拖，放開後從那一站接著播。
+  const seek = h('input', { class: 'dm-seek', type: 'range', min: '0', max: String(total), step: '1', value: '0', 'aria-label': '拖到第幾站' });
+  // 倍速：×1 → ×2 → ×4 → ×1。只改停留與移動的長短，不跳站（每一站照樣會停，沒位置的站照樣寫明）
+  const SPEEDS = [1, 2, 4];
+  let speed = 1;
+  const spd = h('button', { class: 'dm-speed', type: 'button', 'aria-label': '播放速度 ×1，點一下換' }, '×1');
+  const box = h('div', { class: 'dm-player', dataset: { phase: 'idle', step: '0', speed: '1' }, 'aria-live': 'polite' },
+    h('div', { class: 'dm-row' }, btn, h('div', { class: 'dm-now' }, clock, where), prog),
+    h('div', { class: 'dm-row dm-row2' }, seek, spd));
 
   let i = -1, timer = 0, playing = false, last = null;   // last：上一個放得上地圖的站（游標停的地方）
+  let gen = 0;                                             // 每次跳站／停下就換一代：舊的移動動畫看到代數變了就收手
+  const ms = (k) => PLAY_MS[k] / speed;
   const set = (phase, step, clk, text) => {
     box.dataset.phase = phase; box.dataset.step = String(step);
     clock.textContent = clk; clock.hidden = !clk; where.textContent = text;
     prog.textContent = step ? `第 ${step} / ${total} 站` : `共 ${total} 站`;
+    seek.value = String(phase === 'done' ? total : (phase === 'move' ? Math.max(0, step - 1) : step));
+    const s = steps[step - 1];
+    seek.setAttribute('aria-valuetext', s && phase !== 'move' ? `第 ${s.n} 站 ${s.name}` : (phase === 'done' ? '走完了' : '還沒開始'));
   };
   const step = (s) => { if (ad.onStep) ad.onStep(s); };
   const stop = (done) => {
@@ -242,16 +255,17 @@ export function dayPlayer(m, ad, g, playKey) {
   };
   // 不在畫面上了（整頁重畫、換頁）：這一份就停，但**不清掉**進度——重畫出來的新播放器會接著播
   const alive = () => { if (g.isConnected) return true; playing = false; clearTimeout(timer); return false; };
+  // 到站；播放中才排下一站（拖進度條停下來時只到站、不往下走）
   const arrive = () => {
     const s = steps[i];
-    if (playKey) live.set(playKey, { n: s.n, total, at: Date.now() });
+    if (playKey && playing) live.set(playKey, { n: s.n, total, at: Date.now() });
     if (s.pin) { ad.show(s, false); last = s; set('stop', s.n, s.time, `${s.n}. ${s.name}`); }
     else {
       if (last) ad.show(last, true);
       set('missing', s.n, s.time, `${s.n}. ${s.name}\n這一站沒有位置，地圖上沒畫`);
     }
     step(s);
-    timer = setTimeout(next, PLAY_MS.stop);
+    if (playing) timer = setTimeout(next, ms('stop'));
   };
   const next = () => {
     if (!alive()) return;
@@ -262,11 +276,11 @@ export function dayPlayer(m, ad, g, playKey) {
     // 移動：只有「上一個放得上的站」到「這一個放得上的站」才畫移動；減少動態效果時直接跳
     if (s.pin && last && !reducesMotion()) {
       set('move', s.n, '', `往第 ${s.n} 站`);
-      const from = last;
+      const from = last, my = gen;
       const t0 = performance.now();
       const tick = (now) => {
-        if (!playing || !alive()) return;
-        const t = Math.min(1, (now - t0) / PLAY_MS.move);
+        if (!playing || my !== gen || !alive()) return;
+        const t = Math.min(1, (now - t0) / ms('move'));
         ad.between(from, s, t);
         if (t < 1) requestAnimationFrame(tick); else arrive();
       };
@@ -277,9 +291,35 @@ export function dayPlayer(m, ad, g, playKey) {
     if (playing) return stop(false);
     playing = true; btn.textContent = '❚❚ 暫停';
     const ph = box.dataset.phase;
-    if (ph === 'stop' || ph === 'missing') { timer = setTimeout(next, PLAY_MS.stop); return; }   // 停在站上暫停：繼續就往下一站
+    if (ph === 'stop' || ph === 'missing') { timer = setTimeout(next, ms('stop')); return; }   // 停在站上暫停：繼續就往下一站
     if (ph === 'move') i -= 1;                                  // 移動中暫停：從上一站重新走到同一站
     next();
+  });
+  // 拖進度條：跳到第 k 站（0＝還沒開始）。拖的當下先停住，放開（change）時原本在播就從那一站接著播
+  let wasPlaying = false, dragging = false;
+  const jump = (k) => {
+    gen += 1; clearTimeout(timer); timer = 0;
+    if (k <= 0) { i = -1; last = null; set('idle', 0, '', '按「播放」，照當天的順序走一遍'); step(null); return; }
+    i = k - 1;
+    last = steps.slice(0, i).reverse().find((s) => s.pin) || null;
+    arrive();
+  };
+  seek.addEventListener('input', () => {
+    if (!dragging) { dragging = true; wasPlaying = playing; }
+    playing = false;
+    jump(Number(seek.value));
+  });
+  seek.addEventListener('change', () => {
+    dragging = false;
+    if (!wasPlaying) { btn.textContent = Number(seek.value) > 0 ? '▶ 繼續' : '▶ 播放'; return; }
+    playing = true; btn.textContent = '❚❚ 暫停';
+    if (i < 0) next(); else timer = setTimeout(next, ms('stop'));    // 拖到最後一站：停完那一站就「走完了」
+  });
+  spd.addEventListener('click', () => {
+    speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+    spd.textContent = `×${speed}`;
+    spd.setAttribute('aria-label', `播放速度 ×${speed}，點一下換`);
+    box.dataset.speed = String(speed);
   });
   // 接著播：同一天、剛剛（10 秒內）還在播、站數沒變 → 從那一站重新到站（不重放移動）
   const saved = playKey && live.get(playKey);

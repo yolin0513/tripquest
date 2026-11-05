@@ -490,7 +490,12 @@ button.card { appearance: none; font: inherit; }
 .dm-compass-t { fill: var(--text); font-size: 10px; font-weight: 800; }
 .dm-cursor { fill: none; stroke: var(--primary-text); stroke-width: 4; opacity: .9; }
 .dm-cursor.is-dim { opacity: .3; stroke-dasharray: 5 4; }
-.dm-player { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: var(--bg-elev); border: 1px solid var(--line); }
+.dm-player { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: var(--bg-elev); border: 1px solid var(--line); }
+.dm-row { display: flex; align-items: center; gap: 10px; }
+/* 進度條＋倍速：進度條一格一站；手指好拖（整條 44px 高） */
+.dm-seek { flex: 1; min-width: 0; height: 44px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+.dm-speed { flex: none; min-width: 56px; min-height: 44px; padding: 0 10px; border-radius: 22px; border: 2px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-weight: 900; font-variant-numeric: tabular-nums; }
+.dm-player[data-speed="2"] .dm-speed, .dm-player[data-speed="4"] .dm-speed { border-color: var(--primary-text); }
 .dm-play { min-height: 44px; min-width: 96px; flex: none; }
 .dm-now { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dm-clock { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1.1; }
