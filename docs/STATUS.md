@@ -16,7 +16,14 @@
   **地圖程式還沒寫**（Dispatch：等投票結果；現在結果有了，下一步先實測 OSM 圖磚的 CORS 標頭）。仍等 Yolin：離線取捨、交通方式要不要新增成資料。
 - **Yolin 回了**：離線取捨接受；交通方式新增。Dispatch：B（同步欄位）跟 A 分開投。**B 結果**（`docs/VOTE_2026-11-05_同步欄位.md`）：交通方式存到達站 spot、帶出發站 id（`legFrom`／`legMode`，新組 `leg`，2:1）；
   `expense.day`（3:0，不進 TRACKED、不從 createdAt 推、表單先不預選）；重要／訂好位兩組（3:0）；英文名、時區不加（3:0）。**部署前要先用 workertest 查 `_f` 補 0 會不會寫回 D1**（會的話先問 Yolin）。
-- OSM 圖磚 CORS 實測可行（見 SPEC §開頭）。真實地圖程式開始寫：`js/tilemap.js`（圖磚顯示器，純函式＋元件，還沒接上畫面、沒測）。
+- OSM 圖磚 CORS 實測可行（見 SPEC §開頭）。
+- **真實地圖第一版（1d482c3，沒 bump VERSION；樣式依轉述、原圖未核）**：`js/tilemap.js`（圖磚顯示器）＋`js/realmap.js`（圖釘、直線虛線、站名標籤列「全」／單站、回放、重畫後保留視野、沒網路退回示意圖）＋`sw.js` 圖磚快取。
+  實測：`scripts/_realmapshots.mjs fake`（ignore；圖磚攔成本機合成格線）31 項——圖釘尖端對 node 獨立算的 Mercator（＋對照組圖磚偏 10px 四根都抓到）、著作權字樣在框內沒被蓋、點標籤移到那站且頁面不上下捲、
+  沒位置的站點了寫明且地圖不動、＋／⌂、滑鼠拖、**單指在地圖上滑頁面照樣捲（對照組：touch-action:none 就捲不動；前置：地圖外同一滑法會捲）**、整頁重畫後還在第 2 站、回放游標到站正好在圖釘上、圖磚全部 503 → 示意圖＋「目前沒有網路」；
+  `real` 模式真抓 OSM 約十幾張圖磚截兩張，14 項過。palettetest 抓到新樣式對比不足已修。回歸 palettetest、zhtest、gatelint、viewentrytest、itinviewtest、collapsetest、installtest、updatetest、scrolltest 全綠；全套沒跑。
+  **沒實測**：Service Worker 圖磚快取（存、過期、沒網路沿用 7 天、上限 1500）一條都沒跑過；雙指拖曳（只測了滑鼠）；實機觸控；其他測試在背景會不會去抓真的 OSM 圖磚（地圖捲進畫面才抓，推論多數測試不會）。
+  `scripts/_daymapshots.mjs`（示意圖那支一次性腳本）現在會紅——行程頁已換成真實地圖，那支過時了。截圖在交接目錄 `handoff_1104\tq\真實地圖第一版\`。
+  下一步：SW 圖磚快取的驗證、交通方式資料（照 B 投票，動 merge.js → Worker 先部署，部署前先查 `_f` 補 0 會不會寫 D1）。
 
 ### ⏩⏩ 2026-11-05 下午 Yolin：「請先以這個為目標」——參考畫面（大阪散步帖，就是 `DESIGN_繪本風改版.md` 的參考 A）優先於七項清單
 - 附件（三張截圖＋錄影）**本 Session 沒收到**，答覆依據是 10-27 設計文件第 0.5 節的逐項對照表（當時也是 Dispatch 轉述、沒看過原圖）。
