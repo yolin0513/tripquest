@@ -2,12 +2,20 @@
  * - App shell（HTML/CSS/JS/data JSON）：install 時預快取，之後 stale-while-revalidate
  * - 導覽請求：network-first，離線時回退 index.html
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
+ * - 例外：OpenStreetMap 地圖圖磚進獨立的 TILE_CACHE（只存看過的，見 tile()）
  */
 const VERSION = 'tripquest-v1.74.11';
 const SHELL = `${VERSION}-shell`;
 // 內建配樂：獨立快取、跨版本保留（檔名即版本，內容不會變）—— 15MB 不進 SHELL，
 // 不預快取、點了才下載；升版不重抓。
 const MUSIC_CACHE = 'tq-music-v1';
+// 地圖圖磚（OpenStreetMap）：獨立快取、跨版本保留。只存**使用者看過的**（OSM 條款禁止預先下載區域），
+// 照回應的快取標頭判新舊（max-age 內直接用；過期有網路就重抓；沒網路最多沿用到 stale-if-error，讀不到就 7 天）。
+// 只存 CORS 回應（img 帶 crossorigin；opaque 回應讀不到標頭、配額也會被灌水）。張數有上限，超過丟最舊的。
+const TILE_CACHE = 'tq-tiles-v1';
+const TILE_HOST = 'tile.openstreetmap.org';
+const TILE_MAX = 1500;
+const DAY7 = 7 * 24 * 3600;
 
 const SHELL_ASSETS = [
   './',
@@ -26,6 +34,8 @@ const SHELL_ASSETS = [
   './js/boot-theme.js',
   './js/tripday.js',
   './js/daymap.js',
+  './js/tilemap.js',
+  './js/realmap.js',
   './js/glyphs.js',
   './js/daterange.js',
   './js/ai.js',
@@ -140,7 +150,7 @@ self.addEventListener('message', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION) && k !== MUSIC_CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION) && k !== MUSIC_CACHE && k !== TILE_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -149,6 +159,8 @@ self.addEventListener('fetch', (e) => {
   const { request } = e;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+
+  if (url.host === TILE_HOST) { e.respondWith(tile(request)); return; }
 
   // 跨網域（維基百科圖片等）：直接走網路，不進快取
   if (url.origin !== self.location.origin) return;
@@ -186,6 +198,7 @@ self.addEventListener('fetch', (e) => {
   }
 
   // 不在 SHELL 清單的同源檔案（極少數）：照舊 stale-while-revalidate
+  // （圖磚的處理在檔尾 tile()）
   e.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request).then((res) => {
@@ -199,3 +212,32 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
+
+// ---------- 地圖圖磚 ----------
+const secOf = (cc, key, dflt) => { const m = new RegExp(key + '=(\\d+)').exec(cc || ''); return m ? Number(m[1]) : dflt; };
+async function tile(request) {
+  const c = await caches.open(TILE_CACHE);
+  const hit = await c.match(request);
+  const age = hit ? (Date.now() - Number(hit.headers.get('x-tq-at') || 0)) / 1000 : Infinity;
+  const cc = hit ? hit.headers.get('cache-control') : '';
+  if (hit && age < secOf(cc, 'max-age', DAY7)) return hit;               // 還新：不打網路
+  try {
+    const res = await fetch(request);
+    if (res && res.ok && (res.type === 'cors' || res.type === 'basic')) {
+      const h = new Headers(res.headers);
+      h.set('x-tq-at', String(Date.now()));
+      const body = await res.clone().blob();
+      await c.delete(request);                                          // 重新放：排到最新（丟最舊時用插入順序）
+      await c.put(request, new Response(body, { status: res.status, statusText: res.statusText, headers: h }));
+      const keys = await c.keys();
+      for (const k of keys.slice(0, Math.max(0, keys.length - TILE_MAX))) await c.delete(k);
+      return res;
+    }
+    if (hit && age < secOf(cc, 'max-age', DAY7) + secOf(cc, 'stale-if-error', DAY7)) return hit;
+    return res;
+  } catch (err) {
+    // 沒網路：舊的那張在標頭允許的範圍內（stale-if-error，讀不到 7 天）就拿出來；再舊就當沒有
+    if (hit && age < secOf(cc, 'max-age', DAY7) + secOf(cc, 'stale-if-error', DAY7)) return hit;
+    return Response.error();
+  }
+}

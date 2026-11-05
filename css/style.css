@@ -501,6 +501,44 @@ button.card { appearance: none; font: inherit; }
 .dm-player[data-phase="missing"] .dm-where { color: var(--text); background: var(--bg); border: 2px dashed var(--line); border-radius: 8px; padding: 2px 6px; }
 .dm-player[data-phase="move"] .dm-where, .dm-player[data-phase="idle"] .dm-where { color: var(--muted); font-weight: 600; }
 .dm-prog { flex: none; font-size: 0.82rem; color: var(--muted); font-weight: 700; }
+/* 真實地圖（js/tilemap.js、js/realmap.js）。🔶 粉紅色、卡片樣式依 Dispatch 轉述、原圖未核——樣式最後定 */
+.tm { position: relative; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: #dde6ea; color: #222; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.tm.is-dragging { cursor: grabbing; }
+.tm-tiles, .tm-over { position: absolute; inset: 0; }
+.tm-tile { position: absolute; left: 0; top: 0; width: 256px; height: 256px; pointer-events: none; -webkit-user-drag: none; }
+.tm-tile[data-state="err"] { visibility: hidden; }
+.tm-over { pointer-events: none; }
+.tm-ctrls { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; }
+.tm-btn { width: 44px; height: 44px; border-radius: 10px; border: 1px solid #c9c9c9; background: #fff; color: #222; font-size: 1.3rem; font-weight: 800; line-height: 1; box-shadow: 0 1px 3px #0003; }
+.tm-attr { position: absolute; right: 0; bottom: 0; padding: 2px 6px; background: #fff; color: #333; font-size: 11px; border-top-left-radius: 6px; }
+.tm-attr a { color: #1a4fb0; }
+.rm-lines { position: absolute; left: 0; top: 0; overflow: visible; }
+.rm-seg { stroke: #c2185b; stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; }
+.rm-seg.is-gap { stroke-width: 2; opacity: .45; }
+.rm-pins { position: absolute; inset: 0; }
+.rm-pin { position: absolute; left: 0; top: 0; width: 0; height: 0; padding: 0; border: 0; background: none; pointer-events: auto; }
+.rm-pin-card { position: absolute; left: -20px; top: -46px; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: #222; border: 2px solid #c2185b;
+  box-shadow: 0 2px 4px #0004; display: grid; place-items: center; overflow: hidden; }
+.rm-pin-big { font-size: 1.15rem; font-weight: 900; color: #222; background: #fff; }
+.rm-pin-photo { width: 100%; height: 100%; object-fit: cover; }
+.rm-pin-n { position: absolute; left: 12px; top: -54px; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 5px; background: #c2185b; color: #fff; font-size: 12px; font-weight: 800; line-height: 20px; text-align: center; display: none; }
+.rm-pin.has-photo .rm-pin-n { display: block; }
+.rm-pin.is-dim { opacity: .45; }
+.rm-pin.is-sel { z-index: 2; }
+.rm-pin.is-sel .rm-pin-card { transform: scale(1.18); transform-origin: 50% 100%; border-width: 3px; }
+.rm-cursor { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: var(--primary-text); border: 3px solid #fff; box-shadow: 0 0 0 2px #0005; z-index: 3; }
+.rm-cursor.is-dim { opacity: .4; }
+.rm-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 4px; scrollbar-width: thin; }
+.rm-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 12px 4px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.95rem; font-weight: 700; }
+.rm-chip-n { min-width: 24px; height: 24px; border-radius: 6px; background: #c2185b; color: #fff; display: inline-grid; place-items: center; font-size: 0.85rem; font-weight: 800; padding: 0 4px; }
+.rm-chip.is-all .rm-chip-n { background: #f5c518; color: #2a1a00; }
+.rm-chip.is-missing { border-style: dashed; }
+.rm-chip.is-missing .rm-chip-n { background: var(--bg); color: var(--text); border: 1px dashed var(--muted); }
+.rm-chip[aria-pressed="true"] { border: 2px solid var(--primary-text); }
+.rm-chip.is-now { box-shadow: 0 0 0 3px var(--primary-text); }
+.rm-selnote { margin: 6px 2px 0; padding: 6px 10px; border: 2px dashed var(--line); border-radius: 10px; font-weight: 700; color: var(--text); }
+.rm-hint { margin: 4px 2px 0; font-size: 0.85rem; color: var(--muted); }
+.rm-offline { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg-elev); border: 2px dashed var(--line); font-weight: 700; color: var(--text); }
 .dm-note { margin: 6px 2px 0; font-size: 0.82rem; line-height: 1.5; color: var(--muted); }
 .dm-label { fill: var(--text); font-size: 14px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
 .dm-missing { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; line-height: 1.5; }

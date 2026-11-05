@@ -130,13 +130,17 @@ const f1 = (v) => v.toFixed(1);
 
 // photoOf(s)：回傳 Promise<string>，那一站最新照片的網址（拿不到回空字串，圖釘維持圓點）。
 // playKey：同一天的固定代號（行程＋第幾天）；播放中整頁重畫時，新的播放器靠它接著播。
-export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = null, playKey = '' } = {}) {
-  const m = dayMapModel(daySpots, timeOf, hasPhoto);
-  const missNote = m.missing.length
+// 沒座標的站列在圖下（示意圖與真實地圖共用）
+export function missingNote(m) {
+  return m.missing.length
     ? h('div', { class: 'dm-missing' },
       h('span', { class: 'dm-missing-label' }, m.placed.length ? '這幾站沒有位置，沒畫上去：' : '這天的景點都沒有位置，畫不出地圖：'),
       h('span', { class: 'dm-missing-list' }, m.missing.map((x) => `${x.n}. ${x.name}`).join('、')))
     : null;
+}
+export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = null, playKey = '' } = {}) {
+  const m = dayMapModel(daySpots, timeOf, hasPhoto);
+  const missNote = missingNote(m);
   if (!m.placed.length) return h('div', { class: 'daymap is-empty' }, missNote);
 
   const g = svg('svg', { class: 'dm-svg', viewBox: `0 0 ${m.w} ${m.h}`, role: 'img',
@@ -189,7 +193,11 @@ export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = nul
     g.append(svg('text', { class: 'dm-label', 'data-spot': p.id, x: f1(p.lx), y: f1(p.ly), 'text-anchor': p.anchor }, p.label));
   }
   const hasGap = m.segs.some((s) => s.gap);
-  const player = dayPlayer(m, cursor, g, playKey);
+  const put = (x, y, dim) => { cursor.setAttribute('cx', f1(x)); cursor.setAttribute('cy', f1(y)); cursor.classList.toggle('is-dim', !!dim); };
+  const player = dayPlayer(m, {
+    show: (p, dim) => put(p.x, p.y, dim),
+    between: (a, b, t) => put(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, false),
+  }, g, playKey);
   const note = h('p', { class: 'dm-note' },
     `示意圖：方位照實、比例不照實。標的公里數是兩站之間的直線距離（${KM_MIN} 公里以上才標），不是實際路程。`
     + (hasGap ? '淡色細線的兩站中間還有沒位置的站，所以不標距離。' : ''));
@@ -202,7 +210,9 @@ export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = nul
 // 沒位置的站：不默默跳過。停在那一步、跟別站停一樣久，大字寫「這一站沒有位置，地圖上沒畫」；游標留在上一站、變淡。
 // 狀態寫在 data-step（第幾站）、data-phase（idle／stop／missing／move／done）上，測試照這個讀。
 export const PLAY_MS = { stop: 1800, move: 1200 };
-function dayPlayer(m, cursor, g, playKey) {
+// ad（游標怎麼畫，示意圖與真實地圖各給一份）：show(站, 變淡?)、between(上一站, 這一站, 0~1)、onStep?(站或 null)。
+// g：判斷「還在不在畫面上」用的元素。
+export function dayPlayer(m, ad, g, playKey) {
   const byN = new Map([...m.placed.map((p) => [p.n, { ...p, pin: true }]), ...m.missing.map((x) => [x.n, { ...x, pin: false }])]);
   const steps = [...byN.keys()].sort((a, b) => a - b).map((n) => byN.get(n));
   const total = steps.length;
@@ -219,23 +229,24 @@ function dayPlayer(m, cursor, g, playKey) {
     clock.textContent = clk; clock.hidden = !clk; where.textContent = text;
     prog.textContent = step ? `第 ${step} / ${total} 站` : `共 ${total} 站`;
   };
-  const putCursor = (x, y, dim) => { cursor.setAttribute('cx', f1(x)); cursor.setAttribute('cy', f1(y)); cursor.classList.toggle('is-dim', !!dim); };
+  const step = (s) => { if (ad.onStep) ad.onStep(s); };
   const stop = (done) => {
     playing = false; clearTimeout(timer); timer = 0;
     if (playKey) live.delete(playKey);
     btn.textContent = done ? '↺ 再播一次' : '▶ 繼續';
-    if (done) { set('done', total, '', '這一天走完了'); i = -1; last = null; }
+    if (done) { set('done', total, '', '這一天走完了'); i = -1; last = null; step(null); }
   };
   // 不在畫面上了（整頁重畫、換頁）：這一份就停，但**不清掉**進度——重畫出來的新播放器會接著播
   const alive = () => { if (g.isConnected) return true; playing = false; clearTimeout(timer); return false; };
   const arrive = () => {
     const s = steps[i];
     if (playKey) live.set(playKey, { n: s.n, total, at: Date.now() });
-    if (s.pin) { putCursor(s.x, s.y, false); last = s; set('stop', s.n, s.time, `${s.n}. ${s.name}`); }
+    if (s.pin) { ad.show(s, false); last = s; set('stop', s.n, s.time, `${s.n}. ${s.name}`); }
     else {
-      if (last) putCursor(last.x, last.y, true);
+      if (last) ad.show(last, true);
       set('missing', s.n, s.time, `${s.n}. ${s.name}\n這一站沒有位置，地圖上沒畫`);
     }
+    step(s);
     timer = setTimeout(next, PLAY_MS.stop);
   };
   const next = () => {
@@ -247,13 +258,12 @@ function dayPlayer(m, cursor, g, playKey) {
     // 移動：只有「上一個放得上的站」到「這一個放得上的站」才畫移動；減少動態效果時直接跳
     if (s.pin && last && !reducesMotion()) {
       set('move', s.n, '', `往第 ${s.n} 站`);
-      const from = { x: Number(cursor.getAttribute('cx')), y: Number(cursor.getAttribute('cy')) };
-      cursor.classList.remove('is-dim');
+      const from = last;
       const t0 = performance.now();
       const tick = (now) => {
         if (!playing || !alive()) return;
         const t = Math.min(1, (now - t0) / PLAY_MS.move);
-        putCursor(from.x + (s.x - from.x) * t, from.y + (s.y - from.y) * t, false);
+        ad.between(from, s, t);
         if (t < 1) requestAnimationFrame(tick); else arrive();
       };
       requestAnimationFrame(tick);
@@ -264,7 +274,7 @@ function dayPlayer(m, cursor, g, playKey) {
     playing = true; btn.textContent = '❚❚ 暫停';
     const ph = box.dataset.phase;
     if (ph === 'stop' || ph === 'missing') { timer = setTimeout(next, PLAY_MS.stop); return; }   // 停在站上暫停：繼續就往下一站
-    if (ph === 'move') i -= 1;                                  // 移動中暫停：從游標現在的位置繼續走到同一站
+    if (ph === 'move') i -= 1;                                  // 移動中暫停：從上一站重新走到同一站
     next();
   });
   // 接著播：同一天、剛剛（10 秒內）還在播、站數沒變 → 從那一站重新到站（不重放移動）
@@ -276,7 +286,7 @@ function dayPlayer(m, cursor, g, playKey) {
         if (!g.isConnected) return;
         playing = true; btn.textContent = '❚❚ 暫停';
         i = k; last = steps.slice(0, k).reverse().find((s) => s.pin) || null;
-        if (last) putCursor(last.x, last.y, false);
+        if (last) ad.show(last, false);
         arrive();
       }, 0);
     }
