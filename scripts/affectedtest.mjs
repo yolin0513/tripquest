@@ -398,6 +398,34 @@ console.log('\n[T18] 突變清單');
   const real = Object.entries(repo.mutLists).filter(([, v]) => v.kind === 'mutate');
   const bad = real.filter(([, v]) => v.missingCmd.length).map(([k]) => k);
   yes(real.length >= 30 && !bad.length, `M5 真實的 mutate 格式清單 ${real.length} 份，缺 cmd 的 ${bad.length} 份（母體 ≥ 30）`, bad.join('、'));
+  // M7 真實入口走「判紅」那條路：在 .logs 下的暫存 clone 放一份缺 cmd 的清單，run-affected 必須回 9、點名它、一支都不跑；
+  //    同一份 clone 放一份有 cmd 的清單當對照，必須回 0。主工作區不放任何樣本（共用慣例 §5.20：從命令列入口跑的對照組在暫存複本裡跑）。
+  //    clone 拿到的是 commit 過的版本，所以把工作區的 scripts/ 蓋過去，並讀回確認判紅那段真的在複本裡（不在就判情境未成立）。
+  {
+    const d = path.join(ROOT, '.logs', `affectedtest-m7-${process.pid}`);
+    fs.rmSync(d, { recursive: true, force: true });
+    try {
+      const cl = spawnSync('git', ['clone', '-q', '--shared', ROOT, d], { encoding: 'utf8' });   // --shared：不複製物件（底線每版都跑，--no-hardlinks 要多 35 秒）
+      for (const f of fs.readdirSync(path.join(ROOT, 'scripts')).filter((x) => /\.m?js$/.test(x))) fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(d, 'scripts', f));
+      const nocmd = 'tools/mutations/zz_m7_nocmd.json', withcmd = 'tools/mutations/zz_m7_cmd.json';
+      fs.writeFileSync(path.join(d, nocmd), JSON.stringify([{ name: 'm7沒填', file: 'js/app.js', find: 'a', replace: 'b' }]));
+      fs.writeFileSync(path.join(d, withcmd), JSON.stringify([{ name: 'm7有填', file: 'js/app.js', find: 'a', replace: 'b', cmd: 'node scripts/zhtest.mjs' }]));
+      const ready = cl.status === 0 && fs.readFileSync(path.join(d, 'scripts', 'run-affected.mjs'), 'utf8').includes('process.exit(9)')
+        && !JSON.parse(fs.readFileSync(path.join(d, nocmd), 'utf8'))[0].cmd;
+      yes(ready, 'M7 前置：暫存 clone 建好、工作區的 run-affected.mjs（含回 9 那段）蓋進去了、缺 cmd 的樣本真的沒有 cmd', `clone 回 ${cl.status} ${cl.stderr || ''}`);
+      if (ready) {
+        const bad = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', nocmd, '--dry'], { cwd: d, encoding: 'utf8' });
+        yes(bad.status === 9 && bad.stdout.includes(`✗ 突變清單 ${nocmd}`) && bad.stdout.includes('m7沒填') && bad.stdout.includes('一支都沒跑') && !/耗時預測/.test(bad.stdout),
+          'M7 真實入口：缺 cmd 的清單 → 回 9、點名那一條、印「一支都沒跑」、沒走到耗時預測', `回 ${bad.status}：` + bad.stdout.split('\n').filter((l) => /✗|本次跑|放大|預測/.test(l)).join(' | '));
+        const good = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', withcmd, '--dry'], { cwd: d, encoding: 'utf8' });
+        yes(good.status === 0 && /^ {2}zhtest\s+←.*cmd 點名/m.test(good.stdout) && !/放大到全套/.test(good.stdout),
+          'M7 對照：同一份 clone、有 cmd 的清單 → 回 0、挑到點名的 zhtest、沒有放大', `回 ${good.status}：` + good.stdout.split('\n').filter((l) => /✗|本次跑|放大|zhtest/.test(l)).join(' | '));
+      }
+    } finally {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+    yes(!fs.existsSync(d), 'M7 暫存 clone 刪掉了');
+  }
   // M6 真實入口：run-affected --files <真的清單> --dry → 回 0、沒有放大、挑到 mutlint
   const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', 'tools/mutations/mut_itinview.json', '--dry'], { cwd: ROOT, encoding: 'utf8' });
   yes(p.status === 0 && !/放大到全套/.test(p.stdout) && /^ {2}mutlint\s+←/m.test(p.stdout) && /^ {2}itinviewtest\s+←/m.test(p.stdout),

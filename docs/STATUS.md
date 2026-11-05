@@ -58,7 +58,10 @@
   讀不到／刪除的清單照舊放大全套；補丁格式照舊放大。
   驗：affectedtest 新 [T18] 10 項（109 → 119）；`mut_affected_mutlist` 2 條各只紅預期那幾行（「點名的不挑」紅 M1＋真實入口、「沒填 cmd 不判紅」紅兩條 M2；帳本 seq 266、267）。
   效果（`--dry` 實測）：origin/main..工作區 從 74/74 → **16/74**（預測 111 秒）——但底線裡有 6 支會開瀏覽器，推送前的測試**仍是重負載**、要排瀏覽器時段。
-  **已知缺口**：「回 9」那條路只在純函式層驗過（errors），沒從命令列入口造一份缺 cmd 的真清單跑——那要把樣本寫進 `tools/mutations/`，今天不做。
+  ~~已知缺口：「回 9」那條路只在純函式層驗過~~ **補上了（2026-11-05 下午）**：affectedtest M7 在 `.logs/` 的暫存 clone（`--shared`、工作區的 `scripts/` 蓋過去、讀回確認）
+  放一份缺 cmd 的清單，從命令列跑 `run-affected --files … --dry` → 回 9、點名、「一支都沒跑」；同一份 clone 有 cmd 的對照 → 回 0、挑到點名的 zhtest；跑完刪掉 clone。
+  affectedtest 119 → 123 項、約 10 秒（第一版用 `--no-hardlinks` 要 45 秒，底線每版都跑，改 `--shared`）。
+  突變「判紅了照樣往下跑」只紅 M7 真實入口那一條（帳本 seq 268）——故意不刪 `process.exit(9)` 那行字，而是讓條件不成立，否則紅的會是 M7 前置（紅錯理由）。
 - **能跑（秒級、不開瀏覽器，2026-11-05 實跑）**：mutlint、affectedtest 109、gatelint、shelltest 13、zhtest 27、convtest 8、guesscensustest 11、themetrusttest 20、
   validate-places（135 個地點、0 錯）、loadjudge 自我測試 11、palettetest 27、motioncsstest 20、tripdaytest 39、postertruthtest 20、posterlayouttest 34、mutcmdtest 15——
   全部回 0、都印出最後的總結行（跑完，不是半途崩潰）。**瀏覽器測試一支都沒跑**（同機量測中）。

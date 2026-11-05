@@ -16,5 +16,14 @@
     "replace": "        if (false && info.missingCmd.length) {",
     "cmd": "node scripts/affectedtest.mjs",
     "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "突變清單：挑選器判紅了，run-affected 照樣往下跑",
+    "why": "errors 有東西卻不回 9——判紅只停在純函式層、命令列入口照樣綠。預期只紅 affectedtest 的「M7 真實入口：缺 cmd 的清單 → 回 9」那一條（M7 前置、M7 對照照樣過：回 9 那行字還在、有 cmd 的本來就回 0）。",
+    "file": "scripts/run-affected.mjs",
+    "find": "    if (r.errors && r.errors.length) {",
+    "replace": "    if (false && r.errors && r.errors.length) {",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
   }
 ]
