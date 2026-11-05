@@ -7,6 +7,7 @@
 import { h } from './ui.js';
 import { tileMap } from './tilemap.js';
 import { dayMapModel, dayMap, dayPlayer, missingNote } from './daymap.js';
+import { LEG_ICON } from './legs.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs = {}) => { const el = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v)); return el; };
@@ -24,6 +25,14 @@ export function dayRealMap(daySpots, timeOf, opts = {}) {
   const cursor = h('div', { class: 'rm-cursor', 'aria-hidden': 'true' });
   cursor.hidden = true;
   map.over.append(lines, pinLayer, cursor);
+  // 移動中、而且這一段設了交通方式（有圖示的那幾種）→ 游標換成那個圖示；到站、沒設、「其他」→ 圓點
+  const setMode = (mode) => {
+    const ic = (mode && LEG_ICON[mode]) || '';
+    if (cursor.dataset.mode === (ic ? mode : '')) return;
+    cursor.dataset.mode = ic ? mode : '';
+    cursor.classList.toggle('is-mode', !!ic);
+    cursor.textContent = ic;
+  };
 
   // 圖釘：卡片＋編號。卡片裡只放有根據的東西——那一站使用者拍的最新照片；沒有就只放編號（不照名字猜圖示）
   const pins = m.placed.map((p) => {
@@ -92,8 +101,8 @@ export function dayRealMap(daySpots, timeOf, opts = {}) {
 
   // 回放：游標用經緯度內插（使用者縮放、拖地圖時照樣跟得上）；標籤列跟著標出目前那一站，但不移動地圖（v1）
   const player = dayPlayer(m, {
-    show: (p, dim) => { cur = { lat: p.lat, lng: p.lng }; cursor.hidden = false; cursor.classList.toggle('is-dim', !!dim); draw(); },
-    between: (a, b, t) => { cur = { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t }; cursor.hidden = false; cursor.classList.remove('is-dim'); draw(); },
+    show: (p, dim) => { cur = { lat: p.lat, lng: p.lng }; cursor.hidden = false; cursor.classList.toggle('is-dim', !!dim); setMode(null); draw(); },
+    between: (a, b, t, mode) => { cur = { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t }; cursor.hidden = false; cursor.classList.remove('is-dim'); setMode(mode); draw(); },
     onStep: (s) => { for (const c of chips) c.classList.toggle('is-now', !!s && c.dataset.n === String(s.n)); if (!s) { cur = null; cursor.hidden = true; } },
   }, map.el, playKey);
 

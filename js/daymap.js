@@ -214,7 +214,7 @@ export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = nul
 // 沒位置的站：不默默跳過。停在那一步、跟別站停一樣久，大字寫「這一站沒有位置，地圖上沒畫」；游標留在上一站、變淡。
 // 狀態寫在 data-step（第幾站）、data-phase（idle／stop／missing／move／done）上，測試照這個讀。
 export const PLAY_MS = { stop: 1800, move: 1200 };
-// ad（游標怎麼畫，示意圖與真實地圖各給一份）：show(站, 變淡?)、between(上一站, 這一站, 0~1)、onStep?(站或 null)。
+// ad（游標怎麼畫，示意圖與真實地圖各給一份）：show(站, 變淡?)、between(上一站, 這一站, 0~1, 交通方式或 null)、onStep?(站或 null)。
 // g：判斷「還在不在畫面上」用的元素。
 export function dayPlayer(m, ad, g, playKey) {
   const byN = new Map([...m.placed.map((p) => [p.n, { ...p, pin: true }]), ...m.missing.map((x) => [x.n, { ...x, pin: false }])]);
@@ -240,6 +240,7 @@ export function dayPlayer(m, ad, g, playKey) {
   const ms = (k) => PLAY_MS[k] / speed;
   const set = (phase, step, clk, text) => {
     box.dataset.phase = phase; box.dataset.step = String(step);
+    if (phase !== 'move') box.dataset.mode = '';             // 到站、停下：游標回到圓點
     clock.textContent = clk; clock.hidden = !clk; where.textContent = text;
     prog.textContent = step ? `第 ${step} / ${total} 站` : `共 ${total} 站`;
     seek.value = String(phase === 'done' ? total : (phase === 'move' ? Math.max(0, step - 1) : step));
@@ -277,11 +278,15 @@ export function dayPlayer(m, ad, g, playKey) {
     if (s.pin && last && !reducesMotion()) {
       set('move', s.n, '', `往第 ${s.n} 站`);
       const from = last, my = gen;
+      // 這一段設了交通方式（而且還算數，見 dayMapModel）才換圖示；沒設、或中間夾著沒位置的站，游標維持圓點
+      const seg = m.segs.find((x) => x.from === from.n && x.to === s.n);
+      const mode = (seg && seg.mode) || null;
+      box.dataset.mode = mode || '';
       const t0 = performance.now();
       const tick = (now) => {
         if (!playing || my !== gen || !alive()) return;
         const t = Math.min(1, (now - t0) / ms('move'));
-        ad.between(from, s, t);
+        ad.between(from, s, t, mode);
         if (t < 1) requestAnimationFrame(tick); else arrive();
       };
       requestAnimationFrame(tick);

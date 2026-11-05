@@ -23,6 +23,7 @@ import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineS
 import { paperPlane } from '../glyphs.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
+import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -597,10 +598,13 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
         crewStrip(t),
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
-        h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
-          h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
-          h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
-          spotSection(s, tripId, ctx.focusId, ctx.hereId)))))),
+        // 兩站之間一列「怎麼去」（js/legs.js）：就放在兩張卡中間，看行程時一眼就看到、點了就能設——不藏在編輯頁。
+        h('ol', { class: 'timeline' }, ...daySpots.flatMap((s, i) => [
+          i > 0 ? legRow(daySpots[i - 1], s, i) : null,
+          h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
+            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
+            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
+            spotSection(s, tripId, ctx.focusId, ctx.hereId))]).filter(Boolean)))),
   );
   sec._wxSpan = wxSpan;
   return sec;
@@ -656,6 +660,32 @@ async function fillWeather(slot, container, tripId, trip) {
         : h('div', { class: 'wx-strip-tip muted' }, '天氣還算舒服，點看每天預報'),
     ));
   } catch { /* 靜默：天氣是加分項 */ }
+}
+
+// 兩站之間「怎麼去」的那一列。prev＝現在排在前面的那一站；顯示與否完全交給 legModeOf：
+// 記下的前一站不是現在這一站（重排、刪站、換天）就當成沒設定——舊選擇不套到沒人選過的路段上。
+// 沒設定就寫「還沒設定」，不預選任何一種（不拿最常見的去填）。
+function legRow(prev, s, i) {
+  const cur = legModeOf(prev, s);
+  const name = (x) => x.name || '（沒有名字）';
+  const label = cur ? `${LEG_ICON[cur] ? LEG_ICON[cur] + ' ' : ''}${LEG_LABEL[cur]}` : '怎麼去：還沒設定';
+  const pick = h('div', { class: 'tl-leg-pick', role: 'group', 'aria-label': `第 ${i} 站到第 ${i + 1} 站怎麼去` });
+  pick.hidden = true;
+  const save = async (k) => {
+    await store.patch(s.id, k ? { legFrom: prev.id, legMode: k } : { legFrom: null, legMode: null });
+    refreshPage();
+  };
+  pick.append(...LEG_MODES.map((k) => h('button', {
+    class: 'tl-leg-opt' + (k === cur ? ' is-on' : ''), type: 'button', dataset: { mode: k }, 'aria-pressed': String(k === cur),
+    onclick: () => save(k),
+  }, LEG_ICON[k] ? h('span', { class: 'tl-leg-ic', 'aria-hidden': 'true' }, LEG_ICON[k]) : null, LEG_LABEL[k])),
+  cur ? h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, '清除') : null);
+  const btn = h('button', {
+    class: 'tl-leg-btn' + (cur ? '' : ' is-unset'), type: 'button', 'aria-expanded': 'false',
+    'aria-label': `從「${name(prev)}」到「${name(s)}」怎麼去：${cur ? LEG_LABEL[cur] : '還沒設定'}，點一下設定`,
+    onclick: () => { pick.hidden = !pick.hidden; btn.setAttribute('aria-expanded', String(!pick.hidden)); },
+  }, label, h('span', { class: 'tl-leg-chev', 'aria-hidden': 'true' }, ' ▸'));
+  return h('li', { class: 'tl-leg', dataset: { spot: s.id, mode: cur || '' } }, btn, pick);
 }
 
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，

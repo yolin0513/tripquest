@@ -6,6 +6,11 @@
 // 認不得的代號（未來版本新增的）也當成沒有選：不顯示任何字、不猜。
 
 export const LEG_MODES = ['walk', 'train', 'bus', 'car', 'boat', 'plane', 'other'];
+// 名稱與圖示。圖示用系統的表情符號，不自己畫（js/glyphs.js 檔頭：原創圖形就那兩個，不加第三個）；
+// 表情符號本來就是為小尺寸設計的，輪廓彼此分得開（走路＝人、電車＝長車廂側面、公車＝正面方盒、開車＝矮車身、船、飛機）。
+// 「其他」沒有對應的圖示——不硬配一個（配了就是在猜他搭什麼），地圖上跟沒設定一樣用圓點，字寫「其他」。
+export const LEG_LABEL = { walk: '走路', train: '電車・捷運', bus: '公車', car: '開車・計程車', boat: '船', plane: '飛機', other: '其他' };
+export const LEG_ICON = { walk: '🚶', train: '🚃', bus: '🚌', car: '🚗', boat: '⛴️', plane: '✈️', other: '' };
 
 // prev：當天排在前面的那一站（沒有就是 null，每天第一站沒有進站段）；spot：到達站。
 // 回傳代號或 null。
