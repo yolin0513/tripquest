@@ -1,5 +1,14 @@
 [
   {
+    "name": "scrolltest：日期列沒有總覽那格",
+    "why": "2026-11-06 全套撞到 scrolltest 寫死「日期列 3 格」，改成「天數 3 格＋總覽一格沒被選中」。這條證明新加的「總覽那格要在」會紅：把總覽那格的 class 改掉、不再算日期列的格子。預期只紅 scrolltest 的「進行中：日期列三天都在（另有總覽一格…）」。",
+    "file": "js/views/trip.js",
+    "find": "cells.set(0, h('button', { class: 'ds-day ds-all',",
+    "replace": "cells.set(0, h('button', { class: 'ds-xday ds-all',",
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
+  },
+  {
     "name": "待買：勾了的不往下排",
     "why": "排序拿掉「沒買在上」那一層。預期只紅 recordstest 的「勾了 → 移到最下面」。（2026-11-06 第一次跑紅 4 條：後面幾步用「第一列」取品項、跟著排序錯；改成用品項的字找列之後重驗。）",
     "file": "js/buylist.js",

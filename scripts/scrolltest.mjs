@@ -169,8 +169,11 @@ try {
         inView: !!tr && r.left >= tr.left - 1 && r.right <= tr.right + 1 && r.top >= 0 };
     });
   });
-  if (stripA.length === 3 && stripA.filter((c) => c.on).map((c) => c.day).join() === '2' && stripA.find((c) => c.day === 2).today && stripA.find((c) => c.day === 2).inView)
-    ok('進行中：日期列三天都在、自動選中今天（第 2 天）那一格、標著今天、而且在日期列看得到的範圍裡');
+  // 2026-11-05 起日期列最前面多一格「總覽」（data-day=0，.ds-all，Yolin 看過總覽圖）：天數只數 day ≥ 1 的格子，
+  // 總覽那格要在、而且進行中不會被選中（2026-11-06 全套撞到：原本寫死 length === 3，多了總覽那格變 4 → 紅）
+  const daysA = stripA.filter((c) => c.day >= 1), allA = stripA.find((c) => c.day === 0);
+  if (daysA.length === 3 && allA && !allA.on && stripA.filter((c) => c.on).map((c) => c.day).join() === '2' && stripA.find((c) => c.day === 2).today && stripA.find((c) => c.day === 2).inView)
+    ok('進行中：日期列三天都在（另有總覽一格、沒被選中）、自動選中今天（第 2 天）那一格、標著今天、而且在日期列看得到的範圍裡');
   else fail('日期列不對：' + JSON.stringify(stripA));
 
   // v1.42：只展開「現在這一站」（今天第一個未完成的），不再把當天全部未完成的打開 ——
