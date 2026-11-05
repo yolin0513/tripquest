@@ -1,0 +1,104 @@
+[
+  {
+    "name": "待買：勾了的不往下排",
+    "why": "排序拿掉「沒買在上」那一層。預期只紅 recordstest 的「勾了 → 移到最下面」。（2026-11-06 第一次跑紅 4 條：後面幾步用「第一列」取品項、跟著排序錯；改成用品項的字找列之後重驗。）",
+    "file": "js/buylist.js",
+    "find": "    .sort((a, b) => (Number(!!a.done) - Number(!!b.done))\n      || ((a.createdAt || 0) - (b.createdAt || 0))",
+    "replace": "    .sort((a, b) => ((a.createdAt || 0) - (b.createdAt || 0))",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "待買：沒選過我是誰也記一個人",
+    "why": "doneBy 用猜的（沒選過就塞 'someone'）。預期紅 recordstest 的「資料：沒選過我是誰 → doneBy 存 null」。（2026-11-06 第一次跑沒紅：畫面用 doneBy 去找旅伴，找不到就不寫名字，所以畫面那條守不到資料；補了讀資料的那條。）",
+    "file": "js/buylist.js",
+    "find": "doneBy: done ? (memberId || null) : null",
+    "replace": "doneBy: done ? (memberId || 'someone') : null",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "住宿：缺日期寫 0 晚",
+    "why": "nightsOf 缺日期回 0（不是 null）。預期紅 recordstest 的「沒日期那間：不寫 0 晚」。",
+    "file": "js/stays.js",
+    "find": "  if (!a || !b) return null;\n  const n = dayNum(b) - dayNum(a);",
+    "replace": "  if (!a || !b) return 0;\n  const n = dayNum(b) - dayNum(a);",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "住宿：行程外也當成行程內",
+    "why": "拿掉「不在行程日期內」那一支。預期紅 recordstest 的「行程外那間：照實寫不在行程日期內」。",
+    "file": "js/stays.js",
+    "find": "  if (from < 1 || (lastNight != null && to > lastNight)) return { inTrip: false };",
+    "replace": "  if (false) return { inTrip: false };",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "航班：過了的寫「已起飛」",
+    "why": "猜他搭上了。預期紅 recordstest 的「昨天那班：不寫倒數、也不寫已起飛」（入口那條取的是第一個有倒數的，昨天那班已刪，不受影響）。",
+    "file": "js/flights.js",
+    "find": "  if (n < 0) return '';",
+    "replace": "  if (n < 0) return '已起飛';",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "航班：抵達日從起飛日推",
+    "why": "沒填抵達日就拿起飛日頂。預期紅 recordstest 的「沒填抵達：寫日期未填、不從起飛日推」。",
+    "file": "js/views/flights.js",
+    "find": "end(f.arrDate, f.arrTime, f.arrPlace)",
+    "replace": "end(f.arrDate || f.depDate, f.arrTime, f.arrPlace)",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "表單動作列不黏",
+    "why": "回到修之前（2026-11-06 凌晨「存」被分頁列蓋住）。預期紅 recordstest 的航班那條「存看得到、沒被分頁列蓋住」；之後照畫面位置點到分頁列、連帶例外。住宿表單較短、不黏也在畫面內，住宿那條不紅（2026-11-06 實測；事前我預期兩條都紅、寫錯了）。",
+    "file": "css/style.css",
+    "find": ".fl-actions, .stay-actions { position: sticky;",
+    "replace": ".fl-actions, .stay-actions { position: static;",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "日期列回到 1fr（頁面被撐到 413px）",
+    "why": "回到修之前的兩欄寫法與欄位寬度。預期紅 recordstest 的住宿那條「沒有把頁面撐寬」（413）；之後連帶例外，航班那條走不到。",
+    "file": "css/style.css",
+    "edits": [
+      { "find": ".stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }", "replace": ".stay-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }" },
+      { "find": ".fl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }", "replace": ".fl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }" },
+      { "find": ".stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; }", "replace": ".stay-daterow .xfield, .fl-row .xfield { min-width: 0; width: 100%; }" },
+      { "find": ".fl-field, .stay-field { min-width: 0; }", "replace": ".fl-xfield, .stay-xfield { min-width: 0; }" }
+    ],
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "合併：墓碑永遠贏",
+    "why": "刪除不再跟較晚的修改比時間。預期紅 mergetest 的三條【新紀錄·刪了又回來】（buy／stay／flight），加上既有的 spot 那條「(c) 編輯較晚 → 景點還在」（同一個語意，事前漏列）；對照組（修改較早照刪）照樣綠。",
+    "file": "js/merge.js",
+    "find": "    const win = recWins(inc, cur) ? inc : cur;",
+    "replace": "    const win = inc.deleted ? inc : cur.deleted ? cur : recWins(inc, cur) ? inc : cur;",
+    "cmd": "node scripts/mergetest.mjs"
+  },
+  {
+    "name": "Worker：舊的那份也寫進去",
+    "why": "plan 不看 changed。預期只紅 workertest 的【新紀錄】stay「舊的那份推上去會輸」。事前我以為既有的「只補了時間戳的推回 wrote=0」也會紅——實測沒紅：那一份跟伺服器同一個 updatedAt＋deviceId，先被 plan 的快速路徑擋掉，走不到 changed。",
+    "file": "workers/worker.mjs",
+    "find": "        if (!changed) return null;                                     // 合併結果＝現存 → 不寫、不佔 seq",
+    "replace": "        if (false) return null;                                     // 合併結果＝現存 → 不寫、不佔 seq",
+    "cmd": "node scripts/workertest.mjs"
+  },
+  {
+    "name": "合併：沒有欄位組的型別也留著 _f",
+    "why": "sanitizeF 不再刪掉未知型別的 _f。這是「舊版 Worker 會刪 _f → Worker 要先部署」那條根據的反面：拿掉刪除，舊版副本也會留著 _f。預期紅 mergetest 的三條【新紀錄·部署順序】。",
+    "file": "js/merge.js",
+    "find": "  if (!rec || !groups) { if (rec && rec._f !== undefined) delete rec._f; return rec; }",
+    "replace": "  if (!rec || !groups) { return rec; }",
+    "cmd": "node scripts/mergetest.mjs"
+  },
+  {
+    "name": "合併：整筆語意不比內容、一模一樣時算推上來的贏（兩道一起拿掉）",
+    "why": "沒追蹤的型別（expense）推回一模一樣的一份也算 changed。預期紅 mergetest 的【新紀錄·既有型別】expense「寫入次數都是 0」。兩道互為備援：recWins 在完全相同時回 false（現存的贏）、changed 又比一次內容——2026-11-06 只拿掉 changed 那一道時沒紅（等價突變，§5.12），所以這條兩道一起拿掉。",
+    "file": "js/merge.js",
+    "edits": [
+      { "find": "    return { rec: win, changed: win === inc && stable(inc) !== stable(cur) };", "replace": "    return { rec: win, changed: win === inc };" },
+      { "find": "  return cmpStr(stable(inc), stable(cur)) > 0;\n}", "replace": "  return cmpStr(stable(inc), stable(cur)) >= 0;\n}" }
+    ],
+    "cmd": "node scripts/mergetest.mjs"
+  }
+]

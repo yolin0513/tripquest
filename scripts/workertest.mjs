@@ -164,6 +164,55 @@ try {
       `【新組·對照】另外讀 D1：讀得到新值、leg 的時間戳、seq 前進（seq ${seq0} → ${p2.seq}）`, JSON.stringify(got));
   }
 
+  // ---------- 三樣新紀錄 buy／stay／flight（2026-11-06）走真的 Worker ----------
+  // 投票（docs/VOTE_2026-11-05_航班待買住宿.md）第 4 步：部署前用 workertest 驗。純函式層（舊版副本、寫入次數）在 mergetest；
+  // 這裡驗只有真的 Worker＋D1 才驗得到的：_f 存得進去、舊的那份推上去會輸、兩台改不同組都留下、不在表上的型別整筆存整筆回。
+  {
+    const auth = { headers: { authorization: 'Bearer ' + secret } };
+    const pullAll = async () => (await (await fetch(`${B}/pull?g=${gid}&since=0`, auth)).json()).records || [];
+    const tB = Date.now() - 30_000;
+    const fB = { text: tB, done: tB };
+    r = await push(gid, secret, [{ id: 'B1', type: 'buy', tripId: 'r1', text: '防曬乳', done: false, doneBy: null, updatedAt: tB, deviceId: 'dA', _f: fB }]);
+    let got = (await pullAll()).find((x) => x.id === 'B1');
+    yes(r.ok && got && got._f && got._f.text === tB && got._f.done === tB,
+      `【新紀錄】buy 的 _f 兩組都存進 D1、讀得回來（HTTP ${r.status}）`, JSON.stringify(got && got._f));
+    // 兩台改不同組：A 改字（較早）、B 勾了（較晚）——兩邊都留下
+    r = await push(gid, secret, [{ ...got, text: '防曬乳 SPF50', updatedAt: tB + 1000, deviceId: 'dA', _f: { ...fB, text: tB + 1000 } }]);
+    r = await push(gid, secret, [{ ...got, done: true, doneBy: 'm1', updatedAt: tB + 2000, deviceId: 'dB', _f: { ...fB, done: tB + 2000 } }]);
+    got = (await pullAll()).find((x) => x.id === 'B1');
+    yes(got && got.text === '防曬乳 SPF50' && got.done === true && got.doneBy === 'm1',
+      '【新紀錄】buy：一台改字、另一台較晚勾了 → 伺服器兩邊都留下', JSON.stringify(got));
+    // 舊的那份推上去會輸（離線很久的手機把最早那份推上來）
+    const tS = Date.now() - 20_000;
+    const stay = { id: 'S1', type: 'stay', tripId: 'r1', name: '海邊民宿', checkIn: '2024-03-10', checkOut: '2024-03-12', address: null, note: '', deviceId: 'dA' };
+    await push(gid, secret, [{ ...stay, name: '海邊民宿（新）', updatedAt: tS + 5000, _f: { name: tS + 5000, dates: tS, addr: tS, note: tS } }]);
+    const pre = (await pullAll()).find((x) => x.id === 'S1');
+    r = await push(gid, secret, [{ ...stay, updatedAt: tS, deviceId: 'dOld', _f: { name: tS, dates: tS, addr: tS, note: tS } }]);
+    const jo = await r.json().catch(() => ({}));
+    got = (await pullAll()).find((x) => x.id === 'S1');
+    yes(pre && pre.name === '海邊民宿（新）' && r.ok && jo.wrote === 0 && got && got.name === '海邊民宿（新）',
+      `【新紀錄】stay：舊的那份推上去會輸（wrote=${jo.wrote}、伺服器上仍是「${got && got.name}」）`);
+    // 對照組：同一筆真的較晚改了別組（日期）→ 要寫進去，而且名字不被舊值蓋回
+    r = await push(gid, secret, [{ ...stay, checkIn: '2024-03-11', updatedAt: tS + 9000, deviceId: 'dOld', _f: { name: tS, dates: tS + 9000, addr: tS, note: tS } }]);
+    const jn = await r.json().catch(() => ({}));
+    got = (await pullAll()).find((x) => x.id === 'S1');
+    yes(r.ok && jn.wrote === 1 && got && got.checkIn === '2024-03-11' && got.name === '海邊民宿（新）',
+      `【新紀錄·對照】stay：較晚改了日期 → 寫進去（wrote=${jn.wrote}），名字照樣是新的那個`, JSON.stringify(got));
+    // flight 的四組
+    const tF = Date.now() - 10_000;
+    r = await push(gid, secret, [{ id: 'F1', type: 'flight', tripId: 'r1', flightNo: 'XX 101', depDate: '2024-03-10', depTime: '08:30', depPlace: '', arrDate: null, arrTime: '', arrPlace: '', note: '',
+      updatedAt: tF, deviceId: 'dA', _f: { no: tF, dep: tF, arr: tF, note: tF } }]);
+    got = (await pullAll()).find((x) => x.id === 'F1');
+    yes(r.ok && got && got._f && ['no', 'dep', 'arr', 'note'].every((g) => got._f[g] === tF),
+      '【新紀錄】flight 的 _f 四組都存進 D1、讀得回來', JSON.stringify(got && got._f));
+    // 不在表上的型別：整筆存、整筆回（_f 被拿掉＝整筆後寫者贏，跟現役 Worker 對這三種做的事一樣）
+    const tU = Date.now() - 5_000;
+    r = await push(gid, secret, [{ id: 'U1', type: 'zzfuture', tripId: 'r1', a: 1, b: { c: [1, 2] }, updatedAt: tU, deviceId: 'dA', _f: { a: tU } }]);
+    got = (await pullAll()).find((x) => x.id === 'U1');
+    yes(r.ok && got && got.a === 1 && JSON.stringify(got.b) === '{"c":[1,2]}' && got._f === undefined,
+      '【新紀錄】不在表上的型別：整筆存整筆回、_f 被拿掉（舊版 Worker 對 buy／stay／flight 就會這樣）', JSON.stringify(got));
+  }
+
   // ---------- /push 的大小上限要在驗證之前（v1.73.2）----------
   const big = JSON.stringify({ records: [{ id: 'big', type: 'trip', title: 'x'.repeat(3_000_000) }] });
   r = await push(gid, secret, null, big);

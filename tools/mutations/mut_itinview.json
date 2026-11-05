@@ -89,11 +89,11 @@
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {
-    "name": "第 1 批：第一站藏在格子外",
-    "why": "節點還在、使用者看不到（只驗 class 存在的測試會照樣綠）。預期只紅 itinviewtest 的 B1 第一站那一條。",
-    "file": "css/style.css",
-    "find": ".ds-first { font-size: 0.78rem;",
-    "replace": ".ds-first { position: absolute; left: -9999px; font-size: 0.78rem;",
+    "name": "第 1 批：日期列格子又寫回當天第一站",
+    "why": "2026-11-06 換掉舊的「第一站藏在格子外」：274c1ee（Yolin 2026-11-05：日期列不列站名）把 .ds-first 整段拿掉，舊突變的 find 找不到、mutlint 報死掉的突變。行為反過來了——B1 現在驗「格子在、但不寫第一站」，所以突變改成把站名加回去。預期只紅 itinviewtest 的 B1「第 2 天那格在、但不寫當天第一站」。",
+    "file": "js/views/trip.js",
+    "find": "      h('span', { class: 'ds-sub' }, isToday ? '今天' : (dstr || (done ? '✓ 完成' : `${byDay.get(d).length} 站`))),\n    ));",
+    "replace": "      h('span', { class: 'ds-sub' }, isToday ? '今天' : (dstr || (done ? '✓ 完成' : `${byDay.get(d).length} 站`))),\n      first ? h('span', { class: 'ds-first' }, first) : null,\n    ));",
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {

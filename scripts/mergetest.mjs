@@ -217,6 +217,88 @@ console.log('— merge.js 純函式 —');
     'sanitizeF：擋掉遠在未來的時間戳（否則任何人都能把一個欄位組永久凍結）', J(frozen._f));
 }
 
+// ================= 三樣新紀錄：待買 buy、住宿 stay、航班 flight（2026-11-06）=================
+//
+// 投票（docs/VOTE_2026-11-05_航班待買住宿.md）的相容性結論是讀程式推的。這裡用真的 js/merge.js 執行：
+//   一、不同欄位組同時被兩人改，兩邊都留下（進 TRACKED 的理由）
+//   二、刪了又被較晚的修改救回來——Yolin 2026-11-05 接受、是設計；這條把它釘住，誰改了語意這條會紅
+//   三、舊版 Worker（TRACKED 沒有這三種）會刪掉它們的 _f——部署順序「Worker 先」的根據
+//   四、既有型別的欄位組沒動：舊版、新版伺服器對既有記錄的推回都不寫（不會因為這次改動多寫一次 D1）
+// 舊版副本的做法同上面「混版」：讀真的 js/merge.js，只用字串手術拿掉這三個型別。
+{
+  console.log('\n— 三樣新紀錄（buy／stay／flight）—');
+  const SRC = await readFile(new URL('../js/merge.js', import.meta.url), 'utf8');
+  const oldSrc = SRC.replace(/\n  (buy|stay|flight): \{[^}]*\},/g, '');
+  const removed = (SRC.match(/\n  (buy|stay|flight): \{[^}]*\},/g) || []).length;
+  yes(removed === 3 && oldSrc !== SRC, `做得出「舊版 TRACKED」副本（拿掉 ${removed} 個型別，應為 3）`);
+  const tmp = new URL('./_newtypes_old.mjs', import.meta.url);
+  await writeFile(tmp, oldSrc, 'utf8');
+  const Old = await import(tmp.href);
+  await rm(tmp, { force: true });
+  yes(!Old.TRACKED.buy && !Old.TRACKED.stay && !Old.TRACKED.flight && TRACKED.buy && TRACKED.stay && TRACKED.flight,
+    '前置：舊版副本沒有這三種、新版有（兩份是不同的來源）', J([Object.keys(Old.TRACKED), Object.keys(TRACKED)]));
+
+  // 一、不同欄位組同時被兩人改：兩邊都留下，而且兩個合併順序結果一樣
+  const cases = [
+    ['buy', { text: '防曬乳' , done: false, doneBy: null }, { text: '防曬乳 SPF50' }, 'text', { done: true, doneBy: 'm1' }, 'done'],
+    ['stay', { name: '海邊民宿', checkIn: '2024-03-10', checkOut: '2024-03-12', address: null, note: '' }, { name: '海邊民宿（範例）' }, 'name', { checkIn: '2024-03-11' }, 'dates'],
+    ['flight', { flightNo: 'XX 101', depDate: '2024-03-10', depTime: '08:30', depPlace: '', arrDate: null, arrTime: '', arrPlace: '', note: '' }, { flightNo: 'XX 102' }, 'no', { arrDate: '2024-03-10', arrTime: '12:45' }, 'arr'],
+  ];
+  for (const [type, body, chA, gA, chB, gB] of cases) {
+    const base = { id: 'n-' + type, type, tripId: 't', ...body, updatedAt: 1000, deviceId: 'z', _f: seedF({ type }, 1000) };
+    const A = { ...base, ...chA, updatedAt: 2000, deviceId: 'a', _f: { ...base._f, [gA]: 2000 } };
+    const B = { ...base, ...chB, updatedAt: 3000, deviceId: 'b', _f: { ...base._f, [gB]: 3000 } };
+    const m1 = mergeRecord(A, B).rec, m2 = mergeRecord(B, A).rec;
+    const keptA = Object.entries(chA).every(([k, v]) => m1[k] === v);
+    const keptB = Object.entries(chB).every(([k, v]) => m1[k] === v);
+    yes(keptA && keptB && J(m1) === J(m2),
+      `【新紀錄·合併】${type}：一人改 ${gA}、一人改 ${gB}（較晚），兩邊都留下、兩個順序結果一樣`, J([m1, m2]));
+  }
+
+  // 二、刪了又被較晚的修改救回來（設計，Yolin 接受）＋對照組：修改比刪除早就照刪
+  for (const type of ['buy', 'stay', 'flight']) {
+    const live = { id: 'd-' + type, type, tripId: 't', updatedAt: 1000, deviceId: 'z', _f: seedF({ type }, 1000) };
+    const del = { ...live, deleted: true, updatedAt: 2000, deviceId: 'a' };
+    const later = { ...live, note: '晚一點改的', text: '晚一點改的', name: '晚一點改的', updatedAt: 3000, deviceId: 'b', _f: { ...live._f } };
+    const earlier = { ...later, updatedAt: 1500 };
+    const r1 = mergeRecord(del, later).rec, r2 = mergeRecord(later, del).rec;
+    yes(!r1.deleted && !r2.deleted, `【新紀錄·刪了又回來】${type}：刪除之後較晚的修改 → 那一項回來（兩個順序都是）`, J([r1, r2]));
+    const e1 = mergeRecord(del, earlier).rec, e2 = mergeRecord(earlier, del).rec;
+    yes(e1.deleted === true && e2.deleted === true, `【新紀錄·刪了又回來·對照】${type}：修改比刪除早 → 照刪`, J([e1, e2]));
+  }
+
+  // 三、部署順序的根據：舊版伺服器的 sanitizeF 對這三種刪掉 _f；新版留著
+  for (const type of ['buy', 'stay', 'flight']) {
+    const rec = { id: 's-' + type, type, tripId: 't', updatedAt: 1000, _f: seedF({ type }, 1000) };
+    const o = Old.sanitizeF(JSON.parse(J(rec))), n = sanitizeF(JSON.parse(J(rec)));
+    yes(o._f === undefined && n._f && Object.keys(n._f).sort().join(',') === Object.keys(TRACKED[type]).sort().join(','),
+      `【新紀錄·部署順序】${type}：舊版伺服器刪掉 _f（所以 Worker 要先部署）、新版留著每一組`, J([o._f, n._f]));
+  }
+
+  // 四、既有型別：欄位組逐型別相同；照抄 worker.mjs plan() 的伺服器，舊版、新版對「推回同一份」都不寫
+  const existing = Object.keys(Old.TRACKED);
+  yes(existing.length >= 3 && existing.every((t) => J(Old.TRACKED[t]) === J(TRACKED[t])),
+    `【新紀錄·既有型別】${existing.length} 個既有型別的欄位組，舊版與新版逐一相同`, J(existing));
+  const plan = (M, row, inc) => { const rec = M.sanitizeF(JSON.parse(J(inc))); return row ? M.mergeRecord(row, rec).changed : true; };
+  const samples = [
+    { id: 'e1', type: 'trip', title: '宜蘭', startDate: '2024-03-10', endDate: '2024-03-11', updatedAt: 1000, deviceId: 'a', _f: seedF({ type: 'trip' }, 1000) },
+    { id: 'e2', type: 'spot', tripId: 'e1', name: '車站', day: 1, order: 0, updatedAt: 1000, deviceId: 'a', _f: seedF({ type: 'spot' }, 1000) },
+    { id: 'e3', type: 'expense', tripId: 'e1', amount: 100, day: 1, updatedAt: 1000, deviceId: 'a' },
+  ];
+  for (const s of samples) {
+    const writes = [Old, { sanitizeF, mergeRecord }].map((M) => {
+      const row = M.sanitizeF(JSON.parse(J(s)));               // 伺服器上已有這一筆
+      const healed = mergeRecord(JSON.parse(J(row)), JSON.parse(J(row))).rec;   // 新版客戶端 pull 回來合併
+      return plan(M, row, healed) ? 1 : 0;
+    });
+    yes(writes[0] === 0 && writes[1] === 0, `【新紀錄·既有型別】${s.type}：新版客戶端推回同一份，舊版／新版伺服器寫入次數都是 0（${writes.join('／')}）`);
+  }
+  // 對照組：值真的改了，兩版伺服器都要寫（不然上面的 0 可能只是 plan 永遠回 false）
+  const chg = { ...samples[0], title: '宜蘭三日', updatedAt: 2000, _f: { ...samples[0]._f, title: 2000 } };
+  const w = [Old, { sanitizeF, mergeRecord }].map((M) => (plan(M, M.sanitizeF(JSON.parse(J(samples[0]))), chg) ? 1 : 0));
+  yes(w[0] === 1 && w[1] === 1, `【新紀錄·既有型別·對照】真的改了行程名，兩版伺服器都寫（${w.join('／')}）`);
+}
+
 // ================= 兩台裝置 =================
 console.log('\n— 兩台裝置（LAN 伺服器）—');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -330,9 +412,13 @@ try {
   a = await spotOf(A, setup.sid2); b = await spotOf(B, setup.sid2);
   yes(a.deleted === true && b.deleted === true, '(c) 刪除較晚 → 兩台都整筆刪除（沒有半刪）');
 
-  // 記錄體積：_f 只有五組數字
-  const size = await A.evaluate((sid) => JSON.stringify(window.__s.getRaw(sid)._f).length, setup.sid);
-  yes(size < 120, `_f 體積 ${size} bytes（不膨脹）`);
+  // 記錄體積：_f 每一組只有一個數字（不是每個欄位一個、也不帶值）。
+  // 原本寫死「< 120」＝五組時的上限；2026-11-05 spot 加了 leg／important／booked 三組（共 8 組）→ 176 bytes、紅。
+  // 改成照組數算：鍵剛好是 TRACKED.spot 的組、每組不超過 24 bytes（`"important":1730000000000,` 是 26 個字裡最長的一種含引號逗號）
+  const fx = await A.evaluate((sid) => window.__s.getRaw(sid)._f, setup.sid);
+  const size = JSON.stringify(fx).length, groupsN = Object.keys(TRACKED.spot).length;
+  yes(Object.keys(fx).sort().join(',') === Object.keys(TRACKED.spot).sort().join(',') && Object.values(fx).every(Number.isFinite) && size <= groupsN * 26,
+    `_f 體積 ${size} bytes、${Object.keys(fx).length} 組（每組一個數字、不膨脹；上限 ${groupsN} 組 × 26）`, J(fx));
 
   console.log('\n欄位級合併測試結束');
 } catch (e) {
