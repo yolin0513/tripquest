@@ -571,6 +571,7 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
       h('div', { class: 'dc-inner' },
         // 當日示意地圖：有座標的站才畫得上去，沒座標的在圖下列出來（js/daymap.js）
         dayMap(daySpots, (s) => spotTimes(s).startTime || '', {
+          playKey: `${tripId}:${day}`,   // 播放中整頁重畫（同步進來）時，新畫出來的播放器接著播
           hasPhoto: (s) => !!latestSpotSub(s),
           // 縮圖優先（同步保證會到的那一份），拿不到再試全圖；都拿不到回空字串 → 圖釘維持圓點
           photoOf: async (s) => { const sub = latestSpotSub(s); return sub ? ((await blobURL(sub.thumbHash)) || (await blobURL(sub.photoHash))) : ''; },

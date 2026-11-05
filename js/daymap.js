@@ -6,6 +6,7 @@
 // 圖釘有照片就用那一站最新的一張（使用者自己拍的），沒有就是圓點。
 // 不照景點名字畫任何地標插圖（照名字畫就是猜，v1.74 原則）；底圖只有通用的紙紋與色塊。
 import { h } from './ui.js';
+import { reducesMotion } from './prefs.js';
 
 const W = 340, H = 220, PAD = 34;
 export const FS = 14;
@@ -29,7 +30,7 @@ export const kmText = (km) => `直線約 ${km < 10 ? km.toFixed(1).replace(/\.0$
 export function dayMapModel(daySpots, timeOf = () => '', hasPhoto = () => false) {
   const all = daySpots.map((s, i) => ({ id: s.id, n: i + 1, name: s.name || '（沒有名字）', time: timeOf(s) || '', s }));
   const placedRaw = all.filter((x) => hasPos(x.s));
-  const missing = all.filter((x) => !hasPos(x.s)).map(({ id, n, name }) => ({ id, n, name }));
+  const missing = all.filter((x) => !hasPos(x.s)).map(({ id, n, name, time }) => ({ id, n, name, time }));
   if (!placedRaw.length) return { placed: [], segs: [], missing, compass: null, w: W, h: H };
   // 等距圓柱投影：經度乘 cos(緯度) 讓東西向不被拉長；北朝上、不照比例尺，只保留相對方位
   const lat0 = placedRaw.reduce((a, x) => a + num(x.s.lat), 0) / placedRaw.length;
@@ -128,7 +129,8 @@ const svg = (tag, attrs = {}, ...kids) => {
 const f1 = (v) => v.toFixed(1);
 
 // photoOf(s)：回傳 Promise<string>，那一站最新照片的網址（拿不到回空字串，圖釘維持圓點）。
-export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = null } = {}) {
+// playKey：同一天的固定代號（行程＋第幾天）；播放中整頁重畫時，新的播放器靠它接著播。
+export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = null, playKey = '' } = {}) {
   const m = dayMapModel(daySpots, timeOf, hasPhoto);
   const missNote = m.missing.length
     ? h('div', { class: 'dm-missing' },
@@ -180,12 +182,106 @@ export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = nul
   for (const s of m.segs) {
     if (s.kmLabel) g.append(svg('text', { class: 'dm-km', x: f1(s.kx), y: f1(s.ky), 'text-anchor': 'middle', 'data-from': s.from, 'data-to': s.to }, s.kmLabel));
   }
+  // 回放的游標：在圖釘上面、字下面
+  const cursor = svg('circle', { class: 'dm-cursor', cx: -100, cy: -100, r: 22, 'aria-hidden': 'true' });
+  g.append(cursor);
   for (const p of m.placed) {
     g.append(svg('text', { class: 'dm-label', 'data-spot': p.id, x: f1(p.lx), y: f1(p.ly), 'text-anchor': p.anchor }, p.label));
   }
   const hasGap = m.segs.some((s) => s.gap);
+  const player = dayPlayer(m, cursor, g, playKey);
   const note = h('p', { class: 'dm-note' },
     `示意圖：方位照實、比例不照實。標的公里數是兩站之間的直線距離（${KM_MIN} 公里以上才標），不是實際路程。`
     + (hasGap ? '淡色細線的兩站中間還有沒位置的站，所以不標距離。' : ''));
-  return h('div', { class: 'daymap' }, g, note, missNote);
+  return h('div', { class: 'daymap' }, g, player, note, missNote);
 }
+
+// ---------- 當日回放（乙） ----------
+// 照當天順序一站一站走：每一站都停（包括沒位置的站）；移動中不顯示時鐘。
+// 規矩：時鐘**只在到站時**顯示那一站使用者填的時間，沒填就不顯示——兩站之間的時刻是算出來的，顯示它就是編造。
+// 沒位置的站：不默默跳過。停在那一步、跟別站停一樣久，大字寫「這一站沒有位置，地圖上沒畫」；游標留在上一站、變淡。
+// 狀態寫在 data-step（第幾站）、data-phase（idle／stop／missing／move／done）上，測試照這個讀。
+export const PLAY_MS = { stop: 1800, move: 1200 };
+function dayPlayer(m, cursor, g, playKey) {
+  const byN = new Map([...m.placed.map((p) => [p.n, { ...p, pin: true }]), ...m.missing.map((x) => [x.n, { ...x, pin: false }])]);
+  const steps = [...byN.keys()].sort((a, b) => a - b).map((n) => byN.get(n));
+  const total = steps.length;
+  const clock = h('span', { class: 'dm-clock' });
+  const where = h('span', { class: 'dm-where' }, '按「播放」，照當天的順序走一遍');
+  const prog = h('span', { class: 'dm-prog' }, `共 ${total} 站`);
+  const btn = h('button', { class: 'btn dm-play', type: 'button' }, '▶ 播放');
+  const box = h('div', { class: 'dm-player', dataset: { phase: 'idle', step: '0' }, 'aria-live': 'polite' },
+    btn, h('div', { class: 'dm-now' }, clock, where), prog);
+
+  let i = -1, timer = 0, playing = false, last = null;   // last：上一個放得上地圖的站（游標停的地方）
+  const set = (phase, step, clk, text) => {
+    box.dataset.phase = phase; box.dataset.step = String(step);
+    clock.textContent = clk; clock.hidden = !clk; where.textContent = text;
+    prog.textContent = step ? `第 ${step} / ${total} 站` : `共 ${total} 站`;
+  };
+  const putCursor = (x, y, dim) => { cursor.setAttribute('cx', f1(x)); cursor.setAttribute('cy', f1(y)); cursor.classList.toggle('is-dim', !!dim); };
+  const stop = (done) => {
+    playing = false; clearTimeout(timer); timer = 0;
+    if (playKey) live.delete(playKey);
+    btn.textContent = done ? '↺ 再播一次' : '▶ 繼續';
+    if (done) { set('done', total, '', '這一天走完了'); i = -1; last = null; }
+  };
+  // 不在畫面上了（整頁重畫、換頁）：這一份就停，但**不清掉**進度——重畫出來的新播放器會接著播
+  const alive = () => { if (g.isConnected) return true; playing = false; clearTimeout(timer); return false; };
+  const arrive = () => {
+    const s = steps[i];
+    if (playKey) live.set(playKey, { n: s.n, total, at: Date.now() });
+    if (s.pin) { putCursor(s.x, s.y, false); last = s; set('stop', s.n, s.time, `${s.n}. ${s.name}`); }
+    else {
+      if (last) putCursor(last.x, last.y, true);
+      set('missing', s.n, s.time, `${s.n}. ${s.name}\n這一站沒有位置，地圖上沒畫`);
+    }
+    timer = setTimeout(next, PLAY_MS.stop);
+  };
+  const next = () => {
+    if (!alive()) return;
+    if (!playing) return stop(false);
+    i += 1;
+    if (i >= total) return stop(true);
+    const s = steps[i];
+    // 移動：只有「上一個放得上的站」到「這一個放得上的站」才畫移動；減少動態效果時直接跳
+    if (s.pin && last && !reducesMotion()) {
+      set('move', s.n, '', `往第 ${s.n} 站`);
+      const from = { x: Number(cursor.getAttribute('cx')), y: Number(cursor.getAttribute('cy')) };
+      cursor.classList.remove('is-dim');
+      const t0 = performance.now();
+      const tick = (now) => {
+        if (!playing || !alive()) return;
+        const t = Math.min(1, (now - t0) / PLAY_MS.move);
+        putCursor(from.x + (s.x - from.x) * t, from.y + (s.y - from.y) * t, false);
+        if (t < 1) requestAnimationFrame(tick); else arrive();
+      };
+      requestAnimationFrame(tick);
+    } else arrive();
+  };
+  btn.addEventListener('click', () => {
+    if (playing) return stop(false);
+    playing = true; btn.textContent = '❚❚ 暫停';
+    const ph = box.dataset.phase;
+    if (ph === 'stop' || ph === 'missing') { timer = setTimeout(next, PLAY_MS.stop); return; }   // 停在站上暫停：繼續就往下一站
+    if (ph === 'move') i -= 1;                                  // 移動中暫停：從游標現在的位置繼續走到同一站
+    next();
+  });
+  // 接著播：同一天、剛剛（10 秒內）還在播、站數沒變 → 從那一站重新到站（不重放移動）
+  const saved = playKey && live.get(playKey);
+  if (saved && saved.total === total && Date.now() - saved.at < RESUME_MS) {
+    const k = steps.findIndex((s) => s.n === saved.n);
+    if (k >= 0) {
+      setTimeout(() => {
+        if (!g.isConnected) return;
+        playing = true; btn.textContent = '❚❚ 暫停';
+        i = k; last = steps.slice(0, k).reverse().find((s) => s.pin) || null;
+        if (last) putCursor(last.x, last.y, false);
+        arrive();
+      }, 0);
+    }
+  }
+  return box;
+}
+const live = new Map();          // playKey → { n：播到第幾站, total, at }
+const RESUME_MS = 10000;

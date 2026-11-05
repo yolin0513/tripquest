@@ -491,6 +491,16 @@ button.card { appearance: none; font: inherit; }
 .dm-compass-ring { fill: var(--bg-elev); stroke: var(--line); stroke-width: 2; }
 .dm-compass-n { fill: var(--danger); }
 .dm-compass-t { fill: var(--text); font-size: 10px; font-weight: 800; }
+.dm-cursor { fill: none; stroke: var(--primary-text); stroke-width: 4; opacity: .9; }
+.dm-cursor.is-dim { opacity: .3; stroke-dasharray: 5 4; }
+.dm-player { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: var(--bg-elev); border: 1px solid var(--line); }
+.dm-play { min-height: 44px; min-width: 96px; flex: none; }
+.dm-now { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dm-clock { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1.1; }
+.dm-where { font-size: 0.95rem; font-weight: 700; color: var(--text); line-height: 1.35; white-space: pre-line; }
+.dm-player[data-phase="missing"] .dm-where { color: var(--text); background: var(--bg); border: 2px dashed var(--line); border-radius: 8px; padding: 2px 6px; }
+.dm-player[data-phase="move"] .dm-where, .dm-player[data-phase="idle"] .dm-where { color: var(--muted); font-weight: 600; }
+.dm-prog { flex: none; font-size: 0.82rem; color: var(--muted); font-weight: 700; }
 .dm-note { margin: 6px 2px 0; font-size: 0.82rem; line-height: 1.5; color: var(--muted); }
 .dm-label { fill: var(--text); font-size: 14px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
 .dm-missing { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; line-height: 1.5; }
