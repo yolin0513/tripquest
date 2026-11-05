@@ -9,10 +9,20 @@
 ### ⏭ 2026-11-06 明早清單（重負載時段由 Dispatch 排，照這個順序）
 （Dispatch 2026-11-06 凌晨重排）
 1. **三樣新紀錄（航班 `flight`、待買 `buy`、住宿 `stay`，凌晨已實作，見下）搬進測試鏈**——現在只有一次性腳本 `_buyshots`／`_stayshots`／`_flightshots` 守著；排第一，搬完才知道全套幾支。**別漏**：投票的相容性結論是讀程式推的——要用 `workertest` 真的驗（未知型別整筆存回、舊的那份推上去會輸、既有記錄新舊 Worker 寫入次數都是 0），各配突變；另寫一條斷言釘住「刪了又被較晚的修改救回來」（投票紀錄寫明那是設計）。mergetest／workertest 若列舉 TRACKED 要跟著改。
-   - **✅ 2026-11-06 早上做完**：`scripts/recordstest.mjs`（畫面，43 條，44 秒，鏈 79→80）；mergetest 加 20 條【新紀錄…】（不同組兩邊都留、刪了又回來＋對照、舊版副本刪 `_f`＝部署順序的根據、既有型別新舊伺服器寫入 0 次＋對照）；workertest 加 6 條（真的 Worker：`_f` 存進 D1、兩台改不同組、舊的那份會輸＋對照、flight 四組、不在表上的型別整筆存回）。三支原樣綠。突變 `tools/mutations/mut_records.json` 12 條全照預期紅（逐條「預期紅哪條」寫在 why，事前寫錯的照實改了說明）。**順帶抓到**：mergetest 既有「`_f` 體積 < 120」在 spot 加三組後紅（176，改成照組數算上限）；mutlint 報 `mut_itinview` 一條死掉的突變（`.ds-first` 在 274c1ee 拿掉了），換成「把站名加回去」、單跑 1/1 紅。**等價突變**：expense 的「推回一模一樣不寫」有兩道（`recWins` 相同時回 false、`changed` 再比內容），只拿掉一道不紅，突變改兩道一起拿掉。
-2. 全套（目前 **79 支**＋第 1 項搬進來的；legviewtest、tagdaytest、playertest、overviewtest 改寫後都還沒跑過）；含 `_osmwatch`、layouttest；**densitytest 可能紅**（景點卡多一排標籤鈕；行程頁也多了三顆入口）。
-3. 紅了就修版面。
-4. 突變全跑（大版本前，含 48 條過期的）。
+   - **⚠ 時間更正**：下面寫「早上」是錯的——實際是 2026-11-06 **凌晨 1 點前後**（`date` 實測 01:55），額度 8 點才重置。Dispatch 把日期換成 11/06 當成過 8 點、轉來「整批解禁」，我也沒自己查時鐘就跑了。**以後開跑整批之前先 `date` 確認時間，不靠對方轉述**（Dispatch 01:5x 明講「我這邊的時間判斷不可靠，以後你們自己確認」）。
+   - **凌晨誤跑掉的量（照實記）**：突變 18 次（帳本 seq 275～292：mut_records 15 次、mut_itinview 1 次、其中 2 次沒結果）；全套分三段跑了 17 支——第 1～8 支綠、scrolltest 紅（修了、單跑綠、再跑綠）、imgtest／walltest／updatetest／importtest／installtest 綠、densitytest 紅（737px，待決，見第 3 項）、photosynctest 綠、collapsetest 跑到一半被我停掉（01:55）。另外單跑：mergetest×2、workertest、recordstest×2、itinviewtest、tagdaytest、blanktest、densitytest×2、affectedtest×2、mutlint×2、mutcmdtest、mutstale×2。`tools/test-times.json` 被這幾段改寫了（沒 commit）。
+   - **✅ 做完（2026-11-06 凌晨）**：`scripts/recordstest.mjs`（畫面，43 條，44 秒，鏈 79→80）；mergetest 加 20 條【新紀錄…】（不同組兩邊都留、刪了又回來＋對照、舊版副本刪 `_f`＝部署順序的根據、既有型別新舊伺服器寫入 0 次＋對照）；workertest 加 6 條（真的 Worker：`_f` 存進 D1、兩台改不同組、舊的那份會輸＋對照、flight 四組、不在表上的型別整筆存回）。三支原樣綠。突變 `tools/mutations/mut_records.json` 12 條全照預期紅（逐條「預期紅哪條」寫在 why，事前寫錯的照實改了說明）。**順帶抓到**：mergetest 既有「`_f` 體積 < 120」在 spot 加三組後紅（176，改成照組數算上限）；mutlint 報 `mut_itinview` 一條死掉的突變（`.ds-first` 在 274c1ee 拿掉了），換成「把站名加回去」、單跑 1/1 紅。**等價突變**：expense 的「推回一模一樣不寫」有兩道（`recWins` 相同時回 false、`changed` 再比內容），只拿掉一道不紅，突變改兩道一起拿掉。
+2. 全套 **80 支**，8 點後從頭跑一次（凌晨那三段是誤跑、中間又改了 scrolltest，不拼接當成一次全套）：`date` 確認過 8 點 → `node scripts/run-affected.mjs --all --approved`。
+   - **耗時預估**：量過的 74 支合計 2686 秒（`tools/test-times.json`）＋沒量過 6 支（legtest、legviewtest、tagdaytest、playertest、overviewtest、recordstest；recordstest 凌晨單跑 44 秒）——推估約 47～50 分鐘；runner 遇第一支紅就停。
+   - **事先寫下的預期**（跑完逐條對）：
+     - **densitytest 會紅**（凌晨實測 737px＞700；景點卡展開後多一排「重要／訂好位」）——除非 Yolin 先選了 A／B／C（見第 3 項）。紅在「一個景點（標題＋5 個任務）共 N px」那一條，其餘 40 條綠。
+     - scrolltest 應該綠（凌晨修了「日期列多了總覽一格」）。
+     - legviewtest、tagdaytest、playertest、overviewtest：一次性腳本原本綠，**改寫後的檔從沒跑過**——紅的話先看是不是改寫時寫錯（選擇器、埠、種子），不是先懷疑程式。
+     - layouttest（約 12 分鐘）：表單改過（航班／住宿）、景點卡多一排、行程頁多三顆入口——可能紅在窄寬度（320px）換行；沒有實測根據，只是推論的風險點。
+     - recordstest、mergetest、workertest、itinviewtest、affectedtest、mutlint：凌晨單跑都綠，預期綠。
+     - 其餘：沒有預期會紅的理由；紅了就是真的要查。
+3. 紅了就修版面。**densitytest 待 Yolin 選**（Dispatch 已轉）：A 搬出卡片放進編輯畫面／⋯（我建議）、B 縮字硬擠一行（脆弱）、C 門檻放寬到 760。凌晨試過「跟＋新增任務擠同一行」：卡片內只有 305px 寬，三顆放不下仍換兩行（739～765px），已還原、沒留下改動。
+4. 突變全跑（大版本前）。**過期清單 2026-11-06 凌晨重算過（`mutstale`，只讀）**：「48 條」是舊數字——現在 242 條裡**過期 98**、帳本沒紀錄 33、紅·檔同 112 左右（98 是 `--list 過期` 逐行數的；同一晚稍早一次是 97，差的那一條待查是哪條從檔同變過期）。依清單：itinview 22（itinviewtest 17、scrolltest 3、collapsetest 2）、tripday 16、palette 8、motion 10、aicachedry 6、loadjudge 6、mutcmd 5、density 4、affected 系 6、narrowcol 3（layouttest，每條約 12 分鐘）、其餘各 1～3。單支原樣耗時×條數合計約 3446 秒（57 分；aicache-dryrun、loadjudge 沒量過；突變時通常更久）。**第 3 項若改了 `css/style.css` 或 `js/views/trip.js`，過期會再變多——跑之前再算一次，以那次為準。** 帳本有、清單沒有的 4 條：兩條是凌晨我改名／換掉的（`第 1 批：第一站藏在格子外`→換成「又寫回當天第一站」、`合併：整筆語意不比內容…`→改成兩道一起拿掉），另外兩條（theme.js、poster/index.js）是更早的，待查。
 5. 舊版手機相容性：舊版改一筆標了天數的花費，`day` 會不會被蓋掉——補一條測試。
 6. 換版（**Yolin 2026-11-05 已點頭**，條件：全套跑完、驗證補齊；Dispatch 會問他兩次）：**先部署 Worker、再推客戶端。這個順序是必要的，不是保險**——〔讀碼確認 2026-11-06〕現役 Worker 的 `sanitizeF`（`js/merge.js`）對沒有欄位組的型別直接 `delete rec._f`，`workers/worker.mjs` 對每筆推上來的記錄都呼叫它；客戶端先上，`buy`／`stay`／`flight` 在 D1 上就沒有 `_f`、退化成整筆後寫者贏。（v1.75 的 `leg`／`important`／`booked` 本來就要 Worker 先部署。）
 - （A1）播放列、總覽已搬進鏈（只寫不跑）；全套那輪順便確認綠，並各做一條突變證明會紅。
