@@ -540,6 +540,21 @@ button.card { appearance: none; font: inherit; }
 .rm-hint { margin: 4px 2px 0; font-size: 0.85rem; color: var(--muted); }
 .rm-offline { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg-elev); border: 2px dashed var(--line); font-weight: 700; color: var(--text); }
 .dm-note { margin: 6px 2px 0; font-size: 0.82rem; line-height: 1.5; color: var(--muted); }
+/* 總覽（js/overmap.js）：每一天一個顏色；圖釘是寫著「第幾天」的圓點 */
+.ds-day.ds-all { border-style: dashed; }
+.om-seg { stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; }
+.om-seg.is-gap { stroke-width: 2; opacity: .45; }
+.om-pin { position: absolute; left: 0; top: 0; width: 0; height: 0; padding: 0; border: 0; background: none; pointer-events: auto; }
+.om-pin-dot { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 50%; background: var(--day); color: #fff; border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.45); display: grid; place-items: center; font-size: 13px; font-weight: 900; }
+.om-days { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 4px; scrollbar-width: thin; }
+.om-day { flex: none; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; min-height: 48px;
+  padding: 6px 12px 6px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text); text-align: left; }
+.om-day-dot { grid-row: 1 / 3; width: 26px; height: 26px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 900; }
+.om-day-t { font-weight: 800; font-size: 0.95rem; }
+.om-day-sub { font-size: 0.8rem; color: var(--muted); }
+.om-day.is-empty { border-style: dashed; }
+.om-empty { margin: 0; padding: 10px 12px; border-radius: 10px; border: 2px dashed var(--line); font-weight: 700; color: var(--text); }
 .dm-label { fill: var(--text); font-size: 14px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
 .dm-missing { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; line-height: 1.5; }
 .dm-missing-label { font-weight: 800; }

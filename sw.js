@@ -37,6 +37,7 @@ const SHELL_ASSETS = [
   './js/legs.js',
   './js/tilemap.js',
   './js/realmap.js',
+  './js/overmap.js',
   './js/glyphs.js',
   './js/daterange.js',
   './js/ai.js',

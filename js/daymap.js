@@ -15,7 +15,7 @@ export const KM_MIN = 3;          // 直線距離 ≥ 3 公里的路段才標（
 const R_DOT = 11, R_PHOTO = 16;
 
 const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
-const hasPos = (s) => Number.isFinite(num(s.lat)) && Number.isFinite(num(s.lng)) && !(num(s.lat) === 0 && num(s.lng) === 0);
+export const hasPos = (s) => Number.isFinite(num(s.lat)) && Number.isFinite(num(s.lng)) && !(num(s.lat) === 0 && num(s.lng) === 0);
 
 // 兩點的大圓距離（公里）
 export function kmBetween(a, b) {

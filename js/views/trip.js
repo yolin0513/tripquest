@@ -22,6 +22,7 @@ import { spotTimes } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
 import { paperPlane } from '../glyphs.js';
 import { dayRealMap } from '../realmap.js';
+import { tripOverviewMap } from '../overmap.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -214,7 +215,7 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     let sel = defaultDay({ dayNums, todayDay, focusDay });
     try {
       const stored = Number(localStorage.getItem(selKey));
-      if (dayNums.includes(stored)) sel = stored;
+      if (dayNums.includes(stored) || (stored === 0 && localStorage.getItem(selKey) === '0' && dayNums.length > 1)) sel = stored;
       // 剛在景點設定頁改過某一站 → 停在那一站那一天（spot.js 存的，只用一次）
       const jump = takeDayJump(localStorage, tripId, dayNums);
       if (jump != null) {
@@ -224,7 +225,7 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     } catch { /* noop */ }
 
     const daySecs = new Map();
-    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d) });
+    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: dayNums.length > 1 });
     function pick(d) {
       for (const [n, sec] of daySecs) sec.classList.toggle('open', n === d);
       strip.select(d);
@@ -240,6 +241,17 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     // 只有一天就不需要日期列（只有一格，沒東西可以切）
     // 日期列放在「全部展開／收合」上面：它是這一區的目錄
     if (dayNums.length > 1) container.insertBefore(strip.el, container.querySelector('.day-tools'));
+    if (dayNums.length > 1) {
+      // 總覽：跟各天一樣是一個 section，選中才顯示；用 dc-head 讓 pick() 換過來時一樣把開頭帶到日期列下面
+      const ov = h('section', { class: 'daycollapse dc-overview' + (sel === 0 ? ' open' : ''), dataset: { day: '0' } },
+        h('div', { class: 'dc-head' }, h('span', { class: 'dc-main' },
+          h('span', { class: 'dc-row1' }, h('span', { class: 'dc-daynum' }, '總覽')),
+          h('span', { class: 'dc-meta' }, h('span', {}, `全部 ${dayNums.length} 天 · ${spots.length} 個景點`)))),
+        h('div', { class: 'dc-body' }, h('div', { class: 'dc-inner' },
+          tripOverviewMap(byDay, dayNums, { onPickDay: (d) => pick(d) }))));
+      daySecs.set(0, ov);
+      container.append(ov);
+    }
     for (const day of dayNums) {
       const sec = dayCollapse(day, byDay.get(day), tripId, t, { todayDay, focusId, hereId, open: day === sel });
       daySecs.set(day, sec);
@@ -463,8 +475,14 @@ function dayProgress(daySpots) {
 
 // 日期列：所有天數排成一列、一直看得到（不是下拉選單、也不是上一天／下一天的箭頭——
 // 那兩種會把「這趟有幾天」藏起來，長輩不知道還有別天）。天數多時橫向捲，選中的那格會捲進畫面。
-function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick }) {
+function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick, overview = false }) {
   const cells = new Map();
+  // 第 0 格＝總覽（整趟所有天畫在同一張地圖；Yolin 2026-11-05 選 A）。放最前面：它是「全部」，各天是它的細目。
+  if (overview) {
+    cells.set(0, h('button', { class: 'ds-day ds-all', dataset: { day: '0' }, 'aria-label': `總覽，全部 ${dayNums.length} 天的地圖`, onclick: () => onPick(0) },
+      h('span', { class: 'ds-num' }, '總覽'),
+      h('span', { class: 'ds-sub' }, `全部 ${dayNums.length} 天`)));
+  }
   for (const d of dayNums) {
     const dp = dayProgress(byDay.get(d));
     const done = dp.total > 0 && dp.done === dp.total;
