@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges, ORPHAN_RE, ORPHAN_OK, findOrphans } from './affected.mjs';
+import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges, ORPHAN_RE, ORPHAN_OK, findOrphans, mutListInfo } from './affected.mjs';
 import { loadRepo, SCAN_ONLY } from './run-affected.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -368,6 +368,40 @@ console.log('\n[T17] 孤兒檢查');
   const real = findOrphans(scriptNames, names);
   yes(real.orphans.length === 0, `真實的 scripts/：沒有孤兒（像檢查卻沒進鏈、也沒登記理由的）`, '孤兒：' + real.orphans.join('、'));
   yes(real.stale.length === 0, `登記的例外 ${Object.keys(ORPHAN_OK).length} 條都還有效（檔在、而且真的不在鏈裡）`, '過期：' + real.stale.join('、'));
+}
+
+// ---------- 突變清單只挑它點名的測試（2026-11-05，§5.18.1 縮小範圍；正確性依據在 affected.mjs MUT_LIST_RE 上面）----------
+console.log('\n[T18] 突變清單');
+{
+  const f = 'tools/mutations/zz.json';
+  const chainHas = (n) => names.includes(n);
+  yes(['mutlint', 'mutcmdtest', 'itinviewtest', 'collapsetest'].every(chainHas), '前置：mutlint、mutcmdtest、itinviewtest、collapsetest 都在鏈上');
+  // M1 該挑的：cmd 點名的鏈上測試＋讀清單目錄的兩支；不在鏈上的點名要印出來、不假裝有跑
+  const info = mutListInfo([{ name: 'a', cmd: 'node scripts/itinviewtest.mjs' }, { name: 'b', cmd: 'node scripts/collapsetest.mjs' }, { name: 'c', cmd: 'node scripts/mutstale.mjs' }]);
+  const r1 = select({ changed: [f], ...repo, mutLists: { [f]: info } });
+  const extra = r1.selected.filter((n) => !BASELINE.includes(n));
+  yes(!r1.full && !r1.errors.length && ['itinviewtest', 'collapsetest', 'mutlint', 'mutcmdtest'].every((n) => r1.selected.includes(n)),
+    'M1 清單的 cmd 點名 itinviewtest、collapsetest → 挑到它們＋mutlint、mutcmdtest，沒有放大', JSON.stringify({ full: r1.full, extra, errors: r1.errors }));
+  yes(extra.every((n) => ['itinviewtest', 'collapsetest', 'mutlint', 'mutcmdtest'].includes(n)), 'M1 底線以外只多這四支（縮小的範圍就是這些）', JSON.stringify(extra));
+  yes(r1.notes.some((n) => n.includes('mutstale') && n.includes('不在鏈裡')), 'M1 點名不在鏈上的 mutstale → 印出「不在鏈裡，不跑」', JSON.stringify(r1.notes));
+  // M2 ⚠ 有一條沒填 cmd → 判紅（errors）＋放大；不能靜默只挑其他幾支
+  const r2 = select({ changed: [f], ...repo, mutLists: { [f]: mutListInfo([{ name: 'a', cmd: 'node scripts/itinviewtest.mjs' }, { name: '沒填' }]) } });
+  yes(r2.errors.length === 1 && r2.errors[0].includes('沒填') && r2.full, 'M2 有一條沒填 cmd → 判紅並點名那一條（errors 1 項、而且放大）', JSON.stringify({ errors: r2.errors, full: r2.full }));
+  const r2b = select({ changed: [f], ...repo, mutLists: { [f]: mutListInfo([{ name: '形狀不對', cmd: 'node scripts/itinviewtest.mjs && echo x' }]) } });
+  yes(r2b.errors.length === 1 && r2b.errors[0].includes('形狀不對'), 'M2 cmd 形狀不對（接了 &&）→ 同樣判紅', JSON.stringify(r2b.errors));
+  // M3 讀不到／刪掉（mutLists 裡沒有）→ 照舊放大；M4 補丁格式 → 照舊放大
+  const r3 = select({ changed: [f], ...repo, mutLists: {} });
+  yes(r3.full && !r3.errors.length && r3.fullReasons.some((x) => x.includes('讀不到')), 'M3 清單讀不到或已刪除 → 放大成全套', JSON.stringify(r3.fullReasons));
+  const r4 = select({ changed: [f], ...repo, mutLists: { [f]: mutListInfo([{ from: 'x', to: 'y' }]) } });
+  yes(r4.full && r4.fullReasons.some((x) => x.includes('沒有規則認領')), 'M4 補丁格式 → 照舊放大（這條規則不管它）', JSON.stringify(r4.fullReasons));
+  // M5 真實資料：每一份 mutate 格式的清單都沒有缺 cmd（母體不能是 0）
+  const real = Object.entries(repo.mutLists).filter(([, v]) => v.kind === 'mutate');
+  const bad = real.filter(([, v]) => v.missingCmd.length).map(([k]) => k);
+  yes(real.length >= 30 && !bad.length, `M5 真實的 mutate 格式清單 ${real.length} 份，缺 cmd 的 ${bad.length} 份（母體 ≥ 30）`, bad.join('、'));
+  // M6 真實入口：run-affected --files <真的清單> --dry → 回 0、沒有放大、挑到 mutlint
+  const p = spawnSync(process.execPath, ['scripts/run-affected.mjs', '--files', 'tools/mutations/mut_itinview.json', '--dry'], { cwd: ROOT, encoding: 'utf8' });
+  yes(p.status === 0 && !/放大到全套/.test(p.stdout) && /^ {2}mutlint\s+←/m.test(p.stdout) && /^ {2}itinviewtest\s+←/m.test(p.stdout),
+    '真實入口 run-affected --files tools/mutations/mut_itinview.json：挑到 mutlint、itinviewtest，沒有放大', p.stdout.split('\n').filter((l) => /←|放大|✗/.test(l)).join(' | '));
 }
 
 console.log(`\n${process.exitCode ? '✗ 有失敗' : '✓ 全部通過'}（${pass} 項）`);

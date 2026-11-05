@@ -10,6 +10,7 @@
 //   node scripts/run-affected.mjs --only a,b      只跑鏈上這幾支（不經挑選器；名字不在鏈上就停）
 //   node scripts/run-affected.mjs --all           完整的鏈（npm test 走這裡）
 //   加 --dry 只印不跑（含耗時預測）；重負載要加 --approved 才跑（沒加回 8）。
+//   改到的突變清單有沒填 cmd 的 → 回 9、一支都不跑（--dry 也一樣；見 affected.mjs 的 MUT_LIST_RE）。
 //
 // 每一支測試前後各拍一次工作區（scripts/worktree-guard.mjs）：測試改了進版控的檔、或丟下沒被
 // .gitignore 擋掉的新檔 → 回 3 並點名哪一支、哪幾個檔；拍不到（git 讀不到）→ 回 4，不當成沒改動。
@@ -18,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseChain, extractRefs, buildImportGraph, select, formatReport, classifyChanges } from './affected.mjs';
+import { parseChain, extractRefs, buildImportGraph, select, formatReport, classifyChanges, mutListInfo } from './affected.mjs';
 import { snapshot, changesBetween, describe } from './worktree-guard.mjs';
 import { runWithTimeout } from './run-timeout.mjs';
 import { predict, classify, loadTimes, saveTimes, loadHistory, appendHistory } from './predict.mjs';
@@ -72,7 +73,18 @@ export function loadRepo(root = ROOT) {
   for (const dir of ['js', 'server', 'workers']) {
     for (const f of walk(root, dir)) files[f] = fs.readFileSync(path.join(root, f), 'utf8');
   }
-  return { pkg, chain, refs, graph: buildImportGraph(files) };
+  // 突變清單（affected.mjs 的 MUT_LIST_RE）：解析不了的不放進來——挑選器把「沒有」當成讀不到、放大成全套
+  const mutLists = {};
+  const mdir = path.join(root, 'tools', 'mutations');
+  if (fs.existsSync(mdir)) {
+    for (const f of fs.readdirSync(mdir).filter((x) => x.endsWith('.json'))) {
+      let j = null;
+      try { j = JSON.parse(fs.readFileSync(path.join(mdir, f), 'utf8')); } catch { continue; }
+      const info = mutListInfo(j);
+      if (info) mutLists[`tools/mutations/${f}`] = info;
+    }
+  }
+  return { pkg, chain, refs, graph: buildImportGraph(files), mutLists };
 }
 
 const git = (args) => execFileSync('git', ['-c', 'core.quotepath=false', ...args], { cwd: ROOT, encoding: 'utf8' });
@@ -175,6 +187,11 @@ async function main() {
     console.log(formatReport(r));
     console.log('');
     console.log(sinceFullRun());
+    // 突變清單有沒填 cmd 的：挑不出該跑哪幾支，判紅、一支都不跑（不是放大了事——放大會讓漏填看起來沒事）
+    if (r.errors && r.errors.length) {
+      console.log(`✗ 挑選器判紅 ${r.errors.length} 項（見上面 ✗ 開頭的行）——一支都沒跑`);
+      process.exit(9);
+    }
   }
 
   // 按次預測（v11.3 §5.19）：依這次實際要跑的那幾支預測，不按指令名稱

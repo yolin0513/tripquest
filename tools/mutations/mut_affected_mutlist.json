@@ -1,0 +1,20 @@
+[
+  {
+    "name": "突變清單：cmd 點名的測試不挑",
+    "why": "改壞「該被挑到的」：清單改了，它點名的測試卻沒被挑到。預期只紅 affectedtest 的 M1（挑到它們＋mutlint、mutcmdtest）與真實入口 mut_itinview 那一條。",
+    "file": "scripts/affected.mjs",
+    "find": "            if (names.includes(t)) add(t, `突變清單 ${f} 的 cmd 點名`);",
+    "replace": "            if (false && names.includes(t)) add(t, `突變清單 ${f} 的 cmd 點名`);",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "突變清單：沒填 cmd 不判紅",
+    "why": "漏填 cmd 時靜默只挑其他幾支——這條規則最危險的失效方式。預期只紅 affectedtest 的兩條 M2（沒填 cmd、cmd 形狀不對）。",
+    "file": "scripts/affected.mjs",
+    "find": "        if (info.missingCmd.length) {",
+    "replace": "        if (false && info.missingCmd.length) {",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  }
+]

@@ -67,6 +67,34 @@ export const CLOSURE_STOP = ['js/app.js'];
 // ≥ 4 版 → 放大器 A ∪ B 那兩組）。2026-09-19 實測十版裡觸發 N 版，見 STATUS「測試範圍」。
 export const AMP_D_MODE = 'full';
 
+// ---------- 突變清單（2026-11-05 守夜；共用慣例 §5.18.1「縮小範圍」，Dispatch 選 B） ----------
+// 原本 tools/mutations/*.json 沒有規則認領 → 每加一份清單就放大成全套 74 支（會開瀏覽器）。
+// 正確性依據（為什麼「清單 cmd 點名的測試＋讀清單的兩支」就夠）：
+//   · 突變清單是資料，App 的程式（js／css／workers／server）一個都不讀它（搜過 js/、workers/、server/：0 處）。
+//     改清單不會改變 App 的任何行為，所以沒有「改了 A、紅在 B」的路徑可以落到別的測試上。
+//   · 鏈上讀這個目錄的只有 mutlint（格式、find 對得到、母體）與 mutcmdtest（每一條 cmd 合形狀）——兩支都挑。
+//     evtest 也複製整個目錄，但它跑的是補丁格式那批；補丁格式的清單不走這條規則，照舊放大成全套。
+//   · cmd 點名的測試：突變要靠它變紅，挑它是確認那支測試原樣是綠的（§5.11 原樣先綠）。突變本身會不會紅，
+//     不是 test:affected 驗的——新寫的突變當場用 mutate.mjs 單獨跑（§5.18.5）。
+// ⚠ 這條規則成立的前提是「cmd 欄列全了該跑的測試」。任何一條沒有 cmd、或 cmd 不是 `node scripts/<名字>.mjs`，
+//   就**判紅**（errors，run-affected 回 9、一支都不跑）——不靜默跳過：漏填 cmd 時挑選器會挑不到東西、輸出卻一切正常。
+//   讀不到、解析不了、刪掉的清單 → 照舊放大成全套（讀不到不是「沒有關係」）。
+export const MUT_LIST_RE = /^tools\/mutations\/[^/]+\.json$/;
+export const MUT_LIST_TESTS = ['mutlint', 'mutcmdtest'];
+const MUT_CMD_RE = /^node scripts\/([a-z0-9-]+)\.mjs$/;
+// j：清單解析出來的 JSON（讀不到傳 null）。回 null（認不出）、{ kind:'patch' }、或 { kind:'mutate', tests, missingCmd }
+export function mutListInfo(j) {
+  if (!Array.isArray(j) || !j.length) return null;
+  if (j.every((m) => m && typeof m.from === 'string' && typeof m.to === 'string')) return { kind: 'patch' };
+  if (!j.every((m) => m && typeof m.name === 'string')) return null;
+  const tests = new Set(), missingCmd = [];
+  for (const m of j) {
+    const x = MUT_CMD_RE.exec(typeof m.cmd === 'string' ? m.cmd : '');
+    if (x) tests.add(x[1]); else missingCmd.push(m.name);
+  }
+  return { kind: 'mutate', tests: [...tests].sort(), missingCmd };
+}
+
 const isView = (f) => /^js\/views\/[^/]+\.js$/.test(f);
 const isAmpA = (f) => isView(f) || f === 'css/style.css';
 const isAmpB = (f) => AMP_B_FILES.includes(f);
@@ -198,7 +226,8 @@ const refHits = (ref, f) => (ref.endsWith('/') ? f.startsWith(ref) : ref === f);
 // refs:    { 測試名: extractRefs() 的結果 }
 // graph:   buildImportGraph() 的結果
 // 回傳 { selected: [測試名，依鏈順序], reasons: {測試名: [理由…]}, full, fullReasons, notes, n, m }
-export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE }) {
+// mutLists: { 'tools/mutations/x.json': mutListInfo() 的結果 }——沒給或沒有那一份＝讀不到，照舊放大
+export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE, mutLists = {} }) {
   const entries = changed.map((c) => (typeof c === 'string' ? { path: c, status: 'M' } : c));
   const names = chain.map((t) => t.name);
   const chainFiles = new Set(chain.map((t) => t.file));
@@ -209,6 +238,7 @@ export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE }) {
   };
   const fullReasons = [];
   const notes = [];
+  const errors = [];
 
   for (const t of BASELINE) add(t, '底線');
 
@@ -252,6 +282,26 @@ export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE }) {
     const c = ampCReason(f, status);
     if (c) { fullReasons.push(`放大器 C：${c}`); claimed = true; }
 
+    // 突變清單（見 MUT_LIST_RE 上面的正確性依據）
+    if (!claimed && MUT_LIST_RE.test(f)) {
+      const info = Object.prototype.hasOwnProperty.call(mutLists, f) ? mutLists[f] : null;
+      if (info && info.kind === 'mutate') {
+        if (info.missingCmd.length) {
+          errors.push(`突變清單 ${f}：${info.missingCmd.length} 條沒有 cmd 或 cmd 不是「node scripts/<名字>.mjs」（${info.missingCmd.join('、')}）——挑不出該跑哪幾支，判紅`);
+          fullReasons.push(`突變清單 ${f} 有沒填 cmd 的突變`);
+        } else {
+          for (const t of MUT_LIST_TESTS) add(t, `讀突變清單目錄：${f}`);
+          for (const t of info.tests) {
+            if (names.includes(t)) add(t, `突變清單 ${f} 的 cmd 點名`);
+            else notes.push(`突變清單 ${f} 的 cmd 點名 ${t}——不在鏈裡，不跑（不是每版的測試）`);
+          }
+        }
+        continue;
+      }
+      if (!info) { fullReasons.push(`突變清單 ${f}：讀不到、解析不了或已刪除 → 全套`); continue; }
+      // 補丁格式：照舊落到下面「沒有規則認領」
+    }
+
     if (claimed) continue;
     if (isDocLike(f, chainFiles)) continue;
     if (f === 'package.json') { notes.push('package.json：底線（affectedtest 會驗鏈）'); continue; }
@@ -268,12 +318,13 @@ export function select({ changed, chain, refs, graph, dMode = AMP_D_MODE }) {
   const full = fullReasons.length > 0;
   if (full) for (const n of names) (reasons[n] ||= []).push('全套');
   const selected = names.filter((n) => reasons[n]);
-  return { selected, reasons, full, fullReasons, notes, n: selected.length, m: names.length };
+  return { selected, reasons, full, fullReasons, notes, errors, n: selected.length, m: names.length };
 }
 
 // ---------- 輸出（R5） ----------
 export function formatReport(r) {
   const lines = [];
+  for (const e of r.errors || []) lines.push('✗ ' + e);
   if (r.full) {
     lines.push(`放大到全套：本次跑 ${r.n}/${r.m} 支（完整的鏈）`);
     for (const why of r.fullReasons) lines.push('  · ' + why);
