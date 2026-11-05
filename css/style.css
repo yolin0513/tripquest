@@ -507,6 +507,8 @@ button.card { appearance: none; font: inherit; }
 .dm-compass-t { fill: var(--text); font-size: 10px; font-weight: 800; }
 .dm-cursor { fill: none; stroke: var(--primary-text); stroke-width: 4; opacity: .9; }
 .dm-cursor.is-dim { opacity: .3; stroke-dasharray: 5 4; }
+.dm-cursor.is-mode { fill: #fff; opacity: 1; }
+.dm-cursor-ic { font-size: 26px; pointer-events: none; }
 .dm-player { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: var(--bg-elev); border: 1px solid var(--line); }
 .dm-row { display: flex; align-items: center; gap: 10px; }
 /* 進度條＋倍速：進度條一格一站；手指好拖（整條 44px 高） */

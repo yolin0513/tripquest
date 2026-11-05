@@ -125,7 +125,9 @@ export async function makeShareCode(tripId) {
     v: 1, kind: 'questset',
     trip: { title: trip.title, startDate: trip.startDate, endDate: trip.endDate, region: trip.region || '' },
     group: { name: grp?.name || '旅伴' },
-    spots: spots.map((s) => ({ id: s.id, name: s.name, region: s.region, day: s.day, order: s.order, lat: s.lat, lng: s.lng })),
+    // legFrom／legMode（交通方式）一起帶：匯入端把 legFrom 換成新 id；舊版匯入端不認得這兩欄，照舊忽略。
+    spots: spots.map((s) => ({ id: s.id, name: s.name, region: s.region, day: s.day, order: s.order, lat: s.lat, lng: s.lng,
+      ...(s.legMode && s.legFrom ? { legFrom: s.legFrom, legMode: s.legMode } : {}) })),
     quests: quests.filter((q) => !q.deleted).map((q) => ({ id: q.id, spotId: q.spotId, title: q.title, hint: q.hint, kind: q.kind, order: q.order })),
   };
   return gzip(JSON.stringify(payload));
@@ -375,12 +377,15 @@ export async function importShareCode(code) {
     region: p.trip.region || '', allowGeo: false, joinedFromShare: true,
   });
   const idMap = new Map();
+  for (const s of p.spots) idMap.set(s.id, uuid());
   for (const s of p.spots) {
-    const nid = uuid();
-    idMap.set(s.id, nid);
+    // 交通方式記的是「前一站」的 id：換成這邊新的 id，才對得上（legs.js 只認 legFrom＝現在的前一站）。
+    // 對不到（前一站不在這份裡）就不帶，退回「沒有選」——不套到一段沒人選過的路上。
+    const legFrom = s.legMode && idMap.get(s.legFrom);
     await store.put({
-      id: nid, type: 'spot', tripId, name: s.name, nameLocal: s.name,
+      id: idMap.get(s.id), type: 'spot', tripId, name: s.name, nameLocal: s.name,
       region: s.region, day: s.day, order: s.order, lat: s.lat ?? null, lng: s.lng ?? null, source: 'shared',
+      ...(legFrom ? { legFrom, legMode: s.legMode } : {}),
     });
   }
   for (const q of p.quests) {

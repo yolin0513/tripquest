@@ -7,7 +7,7 @@
 // 不照景點名字畫任何地標插圖（照名字畫就是猜，v1.74 原則）；底圖只有通用的紙紋與色塊。
 import { h } from './ui.js';
 import { reducesMotion } from './prefs.js';
-import { legModeOf } from './legs.js';
+import { legModeOf, LEG_ICON } from './legs.js';
 
 const W = 340, H = 220, PAD = 34;
 export const FS = 14;
@@ -197,10 +197,21 @@ export function dayMap(daySpots, timeOf, { hasPhoto = () => false, photoOf = nul
     g.append(svg('text', { class: 'dm-label', 'data-spot': p.id, x: f1(p.lx), y: f1(p.ly), 'text-anchor': p.anchor }, p.label));
   }
   const hasGap = m.segs.some((s) => s.gap);
-  const put = (x, y, dim) => { cursor.setAttribute('cx', f1(x)); cursor.setAttribute('cy', f1(y)); cursor.classList.toggle('is-dim', !!dim); };
+  // 移動中、那一段有選交通方式：游標換成那個圖示（跟真實地圖 realmap.js 同一份 LEG_ICON）；沒選或「其他」維持空心圈。
+  const cursorIc = svg('text', { class: 'dm-cursor-ic', x: -100, y: -100, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'aria-hidden': 'true' });
+  g.insertBefore(cursorIc, cursor.nextSibling);
+  const setMode = (mode) => {
+    const ic = (mode && LEG_ICON[mode]) || '';
+    cursorIc.textContent = ic;
+    cursor.classList.toggle('is-mode', !!ic);
+  };
+  const put = (x, y, dim) => {
+    cursor.setAttribute('cx', f1(x)); cursor.setAttribute('cy', f1(y)); cursor.classList.toggle('is-dim', !!dim);
+    cursorIc.setAttribute('x', f1(x)); cursorIc.setAttribute('y', f1(y));
+  };
   const player = dayPlayer(m, {
-    show: (p, dim) => put(p.x, p.y, dim),
-    between: (a, b, t) => put(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, false),
+    show: (p, dim) => { setMode(null); put(p.x, p.y, dim); },
+    between: (a, b, t, mode) => { setMode(mode); put(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, false); },
   }, g, playKey);
   const note = h('p', { class: 'dm-note' },
     `示意圖：方位照實、比例不照實。標的公里數是兩站之間的直線距離（${KM_MIN} 公里以上才標），不是實際路程。`
