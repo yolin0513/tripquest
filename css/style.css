@@ -414,11 +414,12 @@ button.card { appearance: none; font: inherit; }
 .ds-day {
   appearance: none; flex: none; font: inherit; color: var(--text); cursor: pointer;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
-  min-width: 76px; min-height: var(--tap); padding: 6px 10px;
+  min-width: 64px; min-height: var(--tap); padding: 6px 10px;
   background: var(--bg-elev); border: 1.5px solid var(--line); border-radius: 14px;
 }
-.ds-num { font-weight: 900; font-size: 1rem; line-height: 1.2; white-space: nowrap; }
-.ds-sub { font-size: 0.8rem; color: var(--muted); font-weight: 700; white-space: nowrap; }
+/* 2026-11-05 Yolin 挑版本一：「第 N 天」大字、日期小字（三選一的比較圖見 STATUS） */
+.ds-num { font-weight: 900; font-size: 1.05rem; line-height: 1.2; white-space: nowrap; }
+.ds-sub { font-size: 0.72rem; color: var(--muted); font-weight: 700; white-space: nowrap; }
 .ds-day.is-today { border-color: var(--primary); }
 .ds-day.on { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
 .ds-day.on .ds-sub { color: var(--primary-ink); }

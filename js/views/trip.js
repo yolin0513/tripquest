@@ -498,7 +498,8 @@ function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick, overview = false }
       onclick: () => onPick(d),
     },
       h('span', { class: 'ds-num' }, `第 ${d} 天`),
-      h('span', { class: 'ds-sub' }, isToday ? `今天${wk ? ' ' + wk : ''}` : (dstr ? `${dstr} ${wk}`.trim() : (done ? '✓ 完成' : `${byDay.get(d).length} 站`))),
+      // 2026-11-05 Yolin 挑版本一：「第 N 天」大字＋小字日期，**不顯示星期**（讀屏的 aria-label 照樣念星期）
+      h('span', { class: 'ds-sub' }, isToday ? '今天' : (dstr || (done ? '✓ 完成' : `${byDay.get(d).length} 站`))),
     ));
   }
   // 紙飛機（原創圖形，js/glyphs.js）：停在選中那一格正上方、機頭朝右（下一天）；換天時飛過去（減少動態時直接跳）

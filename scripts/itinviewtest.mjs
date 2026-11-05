@@ -12,7 +12,7 @@
 //   S5 天的標題不再是按鈕（天不收合；收起來就是空白）
 //   T1 時間軸：有填時間的那一站在軸上寫幾點；沒填的那一站時間欄是空的（不補猜的時間）
 //   第 1 批（2026-10-27）——每一條都用 seen()：捲到畫面中間、沒被蓋住、對比 ≥ 4.5，才算「看得到」：
-//   B1 日期列每格看得到日期＋週幾，今天那格寫「今天 週X」，第三行看得到當天第一站
+//   B1 日期列每格看得到日期（不寫星期），今天那格寫「今天」，不寫當天第一站（2026-11-05 Yolin 改）
 //   B2 當日標題卡看得到「第一站 → 最後一站」
 //   B3 時間軸開頭看得到「同行夥伴」（不是「今日」）和旅伴名字；沒有旅伴就不放這一列
 //   B4 進行中、看今天：現在這一站之後的換虛線框、字淡一點但對比照樣 ≥ 4.5
@@ -194,11 +194,12 @@ try {
   // ---- 第 1 批：B1–B5（今天是「進行中」的第 2 天；現在這一站＝今天第一個沒拍完的「乙一」）----
   const WK = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
   const dayOf = (off) => { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + off); return x; };
-  const wk1 = WK[dayOf(-1).getDay()], wk2 = WK[dayOf(0).getDay()];
+  // 2026-11-05 Yolin 挑版本一：小字只寫日期、**不寫星期**（刻意改的；原本是「日期＋週X」「今天 週X」）
+  const md1 = `${dayOf(-1).getMonth() + 1}/${dayOf(-1).getDate()}`;
   let v = await seen(page, '.daystrip .ds-day[data-day="1"] .ds-sub');
-  yes(v.ok && v.text.endsWith(wk1), `B1 日期列第 1 天那格看得到日期與「${wk1}」（${v.why}；字「${v.text}」）`);
+  yes(v.ok && v.text === md1 && !WK.some((w) => v.text.includes(w.slice(1))), `B1 日期列第 1 天那格看得到日期「${md1}」、不寫星期（${v.why}；字「${v.text}」）`);
   v = await seen(page, '.daystrip .ds-day[data-day="2"] .ds-sub');
-  yes(v.ok && v.text === `今天 ${wk2}`, `B1 第 2 天（今天）那格寫「今天 ${wk2}」（${v.why}；字「${v.text}」）`);
+  yes(v.ok && v.text === '今天', `B1 第 2 天（今天）那格寫「今天」、不寫星期（${v.why}；字「${v.text}」）`);
   // 2026-11-05 Yolin：日期列不列站名（刻意改的）。先確認那一格在、而且有字，再驗站名不在格子裡
   const cell2 = await page.evaluate(() => { const c = document.querySelector('.daystrip .ds-day[data-day="2"]'); return c ? { text: c.textContent, first: !!c.querySelector('.ds-first') } : null; });
   yes(!!cell2 && cell2.text.includes('第 2 天') && !cell2.text.includes('乙一') && !cell2.first, `B1 第 2 天那格在、但不寫當天第一站「乙一」（字「${cell2 && cell2.text}」）`);
