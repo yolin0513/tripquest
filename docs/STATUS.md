@@ -12,6 +12,11 @@
 - 換版（bump VERSION＋推）要 Yolin 點頭。三支工具、itinview 兩條突變那件已做完（見守夜節）。
 - **給 Yolin 選的清單（2026-11-05 中午送出，等他選）**：① 深色主題 22 處字太淡 ② 海報新版型 ③ 時間軸兩站間「直線約 N 公里」
   ④ 當日花費合計 ⑤ 出發前準備清單 ⑥ 住宿卡＋航班 ⑦ 海報本機濾鏡。④⑤⑥ 要加同步欄位＝資料結構，照常設規則 3 先三代理投票。建議 ①→②→③。
+- **① 第一段已做、等 Yolin 看方向（cb927fd，Dispatch 說不空等先做 ①）**：深色 `--primary-text` #4f8dff → #6fa3ff、`--heart-ink` 白 → 深色（「新」徽章 2.72 → 6.74）。
+  **SOS 鈕原本是誤報**：內容是 🆘 表情符號，字色畫不出來；`--danger-ink` 不改，palettetest 改登記成表情符號。palettetest 深色名單 22 → 9（過了的 12 處由 P4 點名拿掉）。
+  剩 9 處（`--danger-text` 的危險字、`.tag-er`／`.tag-hot` 標籤、`.qc-prog.done`／`.qrow.done` 的完成綠、`.numpad-del`、`.exp-person-bal.neg`）等他說方向對再改。
+  改前改後截圖：`scripts/_darkshots.mjs before|after`（被 ignore 的一次性工具）；改前攔下 style.css 改送 HEAD 那份、關掉 Service Worker（第一版沒關，第二頁的「改前」量到新顏色——靠量測抓到），
+  每頁讀生效的 `--primary-text` 核對、固定 ID（隨機 ID 讓頭像色不同）。截圖已傳給 Yolin。瀏覽器回歸沒跑（留到額度重置後）。
 
 ### ✅ 2026-11-05 11:2x 推上去了（Yolin 說「可以推」；Dispatch 給 11:18 之後的瀏覽器時段）：遠端 HEAD f5f49ba
 - **範圍** `e090c06..f5f49ba`，10 個 commit、新增 606 行（守夜這一輪的文件、`mutstale`、突變清單挑選規則、耗時紀錄）。App 本身沒有改動，沒 bump VERSION。
