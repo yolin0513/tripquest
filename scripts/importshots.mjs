@@ -126,7 +126,8 @@ try {
 
   await page.evaluate(() => {
     const el = [...document.querySelectorAll('.daycollapse')][0];
-    if (el && !el.classList.contains('open')) el.querySelector('.dc-head').click();
+    // 換天要點日期列那一格；.dc-head 從 2026-10-27 起不能點（2026-11-05 改）。只有一天的旅程不畫日期列、那天本來就選中。
+    if (el && !el.classList.contains('open')) document.querySelector(`.ds-day[data-day="${el.dataset.day}"]`)?.click();
   });
   await sleep(500);
   await page.evaluate(() => {
