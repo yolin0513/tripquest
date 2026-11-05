@@ -9,9 +9,10 @@ import { hasPos } from './daymap.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs = {}) => { const el = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v)); return el; };
-// 每天的顏色：白字放在上面要讀得清楚（palettetest 驗對比），相鄰兩天色相差得開；超過 8 天循環
-export const DAY_COLORS = ['#c2185b', '#1565c0', '#2e7d32', '#bf360c', '#6a1b9a', '#00838f', '#5d4037', '#37474f'];
-export const dayColor = (d) => DAY_COLORS[(d - 1) % DAY_COLORS.length];
+// 每天的顏色：用 class om-c1…om-c8（色碼寫在 css/style.css，palettetest 才算得到白字的對比）；
+// 相鄰兩天色相差得開；超過 8 天循環。
+export const DAY_COLOR_N = 8;
+export const dayColor = (d) => 'om-c' + (((d - 1) % DAY_COLOR_N) + 1);
 
 // byDay：Map(第幾天 → 當天依序的景點)；dayNums：要列的天（已排序）
 export function overviewModel(byDay, dayNums) {
@@ -28,7 +29,7 @@ export function tripOverviewMap(byDay, dayNums, { onPickDay = () => {}, label = 
   const wrap = h('div', { class: 'daymap is-real is-overview' });
   const list = h('div', { class: 'om-days', role: 'group', 'aria-label': '選一天看那一天的地圖' },
     ...m.days.map((x) => h('button', { class: 'om-day' + (x.placed.length ? '' : ' is-empty'), type: 'button', dataset: { day: String(x.d) }, onclick: () => onPickDay(x.d) },
-      h('span', { class: 'om-day-dot', style: `background:${x.color}`, 'aria-hidden': 'true' }, String(x.d)),
+      h('span', { class: 'om-day-dot ' + x.color, 'aria-hidden': 'true' }, String(x.d)),
       h('span', { class: 'om-day-t' }, label(x.d)),
       h('span', { class: 'om-day-sub' }, x.placed.length === x.total ? `${x.total} 站` : `${x.total} 站，${x.total - x.placed.length} 站沒有位置`))));
   if (!m.any) {
@@ -42,14 +43,14 @@ export function tripOverviewMap(byDay, dayNums, { onPickDay = () => {}, label = 
   const pins = [], segs = [];
   for (const x of m.days) {
     x.placed.forEach((p, i) => {
-      const el = h('button', { class: 'om-pin', type: 'button', style: `--day:${x.color}`, dataset: { day: String(x.d), spot: p.id },
+      const el = h('button', { class: 'om-pin', type: 'button', dataset: { day: String(x.d), spot: p.id },
         'aria-label': `${label(x.d)}第 ${p.n} 站 ${p.name}，點了看這一天`, onclick: () => onPickDay(x.d) },
-        h('span', { class: 'om-pin-dot' }, String(x.d)));
+        h('span', { class: 'om-pin-dot ' + x.color }, String(x.d)));
       pinLayer.append(el);
       pins.push({ p, el });
       if (i > 0) {
         const a = x.placed[i - 1];
-        const ln = svg('line', { class: 'om-seg' + (p.n - a.n > 1 ? ' is-gap' : ''), stroke: x.color, 'data-day': x.d });
+        const ln = svg('line', { class: 'om-seg ' + x.color + (p.n - a.n > 1 ? ' is-gap' : ''), 'data-day': x.d });
         lines.append(ln);
         segs.push({ a, b: p, ln });
       }

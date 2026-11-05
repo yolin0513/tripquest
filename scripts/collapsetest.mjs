@@ -109,7 +109,7 @@ try {
       cells: [...document.querySelectorAll('.daystrip .ds-day')].map((c) => ({ day: c.dataset.day, on: c.classList.contains('on') })),
     }));
     eq(vis.shown.join(','), '2', `畫面上真的只看得到第 2 天（其他天 display:none；實得：${vis.shown.join('、') || '無'}）`);
-    eq(vis.cells.map((c) => c.day).join(','), '1,2', '日期列兩天都看得到（不是只剩選中的那一天）');
+    eq(vis.cells.map((c) => c.day).join(','), '0,1,2', '日期列：總覽＋兩天都看得到（不是只剩選中的那一天）');
     eq(vis.cells.filter((c) => c.on).map((c) => c.day).join(','), '2', '日期列選中的是第 2 天');
   }
   yes(!st.spots.find((x) => x.name === 'D2丙').open, '同一天其他未完成的景點是收起來的（使用者回報的就是這裡全開）');
