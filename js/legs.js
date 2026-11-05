@@ -10,7 +10,9 @@ export const LEG_MODES = ['walk', 'train', 'bus', 'car', 'boat', 'plane', 'other
 // 表情符號本來就是為小尺寸設計的，輪廓彼此分得開（走路＝人、電車＝長車廂側面、公車＝正面方盒、開車＝矮車身、船、飛機）。
 // 「其他」沒有對應的圖示——不硬配一個（配了就是在猜他搭什麼），地圖上跟沒設定一樣用圓點，字寫「其他」。
 export const LEG_LABEL = { walk: '走路', train: '電車・捷運', bus: '公車', car: '開車・計程車', boat: '船', plane: '飛機', other: '其他' };
-export const LEG_ICON = { walk: '🚶', train: '🚃', bus: '🚌', car: '🚗', boat: '⛴️', plane: '✈️', other: '' };
+// 電車原本是 🚃：縮到地圖上的實際大小（22px）跟公車 🚌 都是「方盒＋一排窗」分不開（2026-11-05 截圖），改側面長車頭。
+// 判準是「七種填成單色、實際大小並排還分得開」，不是「換一個不一樣的」——scripts/_legsil.mjs 兩兩比輪廓。
+export const LEG_ICON = { walk: '🚶', train: '🚄', bus: '🚌', car: '🚗', boat: '⛴️', plane: '✈️', other: '' };
 
 // prev：當天排在前面的那一站（沒有就是 null，每天第一站沒有進站段）；spot：到達站。
 // 回傳代號或 null。
