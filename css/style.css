@@ -506,6 +506,30 @@ button.card { appearance: none; font: inherit; }
 .buy-more { flex: none; width: 44px; height: 44px; border-radius: 12px; border: none; background: transparent; color: var(--muted);
   font-size: 1.4rem; cursor: pointer; }
 .buy-foot { margin-top: 16px; }
+/* 住宿（js/views/stays.js） */
+.stay-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.stay-empty { font-weight: 800; font-size: 1.05rem; margin: 6px 2px; }
+.stay-card { border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; background: var(--card, var(--bg)); }
+.stay-card.is-out { border-style: dashed; }
+.stay-head { display: flex; align-items: center; gap: 8px; }
+.stay-ic { font-size: 1.4rem; }
+.stay-name { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.stay-edit { flex: none; min-height: 40px; padding: 4px 12px; }
+.stay-dates { margin: 8px 0 2px; font-weight: 700; }
+.stay-n { color: var(--text); }
+.stay-where { margin: 2px 0; color: var(--muted); font-weight: 700; }
+.stay-where.is-out { color: var(--text); }
+.stay-addr, .stay-note { margin: 6px 0 0; overflow-wrap: anywhere; }
+.stay-map { margin-left: 4px; font-weight: 800; }
+.stay-form { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.stay-form-t { margin: 0; }
+.stay-field { display: flex; flex-direction: column; gap: 4px; }
+.stay-label { font-weight: 800; }
+.stay-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stay-err { margin: 0; color: var(--danger, #e66); font-weight: 800; }
+.stay-err:empty { display: none; }
+.stay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.stay-foot { margin-top: 16px; }
 
 /* 同行夥伴：每一天時間軸的開頭（回答「誰跟我去」；用旅伴自己的頭像） */
 /* 當日示意地圖（js/daymap.js）：字一律用文字變數；底只有紙紋色塊，不畫地標 */

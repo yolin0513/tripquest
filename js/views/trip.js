@@ -25,6 +25,7 @@ import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
 import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
 import { buyCounts } from '../buylist.js';
+import { staysOf } from '../stays.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -155,6 +156,9 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
       // 待買清單（2026-11-05 投票）：有東西才寫還剩幾項；一項都沒有就只寫名字，不寫「0 項」
       buyButton(tripId),
+      // 住宿（同一次投票）：有幾間就寫幾間；一間都沒有只寫名字
+      h('button', { class: 'btn btn-soft btn-block stay-entry', onclick: () => navigate(`/trip/${tripId}/stays`) },
+        `🏨 住宿${staysOf(tripId).length ? `・${staysOf(tripId).length} 間` : ''}`),
       spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
       // 「把任務分享給旅伴」移到旅程設定（v1.59.1）——分享＝邀請旅伴加入，
       // 語意屬於「旅伴與電話」那一區；行程頁保持「出遊當下」的操作。

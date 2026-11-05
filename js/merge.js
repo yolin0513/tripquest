@@ -73,6 +73,12 @@ export const TRACKED = {
     text: ['text'],
     done: ['done', 'doneBy'],
   },
+  stay: {
+    name: ['name'],
+    dates: ['checkIn', 'checkOut'],   // 同一組：不合出「A 的入住配 B 的退房」
+    addr: ['address'],
+    note: ['note'],
+  },
 };
 
 export const groupsOf = (type) => TRACKED[type] || null;
