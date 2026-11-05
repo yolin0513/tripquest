@@ -21,6 +21,7 @@ import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
 import { paperPlane } from '../glyphs.js';
+import { dayMap } from '../daymap.js';
 
 // v1.74：沒有任務的地點**不算未完成** —— 留白之後這種地點是常態（對不上策展資料庫的
 // 餐廳、民宿、店家），把 total === 0 當成未完成的話，「現在這一站／帶我去下一站」
@@ -560,6 +561,8 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
     ),
     h('div', { class: 'dc-body' },
       h('div', { class: 'dc-inner' },
+        // 當日示意地圖：有座標的站才畫得上去，沒座標的在圖下列出來（js/daymap.js）
+        dayMap(daySpots, (s) => spotTimes(s).startTime || ''),
         crewStrip(t),
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。

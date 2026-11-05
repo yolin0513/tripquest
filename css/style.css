@@ -476,6 +476,18 @@ button.card { appearance: none; font: inherit; }
 .tl-next .qc-name { color: var(--muted); }
 
 /* 同行夥伴：每一天時間軸的開頭（回答「誰跟我去」；用旅伴自己的頭像） */
+/* 當日示意地圖（js/daymap.js）：字一律用文字變數；底只有紙紋色塊，不畫地標 */
+.daymap { margin: 12px 0 6px; }
+.dm-svg { display: block; width: 100%; height: auto; border-radius: 16px; border: 2px solid var(--line); }
+.dm-bg { fill: var(--bg-elev); }
+.dm-deco { fill: var(--bg-elev-2); opacity: 0.7; }
+.dm-route { fill: none; stroke: var(--primary); stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; stroke-linejoin: round; }
+.dm-pin-dot { fill: var(--accent); stroke: var(--bg); stroke-width: 3; }
+.dm-pin-n { fill: #2a1a00; font-size: 12px; font-weight: 800; }
+.dm-label { fill: var(--text); font-size: 14px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
+.dm-missing { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; line-height: 1.5; }
+.dm-missing-label { font-weight: 800; }
+.daymap.is-empty { margin-top: 12px; }
 .tl-crew { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 4px; }
 .tl-crew-label { font-size: 0.85rem; font-weight: 800; color: var(--muted); }
 .tl-crew-list { display: flex; flex-wrap: wrap; gap: 6px; }
