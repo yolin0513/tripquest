@@ -7,6 +7,7 @@
 // 不照景點名字畫任何地標插圖（照名字畫就是猜，v1.74 原則）；底圖只有通用的紙紋與色塊。
 import { h } from './ui.js';
 import { reducesMotion } from './prefs.js';
+import { legModeOf } from './legs.js';
 
 const W = 340, H = 220, PAD = 34;
 export const FS = 14;
@@ -51,8 +52,11 @@ export function dayMapModel(daySpots, timeOf = () => '', hasPhoto = () => false)
     const a = pins[i];
     const gap = b.n - a.n > 1;
     const km = kmBetween(a, b);
+    // 交通方式：只在「中間沒夾站」且到達站記的前一站就是 a 時才算（js/legs.js）。
+    // 中間夾著沒位置的站時，a 不是 b 真正的前一站，選的方式屬於另一段 → 不顯示。
+    const mode = gap ? null : legModeOf(px[i].s, px[i + 1].s);
     // 字上寫明是哪兩站之間：兩條線靠得近時，光靠位置會被讀成別的路段（第一次截圖實際發生：4→5 的距離貼在第 1 站下面）
-    return { from: a.n, to: b.n, x1: a.x, y1: a.y, x2: b.x, y2: b.y, gap, km, kmLabel: !gap && km >= KM_MIN ? `${a.n}→${b.n} ${kmText(km)}` : '' };
+    return { from: a.n, to: b.n, mode, x1: a.x, y1: a.y, x2: b.x, y2: b.y, gap, km, kmLabel: !gap && km >= KM_MIN ? `${a.n}→${b.n} ${kmText(km)}` : '' };
   });
   const taken = pins.map((p) => box(p.x - p.r, p.y - p.r, p.x + p.r, p.y + p.r));
   const placed = placeLabels(pins, taken);

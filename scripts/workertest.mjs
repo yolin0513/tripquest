@@ -14,6 +14,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
+import { mergeRecord, stable } from '../js/merge.js';
 
 const WDIR = fileURLToPath(new URL('../workers', import.meta.url));
 // 隨機埠：固定埠碰到上一次殘留的 workerd 就起不來（實際踩過）。
@@ -119,6 +120,49 @@ try {
   yes(r.ok && j.wrote === 200,
     `一次推 200 筆會正確分批（wrote=${j.wrote}，要 > 99 個綁定與 > 90 的 batch）`,
     `HTTP ${r.status}：${jTxt.slice(0, 160)}`);
+
+  // ---------- 新增欄位組（leg／important／booked，2026-11-05）不會讓「只補了時間戳」的推回寫進 D1 ----------
+  // 新版合併對「兩邊都沒有這組」的舊記錄會在 _f 補上 leg:0 等鍵 → 跟伺服器那份不一樣 →
+  // 新版客戶端觸發補推（store.js importRecords 的 heal）。投票時兩位代理推論相反：會不會因此把
+  // 家人群組裡每一筆 spot 都寫一次 D1。這裡走真的路徑重現：伺服器上放一筆舊版寫的 spot，
+  // pull 回來、用真的 js/merge.js 照 importRecords 的寫法合併、把合併結果推回去，
+  // 然後**另外讀 D1**（pull since=推之前的 seq）確認沒寫；對照組：真的改了值的那一筆要寫進去。
+  // 兩個來源各自判：Worker 回的 wrote，與事後從 D1 讀到的 seq／記錄。
+  {
+    const auth = { headers: { authorization: 'Bearer ' + secret } };
+    const tL = Date.now() - 60_000;
+    const oldF = { name: tL, slot: tL, time: tL, pinned: tL, pos: tL };   // 舊版寫的：只認得五組
+    r = await push(gid, secret, [{ id: 'L1', type: 'spot', tripId: 'r1', name: '舊站', day: 1, order: 0, updatedAt: tL, deviceId: 'dOld', _f: oldF }]);
+    yes(r.ok, `新組情境：伺服器上放一筆舊版寫的 spot（HTTP ${r.status}）`);
+    const p0 = await (await fetch(`${B}/pull?g=${gid}&since=0`, auth)).json();
+    const onServer = (p0.records || []).find((x) => x.id === 'L1');
+    const seq0 = p0.seq;
+    yes(onServer && Number.isFinite(seq0) && onServer._f && onServer._f.leg === undefined,
+      `前置：伺服器那份沒有 leg 組（seq=${seq0}）`, JSON.stringify(onServer && onServer._f));
+    // 照 store.js importRecords：本機已有同一筆（cur），收到伺服器那份（inc）
+    const { rec: healed } = mergeRecord(structuredClone(onServer), structuredClone(onServer));
+    const heals = stable(healed) !== stable(onServer);
+    yes(heals && healed._f.leg === 0 && healed._f.important === 0 && healed._f.booked === 0,
+      '前置：新版合併真的會補 0、真的會觸發補推（情境成立）', JSON.stringify(healed._f));
+    // 主要目標：只補了時間戳、值沒變的那一份推回去 → D1 不寫
+    r = await push(gid, secret, [healed]);
+    const jh = await r.json().catch(() => ({}));
+    const p1 = await (await fetch(`${B}/pull?g=${gid}&since=${seq0}`, auth)).json();
+    const rewritten = (p1.records || []).filter((x) => x.id === 'L1');
+    yes(r.ok && jh.wrote === 0, `【新組】只補了時間戳的推回：Worker 回 wrote=0（實得 HTTP ${r.status}、wrote=${jh.wrote}）`);
+    yes(rewritten.length === 0 && p1.seq === seq0,
+      `【新組】另外讀 D1：那一筆沒有被重寫、群組 seq 沒動（seq ${seq0} → ${p1.seq}，since=${seq0} 讀到 L1 ${rewritten.length} 筆）`);
+    // 對照組：真的選了交通方式（值變了）→ 要寫進去。這條沒寫的話，上面的「沒寫」可能只是整段沒跑到
+    const tC = Date.now();
+    const changed = { ...healed, legFrom: 'L0', legMode: 'train', updatedAt: tC, deviceId: 'dNew', _f: { ...healed._f, leg: tC } };
+    r = await push(gid, secret, [changed]);
+    const jc = await r.json().catch(() => ({}));
+    const p2 = await (await fetch(`${B}/pull?g=${gid}&since=${seq0}`, auth)).json();
+    const got = (p2.records || []).find((x) => x.id === 'L1');
+    yes(r.ok && jc.wrote === 1, `【新組·對照】真的改了值：Worker 回 wrote=1（實得 HTTP ${r.status}、wrote=${jc.wrote}）`);
+    yes(got && got.legMode === 'train' && got.legFrom === 'L0' && got._f.leg === tC && p2.seq > seq0,
+      `【新組·對照】另外讀 D1：讀得到新值、leg 的時間戳、seq 前進（seq ${seq0} → ${p2.seq}）`, JSON.stringify(got));
+  }
 
   // ---------- /push 的大小上限要在驗證之前（v1.73.2）----------
   const big = JSON.stringify({ records: [{ id: 'big', type: 'trip', title: 'x'.repeat(3_000_000) }] });

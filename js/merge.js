@@ -31,6 +31,13 @@ export const TRACKED = {
     time: ['startMin', 'stayMin', 'startTime', 'endTime'],
     pinned: ['pinned'],
     pos: ['lat', 'lng', 'geoSrc'],
+    // 以下三組 2026-11-05 投票加（docs/VOTE_2026-11-05_同步欄位.md）。都是**新欄位**，
+    // 不是把既有欄位升級成追蹤組，所以 effTs 的「有 _f 卻缺這一組＝沒有意見」推論成立。
+    // 進站段的交通方式：存在到達站，連同「選的時候的前一站 id」——畫面只在現在的前一站
+    // 就是 legFrom 時才顯示（js/legs.js），重排之後不會把舊選擇套到沒人選過的一段。
+    leg: ['legFrom', 'legMode'],
+    important: ['important'],
+    booked: ['booked'],
   },
   trip: {
     title: ['title'],

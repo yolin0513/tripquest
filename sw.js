@@ -34,6 +34,7 @@ const SHELL_ASSETS = [
   './js/boot-theme.js',
   './js/tripday.js',
   './js/daymap.js',
+  './js/legs.js',
   './js/tilemap.js',
   './js/realmap.js',
   './js/glyphs.js',
