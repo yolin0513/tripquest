@@ -1,0 +1,65 @@
+[
+  {
+    "name": "mutstale：no-result 也當成算數的結果",
+    "why": "逾時、被殺的那一次被當成量到了。預期只紅對照組 nores → [沒結果]。",
+    "file": "scripts/mutstale.mjs",
+    "find": "const counted = rs.filter((r) => r.result === 'red' || r.result === 'not-red');",
+    "replace": "const counted = rs.filter((r) => r.result !== undefined);",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  },
+  {
+    "name": "mutstale：不比目標檔的雜湊",
+    "why": "紅過就算數，不管程式後來改了沒——正是 itinview 那兩條的盲點。預期只紅對照組 changed、changed-unc（兩條都該是 [過期]）。",
+    "file": "scripts/mutstale.mjs",
+    "find": "cat = now && then && now === then ? '紅·檔同' : '過期';",
+    "replace": "cat = '紅·檔同';",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  },
+  {
+    "name": "mutstale：取第一次、不取最近一次",
+    "why": "紅過一次、之後沒紅，照樣報紅。預期只紅對照組 red-then-notred → [沒紅]。",
+    "file": "scripts/mutstale.mjs",
+    "find": "counted.reduce((a, b) => (b.seq > a.seq ? b : a))",
+    "replace": "counted[0]",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  },
+  {
+    "name": "mutstale：測試檔判斷不了就當成沒改",
+    "why": "讀不到不是沒有改動（§5.13）。預期只紅對照組 test-untracked → 判斷不了。",
+    "file": "scripts/mutstale.mjs",
+    "find": "if (v === null || Number.isNaN(v)) return '判斷不了';",
+    "replace": "if (v === null || Number.isNaN(v)) return '沒改';",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  },
+  {
+    "name": "mutstale：測試檔一律當成沒改",
+    "why": "時間比較拿掉。預期只紅對照組 test-after → 改過。",
+    "file": "scripts/mutstale.mjs",
+    "find": "return v > Date.parse(atIso) ? '改過' : '沒改';",
+    "replace": "return '沒改';",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  },
+  {
+    "name": "mutstale：當時那份一律對到最新的 commit",
+    "why": "不找內容相同的那個 commit。預期只紅對照組 changed（差幾行）與 changed-unc（沒進過 commit）。",
+    "file": "scripts/mutstale.mjs",
+    "find": "const hit = list.find(([, s]) => s === then);",
+    "replace": "const hit = list[0];",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  },
+  {
+    "name": "mutstale：不報帳本有、清單沒有的",
+    "why": "孤兒檢查拿掉（§5.2）。預期只紅對照組「帳本有、清單沒有 → 點名 gone」。",
+    "file": "scripts/mutstale.mjs",
+    "find": "const orphan = [...byKey.keys()].filter((k) => !seenKeys.has(k))",
+    "replace": "const orphan = [...byKey.keys()].filter((k) => false && !seenKeys.has(k))",
+    "cmd": "node scripts/mutstale.mjs",
+    "done": "^mutstale 結束：回 "
+  }
+]
