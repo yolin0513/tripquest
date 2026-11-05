@@ -121,7 +121,10 @@ try {
   await page.evaluateOnNewDocument((o) => {
     window.__TQ_OVERPASS_ENDPOINT = o.op;
     window.__TQ_PLACES_ENDPOINT = o.places;
-  }, { op: `http://localhost:${OP}/`, places: `http://localhost:${PLACES}/places` });
+    // 行程頁的當日地圖會抓 OSM 圖磚：指到本機不存在的路徑（404 → 地圖退回示意圖），測試不去抓真的 OSM
+    // （2026-11-05 監看實測：沒加這行時每跑一次抓 12 張）
+    window.__TQ_TILE_URL = o.tiles;
+  }, { op: `http://localhost:${OP}/`, places: `http://localhost:${PLACES}/places`, tiles: `http://localhost:${WEB}/__no_tiles__/{z}/{x}/{y}.png` });
   page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');

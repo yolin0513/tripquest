@@ -58,6 +58,9 @@ page.on('pageerror', (e) => { console.log('  [pageerror]', e.message); process.e
 try {
   // 換頁會重載模組 —— 端點覆寫要在每一次文件載入前注入，不然 UI 會打到真的 Nominatim
   await page.evaluateOnNewDocument((geoUrl) => { window.__TQ_GEO_ENDPOINT = geoUrl; }, `http://localhost:${GEO}/search`);
+  // 行程頁的當日地圖會抓 OSM 圖磚：指到本機不存在的路徑（404 → 地圖退回示意圖），測試不去抓真的 OSM
+  // （2026-11-05 監看實測：沒加這行時每跑一次抓 10 張）
+  await page.evaluateOnNewDocument((u) => { window.__TQ_TILE_URL = u; }, `http://localhost:${WEB}/__no_tiles__/{z}/{x}/{y}.png`);
   await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
 
