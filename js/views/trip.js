@@ -599,12 +599,10 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
         // 兩站之間一列「怎麼去」（js/legs.js）：就放在兩張卡中間，看行程時一眼就看到、點了就能設——不藏在編輯頁。
-        h('ol', { class: 'timeline' }, ...daySpots.flatMap((s, i) => [
-          i > 0 ? legRow(daySpots[i - 1], s, i) : null,
-          h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
+        legTimeline(daySpots, (s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
             h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
-            spotSection(s, tripId, ctx.focusId, ctx.hereId))]).filter(Boolean)))),
+            spotSection(s, tripId, ctx.focusId, ctx.hereId))))),
   );
   sec._wxSpan = wxSpan;
   return sec;
@@ -685,7 +683,45 @@ function legRow(prev, s, i) {
     'aria-label': `從「${name(prev)}」到「${name(s)}」怎麼去：${cur ? LEG_LABEL[cur] : '還沒設定'}，點一下設定`,
     onclick: () => { pick.hidden = !pick.hidden; btn.setAttribute('aria-expanded', String(!pick.hidden)); },
   }, label, h('span', { class: 'tl-leg-chev', 'aria-hidden': 'true' }, ' ▸'));
-  return h('li', { class: 'tl-leg', dataset: { spot: s.id, mode: cur || '' } }, btn, pick);
+  // 選了交通方式才多一行「甲 → 乙」（錄影那批：站與站之間一行交通）。放在按鈕外面，按鈕的字不變。
+  // 分鐘數只在走路／開車、而且路線服務真的算出來（src 'osrm'）時才補上（fillLegMinutes）；
+  // 電車、公車、船、飛機沒有班次資料——不拿開車時間冒充，就不寫分鐘。
+  const route = cur ? h('div', { class: 'tl-leg-route' },
+    h('span', { class: 'tl-leg-ends' }, `${name(prev)} → ${name(s)}`),
+    h('span', { class: 'tl-leg-min', dataset: { from: prev.id, to: s.id, mode: cur } })) : null;
+  return h('li', { class: 'tl-leg', dataset: { spot: s.id, mode: cur || '' } }, btn, route, pick);
+}
+
+function legTimeline(daySpots, item) {
+  const ol = h('ol', { class: 'timeline' }, ...daySpots.flatMap((s, i) => [i > 0 ? legRow(daySpots[i - 1], s, i) : null, item(s)]).filter(Boolean));
+  queueMicrotask(() => { fillLegMinutes(ol, daySpots).catch(() => {}); });
+  return ol;
+}
+
+// 走路／開車那幾段補「約 N 分鐘」。一天一種方式一次路線矩陣（route.js 有快取與節流）；
+// 降級成直線估算（src 'est'）就不寫——那是猜的。跨區長途也不寫。
+const LEG_ROUTE_MODE = { walk: 'walk', car: 'drive' };
+async function fillLegMinutes(ol, daySpots) {
+  const slots = [...ol.querySelectorAll('.tl-leg-min')].filter((x) => LEG_ROUTE_MODE[x.dataset.mode]);
+  if (!slots.length) return;
+  let route;
+  try { route = await import('../route.js'); } catch { return; }
+  const placed = daySpots.filter((s) => s.lat != null && s.lng != null);
+  const at = new Map(placed.map((s, i) => [s.id, i]));
+  for (const mode of new Set(slots.map((x) => LEG_ROUTE_MODE[x.dataset.mode]))) {
+    const mine = slots.filter((x) => LEG_ROUTE_MODE[x.dataset.mode] === mode && at.has(x.dataset.from) && at.has(x.dataset.to));
+    if (!mine.length || placed.length < 2) continue;
+    let m;
+    try { m = await route.travelMatrix(placed.map((s) => ({ lat: s.lat, lng: s.lng })), mode); } catch { continue; }
+    if (!m || m.src !== 'osrm' || !ol.isConnected) continue;
+    for (const x of mine) {
+      const a = placed[at.get(x.dataset.from)], b = placed[at.get(x.dataset.to)];
+      const sec = m.sec[at.get(x.dataset.from)][at.get(x.dataset.to)];
+      if (!Number.isFinite(sec) || route.longHaul(a, b, sec)) continue;
+      x.textContent = `約 ${route.fmtDur(sec)}`;
+      x.title = mode === 'walk' ? '路線服務算的步行時間' : '路線服務算的開車時間（不含塞車）';
+    }
+  }
 }
 
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，
