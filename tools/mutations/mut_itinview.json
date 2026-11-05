@@ -73,7 +73,7 @@
   },
   {
     "name": "自動捲動：照日期找、不照正在顯示的那天",
-    "why": "現在這一站的天跟今天不同時，量到隱藏那天的位置 0、捲到錯的地方。預期紅 scrolltest R2 的「現在這一站不在今天」那一條；A 的那一站就在今天，對 A 是等價突變、不紅。",
+    "why": "現在這一站的天跟今天不同時，量到隱藏那天的位置 0、捲到錯的地方。預期紅 scrolltest R2 的「現在這一站不在今天」那一條；A 的那一站就在今天，對 A 是等價突變、不紅。（2026-11-05 補：同一個 R2 情境的前一步「沒有干擾原本的自動捲動」也會紅——量到 0、根本沒捲；同一個缺陷、同一個情境，不是別條規則擋的。帳本 seq 273）",
     "file": "js/views/trip.js",
     "find": "  const daySec = container.querySelector('.daycollapse.open');",
     "replace": "  const daySec = container.querySelector(`.daycollapse[data-day=\"${todayDay}\"]`);",

@@ -28,6 +28,7 @@
   依清單：`mut_itinview` 22／23、`mut_tripday` 16／16、`mut_motion` 10／12、`mut_palette` 8／8，其餘見工具輸出。
 - **什麼時候做（Dispatch 2026-11-05 定）**：額度重置後的第一個瀏覽器空檔。順序：先 itinview 兩條自動捲動（約 6 分鐘）——
   `node scripts/mutate.mjs --only tools/mutations/mut_itinview.json "自動捲動：照日期找、不照正在顯示的那天" "自動捲動：沒把日期列算進去"`——
+  **（itinview 這兩條 2026-11-05 11:3x 已在 Dispatch 給的瀏覽器時段跑完，見下一條；剩下的是整批。）**
   再整批跑過期的（會開瀏覽器、重負載、要許可；耗時待估）。不開瀏覽器的過期突變（palettetest、loadjudge、aicache-dryrun、affected、mutate 等）可以先跑，但今天照指示不跑整批。
 - **劃掉的條件**：`mutstale` 跑出來「過期」的都重跑過、紅在 `why` 寫的那一條；沒紅的照實記下來並處理（不是改預期）。
 - **「帳本沒紀錄」33 條的盤點（2026-11-05 下午，只讀）**：find 都還對得到（mutlint 0 條死掉）。依守它的測試分，額度重置後的順序建議照「不開瀏覽器、短」先跑：
@@ -42,6 +43,9 @@
   耗時取自 `tools/test-times.json`（突變時可能更久，只是下限）。
 - **2026-11-05 我自己讓 4 條變過期、當場重跑了**：改 `scripts/run-affected.mjs`（B 規則）讓守「目錄引用不算涵蓋」的 4 條（mut_affected_d、mut_guesscensus、mut_shell、mut_themetrust
   各一條，目標都是 run-affected.mjs）變成過期；它們守的正是剛改的那支、不開瀏覽器，照「回歸只跑被改到的」單獨重跑：4/4 都紅在 `why` 寫的 T12 那兩條（帳本 seq 269～272），回到紅·檔同。
+- **✅ itinview 兩條「自動捲動」在現在的 `trip.js` 上重跑了（2026-11-05 11:3x，Dispatch 給的瀏覽器時段）**：
+  「照日期找、不照正在顯示的那天」seq 273 紅——紅在 `why` 寫的 scrolltest R2「現在這一站不在今天」，**同一個 R2 情境的前一步「沒有干擾原本的自動捲動」也紅**（量到 0、根本沒捲；同一個缺陷、同一個情境，不是別條規則擋的）——已補進那條的 `why`。
+  「沒把日期列算進去」seq 274 只紅「天的標題列被日期列蓋住」，跟 `why` 寫的一致。兩條回到紅·檔同。
 
 ### 🌙 2026-11-05 守夜（同機查詢島在跑效能量測 → 不開瀏覽器、不跑長時間吃 CPU 的東西、不 push；中途得知 Yolin 在線上，要他決定的事當下就經 Dispatch 問）
 - **開工時的現況（實測）**：工作區乾淨；本機比遠端多 2 個只有文件的 commit（c3f91b7、08bf4d7），遠端 main＝e090c06，線上 v1.74.11（10-29 curl）。
@@ -77,7 +81,14 @@
 - **能跑（秒級、不開瀏覽器，2026-11-05 實跑）**：mutlint、affectedtest 109、gatelint、shelltest 13、zhtest 27、convtest 8、guesscensustest 11、themetrusttest 20、
   validate-places（135 個地點、0 錯）、loadjudge 自我測試 11、palettetest 27、motioncsstest 20、tripdaytest 39、postertruthtest 20、posterlayouttest 34、mutcmdtest 15——
   全部回 0、都印出最後的總結行（跑完，不是半途崩潰）。**瀏覽器測試一支都沒跑**（同機量測中）。
-- **🔴 靜默失效的工具點擊（讀程式確認、沒實跑）**：`.dc-head` 10-27 起沒有點擊處理（`js/views/trip.js:549` 註解「標題不再能點」），點了什麼都不會發生、也不丟錯。
+- **✅ 三支改完、2026-11-05 11:4x 在暫存 clone 實跑（`.logs/vt-clone`，`--shared`＋`node_modules` 連結，跑完刪掉）**——因為 gallery 會寫 319 張進版控的 `screenshots/`，不在主工作區跑。
+  | 工具 | 回傳 | 看了哪張 | 結果 |
+  |---|---|---|---|
+  | gallery（22d11a7） | **1** | 05、26 | 兩張都是第 1 天選中、景點展開。崩在 `gallery.mjs:217` 等 `.quest-focus-photo`——**舊問題、跟這次無關**：景點頁的大圖 v1.43（cc7dfe1，09-06）就拿掉了，plantest 還斷言景點頁「沒有」它；第 30、31 張從那時起就拍不到，這支不在鏈裡，沒人發現。**沒修**（要決定 30、31 兩張還要不要）。 |
+  | shotxl（22d11a7） | 0 | 任務列-愛心數 | 選中那天的景點展開、7 張任務卡與愛心數都在。 |
+  | importshots（61113d8） | 0，13 張 | 11-trip-times | 第 1 天、時間 05:00／07:07 看得到。之後 `f8verify` 回 0、239 秒、全部擋下、已登記。 |
+  **誠實的限制（推論）**：三支截的都是本來就預設選中的第 1 天（gallery 的旅程 4 月已結束、importshots 的沒設日期 → `defaultDay` 回第 1 天），所以**改的那行「點 `.ds-day`」多半根本沒執行到**——圖對，不代表換天那條路驗過。要真的驗，得造一個預設不是第 1 天的情境；這幾支只拍展示圖，沒再花瀏覽器時間。
+- **（舊，已處理）靜默失效的工具點擊（讀程式確認、沒實跑）**：`.dc-head` 10-27 起沒有點擊處理（`js/views/trip.js:549` 註解「標題不再能點」），點了什麼都不會發生、也不丟錯。
   還在點它的：`scripts/shotxl.mjs:74`（要展開所有天→現在其他天不會展開，截圖少內容）、`scripts/gallery.mjs:168`、`:185`（要展開第 1 天→第 1 天沒選中時不會展開）、
   `scripts/importshots.mjs:129`（同樣寫法；它是 f8verify 登記的檔，動了要重跑 f8verify＝開瀏覽器，今晚不碰）。三支都不在鏈裡，沒有任何東西會紅。
   修法（推論）：改點日期列那一格（`.daystrip` 裡的第 N 格），或乾脆不展開、截選中的那一天；要開瀏覽器驗，排進下一個瀏覽器時段。
@@ -98,7 +109,7 @@
 - curl 線上 `sw.js`：`tripquest-v1.74.11`。
 - **C2 那批瀏覽器突變（約 33 條）判準**：被守的程式自上次跑（10-27）以來只改了 `js/views/trip.js` 14 行、`css/style.css` 35 行，`mutlint` 綠（find 字串都還對得到），
   今天新加的防線都已當場證明會紅 → **今晚不算累積夠**。（2026-11-05 更正：行數算錯，見守夜那節——從突變跑時的內容算，trip.js +36 −27、style.css +31 −4，產品程式合計上限約 239 行。）算「夠了」的條件（任一）：被守的檔累計行為改動 ≥ 200 行、或 ≥ 3 個上線版本、或 `mutlint` 報 find 對不到、或 Yolin 指定。
-- **🔴 優先查：itinview 兩條「自動捲動」突變——現在有沒有人守，不知道。**（17:30 更正：上一則回報我寫「沒照預期紅」，是讀錯了 VERIFY 10-27 那行舊進度。）
+- **（2026-11-05 已重跑、兩條都紅，見最上面常設待辦那節）** ~~🔴 優先查：itinview 兩條「自動捲動」突變——現在有沒有人守，不知道。~~（17:30 更正：上一則回報我寫「沒照預期紅」，是讀錯了 VERIFY 10-27 那行舊進度。）
   帳本實測：修好之後 10-28 02:2x 兩條都紅了（seq 181「照日期找、不照正在顯示的那天」、seq 182「沒把日期列算進去」），當時 `js/views/trip.js` 是 dc1b4e4。
   之後 `trip.js` 又改了兩次（a3a2440、c3f8204，10-28 晚上景點標題列），**這兩條沒在現在的 `trip.js` 上重跑過**。
   （2026-11-05 更正：不是兩次，是 5 個 commit、+36 −27 行；當時那份是 2094347。`node scripts/mutstale.mjs` 算的，見守夜那節。）
@@ -185,8 +196,8 @@
 
 ### 待辦（2026-10-29 新增）
 - （2026-11-05）**97 條過期的突變紅**——見本檔最上面的常設待辦，用 `node scripts/mutstale.mjs` 看現況。
-- （2026-11-05）三支工具還在點已失效的 `.dc-head`（shotxl、gallery、importshots）——見守夜節。
-  **gallery、shotxl 已改、沒跑**（Dispatch：修法先寫好、下一個瀏覽器時段一次驗）：gallery 兩處改點日期列 `.ds-day[data-day="1"]`；shotxl 只展開選中那一天的景點
+- ~~（2026-11-05）三支工具還在點已失效的 `.dc-head`~~ **11:4x 三支都改完、實跑過，結果與限制見守夜節的表**。新的小待辦：gallery 第 30、31 張（景點頁大圖 v1.43 已拿掉）要刪還是改拍別的——等決定。
+  以下是改之前的紀錄：**gallery、shotxl 已改、沒跑**（Dispatch：修法先寫好、下一個瀏覽器時段一次驗）：gallery 兩處改點日期列 `.ds-day[data-day="1"]`；shotxl 只展開選中那一天的景點
   （「每一天都展開」在新版面做不到，註解寫明）。只驗了 `node --check`、gatelint。**下一個瀏覽器時段要驗**：`node scripts/gallery.mjs` 的 05、26 兩張圖是第 1 天、景點有展開；
   `node scripts/shotxl.mjs` 行程頁那張有展開的景點。**importshots 沒改**：它是 f8verify 登記的檔，改了要重跑 f8verify（開瀏覽器），併進同一個時段。
 - 取樣器改從父程序鏈認 own（盲點 ③），順帶想 ④ 觀察者裡的內建瀏覽器怎麼分出來、⑤ GPU；**改了之後跟 10-28、10-29 的數字不能直接比**，改之前先把這幾場的結論定案。
@@ -761,7 +772,7 @@ Dispatch 裁定（原話摘要）：日期控制要「看得見全部天數的�
   時間軸 `ol.timeline > li.tl-item`，沒填時間就留白（不補猜的時間）。一天的旅程不畫日期列。**15 天以上**：390px 寬推論一次約看得到 4～5 格，其餘橫向捲；
   itinviewtest S4 會量實際格數（只印、不設門檻），已向 Dispatch 回報。
   - 刻意不動 `scripts/importshots.mjs`（f8verify 的登記檔，動了要重跑 f8verify；沒設日期的新旅程預設第 1 天照樣能用）。
-  - **待改**：`scripts/gallery.mjs`、`scripts/shotxl.mjs`（工具、不在鏈裡）還在點 `.dc-head`，下次用到前要改成點日期列。
+  - ~~**待改**：`scripts/gallery.mjs`、`scripts/shotxl.mjs`（工具、不在鏈裡）還在點 `.dc-head`，下次用到前要改成點日期列。~~（2026-11-05 已改、實跑，見守夜節）
   - **風險（推論）**：時間軸左欄 4rem，特大字級可能擠——等 layouttest。
 - **第 4 項 淺色「和紙」主題**：
   - `css/style.css`：新增**文字專用變數** `--primary-text`／`--accent-text`／`--ok-text`／`--danger-text`／`--heart-text`／`--warn-text`／`--mark-text`
