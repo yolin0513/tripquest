@@ -163,9 +163,11 @@ await shot('29-memories');
 // ---------- 5. 任務大圖卡（展開一天 + 一個景點）----------
 await go(`/#/trip/${tripId}`);
 await page.waitForSelector('.daycollapse');
+// 換天要點日期列那一格（.ds-day）；.dc-head 從 2026-10-27 起不能點、點了什麼都不會發生（2026-11-05 改，還沒開瀏覽器驗）。
+// 只有一天的旅程不畫日期列，那一天本來就是選中的——找不到格子就不點。
 await page.evaluate(() => {
   const d1 = document.querySelector('.daycollapse[data-day="1"]');
-  if (d1 && !d1.classList.contains('open')) d1.querySelector('.dc-head').click();
+  if (d1 && !d1.classList.contains('open')) document.querySelector('.ds-day[data-day="1"]')?.click();
 });
 await sleep(400);
 await page.evaluate(() => {
@@ -182,7 +184,7 @@ await go(`/#/trip/${tripId}`);
 await page.waitForSelector('.daycollapse');
 await page.evaluate(() => {
   const d1 = document.querySelector('.daycollapse[data-day="1"]');
-  if (d1 && !d1.classList.contains('open')) d1.querySelector('.dc-head').click();
+  if (d1 && !d1.classList.contains('open')) document.querySelector('.ds-day[data-day="1"]')?.click();   // 同上：點日期列那一格
 });
 await sleep(400);
 await page.evaluate(() => document.querySelector('.day-tools')?.scrollIntoView({ block: 'start' }));

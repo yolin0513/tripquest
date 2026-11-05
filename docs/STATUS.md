@@ -167,7 +167,10 @@
 
 ### 待辦（2026-10-29 新增）
 - （2026-11-05）**97 條過期的突變紅**——見本檔最上面的常設待辦，用 `node scripts/mutstale.mjs` 看現況。
-- （2026-11-05）三支工具還在點已失效的 `.dc-head`（shotxl、gallery、importshots）——見守夜節，下一個瀏覽器時段改。
+- （2026-11-05）三支工具還在點已失效的 `.dc-head`（shotxl、gallery、importshots）——見守夜節。
+  **gallery、shotxl 已改、沒跑**（Dispatch：修法先寫好、下一個瀏覽器時段一次驗）：gallery 兩處改點日期列 `.ds-day[data-day="1"]`；shotxl 只展開選中那一天的景點
+  （「每一天都展開」在新版面做不到，註解寫明）。只驗了 `node --check`、gatelint。**下一個瀏覽器時段要驗**：`node scripts/gallery.mjs` 的 05、26 兩張圖是第 1 天、景點有展開；
+  `node scripts/shotxl.mjs` 行程頁那張有展開的景點。**importshots 沒改**：它是 f8verify 登記的檔，改了要重跑 f8verify（開瀏覽器），併進同一個時段。
 - 取樣器改從父程序鏈認 own（盲點 ③），順帶想 ④ 觀察者裡的內建瀏覽器怎麼分出來、⑤ GPU；**改了之後跟 10-28、10-29 的數字不能直接比**，改之前先把這幾場的結論定案。
 
 ### 📌 量錯對象修好之後，第一次跑就撞到從沒被掃過的 bug（2026-10-29，留著）

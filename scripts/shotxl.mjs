@@ -71,7 +71,9 @@ try {
     if (expand) {
       for (let k = 0; k < 2; k++) {
         await page.evaluate(() => {
-          document.querySelectorAll('.daycollapse:not(.open) .dc-head, .qcollapse:not(.open) .qc-toggle').forEach((b) => b.click());
+          // 2026-10-27 起行程頁一次只顯示一天、.dc-head 不能點——原本「把每一天都展開」已經做不到，點了也不會發生任何事。
+          // 現在只展開選中那一天裡的景點；要截別天，得先點日期列那一格（.ds-day[data-day="N"]）。（2026-11-05 改，還沒開瀏覽器驗）
+          document.querySelectorAll('.daycollapse.open .qcollapse:not(.open) .qc-toggle').forEach((b) => b.click());
         }).catch(() => {});
         await sleep(500);
       }
