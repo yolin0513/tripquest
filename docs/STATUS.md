@@ -9,6 +9,7 @@
 ### ▶ 2026-11-05 深夜 換版評估（Dispatch 要拿去問 Yolin）：v1.75.0 **還不能換**，缺的幾乎都是驗證
 - 功能：六塊都在；不擋換版的缺口——複製／分享行程時 `legFrom` 沒換新 id（退回圓點、不會顯示錯的）、離線示意圖游標不換圖示。
 - 驗證（要做的事，不只是跑）：①六塊新畫面在正式測試鏈裡只有 legtest（資料層）與 itinviewtest（日期列）——播放列、總覽、交通設定列、標籤、花費第幾天都只有被 .gitignore 擋的一次性腳本，要搬進鏈（§5.4 每個功能至少一條從真實入口進去的斷言）；②全套 75 支（含 densitytest：景點卡多一排可能踩 700px）；③大版本前突變全跑（§5.18.3，含 48 條過期），重負載要 Dispatch 排；④舊版手機改一筆標了天數的花費，`day` 會不會被蓋掉（expense 是整筆 LWW；推論舊版本機 patch 是合併、會保留，沒驗）。
+- **A1 進度（深夜，只寫不跑）**：`legviewtest`（交通方式畫面，20 條）、`tagdaytest`（標籤＋花費第幾天，18 條）已從一次性腳本搬進鏈尾，鏈 75→77。斷言內容與一次性腳本相同（那兩支今晚實測 20/20、18/18、突變正中），**但改寫後的檔本身還沒跑過**；`tools/test-times.json` 沒有它們的耗時 → 預測器會當重負載。還沒搬：播放列（`_playershots`）、總覽（`_overviewshots`）。
 - 上線順序：`merge.js` 改了 → Worker 先部署、客戶端後推，兩步都要 Yolin 點頭。
 - 錄影那批（航班卡＋倒數、站間交通一行、待買清單、住宿清單）→ **下一版**。
 
@@ -2043,7 +2044,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
   實例：densitytest 那次把時間軸改窄，頁面變矮，scrolltest A 的「現在這一站」（最後一站）捲動時被文件底卡住，停的位置剛好跟正確答案一樣，
   「沒把日期列算進去」那條突變就不紅了（2094347）。**診斷法**：把版面暫時改回舊版再跑那條突變——舊版紅、新版不紅，就證明突變本身沒壞，是防線的涵蓋範圍變了。
   修法是補前置斷言，讓「情境沒成立」自己會紅（這次加的是「捲動沒有被文件底卡住」，並配一條只紅它的突變）。
-- `npm test` 是完整的鏈 **75 支**（2026-11-05 加 legtest，接在 mergetest 後面；定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → dayjumptest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest → viewentrytest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **77 支**（2026-11-05 加 legtest，接在 mergetest 後面；同日深夜在最後加 legviewtest、tagdaytest；定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → dayjumptest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest → viewentrytest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——
