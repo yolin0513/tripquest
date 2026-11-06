@@ -239,10 +239,12 @@ export function dayPlayer(m, ad, g, playKey) {
   // 拖到哪一站就停在那一站（跟播到那一站一樣：有位置的游標過去、沒位置的寫明）；播放中拖，放開後從那一站接著播。
   const seek = h('input', { class: 'dm-seek', type: 'range', min: '0', max: String(total), step: '1', value: '0', 'aria-label': '拖到第幾站' });
   // 倍速：×1 → ×2 → ×4 → ×1。只改停留與移動的長短，不跳站（每一站照樣會停，沒位置的站照樣寫明）
+  // 選過的倍速記在這一天（playKey）上：背景重畫會把播放列整個換掉，原本每次都回到 ×1——
+  // 使用者選了 ×4、播到一半就自己變回 ×1（2026-11-06 playertest 連跑 10 次紅 6 次查出來的）
   const SPEEDS = [1, 2, 4];
-  let speed = 1;
-  const spd = h('button', { class: 'dm-speed', type: 'button', 'aria-label': '播放速度 ×1，點一下換' }, '×1');
-  const box = h('div', { class: 'dm-player', dataset: { phase: 'idle', step: '0', speed: '1' }, 'aria-live': 'polite' },
+  let speed = (playKey && SPEEDS.includes(speedOf.get(playKey)) && speedOf.get(playKey)) || 1;
+  const spd = h('button', { class: 'dm-speed', type: 'button', 'aria-label': `播放速度 ×${speed}，點一下換` }, `×${speed}`);
+  const box = h('div', { class: 'dm-player', dataset: { phase: 'idle', step: '0', speed: String(speed) }, 'aria-live': 'polite' },
     h('div', { class: 'dm-row' }, btn, h('div', { class: 'dm-now' }, clock, where), prog),
     h('div', { class: 'dm-row dm-row2' }, seek, spd));
 
@@ -294,6 +296,9 @@ export function dayPlayer(m, ad, g, playKey) {
       // 播放列的字跟著寫怎麼去（只寫使用者選的；沒選就只寫「往第 N 站」）
       set('move', s.n, '', `往第 ${s.n} 站` + (mode && LEG_LABEL[mode] ? `\n${LEG_ICON[mode] ? LEG_ICON[mode] + ' ' : ''}${LEG_LABEL[mode]}` : ''));
       box.dataset.mode = mode || '';
+      // 跟播放列同一刻把游標換成這一段的樣子（停在起點）：原本等到下一個畫面才換，
+      // 中間約一個畫面的空檔裡播放列寫「移動中」、游標還是圓點（2026-11-06 legviewtest 偶發紅，HEAD 6 次紅 1 次）
+      ad.between(from, s, 0, mode);
       const t0 = performance.now();
       const tick = (now) => {
         if (!playing || my !== gen || !alive()) return;
@@ -337,6 +342,7 @@ export function dayPlayer(m, ad, g, playKey) {
     spd.textContent = `×${speed}`;
     spd.setAttribute('aria-label', `播放速度 ×${speed}，點一下換`);
     box.dataset.speed = String(speed);
+    if (playKey) speedOf.set(playKey, speed);
   });
   // 接著播：同一天、剛剛（10 秒內）還在播、站數沒變 → 從那一站重新到站（不重放移動）
   const saved = playKey && live.get(playKey);
@@ -355,4 +361,5 @@ export function dayPlayer(m, ad, g, playKey) {
   return box;
 }
 const live = new Map();          // playKey → { n：播到第幾站, total, at }
+const speedOf = new Map();       // playKey → 選過的倍速（只在這次開著 App 的期間記得，不存進資料）
 const RESUME_MS = 10000;

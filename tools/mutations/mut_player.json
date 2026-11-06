@@ -1,0 +1,20 @@
+[
+  {
+    "name": "倍速不記得：新的播放列一律從 ×1 開始",
+    "why": "（事前寫：2026-11-06 09:5x；第一次跑後補「偶發」那半句）背景重畫或離開再回來，播放列換成新的一份，使用者選的倍速又變回 ×1。預期紅 playertest 的「倍速記得住」；兩條「前置」不紅。這等於把原本的 bug 放回去，所以「倍速鈕再點一下 → 回到 ×1」「×4 的總時間不到 ×1 的四成」可能跟著紅（修正前連跑 10 次紅 6 次，偶發），紅不紅都算照預期。",
+    "file": "js/daymap.js",
+    "find": "  let speed = (playKey && SPEEDS.includes(speedOf.get(playKey)) && speedOf.get(playKey)) || 1;",
+    "replace": "  let speed = 1;",
+    "cmd": "node scripts/playertest.mjs",
+    "done": "^播放列：\\d+ 項通過"
+  },
+  {
+    "name": "倍速選了不記下來（點倍速鈕不寫進 speedOf）",
+    "why": "（事前寫：2026-11-06 09:5x；第一次跑後補「偶發」那半句）讀的那一半還在、寫的那一半拿掉：效果一樣，新的播放列回到 ×1。這兩條不是互為備援——讀與寫缺一個就壞，各自單獨改壞都該紅。預期紅 playertest 的「倍速記得住」；跟上一條一樣，原本那兩條偶發的可能跟著紅。",
+    "file": "js/daymap.js",
+    "find": "    if (playKey) speedOf.set(playKey, speed);\n",
+    "replace": "",
+    "cmd": "node scripts/playertest.mjs",
+    "done": "^播放列：\\d+ 項通過"
+  }
+]

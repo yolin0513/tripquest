@@ -187,7 +187,9 @@ try {
   const jf = data.spots.find((s) => s.name === '九份老街');
   eq(jf && jf.day, 2, '九份老街落在第 2 天');
   yes(!data.spots.some((s) => s.name === '十分瀑布'), '取消勾選的那一筆真的沒有建立');
-  yes(await page.$eval('.page', (e) => e.textContent.includes('台北101')), '行程頁上看得到匯入的景點');
+  // 等畫面畫出來再讀（最多 5 秒）：原本立刻讀，2026-11-06 全套裡偶發紅一次（單跑 12 次 0 紅）——讀得比畫面快
+  const shown = await page.waitForFunction(() => document.querySelector('.page')?.textContent.includes('台北101'), { timeout: 5000 }).then(() => true, () => false);
+  yes(shown, '行程頁上看得到匯入的景點');
 
   // ---------- 9. 沒有金鑰時，照片這條路要好好講原因 ----------
   await page.goto(`http://localhost:${WEB}/#/new`, { waitUntil: 'networkidle0' });

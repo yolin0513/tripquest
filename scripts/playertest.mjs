@@ -3,7 +3,8 @@
 // 從一次性的 _playershots（被 .gitignore 擋）搬進來：2026-11-05 Dispatch A1——播放列只被不會自動跑的腳本驗過。
 // 截圖留在一次性腳本，這支只放斷言（內容與 _playershots 相同；_playershots 2026-11-04 實測 19 項全過）。
 // 驗什麼：×4 每站都停、沒位置的站停下寫明、移動中沒時鐘、×4 總時間 < ×1 的四成、
-// 鍵盤 Home／→ 拖進度條、手指點進度條（游標落在圖釘上＋對照組）、播放中拖到最後接著播完。
+// 鍵盤 Home／→ 拖進度條、手指點進度條（游標落在圖釘上＋對照組）、播放中拖到最後接著播完、
+// 播放列被換掉（回首頁再回來）之後倍速還是選的那一檔。
 // 圖磚攔成本機合成格線，不打 OSM。資料是合成的（日期 2024 年）。第 1 天 5 站、第 3 站沒座標。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -147,6 +148,22 @@ try {
   let doneAt = null;
   for (let k = 0; k < 120; k++) { const x = await st(); if (x.phase === 'done') { doneAt = x; break; } await sleep(40); }
   yes(!!doneAt && doneAt.btn.includes('再播一次'), `播放中拖完放開會接著播：第 5 站停完就「走完了」（${doneAt && doneAt.where}）`);
+
+  // 倍速記得住：播放列被整個換掉（背景重畫、離開再回來）之後還是使用者選的那一檔。
+  // 2026-11-06：連跑 10 次紅 6 次——背景重畫換掉播放列、倍速回到 ×1，使用者選的 ×4 播到一半自己變回 ×1。
+  // 這裡用「回首頁再回來」這條真實路徑把播放列換掉（不等背景重畫碰巧發生），先確認真的換了一個新的。
+  await page.click('.daycollapse.open .dm-speed');
+  s = await st();
+  const picked = s.spd;
+  yes(picked === '×2' || picked === '×4', `前置：倍速換到 ×1 以外（${picked}）`);
+  await page.evaluate(() => { window.__oldPlayer = document.querySelector('.daycollapse.open .dm-player'); location.hash = '#/'; });
+  await page.waitForSelector('.hero', { timeout: 10000 });
+  await page.evaluate((t) => { location.hash = `#/trip/${t}`; }, tid);
+  await page.waitForSelector('.daycollapse.open .dm-player', { timeout: 10000 });
+  const renewed = await page.evaluate(() => !!window.__oldPlayer && window.__oldPlayer !== document.querySelector('.daycollapse.open .dm-player') && !window.__oldPlayer.isConnected);
+  yes(renewed, '前置：播放列真的換成新的一份（舊的已不在畫面上）');
+  s = await st();
+  yes(s.spd === picked && s.speed === picked.slice(1), `倍速記得住：播放列換掉之後還是 ${picked}（${s.spd}、data-speed ${s.speed}）`);
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {
