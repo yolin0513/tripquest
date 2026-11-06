@@ -474,7 +474,7 @@ button.card { appearance: none; font: inherit; }
 .tl-next .qc-name { color: var(--muted); }
 /* 兩站之間「怎麼去」：落在虛線上的一顆小按鈕。沒設定用虛線框＋淡字（看得到、但不搶卡片）；設了就實線框＋圖示。 */
 .tl-leg { position: relative; margin: 8px 0 -2px; }
-.tl-leg-btn { min-height: 40px; padding: 6px 12px; border-radius: 999px; border: 2px solid var(--line); background: var(--bg);
+.tl-leg-btn { min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 2px solid var(--line); background: var(--bg);
   color: var(--text); font: inherit; font-size: 0.9rem; font-weight: 800; cursor: pointer; }
 .tl-leg-btn.is-unset { border-style: dashed; color: var(--muted); font-weight: 700; }
 .tl-leg-btn[aria-expanded="true"] .tl-leg-chev { display: inline-block; transform: rotate(90deg); }
@@ -590,7 +590,10 @@ button.card { appearance: none; font: inherit; }
 .dm-speed { flex: none; min-width: 56px; min-height: 44px; padding: 0 10px; border-radius: 22px; border: 2px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-weight: 900; font-variant-numeric: tabular-nums; }
 .dm-player[data-speed="2"] .dm-speed, .dm-player[data-speed="4"] .dm-speed { border-color: var(--primary-text); }
 .dm-play { min-height: 44px; min-width: 96px; flex: none; }
-.dm-now { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* 第一列（播放鈕／現在在哪／第幾站）：窄手機＋特大字時「現在在哪」被擠成 62px 寬、一字一行（2026-11-06 layouttest 320px/xl）
+   → 給它一個 em 為單位的基準寬，擠不下就整塊換到下一行，不把字折成直排 */
+.dm-row:not(.dm-row2) { flex-wrap: wrap; }
+.dm-now { flex: 1 1 9em; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dm-clock { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1.1; }
 .dm-where { font-size: 0.95rem; font-weight: 700; color: var(--text); line-height: 1.35; white-space: pre-line; }
 .dm-player[data-phase="missing"] .dm-where { color: var(--text); background: var(--bg); border: 2px dashed var(--line); border-radius: 8px; padding: 2px 6px; }
@@ -664,7 +667,9 @@ button.card { appearance: none; font: inherit; }
 .om-empty { margin: 0; padding: 10px 12px; border-radius: 10px; border: 2px dashed var(--line); font-weight: 700; color: var(--text); }
 .dm-label { fill: var(--text); font-size: 14px; font-weight: 700; paint-order: stroke; stroke: var(--bg-elev); stroke-width: 4px; stroke-linejoin: round; }
 .dm-missing { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; line-height: 1.5; }
-.dm-missing-label { font-weight: 800; }
+/* 說明一行、站名清單另起一行：兩個行內 span 折行時框會疊在一起（2026-11-06 layouttest overlap 289×21px） */
+.dm-missing-label { display: block; font-weight: 800; }
+.dm-missing-list { display: block; }
 .daymap.is-empty { margin-top: 12px; }
 .tl-crew { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 4px; }
 .tl-crew-label { font-size: 0.85rem; font-weight: 800; color: var(--muted); }
