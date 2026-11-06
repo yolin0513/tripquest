@@ -1,6 +1,7 @@
 [
   {
     "name": "T1：改回 v1.74.2 的行為（不整筆排除、toBase 查不到就回原值）",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄、從沒照這句驗過）查不到匯率的那筆又被當原幣金額算進去、unconverted 不再整筆列出。預期紅 moneytest 以「T1」開頭的那幾條（例：T1 unconverted 恰好一組）；T4／T7／T9 不紅。",
     "file": "js/expenses.js",
     "edits": [
       { "find": "if (e.currency !== baseCurrency && convert(e.amount, e.currency, baseCurrency, ratesObj) == null) {", "replace": "if (false) {" },
@@ -10,6 +11,7 @@
   },
   {
     "name": "T2：畫面不顯示 unconverted",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的；這條過期、上次紅時沒寫預期）查不到匯率、沒算進去的那幾筆，畫面不再列出來。預期紅 settletest 以「T2」開頭的那幾條。",
     "file": "js/views/expenses.js",
     "find": "const noteLines = (s.unconverted || []).map((u) =>",
     "replace": "const noteLines = [].map((u) =>",
@@ -17,6 +19,7 @@
   },
   {
     "name": "T3：拿掉「全部查不到」的分支",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）每一筆都查不到匯率時，畫面不再照實寫「全部查不到」、改成顯示一個算不出來的結算。預期紅 settletest 以「T3」開頭的那幾條；T2／T5／T6／T10 不紅。",
     "file": "js/views/expenses.js",
     "find": "const nothingCounted = s.counted === 0;",
     "replace": "const nothingCounted = false;",

@@ -1,6 +1,7 @@
 [
   {
     "name": "T9：拿掉殘差分配那一步",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）四捨五入後的零頭沒人吸收，淨額相加不再是 0。預期紅 moneytest 以「T9」開頭、帳要平那幾條（照轉帳執行完每人歸零）；「T9 每個人的淨額都是整分」可能不紅（推論）。",
     "file": "js/expenses.js",
     "find": "  if (diff !== 0) {\n    const order",
     "replace": "  if (false) {\n    const order",
@@ -8,6 +9,7 @@
   },
   {
     "name": "T9：轉帳改回用未捨入的淨額算",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）轉帳金額出現不是整分的數。預期紅 moneytest 的「前置：兩筆轉帳、金額都是整…」與「T9 零小數：每筆轉帳都是整數」。",
     "file": "js/expenses.js",
     "find": "const transfers = minTransfers(units).map(",
     "replace": "const transfers = minTransfers(Object.fromEntries(Object.entries(balances).map(([m, v]) => [m, v * unit]))).map(",
@@ -15,6 +17,7 @@
   },
   {
     "name": "T10：「打平」的門檻改回 0.5",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）差幾毛錢也寫「打平」。預期紅 settletest 以「T10」開頭、不該寫打平的那一條（r3.settle 不含打平）；該寫打平的對照（r3c）不紅。",
     "file": "js/views/expenses.js",
     "find": "bal === 0 ? '打平'",
     "replace": "Math.abs(bal) < 0.5 ? '打平'",
@@ -22,6 +25,7 @@
   },
   {
     "name": "T10：settleTrip 不看零小數，一律兩位",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）日圓這類零小數的幣別也算到分。預期紅 settletest 以「T10」開頭、零小數那一條。",
     "file": "js/expenses.js",
     "find": "const decimals = currencyInfo(baseCurrency).zero ? 0 : 2;",
     "replace": "const decimals = 2;",

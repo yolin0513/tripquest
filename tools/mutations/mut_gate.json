@@ -31,6 +31,7 @@
   },
   {
     "name": "忽略對照組",
+    "why": "（事前寫：2026-11-06 08 點，帳本沒紀錄）自查的對照組沒命中也不當成檢查器壞了。預期紅 pushgatetest 裡「對照組沒命中要回 4」那一類情境（報不符），其餘情境照樣符合；確切是哪幾種情境，跑之前要再讀 pushgatetest 的情境表確認。",
     "file": "scripts/prepush-scan.mjs",
     "find": "  if (!ctrlHit) broken.push(name);\n",
     "replace": "",
@@ -38,6 +39,7 @@
   },
   {
     "name": "推送閘不看自查結果",
+    "why": "（事前寫：2026-11-06 08 點，帳本沒紀錄）自查命中照樣推。預期紅 pushgatetest 裡「自查命中要回 1、不推」那幾種情境（報不符）；推送失敗、遠端對不上那兩關不紅。",
     "file": "scripts/safe-push.sh",
     "find": "if [ \"$CHECK\" -ne 0 ]; then",
     "replace": "if false; then",

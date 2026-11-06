@@ -1,6 +1,7 @@
 [
   {
     "name": "X3：settleTrip 不帶墓碑",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）已移除的人付過的帳在結算裡消失。預期紅 membergonetest 以「X3」開頭的那幾條（結清方案「小美（已移除） 給 阿公」、帳要平）；X1 確認框那幾條不紅。",
     "file": "js/expenses.js",
     "find": "[...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)].map((m) => m.id)",
     "replace": "[...store.membersOf(trip.groupId)].map((m) => m.id)",
@@ -8,6 +9,7 @@
   },
   {
     "name": "X4：帳只看這一趟（改回舊的範圍）",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）移除前的提醒只算這一趟的帳，別趟付過的不講。預期紅 membergonetest 以「X4」開頭的那一條（另一趟的帳也要提醒）。",
     "file": "js/views/trip.js",
     "find": "const { paid, shared } = memberExpenseCounts(groupId, m.id);",
     "replace": "const { tripExpenses } = await import('../expenses.js'); const es0 = tripExpenses(tripId); const paid = es0.filter((e) => e.payerId === m.id).length, shared = es0.filter((e) => (e.participants || []).includes(m.id)).length;",
@@ -15,6 +17,7 @@
   },
   {
     "name": "X5：確認裡不講照片",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）移除確認框不提他拍過的照片。預期紅 membergonetest 以「X5」開頭的那幾條，以及 X1 那條「1 張照片」（同一個確認框）；只看照片的對照（dB）會變成不跳確認——也會紅。",
     "file": "js/views/trip.js",
     "find": "if (photos) lines.push(",
     "replace": "if (false) lines.push(",
@@ -22,6 +25,7 @@
   },
   {
     "name": "X2：已移除的人叫不出名字（寫成未指定）",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）分帳頁把已移除的人寫成「（未指定）」。預期紅 membergonetest 以「X2」開頭、不該出現「（未指定）」與要寫「小美（已移除）」的那幾條。",
     "file": "js/views/expenses.js",
     "find": ": gone.has(id) ? `${gone.get(id) || '旅伴'}（已移除）`",
     "replace": ": false ? ''",
@@ -29,6 +33,7 @@
   },
   {
     "name": "X2：「每個人」不列已移除的人",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）有帳的已移除者不出現在「每個人」那一區。預期紅 membergonetest 以「X2」開頭、「最後一位是小美（已移除）」那一條。",
     "file": "js/views/expenses.js",
     "find": "...former.filter((m) => (s.totals.byMember[m.id] || 0) !== 0",
     "replace": "...[].filter((m) => (s.totals.byMember[m.id] || 0) !== 0",
@@ -36,6 +41,7 @@
   },
   {
     "name": "X2：「每個人」連沒帳的已移除者也列",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）沒帳的已移除者（小華）也被列出來。預期紅 membergonetest 以「X2」開頭、「不列小華」那一條。",
     "file": "js/views/expenses.js",
     "find": "...former.filter((m) => (s.totals.byMember[m.id] || 0) !== 0 || (s.balances[m.id] || 0) !== 0),",
     "replace": "...former,",
@@ -43,6 +49,7 @@
   },
   {
     "name": "X6：記帳表單用上含墓碑的名單",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）記帳表單的付款人／分給誰出現已移除的人。預期紅 membergonetest 以「X6」開頭、表單那兩條（payers、parts 不含小美）。",
     "file": "js/views/expenses.js",
     "find": "async function openEdit(tripId, existing) {\n  const trip = store.get(tripId);\n  const members = store.membersOf(trip.groupId);",
     "replace": "async function openEdit(tripId, existing) {\n  const trip = store.get(tripId);\n  const members = [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)];",
@@ -50,6 +57,7 @@
   },
   {
     "name": "X6：挑成員用上含墓碑的名單",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）「我是誰」之類的挑成員畫面出現已移除的人。預期紅 membergonetest 以「X6」開頭、挑成員那一條。",
     "file": "js/claim.js",
     "edits": [
       { "find": "  const members = store.membersOf(trip.groupId);\r\n  const picked = await pick(", "replace": "  const members = [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)];\r\n  const picked = await pick(" }
@@ -58,6 +66,7 @@
   },
   {
     "name": "X1：有帳也不提醒（只看照片）",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）移除有帳沒照片的人時不跳確認。預期紅 membergonetest 以「X1」開頭、只有帳的那一條（dA：付了 1 筆）；小美有照片仍會跳、那幾條可能照樣綠（推論）。",
     "file": "js/views/trip.js",
     "find": "if (paid || shared || photos) {",
     "replace": "if (photos) {",

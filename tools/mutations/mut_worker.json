@@ -1,6 +1,7 @@
 [
   {
     "name": "Worker 的 push 上限調到 999（限流形同失效）",
+    "why": "（事前寫：2026-11-06 08 點讀 workertest 推的，帳本沒紀錄）預期紅 workertest 的「push 超過額度會回 429」與「429 帶 Retry-After: 60」。錯祕鑰掃描那條（未驗證請求同桶）也可能紅（推論：同一個 push 上限）。",
     "file": "workers/worker.mjs",
     "find": "push:  { limit: 30,  period: 60 },",
     "replace": "push:  { limit: 999,  period: 60 },",
@@ -8,6 +9,7 @@
   },
   {
     "name": "前置：視窗改成 1 秒（每一輪一定跨視窗，情境不成立）",
+    "why": "（事前寫：2026-11-06 08 點讀 workertest 推的，帳本沒紀錄）預期只紅 workertest 的兩條前置：「掃描那一輪 40 次落在同一個 60 秒視窗裡」「計數的那一輪 40 次 push 落在同一個 60 秒視窗裡」；限流本身那幾條照樣綠（Worker 沒改）。",
     "file": "scripts/workertest.mjs",
     "find": "const PUSH_PERIOD_MS = 60 * 1000;",
     "replace": "const PUSH_PERIOD_MS = 1 * 1000;",

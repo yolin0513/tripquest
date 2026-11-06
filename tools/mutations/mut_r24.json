@@ -1,6 +1,7 @@
 [
   {
     "name": "T4：拿掉「份數全 0 退回平均分」",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）份數全 0／全負時不再退回平均分（分母補成 1，每人攤 0）。預期紅 moneytest 的「T4 份數全 0 → 每人攤 600 / 3」「T4 份數全是負數 → 也退回平均」；「T4 對照：份數 1:0」不紅。",
     "file": "js/expenses.js",
     "find": "if (e.shares && Object.keys(e.shares).length && !sharesFallback(e)) {\n    const total = parts.reduce((s, m) => s + weightOf(e, m), 0);",
     "replace": "if (e.shares && Object.keys(e.shares).length) {\n    const total = parts.reduce((s, m) => s + weightOf(e, m), 0) || 1;",
@@ -8,6 +9,7 @@
   },
   {
     "name": "T4：負數份數不夾成 0",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）負的份數直接拿去算比例。預期紅 moneytest 的「T4 負的份數當 0：{−1, 2, 0}」；全負那條可能被 sharesFallback 先擋走、不一定紅（推論）。",
     "file": "js/expenses.js",
     "find": "const weightOf = (e, m) => Math.max(0, Number(e.shares[m]) || 0);",
     "replace": "const weightOf = (e, m) => Number(e.shares[m]) || 0;",
@@ -15,6 +17,7 @@
   },
   {
     "name": "T7（R3）：參與者空改回回傳 {}",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）沒有參與者的那筆，付款人付的錢憑空消失。預期紅 moneytest 以「T7」開頭、參與者空那一條（帳要平：淨額相加 0）；T7 付款人那兩條不紅。",
     "file": "js/expenses.js",
     "find": "if (!parts.length) return e.payerId ? { [e.payerId]: e.amount } : {};",
     "replace": "if (!parts.length) return {};",
@@ -22,6 +25,7 @@
   },
   {
     "name": "T7（R4）：改回只保護入帳那一半",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）付款人空時只擋了入帳、參與者照樣被扣。預期紅 moneytest 的「T7 付款人空 → 沒有任何人被扣」；「T7 對照：付款人是 A」不紅。",
     "file": "js/expenses.js",
     "edits": [
       { "find": "if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }\n    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;\n    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase;", "replace": "if (e.payerId) {\n    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;\n    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase; }" }
@@ -30,6 +34,7 @@
   },
   {
     "name": "T7（R4）：不檢查付款人在不在成員裡",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）付款人不在成員名單裡也照算。預期紅 moneytest 的「T7 付款人不在成員裡 → 沒有…」；「T7 付款人空」「T7 對照」不紅。",
     "file": "js/expenses.js",
     "find": "if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }",
     "replace": "if (!e.payerId) { noPayer++; continue; }",
@@ -37,6 +42,7 @@
   },
   {
     "name": "T5：拿掉表單的「份數全 0」檢查",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）表單讓份數全 0 的一筆存進去、不提醒。預期紅 settletest 以「T5」開頭的那幾條（擋下、提醒字）。",
     "file": "js/views/expenses.js",
     "find": "  if (st.shares && st.participants.reduce((s, m) => s + Math.max(0, Number(st.shares[m]) || 0), 0) <= 0) {\n    toast('份數至少要有一個人大於 0'); return;\n  }",
     "replace": "",
@@ -44,6 +50,7 @@
   },
   {
     "name": "T5：輸入框不夾負數",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）份數輸入框打負數不改回 0。預期紅 settletest 以「T5」開頭、輸入負數那一條；如果 settletest 沒有打負數的步驟，這條會沒紅——那就是測試沒守到，照實記。",
     "file": "js/views/expenses.js",
     "find": "if (v < 0) ev.target.value = '0';",
     "replace": "",
@@ -51,6 +58,7 @@
   },
   {
     "name": "T6：明細副標不加「先照平均分」",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）份數全 0 退回平均分時，明細不寫出來。預期紅 settletest 以「T6」開頭的那幾條。",
     "file": "js/views/expenses.js",
     "find": "+ (sharesFallback(e) ? ' · 份數都是 0，先照平均分' : '')",
     "replace": "+ ''",
@@ -58,6 +66,7 @@
   },
   {
     "name": "R4 畫面：不講「沒有付款人」",
+    "why": "（事前寫：2026-11-06 08 點讀 settletest 推的，帳本沒紀錄）沒有付款人的花費被略過、畫面卻不說。預期紅 settletest 以「R4」開頭的那幾條。",
     "file": "js/views/expenses.js",
     "find": "if (s.noPayer) noteLines.push(",
     "replace": "if (false) noteLines.push(",

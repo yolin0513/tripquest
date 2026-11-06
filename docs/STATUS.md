@@ -23,7 +23,20 @@
      - 其餘：沒有預期會紅的理由；紅了就是真的要查。
 3. 紅了就修版面。**densitytest 待 Yolin 選**（Dispatch 已轉）：A 搬出卡片放進編輯畫面／⋯（我建議）、B 縮字硬擠一行（脆弱）、C 門檻放寬到 760。凌晨試過「跟＋新增任務擠同一行」：卡片內只有 305px 寬，三顆放不下仍換兩行（739～765px），已還原、沒留下改動。
 4. 突變全跑（大版本前）。**過期清單 2026-11-06 凌晨重算過（`mutstale`，只讀）**：「48 條」是舊數字——現在 242 條裡**過期 98**、帳本沒紀錄 33、紅·檔同 112 左右（98 是 `--list 過期` 逐行數的；同一晚稍早一次是 97，差的那一條待查是哪條從檔同變過期）。依清單：itinview 22（itinviewtest 17、scrolltest 3、collapsetest 2）、tripday 16、palette 8、motion 10、aicachedry 6、loadjudge 6、mutcmd 5、density 4、affected 系 6、narrowcol 3（layouttest，每條約 12 分鐘）、其餘各 1～3。單支原樣耗時×條數合計約 3446 秒（57 分；aicache-dryrun、loadjudge 沒量過；突變時通常更久）。**第 3 項若改了 `css/style.css` 或 `js/views/trip.js`，過期會再變多——跑之前再算一次，以那次為準。**
-   **帳本沒紀錄的 33 條一起跑，不能略過**：它們不是「從沒跑過」就是帳本開帳（2026-10-08）前跑的，現在沒有任何一筆紀錄證明它們會紅——跟過期的一樣當成「沒人守」。清單與順序見下面「🔴 待辦：…過期」那節的「帳本沒紀錄 33 條的盤點」表（mutlint_find 3、worker 2、gate 2〔每條約 4.5 分鐘〕、r1／r24／r5 共 15、member 9、plan 2；`node scripts/mutstale.mjs --list 沒紀錄` 列出）。跑完每條要回到「紅·檔同」並紅在 `why` 寫的那條；沒紅的照實記、處理測試，不改預期。合計過期 98＋沒紀錄 33＝**131 條要跑**。 帳本有、清單沒有的 4 條：兩條是凌晨我改名／換掉的（`第 1 批：第一站藏在格子外`→換成「又寫回當天第一站」、`合併：整筆語意不比內容…`→改成兩道一起拿掉），另外兩條（theme.js、poster/index.js）是更早的，待查。
+   **帳本沒紀錄的 33 條一起跑，不能略過**：它們不是「從沒跑過」就是帳本開帳（2026-10-08）前跑的，現在沒有任何一筆紀錄證明它們會紅——跟過期的一樣當成「沒人守」。清單與順序見下面「🔴 待辦：…過期」那節的「帳本沒紀錄 33 條的盤點」表（mutlint_find 3、worker 2、gate 2〔每條約 4.5 分鐘〕、r1／r24／r5 共 15、member 9、plan 2；`node scripts/mutstale.mjs --list 沒紀錄` 列出）。跑完每條要回到「紅·檔同」並紅在 `why` 寫的那條；沒紅的照實記、處理測試，不改預期。合計過期 98＋沒紀錄 33＝**131 條要跑**。
+   **預期（2026-11-06 08 點事前寫）**：131 條裡原本 **34 條沒寫 `why`**（沒紀錄的 33 條全部＋mut_r1 的 T2）——不寫就是事後才知道「預期」是什麼（§5.22）。已逐條補上「預期紅哪條」，依據寫「事前寫：讀 <測試> 推的」；推論、不確定會不會紅的照實寫在句子裡（例：T4 負數那條、X1）。其餘 97 條原本就有 `why`。
+   **執行順序（不開瀏覽器、短的先）**，每組一行 `node scripts/mutate.mjs tools/mutations/<清單>.json <名稱…>`，跑完逐條對 `why`：
+   | 順序 | 守它的測試 | 條數 | 開瀏覽器 | 單支原樣 |
+   |---|---|---|---|---|
+   | 1 | motioncsstest、shelltest、themetrusttest、tripdaytest、moneytest、palettetest、mutlint、viewentrytest | 5＋1＋1＋16＋8＋8＋5＋1 | 不開 | ≤ 2 秒 |
+   | 2 | mutcmdtest、guesstruthtest、affectedtest | 5＋3＋6 | 不開 | 7～11 秒 |
+   | 3 | aicache-dryrun、loadjudge | 6＋6 | 不開 | 沒量過（先量） |
+   | 4 | workertest | 2 | 不開 | 45 秒 |
+   | 5 | densitytest、membergonetest、motiontest、washitest、plantest、collapsetest、settletest、itinviewtest | 4＋9＋5＋2＋3＋2＋8＋17 | 開 | 8～24 秒 |
+   | 6 | scrolltest | 3 | 開 | 181 秒 |
+   | 7 | pushgatetest（mut_gate 2 條） | 2 | 不開、多程序 | 268 秒（改壞後最長 1443 秒） |
+   | 8 | layouttest（mut_narrowcol 3 條） | 3 | 開 | 716 秒 |
+   原樣耗時 × 條數合計約 4365 秒（73 分；第 3 組沒量過、突變時常更久）——**比原本估的 57 分長**，那次沒算沒紀錄的 33 條。densitytest 那 4 條要等第 3 項定案後再算是不是過期。 帳本有、清單沒有的 4 條：兩條是凌晨我改名／換掉的（`第 1 批：第一站藏在格子外`→換成「又寫回當天第一站」、`合併：整筆語意不比內容…`→改成兩道一起拿掉），另外兩條（theme.js、poster/index.js）是更早的，待查。
 5. 舊版手機相容性：舊版改一筆標了天數的花費，`day` 會不會被蓋掉——補一條測試。
 6. 換版（**Yolin 2026-11-05 已點頭**，條件：全套跑完、驗證補齊；Dispatch 會問他兩次）：**先部署 Worker、再推客戶端。這個順序是必要的，不是保險**——〔讀碼確認 2026-11-06〕現役 Worker 的 `sanitizeF`（`js/merge.js`）對沒有欄位組的型別直接 `delete rec._f`，`workers/worker.mjs` 對每筆推上來的記錄都呼叫它；客戶端先上，`buy`／`stay`／`flight` 在 D1 上就沒有 `_f`、退化成整筆後寫者贏。（v1.75 的 `leg`／`important`／`booked` 本來就要 Worker 先部署。）
 - （A1）播放列、總覽已搬進鏈（只寫不跑）；全套那輪順便確認綠，並各做一條突變證明會紅。
