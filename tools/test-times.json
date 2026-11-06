@@ -1,6 +1,6 @@
 {
   "affectedtest": {
-    "sec": 10.8,
+    "sec": 10.5,
     "at": "2026-11-06"
   },
   "validate-places": {
@@ -12,31 +12,31 @@
     "at": "2026-11-06"
   },
   "secret-leak-test": {
-    "sec": 4.4,
+    "sec": 4.3,
     "at": "2026-11-06"
   },
   "aitest": {
-    "sec": 13.6,
+    "sec": 13.3,
     "at": "2026-11-06"
   },
   "screenshots": {
-    "sec": 150.4,
+    "sec": 150.9,
     "at": "2026-11-06"
   },
   "synctest": {
-    "sec": 7.4,
+    "sec": 7.2,
     "at": "2026-11-06"
   },
   "tagtest": {
-    "sec": 15.2,
+    "sec": 15.4,
     "at": "2026-11-06"
   },
   "scrolltest": {
-    "sec": 182.6,
+    "sec": 181.3,
     "at": "2026-11-06"
   },
   "imgtest": {
-    "sec": 85.5,
+    "sec": 82.8,
     "at": "2026-11-06"
   },
   "walltest": {
@@ -44,11 +44,11 @@
     "at": "2026-11-06"
   },
   "updatetest": {
-    "sec": 47.2,
+    "sec": 47.3,
     "at": "2026-11-06"
   },
   "importtest": {
-    "sec": 10.5,
+    "sec": 10.1,
     "at": "2026-11-06"
   },
   "installtest": {
@@ -72,7 +72,7 @@
     "at": "2026-11-06"
   },
   "tabbartest": {
-    "sec": 39.5,
+    "sec": 38.4,
     "at": "2026-11-06"
   },
   "videotest": {
@@ -132,7 +132,7 @@
     "at": "2026-11-06"
   },
   "musictest": {
-    "sec": 45,
+    "sec": 44.9,
     "at": "2026-11-06"
   },
   "mergetest": {
@@ -144,7 +144,7 @@
     "at": "2026-11-06"
   },
   "nearbytest": {
-    "sec": 9.7,
+    "sec": 9.5,
     "at": "2026-11-06"
   },
   "postest": {
@@ -216,11 +216,11 @@
     "at": "2026-11-06"
   },
   "mutcmdtest": {
-    "sec": 8.2,
+    "sec": 8.7,
     "at": "2026-11-06"
   },
   "mutlint": {
-    "sec": 1.2,
+    "sec": 0.9,
     "at": "2026-11-06"
   },
   "predicttest": {
@@ -280,7 +280,7 @@
     "at": "2026-11-06"
   },
   "themetrusttest": {
-    "sec": 0.1,
+    "sec": 0.2,
     "at": "2026-11-06"
   },
   "posterlayouttest": {
@@ -288,7 +288,7 @@
     "at": "2026-11-06"
   },
   "viewentrytest": {
-    "sec": 1.9,
+    "sec": 1.8,
     "at": "2026-11-06"
   },
   "dayjumptest": {
@@ -300,7 +300,7 @@
     "at": "2026-11-06"
   },
   "legviewtest": {
-    "sec": 29,
+    "sec": 23.7,
     "at": "2026-11-06"
   },
   "tagdaytest": {
