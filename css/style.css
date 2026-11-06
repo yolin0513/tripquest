@@ -497,8 +497,9 @@ button.card { appearance: none; font: inherit; }
 .buy-item { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px; border-radius: 14px;
   border: 2px solid var(--line); background: var(--card, var(--bg)); }
 .buy-check { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 3px solid var(--primary-text, var(--primary));
-  background: transparent; color: #fff; font-size: 1.5rem; font-weight: 900; line-height: 1; cursor: pointer; }
-.buy-item.is-done .buy-check { background: var(--primary); border-color: var(--primary); }
+  background: transparent; color: var(--primary-text); font-size: 1.5rem; font-weight: 900; line-height: 1; cursor: pointer; }
+/* 勾號的字色跟其他主色底按鈕一樣用 --primary-ink（原本寫死 #fff：和紙主題粉色底上 1.0、深色 3.0——palettetest 2026-11-06） */
+.buy-item.is-done .buy-check { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
 .buy-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .buy-text { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
 .buy-item.is-done .buy-text { text-decoration: line-through; color: var(--muted); }
@@ -528,7 +529,7 @@ button.card { appearance: none; font: inherit; }
 /* minmax(0,1fr)＋min-width:0：日期／時間輸入框的最小寬度比半個畫面寬，用 1fr 會把整頁撐到 413px、手機整頁縮小（2026-11-06 量到） */
 .stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; }
-.stay-err { margin: 0; color: var(--danger, #e66); font-weight: 800; }
+.stay-err { margin: 0; color: var(--danger-text); font-weight: 800; }
 .stay-err:empty { display: none; }
 .stay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .stay-foot { margin-top: 16px; }
@@ -540,7 +541,7 @@ button.card { appearance: none; font: inherit; }
 .fl-ic { font-size: 1.4rem; }
 .fl-no { flex: 1; min-width: 0; margin: 0; font-size: 1.35rem; letter-spacing: .04em; overflow-wrap: anywhere; }
 .fl-edit { flex: none; min-height: 40px; padding: 4px 12px; }
-.fl-cd { margin: 8px 0 4px; display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--primary); color: #fff; font-weight: 900; font-size: 1.05rem; }
+.fl-cd { margin: 8px 0 4px; display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--primary); color: var(--primary-ink); font-weight: 900; font-size: 1.05rem; }
 .fl-legs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .fl-end { margin: 0; font-weight: 700; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .fl-tag { flex: none; font-size: 0.85rem; font-weight: 800; color: var(--muted); border: 2px solid var(--line); border-radius: 8px; padding: 0 6px; }
@@ -553,7 +554,7 @@ button.card { appearance: none; font: inherit; }
 .fl-label { font-weight: 800; }
 .fl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .fl-field, .stay-field { min-width: 0; }
-.fl-err { margin: 0; color: var(--danger, #e66); font-weight: 800; }
+.fl-err { margin: 0; color: var(--danger-text); font-weight: 800; }
 .fl-err:empty { display: none; }
 /* 表單長、「存」會落在底部分頁列後面（_flightshots 實測點到了「照片」分頁）→ 動作列黏在分頁列上方，跟 .picked-bar 同一套 */
 /* 表單不用 .card（那是可點的列表卡：置中對齊、按下會縮）——2026-11-06 截圖看到欄位被擠到中間 */
@@ -627,7 +628,9 @@ button.card { appearance: none; font: inherit; }
 .rm-cursor { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: var(--primary-text); border: 3px solid #fff; box-shadow: 0 0 0 2px #0005; z-index: 3; }
 .rm-cursor.is-dim { opacity: .4; }
 /* 移動中換成交通圖示：白底圓、圖示 22px（地圖上實際大小），框照舊，跟站的圖釘分得開 */
-.rm-cursor.is-mode { left: -17px; top: -17px; width: 34px; height: 34px; background: #fff; border: 3px solid var(--primary-text);
+/* 白底固定配深色字：原本字色跟著主題走，深色主題是淺字在白底上（對比 1.0）——彩色表情符號看得到，
+   但手機只有單色字型時圖示就跟白底融在一起（palettetest 2026-11-06） */
+.rm-cursor.is-mode { left: -17px; top: -17px; width: 34px; height: 34px; background: #fff; color: #111; border: 3px solid var(--primary-text);
   font-size: 22px; line-height: 28px; text-align: center; }
 .rm-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 4px; scrollbar-width: thin; }
 .rm-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 12px 4px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text); font-size: 0.95rem; font-weight: 700; }

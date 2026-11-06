@@ -72,6 +72,9 @@ const DARK_KNOWN = [
   '.btn-danger', '.tag-btn.danger', '.tag-er', '.qbig.done .qbig-status',
   '.tag-hot', '.qc-prog.done',
   '.exp-person-bal.neg', '.numpad-del', '.qrow.done .qrow-icon',
+  // 2026-11-06 加：住宿／航班表單的錯誤字，用的就是上面那批的 --danger-text（深色 4.42、高對比 4.39）。
+  // 調亮 --danger-text 會連 .btn-danger 等 4 處一起改，那是 Yolin 還沒回的「深色主題字太淡」方向——不搶先改，跟著那批等。
+  '.stay-err', '.fl-err',
 ];
 export const EXEMPT = { ...ALL_THEMES };
 for (const s of DARK_KNOWN) for (const t of ['深色', '深色＋高對比']) EXEMPT[`${t}｜${s}`] = '深色主題既有的對比不足，另案';
