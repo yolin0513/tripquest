@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges, ORPHAN_RE, ORPHAN_OK, findOrphans, mutListInfo } from './affected.mjs';
+import { BASELINE, AMP_A_TESTS, SW_VERSION_ONLY, SW_VERSION_TESTS, CLOSURE_STOP, parseChain, extractRefs, buildImportGraph, closure, select, formatReport, classifyChanges, ORPHAN_RE, ORPHAN_OK, findOrphans, ORPHAN_OK_PATHS, findOrphanPaths, mutListInfo } from './affected.mjs';
 import { loadRepo, SCAN_ONLY } from './run-affected.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -368,6 +368,31 @@ console.log('\n[T17] 孤兒檢查');
   const real = findOrphans(scriptNames, names);
   yes(real.orphans.length === 0, `真實的 scripts/：沒有孤兒（像檢查卻沒進鏈、也沒登記理由的）`, '孤兒：' + real.orphans.join('、'));
   yes(real.stale.length === 0, `登記的例外 ${Object.keys(ORPHAN_OK).length} 條都還有效（檔在、而且真的不在鏈裡）`, '過期：' + real.stale.join('、'));
+}
+
+// ---------- 孤兒檢查第二半：scripts/ 以外的目錄（2026-11-06；原本只看 scripts/，tools/ 底下放新測試不會有任何警告）----------
+console.log('\n[T17b] 孤兒檢查（scripts/ 以外）');
+{
+  // 母體：已追蹤＋未追蹤但沒被 .gitignore 擋的（新放的檔還沒 commit 也要報）。git 失敗就停，不當成空清單。
+  const ls = (args) => {
+    const r = spawnSync('git', ['-c', 'core.quotepath=false', 'ls-files', '-z', ...args], { cwd: ROOT, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('T17b 檢查器壞了：git ls-files ' + args.join(' ') + ' 失敗：' + r.stderr);
+    return r.stdout.split('\0').filter(Boolean);
+  };
+  const tracked = ls([]), untracked = ls(['--others', '--exclude-standard']);
+  const paths = [...new Set([...tracked, ...untracked])];
+  const chainFiles = chain.map((t) => t.file.replace(/\\/g, '/'));
+  const real = findOrphanPaths(paths, chainFiles);
+  yes(tracked.length >= 500 && real.scanned >= 60 && chainFiles.length >= 40,
+    `前置：git 列出已追蹤 ${tracked.length}、未追蹤 ${untracked.length} 檔；scripts/ 以外的程式檔 ${real.scanned} 支、鏈上 ${chainFiles.length} 支（母體不是空的）`);
+  // 對照組（同一個函式）：tools/ 底下、兩層目錄、未登記 → 報；例外指向不存在的檔 → 過期；scripts/ 底下一層不歸這半管
+  const syn = findOrphanPaths([...paths, 'tools/zzdir/zzfaketest.mjs', 'scripts/zzonlyfirsthalftest.mjs'], chainFiles);
+  yes(syn.orphans.includes('tools/zzdir/zzfaketest.mjs') && !syn.orphans.includes('scripts/zzonlyfirsthalftest.mjs'),
+    '對照組：tools/zzdir/zzfaketest.mjs 沒登記 → 報成孤兒；scripts/ 底下一層的不在這半重複報', JSON.stringify(syn.orphans));
+  const synStale = findOrphanPaths(paths, chainFiles, { ...ORPHAN_OK_PATHS, 'tools/zzgonetest.mjs': '不存在' });
+  yes(synStale.stale.includes('tools/zzgonetest.mjs'), '對照組：例外指向不存在的檔 → 報成過期', JSON.stringify(synStale.stale));
+  yes(real.orphans.length === 0, `真實的 repo：scripts/ 以外沒有孤兒（掃了 ${real.scanned} 支程式檔）`, '孤兒：' + real.orphans.join('、'));
+  yes(real.stale.length === 0, `scripts/ 以外登記的例外 ${Object.keys(ORPHAN_OK_PATHS).length} 條都還有效`, '過期：' + real.stale.join('、'));
 }
 
 // ---------- 突變清單只挑它點名的測試（2026-11-05，§5.18.1 縮小範圍；正確性依據在 affected.mjs MUT_LIST_RE 上面）----------

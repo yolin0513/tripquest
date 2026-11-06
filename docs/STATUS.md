@@ -6,6 +6,11 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### 🧷 2026-11-06 14:20 孤兒檢查擴大到整個 repo（Dispatch 交辦；做完照舊停著等 Yolin）
+- **起因**：查詢島 42 支測試只有 1 支會被跑到。我們盤點（14:15，HEAD 2679650）：像測試卻不在鏈上的只有 `scripts/livetest.mjs`（有登記）與 `tools/mutproof/evtest_mut.mjs`；後者在 `tools/`，**原本的孤兒檢查只看 `scripts/` 底下一層，看不到它**——今天沒事，下一支放進 `tools/` 就不會有任何警告。
+- **補法**：`scripts/affected.mjs` 加 `findOrphanPaths`／`ORPHAN_OK_PATHS`，`affectedtest` 加 [T17b]：母體＝`git ls-files`（已追蹤）＋`--others --exclude-standard`（未追蹤、沒被 ignore 的；新放還沒 commit 的也要報），scripts/ 底下一層以外的每一支程式檔（.mjs/.js/.cjs/.ts/.sh/.py/.ps1），名字像檢查又不在鏈上就紅；放行要逐路徑登記理由（8 條，含 `js/plancheck.js`——App 本體模組，名字剛好含 check）。git 失敗就丟例外，不當空清單。
+- **實測**：affectedtest 128 項全過（掃 140 支）。暫存 clone 對照組（一次性腳本在 scratchpad，跑完 clone 刪掉、主工作區跑前跑後狀態相同）6 種情境 6/6 符合：真的放一支 `tools/mutproof/zzfaketest.mjs`——未追蹤／已 commit 各一種——都只紅「scripts/ 以外沒有孤兒」那一條、點名那支檔；原樣全綠；突變「範圍改回只看 scripts/」→ 假檔不再被點名；突變「母體不收未追蹤」→ 未追蹤那種抓不到、已 commit 那種照紅。（判定器第一版把總結行與細節行算錯、判成 3 條不符，修判定器、沒改預期。）predicttest、convtest、gatelint、mutlint 單支跑過綠；**`test:affected` 這次挑 14 支、會開瀏覽器＝重負載，沒跑**，排進換版前那一輪完整 80 支。
+
 ### 🟢 2026-11-06 09:30 全套結果（第 2 項做完；第 4 項 131 條突變**先不跑**，Dispatch：等他看過全套結果）
 - **實際跑了幾支**：鏈的母體 80 支（從 `package.json` 數），80 支每支至少跑過一次、0 支沒跑到；分 6 段（runner 遇紅就停，從紅的下一支接著跑）：`.logs/full-1106-0825{,b,c,d,e}.log`＋`layout-1106-0910.log`，共開跑 81 次（layouttest 修完重跑一次）。結束狀態：全部正常結束，0 崩潰、0 逾時、0 沒跑完。
 - **最後一次結果：綠 77、紅 3**：

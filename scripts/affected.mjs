@@ -151,6 +151,32 @@ export function findOrphans(scriptNames, chainNames, ok = ORPHAN_OK) {
   return { orphans, stale };
 }
 
+// ---------- 孤兒檢查的第二半：scripts/ 以外（2026-11-06）----------
+// 上面那半只看 scripts/ 底下一層。tools/mutproof/、tools/ev/ 也放了好幾支檢查與驗法，新放一支進去不會有任何警告
+// （查詢島同一天撞到：42 支測試只有 1 支會被跑到，一支從 11-04 紅到 11-06 沒人發現）。
+// 範圍：repo 裡每一個程式檔（已追蹤＋未追蹤但沒被 .gitignore 擋的，由呼叫端用 git 列），scripts/ 底下一層除外（上面那半管）。
+// 名字像檢查、又不在鏈上 → 報；要放行就登記在 ORPHAN_OK_PATHS 並寫理由（登記制，不用排除目錄）。
+export const CODE_RE = /\.(?:m?js|cjs|ts|sh|py|ps1)$/i;
+export const ORPHAN_OK_PATHS = {
+  'js/plancheck.js': 'App 本體的模組（行程檢查功能），名字剛好含 check；行為由 checktest、routetest 驗',
+  'tools/ev/regen-check.mjs': 'tools/ev 入庫的自我檢查（能重新產生、引用都在、沒有本機路徑）；動 tools/ev 時手動跑',
+  'tools/mutproof/evtest_mut.mjs': 'evtest 範圍縮小的突變驅動，重負載（約 4.5 分鐘）；STATUS 記何時手動跑',
+  'tools/mutproof/expect-check.mjs': '突變驅動預期清單的過期／歧義檢查（函式庫）；由突變驅動呼叫',
+  'tools/mutproof/gatelint_format.mjs': 'gatelint「判定與證據分行」的三格證明，一次性入庫的證據；動 gatelint 輸出格式時手動跑',
+  'tools/mutproof/mutlint_mut.mjs': 'mutlint 的突變驅動，在暫存 clone 裡跑；動 mutlint 時手動跑',
+  'tools/mutproof/rescan.mjs': '回頭掃舊突變輸出有沒有跑完（evidence.mjs 呼叫）；手動跑',
+  'tools/okscan.mjs': '「helper 回失敗值、呼叫端沒接」的盤點工具（自帶對照組）；手動跑',
+};
+// paths：repo 相對路徑（正斜線）；chainFiles：鏈上每一支的檔案路徑（例 scripts/xxxtest.mjs）
+export function findOrphanPaths(paths, chainFiles, ok = ORPHAN_OK_PATHS) {
+  const inChain = new Set(chainFiles), have = new Set(paths);
+  const base = (p) => p.split('/').pop().replace(CODE_RE, '');
+  const outside = paths.filter((p) => CODE_RE.test(p) && !/^scripts\/[^/]+$/.test(p));
+  const orphans = outside.filter((p) => ORPHAN_RE.test(base(p)) && !inChain.has(p) && !(p in ok)).sort();
+  const stale = Object.keys(ok).filter((p) => !have.has(p) || inChain.has(p) || !ORPHAN_RE.test(base(p))).sort();
+  return { scanned: outside.length, orphans, stale };
+}
+
 // ---------- 直接引用 ----------
 // 從測試腳本的文字裡撈出 repo 內的路徑：'/js/store.js'（page.evaluate 裡的動態 import）、
 // '../js/merge.js'、'server/index.mjs'（spawn 的伺服器）、'js/views'（整個目錄）、
