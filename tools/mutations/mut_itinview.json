@@ -81,11 +81,11 @@
     "done": "^折疊與自動捲動測試結束"
   },
   {
-    "name": "第 1 批：日期列不寫週幾",
-    "why": "預期紅 itinviewtest 的 B1 第 1 天那格與第 2 天（今天）那格兩條。",
+    "name": "第 1 批：日期列又寫回星期",
+    "why": "（2026-11-06 換掉：原本那條「日期列不寫週幾」把 wk 清空，但 2026-11-05 Yolin 挑版本一之後畫面本來就不寫星期、wk 只剩讀屏 aria-label 用，那條突變守的東西已經不存在，131 條重跑時照樣全綠。換成反方向——又在畫面上寫回星期。事前寫：讀 itinviewtest B1 推的）預期紅 B1 第 1 天那格「不寫星期」那一條；今天那格寫「今天」、不經過 dstr，不紅。",
     "file": "js/views/trip.js",
-    "find": "    const wk = weekdayLabel(t.startDate, d);",
-    "replace": "    const wk = '';",
+    "find": "isToday ? '今天' : (dstr || (done ? '✓ 完成' : `${byDay.get(d).length} 站`))",
+    "replace": "isToday ? '今天' : ((dstr && wk ? dstr + ' ' + wk : dstr) || (done ? '✓ 完成' : `${byDay.get(d).length} 站`))",
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {
@@ -155,7 +155,7 @@
   },
   {
     "name": "scrolltest 前置：現在這一站改回最後一站",
-    "why": "最後一站會被文件底卡住，停的位置由頁面長度決定，上面那條突變就驗不到。預期只紅 scrolltest A 的「前置：捲動沒有被文件底卡住」。",
+    "why": "最後一站會被文件底卡住，停的位置由頁面長度決定，上面那條突變就驗不到。預期只紅 scrolltest A 的「前置：捲動沒有被文件底卡住」。〔事後補，2026-11-06：131 條重跑時照樣全綠——現在的頁面比 10-28 長（最大捲動 1270 → 1919），最後一站也捲得到日期列下面（scrollY 1899 < 1919），選最後一站不再被文件底卡住：在目前的頁面上是等價突變（§5.12），不補斷言。前置那條留著守將來頁面又變矮。〕",
     "file": "scripts/scrolltest.mjs",
     "find": "    const pick = secs.find((x) => x.getBoundingClientRect().top + window.scrollY > window.innerHeight + 40) || secs[secs.length - 1];",
     "replace": "    const pick = secs[secs.length - 1];",

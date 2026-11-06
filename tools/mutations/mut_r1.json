@@ -7,7 +7,8 @@
       { "find": "if (e.currency !== baseCurrency && convert(e.amount, e.currency, baseCurrency, ratesObj) == null) {", "replace": "if (false) {" },
       { "find": "  const toBase = (amt, cur) => (cur === baseCurrency ? amt : convert(amt, cur, baseCurrency, ratesObj));", "replace": "  const toBase = (amt, cur) => { if (cur === baseCurrency) return amt; const v = convert(amt, cur, baseCurrency, ratesObj); if (v == null) { missingRate = true; return amt; } return v; };" }
     ],
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T2：畫面不顯示 unconverted",

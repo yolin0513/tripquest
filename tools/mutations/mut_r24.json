@@ -5,7 +5,8 @@
     "file": "js/expenses.js",
     "find": "if (e.shares && Object.keys(e.shares).length && !sharesFallback(e)) {\n    const total = parts.reduce((s, m) => s + weightOf(e, m), 0);",
     "replace": "if (e.shares && Object.keys(e.shares).length) {\n    const total = parts.reduce((s, m) => s + weightOf(e, m), 0) || 1;",
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T4：負數份數不夾成 0",
@@ -13,15 +14,17 @@
     "file": "js/expenses.js",
     "find": "const weightOf = (e, m) => Math.max(0, Number(e.shares[m]) || 0);",
     "replace": "const weightOf = (e, m) => Number(e.shares[m]) || 0;",
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T7（R3）：參與者空改回回傳 {}",
-    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）沒有參與者的那筆，付款人付的錢憑空消失。預期紅 moneytest 以「T7」開頭、參與者空那一條（帳要平：淨額相加 0）；T7 付款人那兩條不紅。",
+    "why": "（事前寫：2026-11-06 08 點讀 moneytest 推的，帳本沒紀錄）沒有參與者的那筆，付款人付的錢憑空消失。預期紅 moneytest 以「T7」開頭、參與者空那一條（帳要平：淨額相加 0）；T7 付款人那兩條不紅。〔事後補，2026-11-06 11:5x：事前那句預期錯了——131 條重跑時照樣全綠：只有 A 一人時多出的 +300 會被 toUnits「總和湊回 0」整筆扣回 A，三條都還是 0。測試已補「參與者空混一筆正常的」兩條（A −50、B +50），改成預期紅那兩條。〕",
     "file": "js/expenses.js",
     "find": "if (!parts.length) return e.payerId ? { [e.payerId]: e.amount } : {};",
     "replace": "if (!parts.length) return {};",
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T7（R4）：改回只保護入帳那一半",
@@ -30,7 +33,8 @@
     "edits": [
       { "find": "if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }\n    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;\n    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase;", "replace": "if (e.payerId) {\n    balances[e.payerId] = (balances[e.payerId] || 0) + amtBase;\n    byMember[e.payerId] = (byMember[e.payerId] || 0) + amtBase; }" }
     ],
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T7（R4）：不檢查付款人在不在成員裡",
@@ -38,7 +42,8 @@
     "file": "js/expenses.js",
     "find": "if (!e.payerId || (isMember && !isMember.has(e.payerId))) { noPayer++; continue; }",
     "replace": "if (!e.payerId) { noPayer++; continue; }",
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T5：拿掉表單的「份數全 0」檢查",

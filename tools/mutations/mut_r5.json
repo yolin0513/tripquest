@@ -5,7 +5,8 @@
     "file": "js/expenses.js",
     "find": "  if (diff !== 0) {\n    const order",
     "replace": "  if (false) {\n    const order",
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T9：轉帳改回用未捨入的淨額算",
@@ -13,7 +14,8 @@
     "file": "js/expenses.js",
     "find": "const transfers = minTransfers(units).map(",
     "replace": "const transfers = minTransfers(Object.fromEntries(Object.entries(balances).map(([m, v]) => [m, v * unit]))).map(",
-    "cmd": "node scripts/moneytest.mjs"
+    "cmd": "node scripts/moneytest.mjs",
+    "done": "^(✓ 全部通過|✗ 有失敗)（\\d+ 項）"
   },
   {
     "name": "T10：「打平」的門檻改回 0.5",

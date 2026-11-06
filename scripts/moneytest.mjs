@@ -146,6 +146,15 @@ console.log('\n— T7 參與者空、付款人空 —');
   const r3c = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: 'A', participants: ['A', 'B'], shares: null }],
     baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
   near(r3c.balances.A, 150, 'T7 對照：補上參與者 A、B → A 淨額 +150');
+  // 上面三條擋不住「參與者空改回回傳 {}」（2026-11-06 突變照樣全綠）：只有 A 一個人時，A 多出的 +300
+  // 會被 toUnits 的「總和湊回 0」整筆扣回 A 身上，結果剛好還是 0。混一筆正常的花費進來，多出的錢被輪流
+  // 分到兩個人身上，就蓋不掉了。正確：第一筆 A 自己分（0）；第二筆 B 付 100、A／B 各攤 50 → A −50、B +50。
+  const r3m = ex.settleCore({ expenses: [
+    { amount: 300, currency: 'TWD', payerId: 'A', participants: [], shares: null },
+    { amount: 100, currency: 'TWD', payerId: 'B', participants: ['A', 'B'], shares: null },
+  ], baseCurrency: 'TWD', ratesObj: RATES, memberIds: MEM });
+  near(r3m.balances.A, -50, 'T7 參與者空混一筆正常的 → A 淨額 −50（參與者空那筆 A 自己分）');
+  near(r3m.balances.B, 50, 'T7 參與者空混一筆正常的 → B 淨額 +50');
 
   // R4 付款人空 → 整筆不進淨額（沒有人被扣、也沒有人入帳），合計照算，noPayer 計 1
   const r4 = ex.settleCore({ expenses: [{ amount: 300, currency: 'TWD', payerId: '', participants: ['A', 'B'], shares: null }],
