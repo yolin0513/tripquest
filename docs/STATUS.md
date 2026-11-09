@@ -11,6 +11,9 @@
 - **② 讚不顯示數字（c 的第一步 a）**：相簿、動態、檢視器、任務頁、行程頁任務列都改成只標「我按過」；影片片尾拿掉「互相按了 N 個讚」。**沒改的**：回憶影片挑照片的排序（`memory.js` 的 likes，只排順序、不印字）、徽章「應援團」（數自己按讚留言的次數，規則沒動）。新測試 `likenumtest`（鏈 80→81）；同步規則（b）要投票，沒動。
 - **③ 深色第二段**：`--danger-text` #ff6b6b→#ff9090、`--ok-text` #4fd6a6→#6fe3bb、`--heart-text` #ff6b8b→#ff93aa；palettetest 的深色登記清單清空。原本不到 4.5 的 11 處（舊值 3.82～4.43，高對比 3.82～4.42）都過了。跟著變亮、原本就及格的 10 處：`.tag-ok`、`.ring-done .ring-label`、`.sync-banner.done`、`.crew-row .cr-line.ok`、`.place-card.on .pc-add`、`.exp-person-bal.pos`、`.qrow-status.is-done`、`.imp-badge`、`.qline.done .qline-sub`、`.share-live`（都是完成綠）。和紙主題的色值沒動。
 - 突變 `tools/mutations/mut_batch1109.json` 15 條（預期事前寫在 why）。圖在 `handoff_1104\tq\讚不顯示數字\`、`深色第二段\`。
+- **全套（467bed0，17:27 跑完）**：鏈 81 支，81 支都有結果：80 綠、plantest 紅（它釘了景點設定頁的欄位清單，這次多一欄「標籤」是刻意的；改期望值後單跑 49 項綠）。前一次開跑（8c9939f）在 tagtest 同一個原因停在第 8 支，改完從頭重跑，所以綠的 80 支都在 467bed0 上。之後只動 plantest 期望值、palettetest 對照組、突變清單，沒動 App 程式。
+- **突變（17:49）**：新寫 15 條 15/15 紅在該紅的地方（「相簿改成別人按的也標」多紅一行「標記不寫數字」，事前只預期一行，是我寫窄了）；過期名單 61 條排除 narrowcol 2 條（layouttest，每條約 12 分鐘，這次只動顏色與一排按鈕，**沒跑、沒驗**）＝名單 59、實際跑 59、照預期紅 58、沒紅 1：`檢查器：只對 --bg 算`——深色登記清單清空後，原本守這條的登記項不見了，測試變弱；補對照組「字只在最淺的卡片底上不夠」，單條重跑紅在該對照組，同檔檢查器 5 條重跑 5/5。densitytest 的 4 條帳清了。
+- **🔴 換版還沒做**：Worker 部署、VERSION bump、推送都要 Yolin 明確點頭。順序：Worker 先、客戶端後。
 
 ### 🧷 2026-11-06 14:20 孤兒檢查擴大到整個 repo（Dispatch 交辦；做完照舊停著等 Yolin）
 - **起因**：查詢島 42 支測試只有 1 支會被跑到。我們盤點（14:15，HEAD 2679650）：像測試卻不在鏈上的只有 `scripts/livetest.mjs`（有登記）與 `tools/mutproof/evtest_mut.mjs`；後者在 `tools/`，**原本的孤兒檢查只看 `scripts/` 底下一層，看不到它**——今天沒事，下一支放進 `tools/` 就不會有任何警告。

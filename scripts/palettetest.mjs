@@ -264,6 +264,9 @@ if (isMain) {
   ctl('粉彩當字', GOOD + '\n.bad { color: var(--primary); }', ['P2／P3 和紙']);
   ctl('沒定義的變數', GOOD + '\n.bad { color: var(--nope); }', ['P1 ', 'P4 深色', 'P4 和紙']);
   ctl('只設底色、繼承的字太淡', GOOD + '\n.bad { background: var(--text); }', ['P2／P3 ']);
+  // 2026-11-09 補：深色登記清單清空後，「要取最差的底」原本靠真樣式表的登記項守著，守的人不見了（突變「只對 --bg 算」沒紅才發現）。
+  // #808080 在 --bg #101010 上 4.82、在 --bg-elev-2 #202020 上 4.13：只看 --bg 就會放行。
+  ctl('字只在最淺的卡片底上不夠', GOOD + '\n.bad { color: #808080; }', ['P2／P3 深色', 'P2／P3 和紙']);
   ctl('圖片底上有字', GOOD + '\n.bad { background: url(x.png); color: var(--text); }', ['P4 深色', 'P4 和紙']);
   ctl('上一層的底色要算進去', GOOD + '\n.a { background: #000000; color: #ffffff; }\n.a .b { color: #ffffff; }', null);
   ctl('漸層的每個色標都要過', GOOD + '\n.bad { background: linear-gradient(180deg, #000000, #ffffff); color: #ffffff; }', ['P2／P3 ']);
