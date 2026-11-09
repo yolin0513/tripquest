@@ -242,7 +242,7 @@ try {
     nativeTime: !!document.querySelector('.spot-time-row input[type=time]'),
     stay: document.querySelector('.spot-stay').selectedOptions[0].textContent,
   }));
-  // 完整清單、逐欄比對，不要放寬。「標籤」欄：commit 8c9939f 加的，Yolin 選 A，重要／訂好位從景點卡搬過來。
+  // 完整清單、逐欄比對，不要放寬。「標籤」欄：commit 44770ab 加的，Yolin 選 A，重要／訂好位從景點卡搬過來。
   eq(sv.labels.join('／'), '景點名稱／幾點到／停留多久／標籤（點一下就存）／地圖位置', `欄位：${sv.labels.join('、')}（v1.48 起多了地圖位置；2026-11-09 多了標籤）`);
   // 第 5 項：上方的「第幾天／幾個任務」與底下那段提示都拿掉
   const txt = await page.evaluate(() => document.querySelector('#view > .page').innerText);
