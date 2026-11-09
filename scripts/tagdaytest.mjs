@@ -1,7 +1,7 @@
 // 「重要／訂好位」標籤＋花費標第幾天的畫面測試（npm run tagdaytest；在 test:chain 裡）。資料全是合成的（日期 2024 年、名字自編）。
-// 涵蓋的程式：js/views/trip.js js/views/expenses.js js/expenses.js css/style.css
+// 涵蓋的程式：js/views/trip.js js/views/spot.js js/views/expenses.js js/expenses.js css/style.css
 // 從一次性的 _tagshots（被 .gitignore 擋）搬進來（2026-11-05：今天做的畫面要有會自動跑的斷言守著）；截圖留在一次性腳本。
-// 走真實入口：景點卡上的兩顆切換鈕；分帳頁右上「＋」打開的記帳表單、真的點數字鍵與「哪一天」。期望金額是手算的。
+// 走真實入口：行程頁「調整每天的行程」→ ⚙️ 設定 裡的兩顆切換鈕（2026-11-09 從景點卡搬過去）；分帳頁右上「＋」打開的記帳表單、真的點數字鍵與「哪一天」。期望金額是手算的。
 // 突變實測（2026-11-05，在 _tagshots 上）：表單預選第 1 天 → 紅「預設不標」「編輯舊花費仍不標」；
 // 拿掉沒標日期的計數 → 紅「另有 1 筆沒標日期」；標籤改成不是 false 就顯示 → 紅「一開始沒有標籤」「對照組第 2 站」。
 import { spawn } from 'node:child_process';
@@ -75,13 +75,40 @@ try {
   await ensureOpen(sp[0]);
   T = await tagState();
   const t0 = T.find((x) => x.spot === sp[0]);
-  yes(t0.toggles.length === 2 && t0.toggles.every((x) => x[1] === 'false'), `展開後看得到兩顆切換鈕、都沒按下（${JSON.stringify(t0.toggles)}）`);
-  await page.click(`.qcollapse[data-spot="${sp[0]}"] .tag-toggle[data-tag="important"]`);
-  await page.waitForFunction((i) => document.querySelector(`.qcollapse[data-spot="${i}"] .tag-toggle[data-tag="important"]`)?.getAttribute('aria-pressed') === 'true', { timeout: 6000 }, sp[0]).catch(() => {});
-  await stable('.daycollapse.open .timeline');
-  await ensureOpen(sp[0]);
-  await page.click(`.qcollapse[data-spot="${sp[0]}"] .tag-toggle[data-tag="booked"]`);
-  await page.waitForFunction((i) => document.querySelector(`.qcollapse[data-spot="${i}"] .tag-toggle[data-tag="booked"]`)?.getAttribute('aria-pressed') === 'true', { timeout: 6000 }, sp[0]).catch(() => {});
+  // 2026-11-09 Yolin 選 A：切換鈕搬到景點設定頁，卡片不再多一排（densitytest 的 700px）。前置：這張卡真的展開、新增任務那一列在
+  const cardOpen = await page.evaluate((i) => !!document.querySelector(`.qcollapse[data-spot="${i}"].open .qline-add`), sp[0]);
+  yes(cardOpen && t0.toggles.length === 0, `展開的景點卡上沒有切換鈕（前置：卡片展開＝${cardOpen}；切換鈕 ${t0.toggles.length} 顆）`);
+  // 真實路徑：行程頁「調整每天的行程」→ 那一站的 ⚙️ 設定
+  const openSettings = async (id) => {
+    await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.daycollapse.open .qcollapse');
+    await stable('.daycollapse.open .timeline');
+    let planBtn = null;
+    for (const b of await page.$$('button')) if ((await b.evaluate((e) => e.textContent)).includes('調整每天的行程')) { planBtn = b; break; }
+    await planBtn.click();
+    await page.waitForSelector(`.plan-row[data-id="${id}"]`, { timeout: 8000 });
+    let setBtn = null;
+    for (const b of await page.$$(`.plan-row[data-id="${id}"] .plan-mini`)) if ((await b.evaluate((e) => e.textContent)).includes('設定')) { setBtn = b; break; }
+    await setBtn.click();
+    await page.waitForSelector('.tag-toggle', { timeout: 8000 });
+  };
+  const pressed = (key, v) => page.waitForFunction((k, x) => document.querySelector(`.tag-toggle[data-tag="${k}"]`)?.getAttribute('aria-pressed') === x, { timeout: 6000 }, key, v).catch(() => {});
+  const setToggles = () => page.evaluate(() => [...document.querySelectorAll('.tag-toggle')].map((b) => [b.dataset.tag, b.getAttribute('aria-pressed'), b.textContent.trim()]));
+  await openSettings(sp[0]);
+  const st0 = await setToggles();
+  yes(st0.length === 2 && st0.every((x) => x[1] === 'false'), `景點設定頁看得到兩顆切換鈕、都沒按下（${JSON.stringify(st0)}）`);
+  // 打了字還沒按儲存就點標籤：字不能被洗掉（切換鈕不重畫整頁）
+  await page.evaluate(() => { const f = document.querySelector('.page.form input.field'); f.value = '還沒存的新名字'; });
+  await page.click('.tag-toggle[data-tag="important"]');
+  await pressed('important', 'true');
+  await page.click('.tag-toggle[data-tag="booked"]');
+  await pressed('booked', 'true');
+  const st1 = await setToggles();
+  const typed = await page.$eval('.page.form input.field', (e) => e.value);
+  yes(st1.every((x) => x[1] === 'true'), `點兩顆之後都變成按下（${JSON.stringify(st1)}）`);
+  yes(typed === '還沒存的新名字', `點標籤不會洗掉還沒存的名字（「${typed}」）`);
+  await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.daycollapse.open .qcollapse');
   await stable('.daycollapse.open .timeline');
   T = await tagState();
   const a0 = T.find((x) => x.spot === sp[0]), a1 = T.find((x) => x.spot === sp[1]);
@@ -89,12 +116,12 @@ try {
   yes(a1.tags.length === 0, '對照：沒點的第 2 站仍然沒有標籤');
   const rec = await page.evaluate(async (i) => { const s = await import('./js/store.js'); const x = s.get(i); return { important: x.important, booked: x.booked, fi: !!x._f?.important, fb: !!x._f?.booked }; }, sp[0]);
   yes(rec.important === true && rec.booked === true && rec.fi && rec.fb, `存下去的是 true＋_f 兩組都有時間戳（${JSON.stringify(rec)}）`);
-  await page.evaluate((i) => document.querySelector(`.qcollapse[data-spot="${i}"]`).scrollIntoView({ block: 'start' }), sp[0]);
-  await sleep(300);
   // 再點一下取消「重要」
-  await ensureOpen(sp[0]);
-  await page.click(`.qcollapse[data-spot="${sp[0]}"] .tag-toggle[data-tag="important"]`);
-  await page.waitForFunction((i) => document.querySelector(`.qcollapse[data-spot="${i}"] .tag-toggle[data-tag="important"]`)?.getAttribute('aria-pressed') === 'false', { timeout: 6000 }, sp[0]).catch(() => {});
+  await openSettings(sp[0]);
+  await page.click('.tag-toggle[data-tag="important"]');
+  await pressed('important', 'false');
+  await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.daycollapse.open .qcollapse');
   await stable('.daycollapse.open .timeline');
   T = await tagState();
   yes(T.find((x) => x.spot === sp[0]).tags.join() === '✅ 訂好位', `再點一下「重要」→ 取消，只剩訂好位（${T.find((x) => x.spot === sp[0]).tags.join('、')}）`);

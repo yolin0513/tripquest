@@ -1,4 +1,4 @@
-// 景點設定頁 —— 只做四件事：改名字、幾點到、停留多久、刪掉它。
+// 景點設定頁 —— 只做五件事：改名字、幾點到、停留多久、標「重要／訂好位」、刪掉它。
 //
 // 這頁本來還有示意圖、介紹文字、「用地圖帶我去」、任務清單與加照片按鈕。
 // 全部拿掉了，因為那些在別的地方都已經有，而且更靠近使用者真正在做事的地方：
@@ -82,6 +82,23 @@ export default async function spot(tripId, spotId, { drawPage, setTop }) {
   const stayField = h('select', { class: 'field spot-stay' },
     ...stayOptions(tm.stayMin).map((o) =>
       h('option', { value: o.v, selected: String(tm.stayMin || '') === o.v }, o.label)));
+
+  // 重要／訂好位：點一下就存，再點一下取消；不跟著「儲存」——只換這顆鈕的樣子、不重畫整頁，才不會把還沒存的名字、時間洗掉。
+  const tagToggle = (key, onText, offText) => {
+    const btn = h('button', { type: 'button', dataset: { tag: key } });
+    const paint = () => {
+      const on = store.getRaw(spotId)[key] === true;
+      btn.className = 'btn tag-toggle ' + (on ? 'btn-primary is-on' : 'btn-soft');
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? onText : offText;
+    };
+    btn.addEventListener('click', async () => {
+      await store.patch(spotId, { [key]: store.getRaw(spotId)[key] !== true });
+      paint();
+    });
+    paint();
+    return btn;
+  };
 
   const save = async () => {
     const name = nameField.value.trim();
@@ -187,6 +204,11 @@ export default async function spot(tripId, spotId, { drawPage, setTop }) {
         onclick: () => { hourSel.value = ''; minSel.disabled = true; },
       }, '清除'))),
     field('停留多久', stayField),
+    h('div', { class: 'form-field' },
+      h('span', { class: 'form-label' }, '標籤（點一下就存）'),
+      h('div', { class: 'tag-row' },
+        tagToggle('important', '⭐ 重要', '☆ 標成重要'),
+        tagToggle('booked', '✅ 訂好位', '訂好位了嗎？'))),
     h('div', { class: 'form-field' },
       h('span', { class: 'form-label' }, '地圖位置'),
       posLine, posBtns, posClear),

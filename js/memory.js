@@ -128,8 +128,8 @@ function tripStats(tripId) {
   const subs = store.submissionsOfTrip(tripId);
   const members = store.membersOf(store.get(tripId).groupId);
   const photos = new Set(subs.map((s) => s.photoHash || s.thumbHash)).size;
-  return { spots: spots.length, photos, members: members.length,
-    reactions: subs.reduce((n, s) => n + store.reactionsOf(s.id).length, 0) };
+  // 片尾不統計按讚次數（2026-11-09）：取消讚不會同步，這個數字偏多，不印進影片
+  return { spots: spots.length, photos, members: members.length };
 }
 
 // ---------- 影像：滑動視窗，不一次全部解碼 ----------
@@ -877,8 +877,6 @@ function drawOutro(ctx, seg, t) {
   const s = seg.stats;
   y += centerText(ctx, `${s.photos} 個回憶 · ${s.spots} 個景點 · ${s.members} 位旅伴`, W / 2, y + 36,
     { maxW: W - 140, maxLines: 2, size: 42, min: 28, color: 'rgba(255,255,255,0.75)' }) + 36;
-  if (s.reactions) y += centerText(ctx, `互相按了 ${s.reactions} 個讚 ❤️`, W / 2, y + 22,
-    { maxW: W - 140, maxLines: 1, size: 40, min: 26, color: 'rgba(255,255,255,0.6)' }) + 22;
   centerText(ctx, 'TripQuest', W / 2, y + 74,
     { maxW: W - 140, maxLines: 2, size: 34, min: 24, weight: 700, color: 'rgba(255,255,255,0.4)' });
   if (seg.credit) {

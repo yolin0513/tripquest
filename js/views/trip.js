@@ -840,15 +840,6 @@ async function ensurePhotoQuest(s) {
 // 加照片的兩顆只給**沒有任務**的地點：有任務的地點每一列自己就有拍照／從相簿選
 // （那是先前定下來不能退讓的一條：加照片要一眼看到、一次點到），再放一組只會把
 // 卡片變高 —— 實測一個五個任務的景點會從 657px 變成 719px，densitytest 的門檻是 700。
-function tagToggle(s, key, onText, offText) {
-  const on = s[key] === true;
-  return h('button', {
-    class: 'btn btn-sm tag-toggle ' + (on ? 'btn-primary is-on' : 'btn-soft'), type: 'button',
-    dataset: { tag: key }, 'aria-pressed': String(on),
-    onclick: async () => { await store.patch(s.id, { [key]: !on }); refreshPage(); },
-  }, on ? onText : offText);
-}
-
 function spotAddRow(s, tripId, questCount) {
   return h('div', { class: 'qline-add' + (questCount ? '' : ' empty') },
     h('button', {
@@ -857,10 +848,8 @@ function spotAddRow(s, tripId, questCount) {
         if (await addQuestDialog(tripId, s.id)) refreshPage();
       },
     }, '＋ 新增任務'),
-    // 重要／訂好位：自己點才有，再點一下取消。放在這一列（不另起一列）——卡片高度有門檻（densitytest）
-    h('div', { class: 'tag-row' },
-      tagToggle(s, 'important', '⭐ 重要', '☆ 標成重要'),
-      tagToggle(s, 'booked', '✅ 訂好位', '訂好位了嗎？')),
+    // 「重要／訂好位」的切換鈕在景點設定頁（2026-11-09 Yolin 選 A）：放這裡卡片超過 densitytest 的 700px；
+    // 標好的標籤照樣顯示在這張卡的站名下面。
     // 照片仍然掛在任務底下：第一次選照片時才把中性的照片任務建起來（ensureQuest）
     questCount ? null : addPhotoButtons(tripId, photoQuestId(s.id), {
       compact: true,
@@ -1181,7 +1170,9 @@ function questLine(q, spot, themeKey) {
   const done = store.isQuestDone(q.id);
   const subs = store.submissionsOf(q.id);
   const km = KIND_META[q.kind] || KIND_META.thing;
-  const likeCount = subs.reduce((n, s) => n + store.reactionsOf(s.id).length, 0);
+  // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多，數字不可信
+  const meId = activeMemberId(q.tripId);
+  const iLiked = !!meId && subs.some((s) => store.myReaction(s.id, meId));
   const refPick = () => refImageFor(q, spot, subs[0] && (subs[0].thumbHash || subs[0].photoHash));
 
   // 完成的任務，縮圖就是他自己拍的那張（refImageFor 本來就優先用投稿）
@@ -1206,7 +1197,7 @@ function questLine(q, spot, themeKey) {
         q.hint ? h('p', { class: 'qline-hint' }, q.hint) : null,
         h('div', { class: 'qline-tags' },
           h('span', { class: 'tag' }, km.label),
-          likeCount ? h('span', { class: 'qline-likes' }, '❤️ ' + likeCount) : null,
+          iLiked ? h('span', { class: 'qline-likes' }, '❤️ 我按過') : null,
           subs.length ? h('button', {
             class: 'qline-link', onclick: () => navigate(`/quest/${q.id}`),
           }, `看照片（${subs.length} 張）`) : null,
@@ -1242,7 +1233,7 @@ function questLine(q, spot, themeKey) {
         // 「1 張」包成不斷行的一段：qty 用的是不換行空白，但 .qline-sub 有 overflow-wrap:anywhere，
         // 擠的時候照樣會在「1」與「張」之間斷開（layouttest bad-wrap，320px 大字）
         ...(done ? ['✓ 已完成　', h('span', { class: 'qline-qty' }, qty(subs.length, '張'))] : ['還沒拍']),
-        likeCount ? `　❤️ ${likeCount}` : ''),
+        iLiked ? '　❤️' : ''),
     ),
     h('span', { class: 'qline-chev' }, '▸'),
   );

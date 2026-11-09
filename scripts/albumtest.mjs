@@ -225,7 +225,9 @@ try {
     const subs = s.submissionsOfTrip(tid).sort((a, b) => (a.takenAt || a.createdAt) - (b.takenAt || b.createdAt));
     return { on, reacts: s.reactionsOf(subs[pv.__tq.index].id).length };
   }, ids.tid);
-  yes(liked.on.includes('❤️') && liked.on.includes('1') && liked.reacts === 1, `檢視器按 ❤️ → 同一筆 reaction 記錄（${liked.on.trim()}）`);
+  yes(liked.on.includes('❤️') && liked.reacts === 1, `檢視器按 ❤️ → 同一筆 reaction 記錄（${liked.on.trim()}）`);
+  // 2026-11-09：讚只顯示「我按了沒」——取消讚不會同步，筆數在別人手機上偏多。前置：上一條已確認真的有 1 筆紀錄
+  yes(!/\d/.test(liked.on), `檢視器的 ❤️ 鈕不顯示數字（「${liked.on.trim()}」）`);
   // 留言
   await page.evaluate(() => document.querySelector('.pv-cbtn').click());
   await sleep(300);
@@ -243,9 +245,9 @@ try {
   // ✕ 關閉（走 history.back）→ 回到相簿頁、數字更新
   await page.evaluate(() => document.querySelector('.pv-close').click());
   await sleep(700);
-  const closed = await page.evaluate(() => ({ pv: !!document.querySelector('.pv'), hash: location.hash, likes: document.querySelectorAll('.pg-likes').length }));
+  const closed = await page.evaluate(() => ({ pv: !!document.querySelector('.pv'), hash: location.hash, likes: document.querySelectorAll('.pg-likes').length, likeText: document.querySelector('.pg-likes')?.textContent || '' }));
   yes(!closed.pv && closed.hash.includes('/people'), '✕ 關閉 → 回到相簿頁（沒有退出行程）');
-  yes(closed.likes === 1, '格子上的 ❤️ 數字跟著更新');
+  yes(closed.likes === 1 && closed.likeText.includes('❤️') && !/\d/.test(closed.likeText), `格子上標出「我按過」、不寫數字（「${closed.likeText}」）`);
   // Android 返回鍵（history.back）也關
   await page.evaluate(() => document.querySelectorAll('.pg-cell')[0].click());
   await page.waitForSelector('.pv', { timeout: 8000 });

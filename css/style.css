@@ -23,9 +23,10 @@
   /* --primary-text 2026-11-05 從 #4f8dff 調亮：原本放在最淺的卡片底（--bg-elev-2）上只有 3.84，長輩看不清楚 */
   --primary-text: #6fa3ff;
   --accent-text: #ffb454;
-  --ok-text: #4fd6a6;
-  --danger-text: #ff6b6b;
-  --heart-text: #ff6b8b;
+  /* --ok-text／--danger-text／--heart-text 2026-11-09 照 --primary-text 同一個方向調亮（Yolin 授權）：原本在帶色的小標籤、最淺的卡片底上不到 4.5 */
+  --ok-text: #6fe3bb;
+  --danger-text: #ff9090;
+  --heart-text: #ff93aa;
   --warn-text: #ffb14e;
   --mark-text: #d4a017;
   /* 新成員徽章「新」：白字在亮粉上只有 2.72，2026-11-05 改深色字。

@@ -6,6 +6,12 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### ▶ 2026-11-09 Yolin 授權「不用他確認的全部處理掉、我建議的照建議做」：三件做完＋換版前全套（🔴 換版本身仍要他點頭，Worker 部署與推送都還沒做）
+- **① 景點卡選 A**：「重要／訂好位」兩顆鈕從景點卡搬到景點設定頁（「調整每天的行程」→ ⚙️ 設定）；點一下就存，只換那顆鈕的樣子，不重畫整頁（還沒存的名字不會被洗掉）。標好的標籤照樣顯示在卡片站名下。densitytest 41 項全綠（683px）。tagdaytest 改走真實路徑。
+- **② 讚不顯示數字（c 的第一步 a）**：相簿、動態、檢視器、任務頁、行程頁任務列都改成只標「我按過」；影片片尾拿掉「互相按了 N 個讚」。**沒改的**：回憶影片挑照片的排序（`memory.js` 的 likes，只排順序、不印字）、徽章「應援團」（數自己按讚留言的次數，規則沒動）。新測試 `likenumtest`（鏈 80→81）；同步規則（b）要投票，沒動。
+- **③ 深色第二段**：`--danger-text` #ff6b6b→#ff9090、`--ok-text` #4fd6a6→#6fe3bb、`--heart-text` #ff6b8b→#ff93aa；palettetest 的深色登記清單清空。原本不到 4.5 的 11 處（舊值 3.82～4.43，高對比 3.82～4.42）都過了。跟著變亮、原本就及格的 10 處：`.tag-ok`、`.ring-done .ring-label`、`.sync-banner.done`、`.crew-row .cr-line.ok`、`.place-card.on .pc-add`、`.exp-person-bal.pos`、`.qrow-status.is-done`、`.imp-badge`、`.qline.done .qline-sub`、`.share-live`（都是完成綠）。和紙主題的色值沒動。
+- 突變 `tools/mutations/mut_batch1109.json` 15 條（預期事前寫在 why）。圖在 `handoff_1104\tq\讚不顯示數字\`、`深色第二段\`。
+
 ### 🧷 2026-11-06 14:20 孤兒檢查擴大到整個 repo（Dispatch 交辦；做完照舊停著等 Yolin）
 - **起因**：查詢島 42 支測試只有 1 支會被跑到。我們盤點（14:15，HEAD 2679650）：像測試卻不在鏈上的只有 `scripts/livetest.mjs`（有登記）與 `tools/mutproof/evtest_mut.mjs`；後者在 `tools/`，**原本的孤兒檢查只看 `scripts/` 底下一層，看不到它**——今天沒事，下一支放進 `tools/` 就不會有任何警告。
 - **補法**：`scripts/affected.mjs` 加 `findOrphanPaths`／`ORPHAN_OK_PATHS`，`affectedtest` 加 [T17b]：母體＝`git ls-files`（已追蹤）＋`--others --exclude-standard`（未追蹤、沒被 ignore 的；新放還沒 commit 的也要報），scripts/ 底下一層以外的每一支程式檔（.mjs/.js/.cjs/.ts/.sh/.py/.ps1），名字像檢查又不在鏈上就紅；放行要逐路徑登記理由（8 條，含 `js/plancheck.js`——App 本體模組，名字剛好含 check）。git 失敗就丟例外，不當空清單。
@@ -2127,7 +2133,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
   實例：densitytest 那次把時間軸改窄，頁面變矮，scrolltest A 的「現在這一站」（最後一站）捲動時被文件底卡住，停的位置剛好跟正確答案一樣，
   「沒把日期列算進去」那條突變就不紅了（2094347）。**診斷法**：把版面暫時改回舊版再跑那條突變——舊版紅、新版不紅，就證明突變本身沒壞，是防線的涵蓋範圍變了。
   修法是補前置斷言，讓「情境沒成立」自己會紅（這次加的是「捲動沒有被文件底卡住」，並配一條只紅它的突變）。
-- `npm test` 是完整的鏈 **80 支**（2026-11-05 加 legtest，接在 mergetest 後面；同日深夜在最後加 legviewtest、tagdaytest、playertest、overviewtest；2026-11-06 在最後加 recordstest（待買／住宿／航班的畫面，41 條）；定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → dayjumptest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest → viewentrytest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **81 支**（2026-11-09 在最後加 likenumtest；2026-11-05 加 legtest，接在 mergetest 後面；同日深夜在最後加 legviewtest、tagdaytest、playertest、overviewtest；2026-11-06 在最後加 recordstest（待買／住宿／航班的畫面，41 條）；定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → dayjumptest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest → viewentrytest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

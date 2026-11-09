@@ -221,7 +221,9 @@ function gridView(tripId, trip, subs, spotOf, multi) {
     const grid = h('div', { class: 'pg-grid' });
     for (const sub of list) {
       const i = subs.indexOf(sub);
-      const likes = store.reactionsOf(sub.id).length;
+      // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多
+      const me = activeMemberId(tripId);
+      const mine = me ? store.myReaction(sub.id, me) : null;
       const cell = h('button', {
         class: 'pg-cell pg-wait', dataset: { i: String(i) }, 'aria-label': `第 ${idx + 1} 張照片`,
         onclick: async () => {
@@ -232,7 +234,7 @@ function gridView(tripId, trip, subs, spotOf, multi) {
         },
       },
         h('img', { alt: '', hidden: true, draggable: false }),
-        likes ? h('span', { class: 'pg-likes' }, `❤️ ${likes}`) : null,
+        mine ? h('span', { class: 'pg-likes' }, mine.emoji) : null,
         (multi && !store.isPhotoTagged(sub)) ? h('span', { class: 'pg-untag' }, '未標記') : null,
       );
       if (io) io.observe(cell); else loadCell(cell);
@@ -285,12 +287,10 @@ async function feedItem(sub, tripId, allSubs, multi) {
   item.append(actions, commentsBox);
 
   const redraw = () => {
-    const reacts = store.reactionsOf(sub.id);
     const me = activeMemberId(tripId);
     const mine = me ? store.myReaction(sub.id, me) : null;
     actions.replaceChildren(
       ...REACTIONS.map((emo) => {
-        const n = reacts.filter((r) => r.emoji === emo).length;
         return h('button', {
           class: 'react-btn' + (mine?.emoji === emo ? ' on' : ''),
           onclick: async () => {
@@ -299,7 +299,7 @@ async function feedItem(sub, tripId, allSubs, multi) {
             await store.toggleReaction(sub.id, actor, emo);
             redraw();
           },
-        }, emo, n ? String(n) : '');
+        }, emo);
       }),
     );
     const comments = store.commentsOf(sub.id);

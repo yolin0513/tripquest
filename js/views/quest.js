@@ -6,6 +6,7 @@ import { openTagger } from '../phototag.js';
 import { refImageFor } from '../enrich.js';
 import { themeForSpot, loadThemes } from '../theme.js';
 import { paintRef } from './trip.js';
+import { activeMemberId } from '../claim.js';
 
 export default async function quest(questId, { drawPage, setTop }) {
   const q = store.get(questId);
@@ -66,7 +67,9 @@ async function paintGrid(grid, questId, tripId) {
     const tag = store.photoTag(sub);
     const shooter = tag.photographerId ? store.getRaw(tag.photographerId) : null;
     const names = tag.subjectIds.map((id) => store.getRaw(id)?.displayName).filter(Boolean);
-    const likes = store.reactionsOf(sub.id).length;
+    // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多
+    const me = activeMemberId(tripId);
+    const mine = me ? store.myReaction(sub.id, me) : null;
     const cap = names.length
       ? '📸 ' + names.join('、')
       : (shooter?.displayName || sub.byDevice || '未指定');
@@ -77,7 +80,7 @@ async function paintGrid(grid, questId, tripId) {
         onclick: async () => { if (await openTagger(tripId, sub.id, subs)) refreshPage(); },
       }, subPhoto(sub, { className: '', alt: store.photoCaption(sub) || '' })),
       untagged ? h('span', { class: 'untag-dot' }, '未標記') : null,
-      likes ? h('span', { class: 'mini-likes' }, '❤️ ' + likes) : null,
+      mine ? h('span', { class: 'mini-likes' }, mine.emoji) : null,
       h('figcaption', {}, cap),
     ));
   }

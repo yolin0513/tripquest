@@ -129,11 +129,10 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
         h('div', { class: 'pv-cap-1' }, (who || sub.byDevice || '旅伴') + ' 拍的' + (subjects.length ? ` · 📸 ${subjects.join('、')}` : '')),
         h('div', { class: 'pv-cap-2' }, [spot?.name, quest?.title].filter(Boolean).join(' · ') + (cap ? `　「${cap}」` : '')),
       );
-      const rs = store.reactionsOf(sub.id);
+      // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多
       const me = activeMemberId(tripId);
       const mine = me ? store.myReaction(sub.id, me) : null;
       reacts.replaceChildren(...REACTIONS.map((emo) => {
-        const n = rs.filter((r) => r.emoji === emo).length;
         return h('button', {
           class: 'react-btn pv-react' + (mine?.emoji === emo ? ' on' : ''),
           onclick: async () => {
@@ -143,7 +142,7 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
             changed = true;
             drawMeta();
           },
-        }, emo, n ? String(n) : '');
+        }, emo);
       }));
       const cs = store.commentsOf(sub.id);
       commentBtn.textContent = `💬 留言${cs.length ? ' ' + cs.length : ''}`;
