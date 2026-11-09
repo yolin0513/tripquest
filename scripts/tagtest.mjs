@@ -212,7 +212,8 @@ try {
     hasAddPhoto: !!document.querySelector('.addphoto-row, .addphoto-icons'),
   }));
   // v1.48 起多一個「地圖位置」（查詢／貼座標／清除）—— 使用者要求的手動修正入口
-  // 2026-11-09 多一個「標籤」（重要／訂好位，從景點卡搬過來，卡片才不會超過 densitytest 的高度）
+  // 完整清單、逐欄比對（不要改成「至少包含」：多一欄沒人紅，就抓不到意外加進來的欄位）。
+  // 「標籤」欄：commit 8c9939f 加的，Yolin 選 A，重要／訂好位從景點卡搬過來，卡片才不會超過 densitytest 的高度。
   if (spotPage.labels.join('／') === '景點名稱／幾點到／停留多久／標籤（點一下就存）／地圖位置' && !spotPage.hasQuestList && !spotPage.hasAddPhoto) {
     ok('景點設定頁只剩改名／時間／停留／標籤／位置／刪除，任務與加照片都不在這裡了');
   } else fail('景點設定頁沒簡化乾淨：' + JSON.stringify(spotPage));
