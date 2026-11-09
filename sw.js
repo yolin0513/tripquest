@@ -4,7 +4,7 @@
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  * - 例外：OpenStreetMap 地圖圖磚進獨立的 TILE_CACHE（只存看過的，見 tile()）
  */
-const VERSION = 'tripquest-v1.74.11';
+const VERSION = 'tripquest-v1.75.0';
 const SHELL = `${VERSION}-shell`;
 // 內建配樂：獨立快取、跨版本保留（檔名即版本，內容不會變）—— 15MB 不進 SHELL，
 // 不預快取、點了才下載；升版不重抓。
