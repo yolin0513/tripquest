@@ -104,6 +104,8 @@
 - 新測試 `likesynctest`（兩台真裝置、B 時鐘慢 1 小時：S1／S1b／S2×2／S3 三方收斂——投票 R2 反對 (c) 的唯一理由，寫成測試）、`matchinputtest`（秒級、掃描型 → 進底線與 SCAN_ONLY，底線 12→13）；鏈 81→83。workertest 加一個最小的【讚】情境（按讚→換表情→收回）。albumtest／layouttest／livetest／synctest／shotxl 改成 like。
 - 突變 `tools/mutations/mut_v176.json` 24 條，預期事前寫，24/24 紅；`mut_batch1109.json` 刪 5 條（守的是 v1.75.0「不准有數字」，那段程式已刻意反轉、真實路徑走不到；替代在 mut_v176）。
 - **測試範圍（Yolin 2026-11-10 工作方式指示：測試只做最小範圍）**：**這不是全套**。跑過、綠：likesynctest、likenumtest、matchinputtest、workertest、albumtest、synctest、affectedtest、shelltest、mutlint、mutcmdtest（10 支）。**沒跑**：其餘 73 支，包括改了種子資料的 layouttest（單支約 11 分鐘）與 livetest（不在鏈上）。全套曾開跑兩次：第一次停在 affectedtest（STATUS 鏈長度、掃描型登記，都已修）；第二次跑到 6/83 時依新的工作方式指示中止。
+- **🌙 守夜模式要補的第一項：`layouttest` 改了沒跑。** v1.76.0 把它造的假讚從舊式 reaction 改成 like（畫面因此會寫出人數），但單支約 11 分鐘，上班模式下沒跑——**這是這批唯一「改了卻完全沒驗過」的東西**；它若紅，會在下次有人跑全套時才出現，到時看不出是這批改的。補跑：`node scripts/layouttest.mjs`（會開瀏覽器，先問 Dispatch 要機器）。
+- 突變帳本（`.logs/mutate-ledger.jsonl`，不進版控）裡從 mut_batch1109 刪掉的那 5 條，2026-11-10 **手動**追加了 `event:"void"` 紀錄標成作廢（原紀錄保留；備份 `.logs/mutate-ledger.before-void-1110.jsonl`），**沒跑 mutstale**。`mutate.mjs --recover` 讀得懂改過的帳本（回 0）。
 - 另案（只記、不做；來源 2026-11-10 投票）：Worker 沒檢查整筆 `updatedAt` 範圍（遠在未來的時間戳會讓那筆從此改不動）；`server/index.mjs` 自己一份 APPEND_ONLY、沒從 merge.js 匯入。
 
 ### 🔑 2026-11-10 換版卡在部署憑證：踩坑＋工作紀律
