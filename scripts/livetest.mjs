@@ -153,7 +153,7 @@ try {
   const aPull = await A.page.evaluate(async (tid) => {
     const s = await import('./js/store.js');
     const subs = s.submissionsOfTrip(tid);
-    return { subs: subs.length, reacts: subs.reduce((n, x) => n + s.reactionsOf(x.id).length, 0) };
+    return { subs: subs.length, reacts: subs.reduce((n, x) => n + s.likesOf(x.id).count, 0) };
   }, setup.tid);
   if (aPull.subs === 3) ok('裝置 A 收到裝置 B 的照片（共 3 張）'); else fail('裝置 A 投稿數：' + aPull.subs);
   if (aPull.reacts === 1) ok('裝置 A 收到裝置 B 的讚'); else fail('裝置 A 讚數：' + aPull.reacts);

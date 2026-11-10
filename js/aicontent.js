@@ -362,7 +362,7 @@ export async function ensureRecapText(tripId, facts) {
       prompt:
         `旅程：${facts.title}\n` +
         `${facts.dayCount} 天、${facts.people} 人、去了 ${facts.spotCount} 個地方、拍 ${facts.photoCount} 張、` +
-        `完成 ${facts.doneCount}/${facts.questTotal} 個任務、走約 ${facts.distanceKm} 公里、互動 ${facts.interactions} 次。\n` +
+        `完成 ${facts.doneCount}/${facts.questTotal} 個任務、走約 ${facts.distanceKm} 公里${facts.interactions != null ? `、互動 ${facts.interactions} 次` : ''}。\n` +
         (facts.weather ? `天氣最高 ${facts.weather.hi} 度、最低 ${facts.weather.lo} 度、${facts.weather.rainyDays || 0} 天下雨。\n` : '') +
         (facts.topSpot ? `最多照片：${facts.topSpot.name}（${facts.topSpot.photos} 張）。\n` : '') +
         (facts.longestSpot ? `待最久：${facts.longestSpot.name}。\n` : '') +

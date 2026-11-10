@@ -148,10 +148,10 @@ try {
     const dr = await drain();
     const cursorAfter = await sync.getCursor(gid);
     const raw = await fetch(`${apiUrl}/pull?g=${gid}&since=0`, { headers: { authorization: 'Bearer ' + (await import('./js/store.js')).getRaw(gid).syncSecret } }).then(r => r.json());
-    window.__dbg = { dr, cursorBefore, cursorAfter, serverRecs: raw.records.length, serverSubs: raw.records.filter(r => r.type === 'submission').length, serverReacts: raw.records.filter(r => r.type === 'reaction').length };
+    window.__dbg = { dr, cursorBefore, cursorAfter, serverRecs: raw.records.length, serverSubs: raw.records.filter(r => r.type === 'submission').length, serverLikes: raw.records.filter(r => r.type === 'like').length };
     const s = await import('./js/store.js');
     const subs = s.submissionsOfTrip(tid);
-    const reacts = subs.reduce((n, x) => n + s.reactionsOf(x.id).length, 0);
+    const reacts = subs.reduce((n, x) => n + s.likesOf(x.id).count, 0);
     const db = await import('./js/db.js');
     const keys = new Set(await db.allBlobKeys());
     const bThumb = subs.filter((x) => keys.has(x.thumbHash)).length;

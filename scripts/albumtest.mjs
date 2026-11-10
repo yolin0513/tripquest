@@ -223,11 +223,15 @@ try {
     const pv = document.querySelector('.pv');
     const on = pv.querySelector('.pv-react.on')?.textContent || '';
     const subs = s.submissionsOfTrip(tid).sort((a, b) => (a.takenAt || a.createdAt) - (b.takenAt || b.createdAt));
-    return { on, reacts: s.reactionsOf(subs[pv.__tq.index].id).length };
+    const sid = subs[pv.__tq.index].id;
+    const likes = s.exportRecords().filter((r) => r.type === 'like' && r.submissionId === sid);
+    return { on, likes: likes.length, emoji: likes[0]?.emoji, count: s.likesOf(sid).count,
+      cnt: pv.querySelector('.pv-react-count')?.textContent || '' };
   }, ids.tid);
-  yes(liked.on.includes('❤️') && liked.reacts === 1, `檢視器按 ❤️ → 同一筆 reaction 記錄（${liked.on.trim()}）`);
-  // 2026-11-09：讚只顯示「我按了沒」——取消讚不會同步，筆數在別人手機上偏多。前置：上一條已確認真的有 1 筆紀錄
-  yes(!/\d/.test(liked.on), `檢視器的 ❤️ 鈕不顯示數字（「${liked.on.trim()}」）`);
+  yes(liked.on.includes('❤️') && liked.likes === 1 && liked.emoji === '❤️' && liked.count === 1,
+    `檢視器按 ❤️ → 一筆 like 記錄、emoji ❤️、1 人（${liked.on.trim()}；${liked.likes} 筆）`);
+  // v1.76.0：鈕本身不寫數字，人數寫在鈕後面「N 人按讚」（likenumtest 逐畫面守）
+  yes(!/\d/.test(liked.on) && liked.cnt === '1 人按讚', `檢視器：鈕不寫數字、後面寫「1 人按讚」（鈕「${liked.on.trim()}」、計數「${liked.cnt}」）`);
   // 留言
   await page.evaluate(() => document.querySelector('.pv-cbtn').click());
   await sleep(300);
@@ -247,7 +251,8 @@ try {
   await sleep(700);
   const closed = await page.evaluate(() => ({ pv: !!document.querySelector('.pv'), hash: location.hash, likes: document.querySelectorAll('.pg-likes').length, likeText: document.querySelector('.pg-likes')?.textContent || '' }));
   yes(!closed.pv && closed.hash.includes('/people'), '✕ 關閉 → 回到相簿頁（沒有退出行程）');
-  yes(closed.likes === 1 && closed.likeText.includes('❤️') && !/\d/.test(closed.likeText), `格子上標出「我按過」、不寫數字（「${closed.likeText}」）`);
+  // v1.76.0：讚數回到畫面（likenumtest 逐畫面守）；這裡只確認檢視器裡按的讚，關掉之後格子上跟著更新成 1 人
+  yes(closed.likes === 1 && closed.likeText.trim() === '❤️ 1', `關掉檢視器後格子上更新成「❤️ 1」（「${closed.likeText}」）`);
   // Android 返回鍵（history.back）也關
   await page.evaluate(() => document.querySelectorAll('.pg-cell')[0].click());
   await page.waitForSelector('.pv', { timeout: 8000 });

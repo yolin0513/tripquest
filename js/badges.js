@@ -69,8 +69,12 @@ export function statsFor(tripId, memberId) {
   const foodDone = foodQuests.filter((q) => questCredit.get(q.id)?.has(memberId));
 
   const tripProg = store.tripProgress(tripId);
-  const socialCount = store.exportRecords().filter((r) =>
-    (r.type === 'reaction' || r.type === 'comment') && r.tripId === tripId && r.actorId === memberId).length;
+  // 應援團：我現在按著讚的照片數＋我的留言數（v1.76.0，投票：不准再數紀錄筆數）。
+  // 只看新式 like：舊式 reaction 取消不會同步，在別人手機上可能是已經收回的讚（舊行程不用管，Yolin 2026-11-10）
+  const recs = store.exportRecords();
+  const likedSubs = new Set(recs.filter((r) => r.type === 'like' && r.tripId === tripId && r.actorId === memberId)
+    .map((r) => r.submissionId).filter((sid) => store.likesOf(sid, memberId).mine));
+  const socialCount = likedSubs.size +recs.filter((r) => r.type === 'comment' && r.tripId === tripId && r.actorId === memberId).length;
 
   const day1 = trip && trip.startDate;
   const earlyBird = doneByMe.some((q) => {

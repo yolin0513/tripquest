@@ -5,6 +5,7 @@ import { spotTimes } from './spottime.js';
 import { haversine } from './geo.js';
 import { creditOf, shooterOf, subjectsOf, helpedOthers, earnedBadges, BADGES } from './badges.js';
 import { KIND_META } from './ui.js';
+import { LIKE_TYPE, likeId } from './likes.js';
 
 function retracted() {
   const s = new Set();
@@ -19,7 +20,13 @@ export async function buildRecap(tripId) {
   const quests = store.questsOfTrip(tripId);
   const gone = retracted();
   const subs = store.exportRecords().filter((r) => r.type === 'submission' && r.tripId === tripId && !gone.has(r.id));
-  const reactions = store.exportRecords().filter((r) => r.type === 'reaction' && r.tripId === tripId);
+  // 讚（v1.76.0）：只數現在按著的 like，一人一張一次（js/likes.js）。行程裡有舊式 reaction 時，
+  // 「互動」數不出準的數字（舊式取消不會同步）→ interactions／social 給 null、畫面不顯示，不給錯的數字。過渡用，拿掉條件見 likes.js
+  const subIds = new Set(subs.map((s) => s.id));
+  const allRecs = store.exportRecords();
+  const legacyLikes = allRecs.some((r) => r.type === 'reaction' && subIds.has(r.submissionId));
+  const reactions = allRecs.filter((r) => r.type === LIKE_TYPE && subIds.has(r.submissionId) && !r.deleted
+    && typeof r.emoji === 'string' && r.emoji !== '' && r.actorId && r.id === likeId(r.submissionId, r.actorId));
   const comments = store.exportRecords().filter((r) => r.type === 'comment' && r.tripId === tripId);
 
   // 路線距離（依 day/order 連線）
@@ -59,7 +66,7 @@ export async function buildRecap(tripId) {
       shot: shot.length,
       helped: shot.filter((s) => helpedOthers(s, m.id)).length,
       inPhotos: subs.filter((s) => subjectsOf(s).includes(m.id)).length,
-      social: [...reactions, ...comments].filter((r) => r.actorId === m.id).length,
+      social: legacyLikes ? null : [...reactions, ...comments].filter((r) => r.actorId === m.id).length,
       badges: earnedBadges(tripId, m.id).length,
     };
   });
@@ -109,8 +116,8 @@ export async function buildRecap(tripId) {
     photoCount: subs.length,
     people: members.length,
     distanceKm: Math.round(distM / 100) / 10,
-    interactions: reactions.length + comments.length,
-    reactions: reactions.length,
+    interactions: legacyLikes ? null : reactions.length + comments.length,
+    reactions: legacyLikes ? null : reactions.length,
     comments: comments.length,
     foods,
     perMember,

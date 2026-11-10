@@ -78,10 +78,10 @@ export function themeForTrip(spots, themes = _themes) {
 //   2. 那筆還在景點庫裡（placeById）
 //   3. 用現在的比對規則拿景點名字再比一次，還是同一筆（使用者改過名字、或景點庫改過，就不算）
 //   4. 取景點庫那筆的 primary、再來 tags，經 themes.json 的 byTag 換成類別；換出來是中性的 journey 也當作沒有
-// 已知限制：建立時景點名字就被換成景點庫的名字（generate.js），使用者當初打的字沒存下來——
-// v1.74 以前比對很鬆時的誤命中，第 3 步複核不出來（拿景點庫的名字再比，一定比得回同一筆）。
-// **「複核通過」不等於「配對正確」**：第 3 步只擋得到兩種——使用者改過名字、景點庫那筆被刪或改過；
-// 擋不到「當年就比錯」。要擋那種，得從建立時存下使用者打的原始名字（新欄位，資料結構變更，Yolin 決定要不要開投票）。
+// 建立時景點名字就被換成景點庫的名字（generate.js），所以第 3 步拿景點庫的名字再比，一定比得回同一筆——
+// **「複核通過」不等於「配對正確」**：第 3 步只擋得到兩種——使用者改過名字、景點庫那筆被刪或改過；擋不到「當年就比錯」。
+// v1.76.0 起（2026-11-10 投票＋Yolin 選 B）建立時存下原本打的字 matchInput，下面多一步拿它再比——擋得到當年就比錯。
+// 已知限制：v1.76.0 以前建的景點（以及舊手機建的）沒有 matchInput，那些照樣擋不到；不回頭補（猜不出來當年打了什麼）。
 // lookup：{ placeById(id), matchPlace(name, cityHint) }，兩支都要同步；由 generate.js 的 loadPlaceLookup() 先載好。
 // 沒有 lookup → 一律當作沒有（保守方向）。回傳一律帶來源，下一個人看得出這個類別是怎麼來的。
 export function trustedTheme(spot, lookup, themes = _themes) {
@@ -93,6 +93,13 @@ export function trustedTheme(spot, lookup, themes = _themes) {
   if (!place) return res(null, { reason: 'place-gone' });
   const again = lookup.matchPlace(spot.name || '', spot.region || '');
   if (!again || again.id !== placeId) return res(null, { reason: 'recheck-mismatch' });
+  // v1.76.0 多一步：建立時存了使用者原本打的字（matchInput，generate.js），就拿那串字再比一次，要比回同一筆——
+  // 擋得到「當年就比錯」。只在它是字串時做；null（階層選擇，沒打字）與沒有這個欄位（v1.76.0 以前建的、或舊手機建的）
+  // 維持上面的行為，不改家人眼前的畫面。一律嚴格比較（undefined＝不知道，不能當成 null 或空字串）。
+  if (typeof spot.matchInput === 'string') {
+    const born = lookup.matchPlace(spot.matchInput, spot.region || '');
+    if (!born || born.id !== placeId) return res(null, { reason: 'input-mismatch' });
+  }
   const byTag = (themes.map && themes.map.byTag) || {};
   const src = [['primary', place.primary], ...(place.tags || []).map((t) => ['tag', t])].find(([, t]) => t && byTag[t]);
   if (!src) return res(null, { recheck: true, reason: 'no-tag-map' });

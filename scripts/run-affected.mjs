@@ -30,6 +30,9 @@ import { predict, classify, loadTimes, saveTimes, loadHistory, appendHistory } f
 export const DEFAULT_TIMEOUT_SEC = 1800;
 // 只掃描、不執行 js 的測試：它們讀整個 js/ 目錄，引用不算成「涵蓋」（否則悶住放大器 D）；一律要在底線裡（affectedtest 驗）
 export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'themetrusttest', 'viewentrytest'];
+// matchinputtest：掃整個 js/ 找誰碰 matchInput（v1.76.0；同 themetrusttest，算涵蓋會悶住放大器 D）。
+// 另起一行加，不改上面那一行：好幾份突變清單的 find 是上面那一整行，改了它們就全部失效（mutlint 報死掉的突變）
+SCAN_ONLY.push('matchinputtest');
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 

@@ -79,7 +79,7 @@ export function collectSlides(tripId) {
       day: spot?.day || 1, spotOrder: spot?.order ?? 0, spotId: spot?.id || 'x',
       memberName: member?.displayName || '',
       memberId: tag.photographerId || s.memberId || null,
-      likes: store.reactionsOf(s.id).length,
+      likes: store.likesOf(s.id).count,   // 只用來排序（精華版），片尾不印數字
       takenAt: s.takenAt || s.createdAt,
     });
   }

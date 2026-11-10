@@ -18,6 +18,9 @@ import path from 'node:path';
 // ---------- 底線（R2）：不論改了什麼，每版都跑 ----------
 export const BASELINE = ['affectedtest', 'guesscensustest', 'themetrusttest', 'validate-places', 'zhtest', 'nearbytest', 'emptytest', 'tabbartest', 'gatelint', 'convtest', 'shelltest', 'viewentrytest'];   // viewentrytest：主畫面只有路由器一個入口（新的繞路可能出現在任何一支 js，只有每次都跑才抓得到；2026-10-28 settletest 的根因）；themetrusttest：讀存著的 .theme 的每一處都要登記用途，給使用者看的一律走可信類別（同 guesscensustest 的理由，2026-10-27）；guesscensustest：照名字猜類別的每一個呼叫點都要登記用途（新增的呼叫點可能落在任何一支 js，只有每次都跑才抓得到；2026-10-27 一處一處撞到三次）；shelltest：每支 js 都在 SW 離線清單（新增 js 檔不一定會改到 sw.js，漏列時有網路照樣正常，只有每次都跑才抓得到；v1.74.11 漏過 tripday.js）；gatelint：推送閘的壞寫法掃描（共用慣例 v9 §5.16），不論改了什麼每版都跑；convtest：共用慣例副本跟主檔一致（主檔在別的 repo，它改了本 repo 什麼都沒動，只有每次都跑才抓得到）
 
+// matchinputtest：只准 generate.js 寫 matchInput 的登記（新的寫入點可能出現在任何一支 js；同 themetrusttest 的理由，v1.76.0）。
+// 另起一行加，不改上面那一行：好幾份突變清單的 find 是那一行的片段，改了就失效
+BASELINE.push('matchinputtest');
 // ---------- 放大器（R4） ----------
 // imgtest：案例 ②（v1.41）就是 trip.js 的畫面結構改動讓它紅的（修訂 1-C）
 export const AMP_A_TESTS = ['layouttest', 'tabbartest', 'scrolltest', 'densitytest', 'recapcardtest', 'screenshots', 'tagtest', 'walltest', 'imgtest'];

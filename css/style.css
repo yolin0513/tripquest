@@ -1062,6 +1062,9 @@ body.pv-open { overflow: hidden; }
 }
 .react-btn.on { background: color-mix(in srgb, var(--heart) 22%, transparent); border-color: var(--heart); }
 .react-btn:active { transform: scale(0.95); }
+/* v1.76.0：按讚人數寫在表情鈕後面（「N 人按讚」）；0 人或照片上有舊式讚時不出現（js/likes.js） */
+.react-count { align-self: center; color: var(--muted); font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+.pv-react-count { color: rgba(255,255,255,.85); }
 .feed-item .fi-comments { padding: 0 14px 12px; }
 .fi-comment { font-size: 0.95rem; margin: 4px 0; }
 .fi-comment b { font-weight: 800; }

@@ -939,7 +939,9 @@ function crewInfo(tripId, t) {
     let lastAt = Math.max(0, ...mine.map((c) => c.claimedAt || 0),
       ...shot.map((s) => s.takenAt || s.createdAt || 0),
       ...recs.filter((r) => (r.type === 'reaction' || r.type === 'comment') && r.actorId === m.id && r.tripId === tripId)
-        .map((r) => r.createdAt || 0));
+        .map((r) => r.createdAt || 0),
+      // v1.76.0 的讚是一筆會被改的 like（換表情、收回），最後活動時間看 updatedAt
+      ...recs.filter((r) => r.type === 'like' && r.actorId === m.id && r.tripId === tripId).map((r) => r.updatedAt || r.createdAt || 0));
     return { m, joined: !!mine.length, joinedAt: Number.isFinite(joinedAt) ? joinedAt : null,
       devices: mine.length, photos: shot.length, lastAt: lastAt || null,
       isNew: !!mine.length && Date.now() - joinedAt < 24 * 3600000 };
@@ -1176,9 +1178,9 @@ function questLine(q, spot, themeKey) {
   const done = store.isQuestDone(q.id);
   const subs = store.submissionsOf(q.id);
   const km = KIND_META[q.kind] || KIND_META.thing;
-  // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多，數字不可信
+  // 任務列只標「我按過」、不放數字（Yolin 2026-11-10 第 4 題）：一列可能有好幾張照片，加總的數字容易被讀錯
   const meId = activeMemberId(q.tripId);
-  const iLiked = !!meId && subs.some((s) => store.myReaction(s.id, meId));
+  const iLiked = !!meId && subs.some((s) => store.likesOf(s.id, meId).mine);
   const refPick = () => refImageFor(q, spot, subs[0] && (subs[0].thumbHash || subs[0].photoHash));
 
   // 完成的任務，縮圖就是他自己拍的那張（refImageFor 本來就優先用投稿）

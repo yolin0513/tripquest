@@ -67,9 +67,8 @@ async function paintGrid(grid, questId, tripId) {
     const tag = store.photoTag(sub);
     const shooter = tag.photographerId ? store.getRaw(tag.photographerId) : null;
     const names = tag.subjectIds.map((id) => store.getRaw(id)?.displayName).filter(Boolean);
-    // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多
-    const me = activeMemberId(tripId);
-    const mine = me ? store.myReaction(sub.id, me) : null;
+    // 讚數＝按著讚的不同的人數（v1.76.0，js/likes.js）；照片上有舊式讚時只標「我按過」、不寫數字
+    const lk = store.likesOf(sub.id, activeMemberId(tripId));
     const cap = names.length
       ? '📸 ' + names.join('、')
       : (shooter?.displayName || sub.byDevice || '未指定');
@@ -80,7 +79,8 @@ async function paintGrid(grid, questId, tripId) {
         onclick: async () => { if (await openTagger(tripId, sub.id, subs)) refreshPage(); },
       }, subPhoto(sub, { className: '', alt: store.photoCaption(sub) || '' })),
       untagged ? h('span', { class: 'untag-dot' }, '未標記') : null,
-      mine ? h('span', { class: 'mini-likes' }, mine.emoji) : null,
+      lk.showCount ? h('span', { class: 'mini-likes' }, `${lk.mine || '❤️'} ${lk.count}`)
+        : lk.mine ? h('span', { class: 'mini-likes' }, lk.mine) : null,
       h('figcaption', {}, cap),
     ));
   }

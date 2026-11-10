@@ -54,7 +54,8 @@ try {
         await s.put({ id: subid, type: 'submission', tripId: tid, questId: qid, memberId: me,
           photoHash: 'h1', thumbHash: 'h1', createdAt: Date.now() - q * 60000 });
         for (let r = 0; r <= q % 3; r++) {
-          await s.put({ id: uuid(), type: 'reaction', tripId: tid, submissionId: subid, actorId: uuid(), emoji: '❤️', createdAt: Date.now() });
+          const actor = uuid();
+          await s.put({ id: `like:${subid}:${actor}`, type: 'like', tripId: tid, submissionId: subid, actorId: actor, emoji: '❤️', createdAt: Date.now() });
         }
         q++;
       }

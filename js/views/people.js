@@ -221,9 +221,8 @@ function gridView(tripId, trip, subs, spotOf, multi) {
     const grid = h('div', { class: 'pg-grid' });
     for (const sub of list) {
       const i = subs.indexOf(sub);
-      // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多
-      const me = activeMemberId(tripId);
-      const mine = me ? store.myReaction(sub.id, me) : null;
+      // 讚數＝按著讚的不同的人數（v1.76.0，js/likes.js）；照片上有舊式讚時只標「我按過」、不寫數字
+      const lk = store.likesOf(sub.id, activeMemberId(tripId));
       const cell = h('button', {
         class: 'pg-cell pg-wait', dataset: { i: String(i) }, 'aria-label': `第 ${idx + 1} 張照片`,
         onclick: async () => {
@@ -234,7 +233,8 @@ function gridView(tripId, trip, subs, spotOf, multi) {
         },
       },
         h('img', { alt: '', hidden: true, draggable: false }),
-        mine ? h('span', { class: 'pg-likes' }, mine.emoji) : null,
+        lk.showCount ? h('span', { class: 'pg-likes' }, `${lk.mine || '❤️'} ${lk.count}`)
+          : lk.mine ? h('span', { class: 'pg-likes' }, lk.mine) : null,
         (multi && !store.isPhotoTagged(sub)) ? h('span', { class: 'pg-untag' }, '未標記') : null,
       );
       if (io) io.observe(cell); else loadCell(cell);
@@ -287,12 +287,11 @@ async function feedItem(sub, tripId, allSubs, multi) {
   item.append(actions, commentsBox);
 
   const redraw = () => {
-    const me = activeMemberId(tripId);
-    const mine = me ? store.myReaction(sub.id, me) : null;
+    const lk = store.likesOf(sub.id, activeMemberId(tripId));
     actions.replaceChildren(
       ...REACTIONS.map((emo) => {
         return h('button', {
-          class: 'react-btn' + (mine?.emoji === emo ? ' on' : ''),
+          class: 'react-btn' + (lk.mine === emo ? ' on' : ''),
           onclick: async () => {
             const actor = await ensureMember(tripId);
             if (!actor) return;
@@ -301,6 +300,7 @@ async function feedItem(sub, tripId, allSubs, multi) {
           },
         }, emo);
       }),
+      lk.showCount ? h('span', { class: 'react-count' }, `${lk.count} 人按讚`) : null,
     );
     const comments = store.commentsOf(sub.id);
     commentsBox.replaceChildren(

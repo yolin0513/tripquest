@@ -144,10 +144,11 @@ try {
       const sid = uuid();
       await s.put({ id: sid, type: 'submission', tripId: tid, questId: all[qi].id, memberId: me,
         photoHash: 'h1', thumbHash: 'h1', createdAt: Date.now() - qi * 60000 });
-      // 兩三個讚（reaction 記錄）
+      // 一到三個讚（v1.76.0 起是 like 記錄，id 固定 like:<照片>:<人>；畫面會寫出人數，排版要容得下）
       for (let k = 0; k < (qi % 3) + 1; k++) {
-        await s.put({ id: uuid(), type: 'reaction', tripId: tid, groupId: gid, submissionId: sid,
-          actorId: k === 0 ? me : uuid(), emoji: '❤️', createdAt: Date.now() });
+        const actor = k === 0 ? me : uuid();
+        await s.put({ id: `like:${sid}:${actor}`, type: 'like', tripId: tid, submissionId: sid,
+          actorId: actor, emoji: '❤️', createdAt: Date.now() });
       }
     }
     // 一筆分帳（兩人分）。2026-10-29 前欄位寫成 shareIds，程式讀的是 participants（js/expenses.js）——

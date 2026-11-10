@@ -26,6 +26,13 @@ import { loadPhrases, makeCtx, composeBlurb, composeQuests } from './compose.js'
 let _index = null;
 let _templates = null;
 const _cities = new Map();          // cityId -> places[]
+export const MATCH_INPUT_MAX = 40;  // matchInput 超過這個字數就不存（2026-11-10 投票 N2：最少外流）
+// 對上景點庫時要存的 matchInput：階層選擇 → null；打的字 ≤ 40 字 → 那串字；超過 → undefined（不存）
+export function matchInputFor(name, viaPick) {
+  if (viaPick) return null;
+  const s = String(name);
+  return s.length <= MATCH_INPUT_MAX ? s : undefined;
+}
 let _allLoadedForSearch = false;
 
 const norm = (s) => String(s || '').toLowerCase()
@@ -240,8 +247,8 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
     if (!it) continue;
     const spotId = uuid();
     const day = it.day || 1;
-    let place = null;
-    if (it.placeId) { await loadAllForSearch(); place = placeById(it.placeId); }
+    let place = null, viaPick = false;
+    if (it.placeId) { await loadAllForSearch(); place = placeById(it.placeId); viaPick = !!place; }
     if (!place && it.name) place = await matchPlace(it.name, it.region || region);
 
     let spot;
@@ -256,6 +263,12 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
         must: place.must || [], primary: place.primary || '',
         tags: place.tags || [], source: 'curated', placeId: place.id,
       };
+      // matchInput（v1.76.0，2026-11-10 投票＋Yolin 選 B）：送進 matchPlace 的那串字——景點名字在上面被換成景點庫的名字，
+      // 原本的字以前沒留下，「當年就比錯」複核不出來（theme.js trustedTheme）。只在對上景點庫時寫：
+      //   階層選擇（帶 placeId）→ null（使用者沒打字）；超過 40 字 → 不存（鍵不存在＝不知道，最少外流）。
+      // 只准這裡寫（matchinputtest 用登記制守）；改名時不跟著變；不顯示給使用者；不進 merge.js 的 TRACKED；分享連結不帶。
+      const input = matchInputFor(it.name, viaPick);
+      if (input !== undefined) spot.matchInput = input;
     } else {
       // 沒對上策展資料庫：留白。不猜類型、不出題、不寫介紹，表情符號用中性的地點圖示
       // （`nameEmoji()` 是照名字猜的 —— 牛排館「大佛牛排」會得到 🛕，那也是使用者看得到的猜測）。

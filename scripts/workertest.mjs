@@ -211,6 +211,20 @@ try {
     got = (await pullAll()).find((x) => x.id === 'U1');
     yes(r.ok && got && got.a === 1 && JSON.stringify(got.b) === '{"c":[1,2]}' && got._f === undefined,
       '【新紀錄】不在表上的型別：整筆存整筆回、_f 被拿掉（舊版 Worker 對 buy／stay／flight 就會這樣）', JSON.stringify(got));
+
+    // ---------- 讚（v1.76.0，投票 (c)）：固定 id 的 like 紀錄，整筆後寫者贏 ----------
+    // 投票說「伺服器不用改」；這裡用真的 Worker＋D1 證明最小的一輪：按讚 → 換表情 → 收回，每一步都寫得進去
+    // （沒有變成「已存在就不動」——那是 APPEND_ONLY 的行為，like 不在裡面）。最小範圍（Yolin 2026-11-10 工作方式指示）。
+    const tL = Date.now() - 4_000;
+    const like = { id: 'like:S9:m1', type: 'like', tripId: 'r1', submissionId: 'S9', actorId: 'm1', createdAt: tL, deviceId: 'dA' };
+    const steps = [['❤️', '按讚'], ['👍', '換表情'], [null, '收回']];
+    const seen = [];
+    for (const [i, [emo]] of steps.entries()) {
+      r = await push(gid, secret, [{ ...like, emoji: emo, updatedAt: tL + i }]);
+      got = (await pullAll()).find((x) => x.id === like.id);
+      seen.push(r.ok && got ? got.emoji : '（沒讀到）');
+    }
+    yes(JSON.stringify(seen) === JSON.stringify(['❤️', '👍', null]), `【讚】真的 Worker：按讚 → 換表情 → 收回，每一步伺服器上都是新的值（實得 ${JSON.stringify(seen)}）`);
   }
 
   // ---------- /push 的大小上限要在驗證之前（v1.73.2）----------

@@ -129,12 +129,12 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
         h('div', { class: 'pv-cap-1' }, (who || sub.byDevice || '旅伴') + ' 拍的' + (subjects.length ? ` · 📸 ${subjects.join('、')}` : '')),
         h('div', { class: 'pv-cap-2' }, [spot?.name, quest?.title].filter(Boolean).join(' · ') + (cap ? `　「${cap}」` : '')),
       );
-      // 只顯示「我按了沒」，不顯示數字（2026-11-09）：取消讚不會同步，筆數在別人手機上偏多
+      // 讚數＝按著讚的不同的人數（v1.76.0，js/likes.js）；0 不寫、照片上有舊式讚時不寫
       const me = activeMemberId(tripId);
-      const mine = me ? store.myReaction(sub.id, me) : null;
+      const lk = store.likesOf(sub.id, me);
       reacts.replaceChildren(...REACTIONS.map((emo) => {
         return h('button', {
-          class: 'react-btn pv-react' + (mine?.emoji === emo ? ' on' : ''),
+          class: 'react-btn pv-react' + (lk.mine === emo ? ' on' : ''),
           onclick: async () => {
             const actor = await ensureMember(tripId);
             if (!actor) return;
@@ -143,7 +143,7 @@ export function openViewer(tripId, subs, index = 0, { onTag = null } = {}) {
             drawMeta();
           },
         }, emo);
-      }));
+      }), ...(lk.showCount ? [h('span', { class: 'react-count pv-react-count' }, `${lk.count} 人按讚`)] : []));
       const cs = store.commentsOf(sub.id);
       commentBtn.textContent = `💬 留言${cs.length ? ' ' + cs.length : ''}`;
       sheetList.replaceChildren(...(cs.length ? cs.map((c) => {

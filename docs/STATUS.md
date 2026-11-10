@@ -87,6 +87,25 @@
 - **踩坑：Session 的 Bash 工具讀不到 wrangler 登入，要用 Claude App 的終端機分頁。** Yolin 在終端機分頁登入後，從 Bash 跑 whoami 一直是未登入：從 Bash 看，`default.toml` 停在 10-08；`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\...` 底下也有一份大小、時間完全一樣的副本。從終端機分頁（`run_in_terminal`，每次呼叫都開新分頁）跑則讀得到登入，這是實測過的。**原因推測是 Windows 套件虛擬化，沒有證實**，所以不去動套件資料夾裡那份舊憑證。我曾推論「在終端機分頁登入，就會寫進 Bash 讀得到的那份」，結果錯了，是讀終端機畫面對照證據才查清楚。
 - **v1.76.0 還沒開始**，在 `v176` 分支（`4cc61d0`），等 Dispatch 放行。注意：本條 STATUS 是在 main 上新增的 commit，`v176` 已經不能 `--ff-only` 併進 main，到時要 rebase 或 merge。
 
+### ⚠ 先讀：`safe-push` 推的是當下的 HEAD，不是 main（2026-11-10）
+- 機制：`scripts/safe-push.sh` 記下 `PIN=HEAD`，最後 `git push origin "$PIN:refs/heads/main"`——推上去的是**當下 checkout 的那個 commit**，寫成遠端的 main。**開分支本身不是防護**；擋住的是第 35～38 行「HEAD 不在 main 上就回 7、什麼都不推」（434de70 起就有）。
+- 2026-11-10 實跑：在 `v176` 上跑 safe-push → 回 7，遠端 main 前後不變；暫存 clone 裡拿掉那道閘門 → pushgatetest W2 紅（實得 0、遠端被推動），原樣綠。
+- 推論出的後果：只要 HEAD 在 main 上，main 上有什麼就推什麼——**v1.76.0 的 commit 在 `v176` 分支上，v1.75.0 推出之前絕不能進 main**。推 v1.75.0 那一次由 Dispatch 把關（先交 `git rev-parse HEAD` 與 `--abbrev-ref HEAD`，確認 main＝`c2dd8af` 才推）。
+
+### ▶ v1.76.0（2026-11-10，**分支 `v176`，還沒推**；v1.75.0 推出後 main 快轉過來才推）——讚數回來＋原本打的名字
+- **純客戶端版本：merge.js、workers/、server/ 一行都沒動，不用部署 Worker**（投票 6/6）。這推翻了先前「伺服器一定要先部署」——那句只在改到 merge.js／workers/ 時成立，以後翻到不要據此多做一次 Worker 部署。
+- **讚（投票 (c)）**：新型別 `like`，id `like:<照片>:<人>`，emoji 字串＝按著、null＝收回；整筆後寫者贏（跟 phototag 同一條路），不進 APPEND_ONLY／TRACKED（likesynctest 守衛）。純函式 `js/likes.js`，store 的 `likesOf(照片, 我)`；`reactionsOf`／`myReaction` 已刪，**所有讀讚的地方不准再數紀錄筆數**。
+  - 讚數＝按著讚的**不同的人數**（Yolin 第 2 題）。相簿、動態、檢視器、任務頁寫數字；**0 不寫、行程頁任務列只標「我按過」不放數字**（第 4 題）；影片片尾照舊不印。
+  - **換表情是刻意改的操作手感（Yolin 2026-11-10 第 3 題決定）**：按著 X 按 Y＝換成 Y、人數不變；按著 X 再按 X＝收回。
+  - **同時修掉一個本來就壞的 bug**：v1.75.0 以前，已經有任何反應時再按任何表情都是「硬刪本機那筆」——**按著 ❤️ 時按 😂，結果是 ❤️ 被刪、😂 也沒加上**（而且刪除不會同步）。投票 R3 點出。
+  - **過渡規則（Dispatch 2026-11-10 定的中間路線，取代投票的可信旗標系統）**：照片上只要有任何舊式 `reaction`，就不顯示數字（只標我按的表情）；回顧頁「次互動」（含海報、AI 摘要）在行程裡有舊式讚時不顯示。理由：舊手機在過渡期按的是舊式讚，不屬於 Yolin 說「不用管」的舊行程資料；3 舊讚＋1 新讚顯示「1」是錯的數字。**拿掉條件寫在 `js/likes.js`**：家人手機都 ≥ v1.76.0、之後不再產生新的 reaction。「我按過」只看新的 like。徽章「應援團」改成「我按著讚的照片數＋留言數」，只看 like。
+- **原本打的名字（投票，Yolin 選 B）**：`matchInput: string|null`，只在對上景點庫時寫（`generate.js` 唯一寫入點，matchinputtest 用登記制守）；階層選擇 null；超過 40 字不存；沒對上不寫。`trustedTheme` 多一步：matchInput 是字串時要比回同一筆，不然 `input-mismatch`、拿不到類別。舊景點（沒有這欄）維持原行為；不顯示、不進 TRACKED、分享連結不帶。
+- **`likenumtest` 是刻意反轉的**：從「不准有數字」改成「數字＝不同的按讚人數」，期望值寫死；任務列、0、片尾三處「不該有數字」與過渡規則照樣守。
+- 新測試 `likesynctest`（兩台真裝置、B 時鐘慢 1 小時：S1／S1b／S2×2／S3 三方收斂——投票 R2 反對 (c) 的唯一理由，寫成測試）、`matchinputtest`（秒級、掃描型 → 進底線與 SCAN_ONLY，底線 12→13）；鏈 81→83。workertest 加一個最小的【讚】情境（按讚→換表情→收回）。albumtest／layouttest／livetest／synctest／shotxl 改成 like。
+- 突變 `tools/mutations/mut_v176.json` 24 條，預期事前寫，24/24 紅；`mut_batch1109.json` 刪 5 條（守的是 v1.75.0「不准有數字」，那段程式已刻意反轉、真實路徑走不到；替代在 mut_v176）。
+- **測試範圍（Yolin 2026-11-10 工作方式指示：測試只做最小範圍）**：**這不是全套**。跑過、綠：likesynctest、likenumtest、matchinputtest、workertest、albumtest、synctest、affectedtest、shelltest、mutlint、mutcmdtest（10 支）。**沒跑**：其餘 73 支，包括改了種子資料的 layouttest（單支約 11 分鐘）與 livetest（不在鏈上）。全套曾開跑兩次：第一次停在 affectedtest（STATUS 鏈長度、掃描型登記，都已修）；第二次跑到 6/83 時依新的工作方式指示中止。
+- 另案（只記、不做；來源 2026-11-10 投票）：Worker 沒檢查整筆 `updatedAt` 範圍（遠在未來的時間戳會讓那筆從此改不動）；`server/index.mjs` 自己一份 APPEND_ONLY、沒從 merge.js 匯入。
+
 ### 🔑 2026-11-10 換版卡在部署憑證：踩坑＋工作紀律
 - **現況（2026-11-11 已解決，見上一節）**：v1.75.0（`c7a7d26`＋本條 STATUS）已驗完、自查通過，**只差 Worker 部署**。Yolin 選「回家自己跑 `npx wrangler login`」（不走 API token）。他登入後第一件事：部署 Worker → `safe-push.sh` 推 v1.75.0；**v1.76.0 的任何改動都不准混進 v1.75.0**（Dispatch 2026-11-10 硬規定）。
 - **踩坑：部署用的憑證會在沒人用的時候默默失效，而失效這件事只有在你真的要部署時才看得到。**
@@ -2137,7 +2156,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
 
 **3. 每版的流程**（**例外**：v1.74.10 跳過了 `sweep`，理由與恢復條件見本檔開頭「目前進行中／交接」；那是一次性的例外，不是新做法）：bump `sw.js` VERSION → `npm run test:affected`（底線＋受影響，見下面
 「測試」節的「測試範圍」）
-**🔴 推之前的 `test:affected` 一定會開瀏覽器——這是常態，不是特例**（2026-11-05 實測）：底線 12 支裡有 3 支真的開瀏覽器（tabbartest、nearbytest、emptytest：檔內 `import puppeteer`），
+**🔴 推之前的 `test:affected` 一定會開瀏覽器——這是常態，不是特例**（2026-11-05 實測）：底線 12 支（v1.76.0 起 13 支，多了秒級的 matchinputtest）裡有 3 支真的開瀏覽器（tabbartest、nearbytest、emptytest：檔內 `import puppeteer`），
 不管這次改了什麼都會被挑到。（預測器那次說「6 支」，另外 3 支是從寬的誤判：predicttest 的測試樣本、affectedtest／worktreeguardtest 引用的 run-affected.mjs 本身含偵測樣式的字——
 誤判只會多算、不會少算，沒改。我第一版寫「4 支，含 viewentrytest」是錯的，viewentrytest 不開瀏覽器。）所以**每一次推送前的測試都是重負載（§5.19），要先拿許可、排瀏覽器時段**。就算只改文件也一樣。
 **這條 2026-11-05 實際擋過一次推送，擋的是 Dispatch 自己的放行前提**：Yolin 說「可以推」，Dispatch 轉達時附了前提「做完突變清單規則之後，推之前只要跑幾支秒級的、不用開瀏覽器」——
@@ -2228,7 +2247,7 @@ GitHub noreply（見「環境與帳號注意事項」）；②測試範圍放寬
   實例：densitytest 那次把時間軸改窄，頁面變矮，scrolltest A 的「現在這一站」（最後一站）捲動時被文件底卡住，停的位置剛好跟正確答案一樣，
   「沒把日期列算進去」那條突變就不紅了（2094347）。**診斷法**：把版面暫時改回舊版再跑那條突變——舊版紅、新版不紅，就證明突變本身沒壞，是防線的涵蓋範圍變了。
   修法是補前置斷言，讓「情境沒成立」自己會紅（這次加的是「捲動沒有被文件底卡住」，並配一條只紅它的突變）。
-- `npm test` 是完整的鏈 **81 支**（2026-11-09 在最後加 likenumtest；2026-11-05 加 legtest，接在 mergetest 後面；同日深夜在最後加 legviewtest、tagdaytest、playertest、overviewtest；2026-11-06 在最後加 recordstest（待買／住宿／航班的畫面，41 條）；定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → dayjumptest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest → viewentrytest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
+- `npm test` 是完整的鏈 **83 支**（2026-11-10 v1.76.0 在最後加 likesynctest、matchinputtest；2026-11-09 在最後加 likenumtest；2026-11-05 加 legtest，接在 mergetest 後面；同日深夜在最後加 legviewtest、tagdaytest、playertest、overviewtest；2026-11-06 在最後加 recordstest（待買／住宿／航班的畫面，41 條）；定義在 `package.json` 的 `test:chain`；affectedtest → … → workertest → worktreeguardtest → mutatetest → mutcmdtest → mutlint → predicttest → proctreetest → evtest → convtest → motioncsstest → motiontest → tripdaytest → dayjumptest → itinviewtest → palettetest → washitest → shelltest → postertruthtest → guesstruthtest → guesscensustest → themetrusttest → posterlayouttest → viewentrytest），只有真的跑完整條鏈才能說「全綠」。**平常跑 `npm run test:affected`**（底線＋受影響，見下面「測試範圍」）。較大的：itintest 142、plannertest 62、routetest 68、nearbytest 60、transittest 47、checktest 46、v147shots 45、mergetest 36、jointest 36、exporttest 33、workertest 15。
 - **`layouttest`**：17 頁 × 3 字級 × 4 寬度 = 204 種組合 + 6 個對話框，逐一渲染、機械化檢查跑版（v1.73.0）。
   **2026-09-25 的來回**：「數字和量詞被拆開」那一條的兩個 regex 在模板字串 `CHECK` 裡只寫了一個反斜線（`abbbe71` 起），瀏覽器拿到
   的是 `[s　]`，斷在一般空白的「第 1」換行「天」一直抓不到。修好之後冒出 16 個 bad-wrap（修之前的版本在同一份畫面上是 0 個——

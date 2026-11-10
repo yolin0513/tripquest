@@ -7,6 +7,7 @@
 import * as db from './db.js';
 import { uuid, deviceId } from './ids.js';
 import { mergeRecord, groupsOf, seedF, groupChanged, stable, APPEND_ONLY } from './merge.js';
+import { LIKE_TYPE, likeId, nextEmoji, likeSummary } from './likes.js';
 
 const state = {
   ready: false,
@@ -157,23 +158,25 @@ export async function remove(id) {
 }
 
 // ---------- 反應（按讚）與留言 ----------
+// v1.76.0：寫一筆固定 id 的 like 紀錄（js/likes.js 寫了為什麼）。按同一個表情＝收回（emoji 變 null）、
+// 按別的表情＝換表情。v1.75.0 以前這裡是「已經有任何反應就硬刪本機那筆」：刪除不會同步（別人手機上那筆還在），
+// 而且按著 ❤️ 時按 😂，結果是 ❤️ 被刪、😂 也沒加上——那是一個本來就壞的 bug，換表情順便修掉。
+// 舊式 reaction 紀錄一筆都不動（只增不刪的型別，刪了也傳不出去）。
 export async function toggleReaction(submissionId, actorId, emoji = '❤️') {
   const sub = state.byId.get(submissionId);
-  if (!sub) return;
-  const mine = list().find((r) => r.type === 'reaction' && r.submissionId === submissionId && r.actorId === actorId);
-  if (mine) {
-    state.byId.delete(mine.id);
-    await db.deleteRecordHard(mine.id);
-  } else {
-    const rec = {
-      id: uuid(), type: 'reaction', tripId: sub.tripId, submissionId,
-      actorId, emoji, createdAt: Date.now(), deviceId: deviceId(),
-    };
-    state.byId.set(rec.id, rec);
-    await db.putRecord(rec);
-  }
-  emit();
-  await queueSync('push', sub);
+  if (!sub || !actorId) return null;
+  const id = likeId(submissionId, actorId);
+  const prev = state.byId.get(id);
+  return put({
+    id, type: LIKE_TYPE, tripId: sub.tripId, submissionId, actorId,
+    emoji: nextEmoji(prev ? prev.emoji : null, emoji),
+    createdAt: prev ? prev.createdAt : Date.now(),
+  });
+}
+
+// 讚數一律從這裡拿（{ count, mine, legacy, showCount }），不准再數紀錄筆數
+export function likesOf(submissionId, me = null) {
+  return likeSummary(state.byId.values(), submissionId, me);
 }
 
 export async function addComment(submissionId, actorId, text) {
@@ -198,15 +201,9 @@ export async function deleteComment(id) {
   emit();
 }
 
-export function reactionsOf(submissionId) {
-  return list().filter((r) => r.type === 'reaction' && r.submissionId === submissionId);
-}
 export function commentsOf(submissionId) {
   return list().filter((r) => r.type === 'comment' && r.submissionId === submissionId)
     .sort((a, b) => a.createdAt - b.createdAt);
-}
-export function myReaction(submissionId, actorId) {
-  return reactionsOf(submissionId).find((r) => r.actorId === actorId) || null;
 }
 
 // ---------- 「我是誰」（每個行程記住一次，之後拍照不再追問） ----------

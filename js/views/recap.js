@@ -52,7 +52,7 @@ export default async function recap(tripId, { drawPage, setTop }) {
     num('📍', r.spotCount, '個地方'),
     num('✅', `${r.doneCount}/${r.questTotal}`, '個任務'),
     r.distanceKm >= 0.1 ? num('👣', r.distanceKm, '公里') : null,
-    num('💬', r.interactions, '次互動'),
+    r.interactions != null ? num('💬', r.interactions, '次互動') : null,   // null＝行程裡有舊式讚、數不準（recap.js）
   ));
 
   // 天氣
@@ -227,7 +227,7 @@ export function renderRecapCard(r, ai, p) {
     ['👣', r.distanceKm >= 0.1 ? r.distanceKm : r.spotCount, r.distanceKm >= 0.1 ? '公里' : '個地方'],
     ['✅', `${r.doneCount}/${r.questTotal}`, '個任務'],
     ['💬', r.interactions, '次互動'],
-  ];
+  ].filter((c) => c[1] != null);   // 互動是 null（行程裡有舊式讚）就不畫那一格
   const CELL_H = 196, colX = [W / 2 - 240, W / 2 + 240];
   for (let row = 0; row < Math.ceil(cells.length / 2); row++) {
     const rowCells = cells.slice(row * 2, row * 2 + 2);
