@@ -57,10 +57,10 @@
   },
   {
     "name": "X6：挑成員用上含墓碑的名單",
-    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）「我是誰」之類的挑成員畫面出現已移除的人。預期紅 membergonetest 以「X6」開頭、挑成員那一條。",
+    "why": "（事前寫：2026-11-06 08 點讀 membergonetest 推的，帳本沒紀錄）「我是誰」之類的挑成員畫面出現已移除的人。預期紅 membergonetest 以「X6」開頭、挑成員那一條。〔2026-11-12 守夜：find／replace 原本帶 \\r\\n（照主工作區 CRLF 的 js/claim.js 寫的），`.gitattributes` 規定 LF、新 clone 裡這條是死的；改成 \\n，主工作區同時換成 LF。預期不變。〕",
     "file": "js/claim.js",
     "edits": [
-      { "find": "  const members = store.membersOf(trip.groupId);\r\n  const picked = await pick(", "replace": "  const members = [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)];\r\n  const picked = await pick(" }
+      { "find": "  const members = store.membersOf(trip.groupId);\n  const picked = await pick(", "replace": "  const members = [...store.membersOf(trip.groupId), ...store.formerMembersOf(trip.groupId)];\n  const picked = await pick(" }
     ],
     "cmd": "node scripts/membergonetest.mjs"
   },

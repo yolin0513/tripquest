@@ -1,0 +1,22 @@
+[
+  {
+    "name": "mutlint：find 帶 \\r 不點名",
+    "why": "（事前寫 2026-11-12 守夜）第 5 件檢查（find 不准帶 \\r）的偵測那一層關掉：X6 那種「在 CRLF 的工作區裡活著、新 clone 裡死掉」的突變又會無聲無息。預期 mutlint 回 4、只紅對照組「find 帶 \\r（在 CRLF 的工作區裡看起來活著）」與「判定：只有 find 帶 \\r 那一類也判有問題」（偵測沒了，判定那條拿到的 cr 也是 0）。",
+    "expect": ["對照組｜find 帶 \\r", "對照組｜判定：只有 find 帶 \\r"],
+    "file": "scripts/mutlint.mjs",
+    "find": "    if (typeof e.find === 'string' && e.find.includes('\\r')) out.push(`${f}｜${m.name}`);",
+    "replace": "    void e;",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  },
+  {
+    "name": "mutlint：判定不算 find 帶 \\r 那一類",
+    "why": "（事前寫 2026-11-12 守夜）處置那一環：偵測照樣數到、清單照樣印，但 main 的判定不把這一類算進去——印了「find 帶 \\r 1 條」卻回 0。預期 mutlint 回 4、只紅對照組「判定：只有 find 帶 \\r 那一類也判有問題」。",
+    "expect": ["對照組｜判定：只有 find 帶 \\r"],
+    "file": "scripts/mutlint.mjs",
+    "find": "export const verdictOf = (r) => ((r.problems.length || r.bad.length || r.dead.length || r.cr.length) ? 1 : 0);",
+    "replace": "export const verdictOf = (r) => ((r.problems.length || r.bad.length || r.dead.length) ? 1 : 0);",
+    "cmd": "node scripts/mutlint.mjs",
+    "done": "^mutlint 結束：回 \\d+"
+  }
+]

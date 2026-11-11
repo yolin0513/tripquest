@@ -18,7 +18,9 @@ const MUTS = [
   { name: 'K3 拿掉「登記過期」點名', edits: [[STALE, '']], expectFalse: ['登記過期'], rc: 4 },
   { name: 'K4 點名的那一段全部拿掉', edits: [[UNK, 'if (!ms) { unrecognized++; continue; }'], [PARSE, 'catch (e) { unrecognized++; continue; }'], [STALE, '']],
     expectFalse: ['漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期'], rc: 4 },
-  { name: 'K5 一律報有問題（該放的擋住）', edits: [["  if (checked !== pop) problems.push(", "  problems.push('一律');\n  if (checked !== pop) problems.push("]], expectFalse: ['齊全', '漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期'], rc: 4 },
+  // K5（2026-11-12 守夜補預期）：mutlint 加了第 5 件（find 不准帶 \r）的對照組「判定：只有 find 帶 \r 那一類也判有問題」，
+  // 它要求 problems 是空的——一律報有問題時它也會 false。事前寫、這次一起實跑。
+  { name: 'K5 一律報有問題（該放的擋住）', edits: [["  if (checked !== pop) problems.push(", "  problems.push('一律');\n  if (checked !== pop) problems.push("]], expectFalse: ['齊全', '漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期', '判定：只有 find 帶 \\r 那一類也判有問題'], rc: 4 },
 ];
 let bad = 0;
 const RUN = MUTS;

@@ -6,6 +6,7 @@
 //      或驗閘門補丁的 [{from, to}]（一份檔＝一條突變）。兩種都不是、讀不懂 → 點名那一份、非 0。檢查條數≠母體條數、
 //      分類加總≠JSON 總數 → 非 0。（第一版只認 find/replace，148 份只算到 7 份，結論照樣是「0 條有問題」——2026-10-02 實測。）
 //   2. 沒有一條突變只改空白或行尾（mutate.mjs 判斷「是不是原樣」會先統一行尾，只改行尾的突變會被看成什麼都沒改）。
+//   （第 3、4 件見 findCount 與 scanDir 上面；第 5 件「find 不准帶 \r」見 crFinds 上面。）
 // 回傳值：0 通過；1 有問題；4 對照組沒過（檢查器壞了）。
 
 import fs from 'node:fs';
@@ -48,13 +49,28 @@ function findCount(root, m, e) {
 //    當天查到：③ 有 91 份，原本跟 ① 混在同一個「母體 N 條」裡，輸出上分不出來。
 export const GATE_FILES = ['scripts/safe-push.sh', 'scripts/prepush-scan.mjs', 'scripts/pushgatetest.mjs', 'scripts/verified-reg.mjs'];
 
+// 5.（2026-11-12 守夜）find 不准帶 \r（CR）——任何一種格式、任何一處。
+//    為什麼：.gitattributes 規定 `* text=auto eol=lf`，進版控的文字檔一律以 LF 存、新 clone 拿到的也是 LF；
+//    帶 \r 的 find 在任何新 clone 裡都找不到。但第 3 件（find 剛好一處）比的是**這台機器的工作區**——工作區裡那支檔
+//    若剛好是 CRLF（Windows 工具寫出來的，`git status` 照樣乾淨），帶 \r\n 的 find 在這裡活著，第 3 件就看不出來。
+//    實例：mut_member.json「X6：挑成員用上含墓碑的名單」的 find 照主工作區 CRLF 的 js/claim.js 寫，帶 \r\n；
+//    在新 clone 裡 mutlint 回 1（2026-11-11 晚在暫存 clone 撞到）。換一台機器或重新 clone 就會冒出來。
+//    只看 find：replace 帶 \r 只會讓改壞的那份行尾混雜，突變照樣套得上。
+export function crFinds(f, ms) {
+  const out = [];
+  for (const m of ms) for (const e of (m.edits || [{ find: m.find }])) {
+    if (typeof e.find === 'string' && e.find.includes('\r')) out.push(`${f}｜${m.name}`);
+  }
+  return out;
+}
+
 export function scanDir(d, notMutations = NOT_MUTATIONS, root = ROOT, refs = driverRefs()) {
   const files = fs.readdirSync(d).filter((f) => f.endsWith('.json')).sort();
   const others = fs.readdirSync(d).filter((f) => !f.endsWith('.json'));
   const problems = [];
   let pop = 0, checked = 0, unrecognized = 0, findChecked = 0, patchFormat = 0;
   let live = 0, liveGate = 0, oldCommit = 0, orphan = 0, deadMut = 0;
-  const bad = [], used = [], known = [], dead = [];
+  const bad = [], used = [], known = [], dead = [], cr = [];
   for (const f of files) {
     if (notMutations.includes(f)) { known.push(f); continue; }
     let j;
@@ -67,6 +83,7 @@ export function scanDir(d, notMutations = NOT_MUTATIONS, root = ROOT, refs = dri
     const r = lintMutations(ms);
     checked += r.checked;
     for (const n of r.bad) bad.push(`${f}：${n}`);
+    cr.push(...crFinds(f, ms));   // 兩種格式都查（補丁格式也是套在 git 取出的檔上，一樣是 LF）
     if (Array.isArray(j) && j.every((m) => m && typeof m.from === 'string')) {
       patchFormat++;
       if (refs.has(f)) oldCommit++; else orphan++;
@@ -94,8 +111,12 @@ export function scanDir(d, notMutations = NOT_MUTATIONS, root = ROOT, refs = dri
   if (live + deadMut !== mutateFmt || oldCommit + orphan !== patchFormat) {
     problems.push(`量尺分類對不上：① ${live}＋死掉 ${deadMut}，mutate 格式 ${mutateFmt}；② ${oldCommit}＋③ ${orphan}，補丁 ${patchFormat}`);
   }
-  return { files: files.length, used: used.length, known: known.length, unrecognized, pop, checked, bad, problems, findChecked, patchFormat, dead, live, liveGate, oldCommit, orphan, mutateFmt, deadMut };
+  return { files: files.length, used: used.length, known: known.length, unrecognized, pop, checked, bad, problems, findChecked, patchFormat, dead, live, liveGate, oldCommit, orphan, mutateFmt, deadMut, cr };
 }
+
+// 判定（2026-11-12 抽出來）：main 與對照組用同一個——任何一類有東西就是 1。抽出來是為了讓「看出問題之後停下」這一環
+// 也有對照組（原本寫在 main 裡，對照組只驗 scanDir 數得對不對、驗不到 main 有沒有把新的一類算進去）。
+export const verdictOf = (r) => ((r.problems.length || r.bad.length || r.dead.length || r.cr.length) ? 1 : 0);
 
 // 量尺（給人看的那一行）：每個數字都寫分母；不知道的寫「未知」，不省略
 export const describeGauge = (r) => `量尺：① 守現行程式 ${r.live} 條（mutate 格式 ${r.mutateFmt} 條中；find 死掉 ${r.deadMut} 條），`
@@ -105,7 +126,8 @@ export const describeGauge = (r) => `量尺：① 守現行程式 ${r.live} 條�
 
 export const describeScan = (label, r) => `${label}：JSON ${r.files} 份＝突變清單 ${r.used}＋登記的非突變 ${r.known}＋認不出 ${r.unrecognized}；`
   + `格式檢查 ${r.checked}／${r.pop} 條（含 ③，這不是突變總數）、只改空白或行尾 ${r.bad.length} 條${r.bad.length ? '（' + r.bad.join('；') + '）' : ''}；`
-  + `find 查了 ${r.findChecked} 處、其中找不到或不只一處 ${r.dead.length} 處（補丁格式 ${r.patchFormat} 份不查 find：沒有「現在的檔」可比，分類見量尺）`
+  + `find 查了 ${r.findChecked} 處、其中找不到或不只一處 ${r.dead.length} 處（補丁格式 ${r.patchFormat} 份不查 find：沒有「現在的檔」可比，分類見量尺）；`
+  + `find 帶 \\r ${r.cr.length} 條（查了全部 ${r.pop} 條的每一處 find）${r.cr.length ? '（' + r.cr.join('；') + '）' : ''}`
   + `${r.problems.length ? '；問題：' + r.problems.join('；') : ''}`;
 
 // 對照組：判斷本身，加上四種母體情境（齊全、漏一筆、讀不懂、登記過期），比對的是「點名的那一句」
@@ -149,7 +171,7 @@ export function controls(tmp, log = console.log) {
   for (const [label, files, notM, ok] of cases) {
     mk(files);
     const r = scanDir(tmp, notM, srcRoot, new Set());
-    results[label] = ok(r) && (label !== '齊全' || (r.dead.length === 0 && r.findChecked === 1 && r.patchFormat === 1));
+    results[label] = ok(r) && (label !== '齊全' || (r.dead.length === 0 && r.findChecked === 1 && r.patchFormat === 1 && r.cr.length === 0 && verdictOf(r) === 0));
     log(describeScan(`對照組（${label}）`, r) + `＝${results[label]}`);
   }
   for (const [label, xjs, ok] of deadCases) {
@@ -158,6 +180,23 @@ export function controls(tmp, log = console.log) {
     const r = scanDir(tmp, ['d1_out.json'], srcRoot, new Set());
     results[label] = ok ? ok(r) : (r.dead.length === 1 && /^a_mut\.json｜a：find 在 x\.js 出現 0 次$/.test(r.dead[0]) && r.findChecked === 2);
     log(describeScan(`對照組（${label}）`, r) + `＝${results[label]}`);
+  }
+  // find 帶 \r（第 5 件）：目標檔 x.js 是 CRLF、find 帶 \r\n——在這個目錄裡「剛好一處」、第 3 件看是活的（正是 X6 的樣子），
+  // 必須被第 5 件點名；同一份清單裡另一條 find 只有 LF 的不准被點名。「齊全」那一種是反向（0 條）。
+  // 樣本在執行時組（CR 用 fromCharCode），寫進去之後讀回確認真的帶 CR，才算情境成立。
+  {
+    const CR = String.fromCharCode(13);
+    mk({ ...BASE, 'a_mut.json': [
+      { name: 'crlf', file: 'x.js', find: 'const a = 1;' + CR + '\n', replace: 'const a = 2;' + CR + '\n' },
+      { name: 'lf', file: 'x.js', find: 'let c', replace: 'let d' },
+    ] }, 'const a = 1;' + CR + '\nlet c = 3;' + CR + '\n');
+    const formed = fs.readFileSync(path.join(tmp, 'a_mut.json'), 'utf8').includes('\\r')
+      && fs.readFileSync(path.join(srcRoot, 'x.js'), 'utf8').includes(CR);
+    const r = scanDir(tmp, ['d1_out.json'], srcRoot, new Set());
+    const label = 'find 帶 \\r（在 CRLF 的工作區裡看起來活著）';
+    results[label] = formed && r.dead.length === 0 && r.cr.length === 1 && r.cr[0] === 'a_mut.json｜crlf';
+    results['判定：只有 find 帶 \\r 那一類也判有問題'] = formed && r.problems.length === 0 && r.bad.length === 0 && r.dead.length === 0 && verdictOf(r) === 1;
+    log(describeScan(`對照組（${label}）`, r) + `（樣本讀回帶 CR：${formed}）＝${results[label]}`);
   }
   // 量尺的雙向對照：
   //   偽裝成 ① 的 ③：補丁格式、from 剛好在現在的 x.js 裡一處（看起來活著）、沒有驅動引用 → 必須歸 ③，不得歸 ①
@@ -217,7 +256,8 @@ function main() {
   console.log(describeGauge(r));
   console.log(timeoutMargin());
   for (const x of r.dead) console.log(`  ✗ 死掉的突變：${x}`);
-  if (r.problems.length || r.bad.length || r.dead.length) { console.log('✗ 有問題——非 0 結束'); return 1; }
+  for (const x of r.cr) console.log(`  ✗ find 帶 \\r（新 clone 裡找不到）：${x}`);
+  if (verdictOf(r)) { console.log('✗ 有問題——非 0 結束'); return 1; }
   console.log('通過');
   return 0;
 }
