@@ -2,7 +2,7 @@
 // 跑 clone 自己的那支測試，看紅的是不是預期那幾條。用法：node tools/mutproof/timeout_mut.mjs <repo> [名稱開頭...]
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed, clearOld, outFileOf } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'timeout_mut';
 import crypto from 'node:crypto';
@@ -34,6 +34,7 @@ const MUTS = [
 let bad = 0;
 const RUN = MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.startsWith(o)));
 evidHeader('timeout_mut', RUN.map((x) => x.name));
+clearOld(REPO, RUNNER, RUN.map((x) => x.name));
 for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
@@ -64,7 +65,7 @@ for (const m of RUN) {
   const nested = { file: m.file || null, outer, inner: tested && m.file ? tested[m.file] || null : null, printed: !!tested };
   nested.ok = !!tested && (!m.file || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
-  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
+  fs.writeFileSync(outFileOf(REPO, RUNNER, m.name), out);
   evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'timeout_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、改壞那份 ${sha}、紅 ${reds.length} 條${extra.length ? '（另外紅：' + extra.map((x) => x.slice(0, 28)).join('／') + '）' : ''}`);
   if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);

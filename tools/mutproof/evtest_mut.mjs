@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { evidHeader, evid, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
+import { evidHeader, evid, expectGate, itemsOf, gateOrExit, completed, clearOld, outFileOf } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'evtest_mut';
 
@@ -29,6 +29,7 @@ const MUTS = [
 
 let bad = 0;
 evidHeader(RUNNER, MUTS.map((x) => x.name));
+clearOld(REPO, RUNNER, MUTS.map((x) => x.name));
 for (const m of MUTS) {
   fs.rmSync(COPY, { recursive: true, force: true });
   fs.mkdirSync(path.join(COPY, 'tools', 'ev'), { recursive: true });
@@ -57,7 +58,7 @@ for (const m of MUTS) {
   const ok = fin.ok && (nested.ok && (m.expectRed.length ? r.status !== 0 && hitAll && !extra.length : r.status === 0 && !reds.length));
   if (!ok) bad++;
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
-  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w一-鿿-]+/g, '_') + '.txt'), out);
+  fs.writeFileSync(outFileOf(REPO, RUNNER, m.name), out);
   evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: RUNNER, name: m.name, expect: m.expectRed, expectUnformed: [], reds, unformed: [], status: r.status, sha: m.file ? `${m.file}=${outer}` : '' });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}，紅 ${reds.length} 條${extra.length ? `（多紅：${extra.map((x) => x.slice(0, 30)).join('／')}）` : ''}；被驗那份 ${nested.ok ? '＝改壞的那份' : `對不上（外 ${outer}、內 ${nested.inner}）`}`);
   if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);

@@ -2,7 +2,7 @@
 // 看紅的是不是預期那幾條（只列開頭）。用法：node tools/mutproof/predict_mut.mjs <repo>
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed, clearOld, outFileOf } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'predict_mut';
 import crypto from 'node:crypto';
@@ -31,6 +31,7 @@ const MUTS = [
 let bad = 0;
 const RUN = MUTS;
 evidHeader('predict_mut', RUN.map((x) => x.name));
+clearOld(REPO, RUNNER, RUN.map((x) => x.name));
 for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
@@ -58,7 +59,7 @@ for (const m of RUN) {
   const nested = { file: m.file || null, outer, inner: tested && m.file ? tested[m.file] || null : null, printed: !!tested };
   nested.ok = !!tested && (!m.file || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
-  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
+  fs.writeFileSync(outFileOf(REPO, RUNNER, m.name), out);
   evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'predict_mut', name: m.name, expect: m.expect, expectUnformed: [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、改壞那份 ${sha}、紅 ${reds.length} 條${extra.length ? '（預期外：' + extra.map((x) => x.slice(0, 26)).join('／') + '）' : ''}`);
   if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);

@@ -2,7 +2,7 @@
 // 列出實際紅的那幾條，跟預期比（預期是「哪幾條情境的開頭」）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed, clearOld, outFileOf } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'mut_guard_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -29,6 +29,7 @@ const MUTS = [
 const ONLY = process.argv.slice(3); let bad = 0;
 const RUN = MUTS.filter((x) => !ONLY.length || ONLY.some((o) => x.name.startsWith(o)));
 evidHeader('mut_guard_mut', RUN.map((x) => x.name));
+clearOld(REPO, RUNNER, RUN.map((x) => x.name));
 for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
@@ -57,7 +58,7 @@ for (const m of RUN) {
   const nested = { file: (m.find ? 'scripts/mutate.mjs' : null) || null, outer, inner: tested && (m.find ? 'scripts/mutate.mjs' : null) ? tested[(m.find ? 'scripts/mutate.mjs' : null)] || null : null, printed: !!tested };
   nested.ok = !!tested && (!(m.find ? 'scripts/mutate.mjs' : null) || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
-  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
+  fs.writeFileSync(outFileOf(REPO, RUNNER, m.name), out);
   evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'mut_guard_mut', name: m.name, expect: m.expect, expectUnformed: m.expectUnformed || [], reds, unformed: linesOf(out, '⊘ 情境未成立：'), status: r.status, sha: hash });
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}、${((Date.now() - t0) / 1000).toFixed(1)} 秒、被驗的 mutate ${hash}、紅 ${reds.length} 條${extra.length ? '（預期外：' + extra.map((x) => x.slice(0, 24)).join('／') + '）' : ''}`);
   if (!fin.ok) console.log(`     ⊘ 被中斷、不算數：${fin.why}`);

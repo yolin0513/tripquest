@@ -2,7 +2,7 @@
 // 預期只有指定的那幾條紅。複本＝clone HEAD ＋ 蓋上工作區裡這次改的檔。
 import fs from 'node:fs';
 import path from 'node:path';
-import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed } from './evid.mjs';
+import { evidHeader, evid, linesOf, expectGate, itemsOf, gateOrExit, completed, clearOld, outFileOf } from './evid.mjs';
 import { parseTested, sha12 } from '../../scripts/probe-hash.mjs';
 const RUNNER = 'wtg_mut';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -28,6 +28,7 @@ const MUTS = [
 let bad = 0;
 const RUN = MUTS;
 evidHeader('wtg_mut', RUN.map((x) => x.name));
+clearOld(REPO, RUNNER, RUN.map((x) => x.name));
 for (const m of RUN) {
   fs.rmSync(COPY, { recursive: true, force: true });
   execFileSync('git', ['clone', '-q', REPO, COPY]);
@@ -57,7 +58,7 @@ for (const m of RUN) {
   const nested = { file: m.file || null, outer, inner: tested && m.file ? tested[m.file] || null : null, printed: !!tested };
   nested.ok = !!tested && (!m.file || nested.inner === outer);
   fs.mkdirSync(path.join(REPO, '.logs', 'mutproof', RUNNER), { recursive: true });
-  fs.writeFileSync(path.join(REPO, '.logs', 'mutproof', RUNNER, m.name.replace(/[^\w\u4e00-\u9fff-]+/g, '_') + '.txt'), out);
+  fs.writeFileSync(outFileOf(REPO, RUNNER, m.name), out);
   evid({ finished: fin.ok, finishWhy: fin.why, nested, runner: 'wtg_mut', name: m.name, expect: m.expectRed, expectUnformed: [], reds, unformed: [], status: r.status, sha: (out.match(/被驗的 run-affected \S+、worktree-guard \S+/) || [''])[0] });
   const hashLine = (out.match(/被驗的 run-affected \S+、worktree-guard \S+/) || ['（沒印雜湊）'])[0];
   console.log(`${ok ? '✓' : '✗'} ${m.name}：回 ${r.status}，紅 ${reds.length} 條${extra.length ? `（多紅：${extra.map((x) => x.slice(0, 30)).join('／')}）` : ''}；${hashLine}`);

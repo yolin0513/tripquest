@@ -9,6 +9,22 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 export const evidHeader =(runner, names) => console.log('@@EVID-TOTAL ' + JSON.stringify({ runner, names }));
 export const evid = (rec) => console.log('@@EVID ' + JSON.stringify(rec));
+
+// ---------- 開跑前刪掉這一次要寫的舊輸出（2026-11-12 守夜；Dispatch：「開跑前刪掉自己的舊輸出，是一行的事」）----------
+// 驅動每跑完一條才寫 .logs/mutproof/<驅動>/<名稱>.txt。中途停下時（預期檢查回 6／7／8——基準的輸出還沒寫就結束），
+// 上一次的檔留著、看起來像這一次的結果：2026-11-12 凌晨差點把 10 月 2 日的 G0 輸出當成這次的讀；expect-check.mjs 也讀這些檔。
+// 寫檔與刪檔都用 outFileOf：兩邊的路徑規則對不上的話，刪檔會無聲落空（刪了一個不存在的名字）。
+// 只刪這一次要跑的那幾條；其餘名稱的檔不碰（--only 之類只跑幾條時，別條上一次的輸出不是「這一次的舊輸出」）。
+export const outFileOf = (repo, runner, name) => path.join(repo, '.logs', 'mutproof', runner, name.replace(/[^\w一-鿿-]+/g, '_') + '.txt');
+export function clearOld(repo, runner, names) {
+  const files = names.map((n) => outFileOf(repo, runner, n));
+  const had = files.filter((f) => fs.existsSync(f));
+  for (const f of had) fs.rmSync(f, { force: true });
+  const left = files.filter((f) => fs.existsSync(f));
+  console.log(`開跑前刪掉這一次要寫的舊輸出：要跑 ${names.length} 條、原本有舊檔 ${had.length} 個、刪完還在 ${left.length} 個（.logs/mutproof/${runner}/）`);
+  if (left.length) { console.log(`◇ 舊輸出刪不掉，停下（回 4）：${left.map((f) => path.basename(f)).join('、')}`); process.exit(4); }
+  return had.length;
+}
 export const linesOf = (out, mark) => out.split('\n').filter((l) => l.startsWith(mark)).map((l) => l.slice(mark.length));
 
 // ---------- 跑完了沒（2026-10-02，MealMate 撞到：被停掉的那一輪記成「跑完、紅錯地方」）----------
