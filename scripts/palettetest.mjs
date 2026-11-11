@@ -56,6 +56,7 @@ const ALL_THEMES = {
   '.pv-bottom': ON_PHOTO,
   '.pv-cap-2': ON_PHOTO,
   '.pv-react': ON_PHOTO,
+  '.pv-react-count': ON_PHOTO + '（v1.76.0 加的「幾人按讚」，只在檢視器的黑底按鈕裡，js/viewer.js）',
   '.img-credit': ON_PHOTO,
   '.photo-view img': ON_PHOTO + '（照片本身）',
   '.tagger-photo': ON_PHOTO + '（照片本身）',
