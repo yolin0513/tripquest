@@ -1,18 +1,20 @@
 [
   {
     "name": "紅了只印前 4 行 ✗（改回 2026-10-28 之前的截斷）",
-    "why": "第 5 行以後紅的項目看不到，「紅的理由對不對」判不完整。預期只紅 mutatetest 的「I 輸出列出全部 6 行 ✗」。",
+    "why": "第 5 行以後紅的項目看不到，「紅的理由對不對」判不完整。預期只紅 mutatetest 的「I 輸出列出全部 6 行 ✗」。（2026-11-12 守夜：補上 expect 欄——原本只寫在 why 裡、沒有機器讀得到的預期；N7 紅的只有 2 行，不受截斷影響。事前寫。）",
+    "expect": ["I 輸出列出全部 6 行"],
     "file": "scripts/mutate.mjs",
     "find": ".filter((l) => l.startsWith('✗'));\n    if (result === 'red')",
     "replace": ".filter((l) => l.startsWith('✗')).slice(0, 4);\n    if (result === 'red')",
     "cmd": "node scripts/mutatetest.mjs"
   },
   {
-    "name": "紅了不留全文（只在沒有結果時留）",
-    "why": "輸出被截短時事後查不到全文。預期只紅 mutatetest 的「I 全文存進 .logs/mutate-out.<第幾次>.log」。",
+    "name": "紅了的全文只留前 4 行",
+    "why": "全文被截短時事後查不到第 5 行以後。預期只紅 mutatetest 的「I 全文存進 .logs/mutate-out.<第幾次>.log、6 項都在」。（2026-11-12 守夜改：原本這一條是「紅了不留全文（只在沒有結果時留）」，整行拿掉存檔。2026-11-11 加的 N4、N7 前置要讀這個檔數行首 ✓／✗，整行拿掉會讓兩個前置判成情境未成立、項數少 4 → mutate.mjs 判「沒跑完」，紅不出來——推論，沒實跑。改成只留前 4 行：I 的 6 行剩 4 行；N4 前 4 行是 ✓、✗、✗ 例外、空行＝3 行、N7 前 4 行＝4 行，兩個前置照樣成立。事前寫。）",
+    "expect": ["I 全文存進"],
     "file": "scripts/mutate.mjs",
     "find": "    fs.writeFileSync(path.join(LOGS, `mutate-out.${seq}.log`), r.out || '');\n",
-    "replace": "",
+    "replace": "    fs.writeFileSync(path.join(LOGS, `mutate-out.${seq}.log`), (r.out || '').split('\\n').slice(0, 4).join('\\n'));\n",
     "cmd": "node scripts/mutatetest.mjs"
   }
 ]

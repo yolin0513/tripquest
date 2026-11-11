@@ -1,0 +1,101 @@
+[
+  {
+    "name": "殺程序的情境判定只看帳本有開跑（不看磁碟痕跡）",
+    "why": "2026-11-12 守夜（Dispatch：mutatetest 有 13 條斷言沒有任何突變的預期守著）。守「K 殺程序錯過時間窗 → 判成情境未成立」：killMidway 判情境成立只看殺掉之後磁碟上的痕跡（壞檔還在、還原紀錄在、帳本那一次只有開跑）；改成只看帳本有沒有開跑，錯過時間窗（突變自己先跑完）也會被當成成立。B、C、C'、C\"、D 正常造成時回的是同一筆，不受影響。預期事前寫：只紅 K。",
+    "expect": ["K 殺程序錯過時間窗"],
+    "file": "scripts/mutatetest.mjs",
+    "find": "  return ready && targetBroken() && fs.existsSync(PENDING) && open && !ledger().some((e) => e.seq === open.seq && e.event !== 'started') ? open : null;",
+    "replace": "  return open || null;",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "上次中斷、檔案已是原樣也拒絕",
+    "why": "2026-11-12 守夜。守「C' 人工還原後 → 照跑」：沒有還原紀錄、帳本有未收尾，檔案統一行尾後等於原檔時要照跑（不然是永遠關著的閘）。改成一律拒絕（回 5）。C\" 走同一條路（git 還原成 CRLF 版、統一行尾後是原樣）也會紅；C（檔案仍是壞的）照樣回 5、不紅。預期事前寫：紅 C'、C\"。",
+    "expect": ["C' 人工還原後", "C\" 用 git 還原"],
+    "file": "scripts/mutate.mjs",
+    "find": "    if (now !== want) {",
+    "replace": "    if (want) {",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "逾時時不殺、放手不等",
+    "why": "2026-11-12 守夜。守「G 卡住的探針整棵被殺掉」與「O3 原樣逾時時整棵被殺掉」：逾時時不殺程序樹，只把自己這一端的管線關掉、unref、直接回報逾時——呼叫端照樣記成逾時、照樣很快結束，但探針還活著。單純「什麼都不殺」（timeout_mut 的 T1）紅不了這兩條：runWithTimeout 等的是管線關閉，探針自己睡完 120 秒才結束，回來時它已經不在了（紅的是「G 卡住 → … 秒結束」）。mutatetest 同一個 commit 補了「看到還活著就殺掉」，不然 clone 刪不掉、整支崩潰、這一條判成沒有結果。預期事前寫：只紅這兩條；G 卡住 → 回 8 與 O3 原樣逾時 → 回 3 照樣過（逾時照樣被記到、時間很短）。",
+    "expect": ["G 卡住的探針整棵被殺掉", "O3 原樣逾時時整棵被殺掉"],
+    "file": "scripts/run-timeout.mjs",
+    "find": "    const timer = timeoutMs ? setTimeout(() => { timedOut = true; killTree(child.pid); }, timeoutMs) : null;",
+    "replace": "    const timer = timeoutMs ? setTimeout(() => { timedOut = true; child.unref(); if (child.stdout) { child.stdout.destroy(); child.stderr.destroy(); } resolve({ status: null, timedOut, out }); }, timeoutMs) : null;",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "逾時那一次不刪還原紀錄",
+    "why": "2026-11-12 守夜。守「G 目標檔雜湊＝原檔、還原紀錄不在」。逾時那一次還原了檔案、卻留下還原紀錄；帳本已經記了收尾，下一次啟動看到還原紀錄、帳本卻沒有未收尾的 → 回 6（兩處紀錄不一致）。所以 G 後面每一次 run 都回 6：--no-result 列出、反向、手動標記、再正常跑一次都會連帶紅（連鎖，不是各自的擋法）。預期事前寫：紅這 5 條。",
+    "expect": ["G 目標檔雜湊", "G --no-result 列出", "G 反向", "G 手動把", "G 再正常跑一次"],
+    "file": "scripts/mutate.mjs",
+    "find": "    fs.rmSync(PENDING);\n    // 結果：紅了",
+    "replace": "    if (!r.timedOut) fs.rmSync(PENDING);\n    // 結果：紅了",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "帳本第一行不寫說明",
+    "why": "2026-11-12 守夜。守「G 帳本第一行寫明這個欄位目前不影響任何選擇」：新建帳本時不寫說明那一行。--no-result 自己另外印 LEDGER_NOTE，所以「G --no-result 列出…並印出那段說明」不紅。預期事前寫：只紅這一條。",
+    "expect": ["G 帳本第一行"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (!fs.existsSync(LEDGER)) fsyncWrite(LEDGER, JSON.stringify({ note: LEDGER_NOTE }) + '\\n', 'a');",
+    "replace": "  void LEDGER_NOTE;",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "沒有結果的清單把紅了的也列進去",
+    "why": "2026-11-12 守夜。守「G 反向：正常紅了的「會紅的」不在 --no-result 裡」：--no-result 只該列最近一次是 no-result 的，改成連 red 也列。「G 再正常跑一次」驗的是同一件事的另一個時間點（手動標記之後再紅一次），也會紅；B、G 的「列得出來」不受影響（多列不影響它們）。預期事前寫：紅這 2 條。",
+    "expect": ["G 反向", "G 再正常跑一次"],
+    "file": "scripts/mutate.mjs",
+    "find": "filter((e) => e.result === 'no-result')",
+    "replace": "filter((e) => e.result !== 'not-red')",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "沒有結果時不存全文",
+    "why": "2026-11-12 守夜。守「H 沒有結果時印出子程序輸出的最後幾行、全文存進 .logs/mutate-noresult.<第幾次>.log」的後半（存檔）。前半（印最後幾行）另一條突變守。預期事前寫：只紅這一條。",
+    "expect": ["H 沒有結果時"],
+    "file": "scripts/mutate.mjs",
+    "find": "      fs.writeFileSync(outFile, r.out || '');",
+    "replace": "      void outFile;",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "沒有結果時不印最後幾行",
+    "why": "2026-11-12 守夜。守同一條斷言的前半（印最後幾行）。檔照存。G 那條只看「⊘ 逾時｜」行、O 的原樣不成立另有自己的最後幾行，都不受影響。預期事前寫：只紅這一條。",
+    "expect": ["H 沒有結果時"],
+    "file": "scripts/mutate.mjs",
+    "find": "      console.log(`     子程序輸出最後",
+    "replace": "      void (`     子程序輸出最後",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "全部照預期紅也回 1",
+    "why": "2026-11-12 守夜。守「H 反向：跑到底的「會紅的」照樣記成 red」——它沒有只屬於自己的擋法：帳本 result 那一半跟 I 的前置共用（把紅了記錯，I 的前置會判情境未成立、項數少 3 → 沒跑完，推論），只剩回傳值那一半能單獨弄紅。沒有任何一類要報時回 1：每一個「全部紅了、檢查回 0」的地方都會紅。逐一數過（推論）：A'、B 還原後照跑、C'、C\"、G 反向、H 反向、E 正常跑完、N7；I 不看回傳值、N1／N6 先報沒紅、其餘回 2／3／5／6／7／8／9 不受影響。預期事前寫：紅這 8 條。",
+    "expect": ["A' --only", "B 還原後照跑", "C' 人工還原後", "C\" 用 git 還原", "G 反向", "H 反向", "E 正常跑完", "N7「✗ 對照組沒過——」"],
+    "file": "scripts/mutate.mjs",
+    "find": "  return first ? KIND[first].code : 0;",
+    "replace": "  return first ? KIND[first].code : 1;",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "最後不刪暫存 clone",
+    "why": "2026-11-12 守夜。守 mutatetest 自己的「暫存 clone 已刪」：跑完不刪 .logs/mut-clone（被 .gitignore 擋掉，主工作區那一條看不到）。下一次 mutatetest 開頭會先刪，留下的不影響之後。預期事前寫：只紅這一條。",
+    "expect": ["暫存 clone 已刪"],
+    "file": "scripts/mutatetest.mjs",
+    "find": "fs.rmSync(CLONE, { recursive: true, force: true });\nyes(!fs.existsSync(CLONE)",
+    "replace": "void CLONE;\nyes(!fs.existsSync(CLONE)",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "情境把檔寫進主工作區（模擬洩漏，掃完自己刪）",
+    "why": "2026-11-12 守夜。守 mutatetest 自己的「主工作區跑前跑後一樣」：拍快照之前往主工作區寫一個沒被擋掉的新檔（像是某個情境把 P() 寫成 ROOT），拍完馬上刪掉——證明這一條看得到洩漏；刪掉是為了不在主工作區留東西（突變執行器跑完只看進版控的檔，看不到它）。這是模擬的洩漏，不是 mutatetest 裡某一行真的寫錯：情境的檔都寫在 clone 或 .logs/ 底下，找不到一行改了就洩漏、其餘情境照常的寫法。預期事前寫：只紅這一條。",
+    "expect": ["主工作區跑前跑後一樣"],
+    "file": "scripts/mutatetest.mjs",
+    "find": "const mainTouched = changesBetween(mainBefore, snapshot({ root: ROOT }));",
+    "replace": "fs.writeFileSync(path.join(ROOT, 'zz-leak.txt'), 'x\\n'); const mainTouched = changesBetween(mainBefore, snapshot({ root: ROOT })); fs.rmSync(path.join(ROOT, 'zz-leak.txt'), { force: true });",
+    "cmd": "node scripts/mutatetest.mjs"
+  }
+]

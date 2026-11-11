@@ -309,6 +309,9 @@ if (want('G')) {
   if (pre(pid > 0 && marks().includes('sleep'), `前置：卡住的探針真的跑起來了（pid ${pid}）`)) {
     yes(r.code === 8 && /^⊘ 逾時｜會卡住的：逾時 2\.5 秒被殺——沒有結果/m.test(r.out) && sec < 60, `G 卡住 → 回 8、行首「⊘ 逾時｜」、寫明沒有結果、${sec.toFixed(1)} 秒結束（實得 ${r.code}）`, r.out.slice(-300));
     yes(!alive, `G 卡住的探針整棵被殺掉（pid ${pid}＝${alive ? '還在' : '不在'}）`);
+    // 還在的話由這裡殺掉（2026-11-12 守夜補）：它的 cwd 在 clone 裡，留著的話最後刪 clone 會失敗、整支崩潰，
+    // 這一條的紅會被判成「沒有結果」而不是乾淨的 ✗（突變「逾時時不殺、放手不等」就是這樣）。pid 是探針自己寫的、剛確認還活著。
+    if (alive) killTree(pid, { log: () => {} });
     yes(sha1(P('zz-target.txt')) === ORIG && !fs.existsSync(PENDING), 'G 目標檔雜湊＝原檔、還原紀錄不在');
     const closing = ledger().filter((e) => e.name === '會卡住的' && e.event === 'done').pop();
     yes(closing && closing.result === 'no-result' && closing.kind === 'timeout', `G 帳本記成 no-result、kind＝timeout（實得 ${closing ? `${closing.result}／${closing.kind}` : '沒有那一筆'}）——不是 done 了事`);
@@ -498,6 +501,7 @@ if (want('O')) {
       let alive = false;
       try { process.kill(pid, 0); alive = true; } catch (e) { alive = e.code === 'EPERM'; }
       if (pre(pid > 0, `前置：O3 卡住的原樣真的跑起來了（pid ${pid}）`)) yes(!alive, `O3 原樣逾時時整棵被殺掉（pid ${pid}＝${alive ? '還在' : '不在'}）`);
+      if (alive) killTree(pid, { log: () => {} });   // 同 G：還在就殺掉，不然下面刪 clone 會失敗、整支崩潰
     }
   }
 }
