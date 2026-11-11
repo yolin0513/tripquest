@@ -698,8 +698,10 @@ function legRow(prev, s, i) {
   pick.append(...LEG_MODES.map((k) => h('button', {
     class: 'tl-leg-opt' + (k === cur ? ' is-on' : ''), type: 'button', dataset: { mode: k }, 'aria-pressed': String(k === cur),
     onclick: () => save(k),
-  }, LEG_ICON[k] ? h('span', { class: 'tl-leg-ic', 'aria-hidden': 'true' }, LEG_ICON[k]) : null, LEG_LABEL[k])),
-  cur ? h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, '清除') : null);
+  }, LEG_ICON[k] ? h('span', { class: 'tl-leg-ic', 'aria-hidden': 'true' }, LEG_ICON[k]) : null, LEG_LABEL[k])));
+  // 「清除」只在選過的時候才有（沒選過就沒東西可清）。不能寫成 append(..., cur ? 鈕 : null)：
+  // 原生 append() 會把 null 印成文字「null」（h() 會略過 null，append 不會）——2026-11-11 Yolin 截圖就是這樣。
+  if (cur) pick.append(h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, '清除'));
   const btn = h('button', {
     class: 'tl-leg-btn' + (cur ? '' : ' is-unset'), type: 'button', 'aria-expanded': 'false',
     'aria-label': `從「${name(prev)}」到「${name(s)}」怎麼去：${cur ? LEG_LABEL[cur] : '還沒設定'}，點一下設定`,

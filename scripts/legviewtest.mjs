@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { blankTextScan } from './blanktext.mjs';
 const { LEG_ICON } = await import(new URL('../js/legs.js', import.meta.url));
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -88,6 +89,13 @@ try {
   yes(L.length === 4 && L.every((x) => x.unset && x.mode === '' && x.text.startsWith('怎麼去：還沒設定') && x.on.length === 0),
     '一開始每一列都寫「還沒設定」、沒有預選任何一種', JSON.stringify(L.map((x) => [x.text, x.on])));
   yes(L.map((x) => x.spot).join() === [B, C, D, E].join(), '每一列掛在到達站上（乙、丙、丁、戊）');
+  // 空值被印成文字（2026-11-11 Yolin 截圖：沒設定那一組的選項旁出現純文字 null）。整個行程頁掃一次，含收起來的選項。
+  // 為什麼之前沒抓到：這裡本來就測了「沒設定」的狀態，但只數 .tl-leg-opt 按鈕（下面「7 個選項、沒有清除」那條）——
+  // 那個 null 是按鈕旁邊的文字節點，不是按鈕，數按鈕永遠看不到它。
+  const blank0 = await blankTextScan(page);
+  yes(blank0.ok && blank0.texts > 0 && blank0.hits.length === 0,
+    `全部沒設定時：整個行程頁沒有空值被印成文字（掃了 ${blank0.texts} 個文字節點、${blank0.attrs} 個屬性；對照樣本${blank0.ok ? '全中' : '沒中：' + blank0.broken.join('、')}）`,
+    blank0.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
 
   // 二、從真實入口設：點「乙」前面那一列 → 選項打開 → 點「電車・捷運」
   const pickVia = async (spotId, mode) => {
@@ -114,6 +122,10 @@ try {
   yes(byS[C]?.unset && byS[D]?.unset, '沒設的兩列（乙→丙、丙→丁）仍是「還沒設定」');
   const rec = await page.evaluate(async (id) => { const s = await import('./js/store.js'); const x = s.get(id); return { legFrom: x.legFrom, legMode: x.legMode, f: !!(x._f && x._f.leg) }; }, B);
   yes(rec.legFrom === A && rec.legMode === 'train' && rec.f, `存下去的是「前一站＝甲」＋電車，而且 _f.leg 有時間戳（${JSON.stringify(rec)}）`);
+  const blank1 = await blankTextScan(page);
+  yes(blank1.ok && blank1.texts > 0 && blank1.hits.length === 0,
+    `設了兩段、兩段沒設時：整個行程頁沒有空值被印成文字（掃了 ${blank1.texts} 個文字節點、${blank1.attrs} 個屬性）`,
+    blank1.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
   await page.evaluate(() => document.querySelector('.daycollapse.open .timeline').scrollIntoView({ block: 'start' }));
   await sleep(300);
 

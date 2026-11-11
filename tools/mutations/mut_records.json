@@ -57,21 +57,13 @@
     "cmd": "node scripts/recordstest.mjs"
   },
   {
-    "name": "表單動作列不黏",
-    "why": "回到修之前（2026-11-06 凌晨「存」被分頁列蓋住）。預期紅 recordstest 的航班那條「存看得到、沒被分頁列蓋住」；之後照畫面位置點到分頁列、連帶例外。住宿表單較短、不黏也在畫面內，住宿那條不紅（2026-11-06 實測；事前我預期兩條都紅、寫錯了）。",
-    "file": "css/style.css",
-    "find": ".fl-actions, .stay-actions { position: sticky;",
-    "replace": ".fl-actions, .stay-actions { position: static;",
-    "cmd": "node scripts/recordstest.mjs"
-  },
-  {
     "name": "日期列回到 1fr（頁面被撐到 413px）",
-    "why": "回到修之前的兩欄寫法與欄位寬度。預期紅 recordstest 的住宿那條「沒有把頁面撐寬」（413）；之後連帶例外，航班那條走不到。",
+    "why": "回到 11-06 修之前的寫法：欄寬 1fr（不是 minmax(0, 1fr)）、拿掉欄位的 min-width:0。預期紅 recordstest 的住宿那條「沒有把頁面撐寬」（413）；之後連帶例外，航班那條走不到。〔2026-11-11 v1.75.1 改成一整行之後重新對準新字串（原本對準兩欄的寫法、已經不存在），改寫後**還沒實跑**——守夜要補；同時刪掉「表單動作列不黏」：它守的黏底是 Yolin 要求拿掉的，改由 mut_fix1111.json「動作列改回黏底」與 recordstest「捲到底「存」完整露在分頁列上方」守。〕",
     "file": "css/style.css",
     "edits": [
-      { "find": ".stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }", "replace": ".stay-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }" },
-      { "find": ".fl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }", "replace": ".fl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }" },
-      { "find": ".stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; }", "replace": ".stay-daterow .xfield, .fl-row .xfield { min-width: 0; width: 100%; }" },
+      { "find": ".stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }", "replace": ".stay-daterow { display: grid; grid-template-columns: 1fr; gap: 10px; }" },
+      { "find": ".fl-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }", "replace": ".fl-row { display: grid; grid-template-columns: 1fr; gap: 10px; }" },
+      { "find": ".stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; font-size: min(1em, 6.4vw); }", "replace": ".stay-daterow .xfield, .fl-row .xfield { min-width: 0; width: 100%; font-size: min(1em, 6.4vw); }" },
       { "find": ".fl-field, .stay-field { min-width: 0; }", "replace": ".fl-xfield, .stay-xfield { min-width: 0; }" }
     ],
     "cmd": "node scripts/recordstest.mjs"

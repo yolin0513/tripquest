@@ -527,9 +527,16 @@ button.card { appearance: none; font: inherit; }
 .stay-form-t { margin: 0; }
 .stay-field { display: flex; flex-direction: column; gap: 4px; }
 .stay-label { font-weight: 800; }
-/* minmax(0,1fr)＋min-width:0：日期／時間輸入框的最小寬度比半個畫面寬，用 1fr 會把整頁撐到 413px、手機整頁縮小（2026-11-06 量到） */
-.stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-.stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; }
+/* 日期／時間各占一整行，不兩欄並排（2026-11-11，Yolin iPhone 實機截圖）：
+   iOS 的日期、時間輸入框有自己的最小寬度（量截圖約 214px，標準字級），不照 width:100% 縮——兩欄時每格只有約 184px，
+   輸入框撐出卡片右緣、左框壓在右框底下。2026-11-06 的 minmax(0,1fr)＋min-width:0 只擋住「整頁被撐寬」，
+   桌面 Chromium 會照 width:100% 縮，所以一直看起來正常。改成一整行：不靠 iOS 控制項肯不肯縮，在我們手上驗得到
+   （另一條路 -webkit-appearance:none 只能在 iPhone 上驗，不採用）。recordstest 用注入的最小寬度模擬 iOS 量這一條。 */
+.stay-daterow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+/* font-size min(1em, 6.4vw)：只有畫面很窄又是大字時才縮——320 寬（iPhone SE／mini 開「放大顯示」也是 320）＋特大字，
+   一整行也只有 258px，iOS 日期框約 283px（按標準字級量到的 214px 等比放大）放不下；縮成約 20.5px（仍大於標準字級的 18.9px）就放得下。
+   390 寬以上 6.4vw ≥ 特大字，完全不影響。比例是對著 recordstest 的模擬調的，沒在 iPhone 上量過。 */
+.stay-daterow .field, .fl-row .field { min-width: 0; width: 100%; font-size: min(1em, 6.4vw); }
 .stay-err { margin: 0; color: var(--danger-text); font-weight: 800; }
 .stay-err:empty { display: none; }
 .stay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -553,14 +560,17 @@ button.card { appearance: none; font: inherit; }
 .fl-sec { margin: 6px 0 0; font-weight: 900; }
 .fl-field { display: flex; flex-direction: column; gap: 4px; }
 .fl-label { font-weight: 800; }
-.fl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.fl-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }   /* 一整行：理由見上面 .stay-daterow */
 .fl-field, .stay-field { min-width: 0; }
 .fl-err { margin: 0; color: var(--danger-text); font-weight: 800; }
 .fl-err:empty { display: none; }
-/* 表單長、「存」會落在底部分頁列後面（_flightshots 實測點到了「照片」分頁）→ 動作列黏在分頁列上方，跟 .picked-bar 同一套 */
+/* 動作列不黏底（2026-11-11 拿掉 sticky）：2026-11-06 為了「表單長、『存』落在分頁列後面（_flightshots 點到了『照片』分頁）」
+   把它黏在分頁列上方，代價是捲動途中蓋住後面的欄位（Yolin iPhone 截圖：蓋住「到哪裡」）。
+   .page 底部本來就留了分頁列高度＋84px，捲到底「存」一定完整露在分頁列上方；recordstest 量兩件：捲動途中不蓋欄位、捲到底露得出來，
+   並用當初出事的點法（puppeteer 原生 click，不自己捲）再點一次「存」。 */
 /* 表單不用 .card（那是可點的列表卡：置中對齊、按下會縮）——2026-11-06 截圖看到欄位被擠到中間 */
 .fl-form, .stay-form { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); }
-.fl-actions, .stay-actions { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); z-index: 5;
+.fl-actions, .stay-actions {
   background: var(--bg-elev-2); border: 1px solid var(--line); border-radius: 14px; padding: 8px; margin: 0 -6px; }
 .fl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .fl-foot { margin-top: 16px; }
