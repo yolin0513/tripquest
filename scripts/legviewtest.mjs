@@ -98,7 +98,7 @@ try {
     `全部沒設定時：整個行程頁沒有空值被印成文字（掃了 ${blank0.texts} 個文字節點、${blank0.attrs} 個屬性；對照樣本${blank0.ok ? '全中' : '沒中：' + blank0.broken.join('、')}）`,
     blank0.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
 
-  // 二、從真實入口設：點「乙」前面那一列 → 選項打開 → 點「電車・捷運」
+  // 二、從真實入口設：點「乙」前面那一列 → 選項打開 → 點「鐵路」（代號 train；2026-11-11 前叫「電車・捷運」）
   const pickVia = async (spotId, mode) => {
     await page.evaluate((id) => document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`).scrollIntoView({ block: 'center' }), spotId);
     await page.click(`.daycollapse.open .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
@@ -118,7 +118,7 @@ try {
   await stable('.daycollapse.open .timeline');
   L = await legs();
   const byS = Object.fromEntries(L.map((x) => [x.spot, x]));
-  yes(byS[B]?.mode === 'train' && byS[B].text.includes('電車') && !byS[B].unset, `甲→乙 設成電車後那一列寫「${byS[B]?.text}」`);
+  yes(byS[B]?.mode === 'train' && byS[B].text.includes('鐵路') && !byS[B].unset, `甲→乙 設成鐵路（train）後那一列寫「${byS[B]?.text}」`);
   yes(byS[E]?.mode === 'bus' && byS[E].text.includes('公車'), `丁→戊 設成公車（${byS[E]?.text}）`);
   yes(byS[C]?.unset && byS[D]?.unset, '沒設的兩列（乙→丙、丙→丁）仍是「還沒設定」');
   const rec = await page.evaluate(async (id) => { const s = await import('./js/store.js'); const x = s.get(id); return { legFrom: x.legFrom, legMode: x.legMode, f: !!(x._f && x._f.leg) }; }, B);
@@ -208,10 +208,12 @@ try {
   const setFs = (v) => page.evaluate((v) => { if (v === 'm') delete document.documentElement.dataset.fs; else document.documentElement.dataset.fs = v; }, v);
   const opened6 = await openC();
   const shown = await page.evaluate((id) => [...document.querySelectorAll(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-opt .tl-leg-name`)].map((e) => e.textContent.trim()), C);
-  const WANT = ['走路', '電車・捷運', '公車', '搭車', '船', '飛機', '其他'];
-  // 對照組：名字改成可以折行、字放大，在最窄＋最大字那一格必須量到「折成 2 行」——量法抓不到折行，下面的「都一行」就不算數
+  const WANT = ['走路', '鐵路', '公車', '搭車', '船', '飛機', '其他'];
+  // 對照組：名字改成可以折行、寬度壓到 1 個字，必須量到「折成 2 行」——量法抓不到折行，下面的「都一行」就不算數。
+  // 第一版用「可折行＋字放大」：名字改短（最長 2 個字）之後放大也折不了行，對照組量不到、自己報紅（2026-11-11）——
+  // 對照組不能靠名字的長度，所以改成壓寬度，任何 2 個字以上的名字都一定折。
   await page.setViewport(MOB(320)); await setFs('xl');
-  await page.evaluate(() => { const s = document.createElement('style'); s.id = 'ctl-wrap'; s.textContent = '.tl-leg-name { white-space: normal !important; font-size: 1.4rem !important; }'; document.head.append(s); });
+  await page.evaluate(() => { const s = document.createElement('style'); s.id = 'ctl-wrap'; s.textContent = '.tl-leg-name { white-space: normal !important; display: inline-block; width: 1em !important; }'; document.head.append(s); });
   await sleep(120);
   const ctl = await legFit();
   await page.evaluate(() => document.getElementById('ctl-wrap')?.remove());
@@ -225,7 +227,7 @@ try {
   }
   await setFs('m'); await page.setViewport(MOB(390)); await sleep(150);
   yes(opened6 && shown.join('｜') === WANT.join('｜') && ctlCaught && combos === 15 && fitBad.length === 0,
-    `選項格子：7 格名字照順序（${shown.join('｜')}）、15 種寬度×字級每個名字都一行、都在格子裡（對照組：可折行＋大字時${ctlCaught ? '量得到折行' : '量不到折行'}）`,
+    `選項格子：7 格名字照順序（${shown.join('｜')}）、15 種寬度×字級每個名字都一行、都在格子裡（對照組：可折行＋壓成 1 字寬時${ctlCaught ? '量得到折行' : '量不到折行'}）`,
     [!opened6 && '選項打不開', `${fitBad.length} 處：` + fitBad.slice(0, 4).join('；'), !ctlCaught && `對照組 ${JSON.stringify(ctl.bad.slice(0, 2))}`].filter(Boolean).join('｜'));
 
   // 選了之後存進去的值：從畫面上寫「搭車」的那一格點（使用者看到的是字），存進去的必須是代號 car——
@@ -241,6 +243,15 @@ try {
   const btn6 = await page.$eval(`.daycollapse.open .tl-leg[data-spot="${C}"] .tl-leg-btn`, (e) => e.textContent.trim()).catch(() => '');
   yes(!!carTile && rec6.legMode === 'car' && rec6.legFrom === A && btn6.includes('搭車') && !btn6.includes('計程車'),
     `點畫面上寫「搭車」的那一格 → 存進去的是代號 car、前一站＝甲；按鈕寫「${btn6}」`, `${carTile ? '' : '找不到寫「搭車」的格子｜'}${JSON.stringify(rec6)}`);
+
+  // 舊值：舊版客戶端存的是代號（train），不是字；改名之後不遷移資料（Dispatch 2026-11-11：只在顯示層對應，伺服器不改寫）。
+  // 直接把一筆 train 寫進資料庫（不經新畫面，等於舊版手機推上來的那一筆）→ 重開頁面，那一列要寫新名字「鐵路」，
+  // 不能寫舊名字、也不能變「還沒設定」（換代號就會變這樣）。丙→乙 這段現在沒設定，前一站是丙。
+  await page.evaluate(async (id, from) => { const s = await import('./js/store.js'); await s.patch(id, { legFrom: from, legMode: 'train' }); }, B, C);
+  await openTrip();
+  const old6 = await page.evaluate((id) => { const li = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`); return { mode: li?.dataset.mode, text: li?.querySelector('.tl-leg-btn')?.textContent.trim() || '' }; }, B);
+  yes(old6.mode === 'train' && old6.text.includes('鐵路') && !old6.text.includes('電車') && !old6.text.includes('還沒設定'),
+    `舊版存的 train（直接寫進資料庫）→ 畫面寫新名字（「${old6.text}」）`, JSON.stringify(old6));
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {

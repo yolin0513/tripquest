@@ -5,10 +5,10 @@
   { "name": "選項：搭車存成新代號", "why": "（事前寫 2026-11-11）合併時最容易犯的錯：顯示的名字對了，存進去的值換成新代號（taxi）。預期只紅「點畫面上寫搭車的那一格 → 存進去的是代號 car」一條；別的選項照舊存 k，第二步電車、公車那幾條照樣綠。",
     "file": "js/views/trip.js", "find": "    onclick: () => save(k),", "replace": "    onclick: () => save(k === 'car' ? 'taxi' : k),",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過" },
-  { "name": "選項：名字不縮字", "why": "（事前寫 2026-11-11）拿掉 min(1rem, 10vw − 16px)，名字照原字級。nowrap 還在，所以不會折行、會超出格子。預期只紅「選項格子」一條，細節點名窄畫面＋大字的「超出格子」。",
-    "file": "css/style.css", "find": ".tl-leg-name { white-space: nowrap; font-size: min(1rem, calc(10vw - 16px)); line-height: 1.25; }", "replace": ".tl-leg-name { white-space: nowrap; line-height: 1.25; }",
+  { "name": "選項：鐵路改回舊名字", "why": "（事前寫 2026-11-11）train 的名字回到「電車・捷運」。預期紅 legviewtest 三條：第二步「甲→乙 設成鐵路（train）後那一列」、第六步「選項格子」（名字順序）、「舊版存的 train → 畫面寫新名字」。母體 25 項要跑滿。",
+    "file": "js/legs.js", "find": "train: '鐵路',", "replace": "train: '電車・捷運',",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過" },
-  { "name": "量法：不認折行", "why": "（事前寫 2026-11-11）量格子時不檢查行數。對照組（可折行＋大字）折行後每行都在格子裡、不會超出，只有行數抓得到——所以對照組量不到。預期只紅「選項格子」一條，細節寫「對照組」。",
+  { "name": "量法：不認折行", "why": "（事前寫 2026-11-11）量格子時不檢查行數。對照組（可折行＋壓成 1 字寬）折行後每行都在格子裡、不會超出，只有行數抓得到——所以對照組量不到。預期只紅「選項格子」一條，細節寫「對照組」。〔同一天對照組從「可折行＋大字」改成「壓成 1 字寬」（名字改短後原本的對照組折不了行）之後重跑。〕",
     "file": "scripts/legviewtest.mjs", "find": "      if (lines !== 1) bad.push(`「${nm.textContent}」折成 ${lines} 行`);", "replace": "      if (false) bad.push(`「${nm.textContent}」折成 ${lines} 行`);",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過" }
 ]

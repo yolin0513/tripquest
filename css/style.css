@@ -481,8 +481,9 @@ button.card { appearance: none; font: inherit; }
 .tl-leg-btn[aria-expanded="true"] .tl-leg-chev { display: inline-block; transform: rotate(90deg); }
 /* 選項（2026-11-11 Yolin 選 A：收起來、點了才展開；「選項內的文字及換行請整齊」）：兩欄大格子，圖示在上、名字在下。
    名字一律一行：寧可縮字或拉高格子，不准折成兩行（Dispatch 轉述的要求）。圖示放上面就是「拉高格子」——名字分到整格的寬度。
-   縮字：最長的名字「電車・捷運」5 個字，窄畫面＋大字時字級取 min(1rem, 10vw − 16px)；nowrap 是第二道（照現在的字長，
-   縮字那道在就不會折行，拿掉 nowrap 不會有測試紅——它守的是以後名字變長）。legviewtest 量 15 種寬度×字級。
+   縮字（min(1rem, 10vw − 16px)）＋nowrap 兩道都是為了「以後名字變長」：同一天名字改成「鐵路」「搭車」之後最長只有 2 個字，
+   現在不縮也放得下，拿掉任一道或兩道都不會有測試紅（等價突變，所以沒有登記突變）。原本最長的「電車・捷運」5 個字，
+   在 320 寬＋特大字時要靠縮字才放得下（突變第 558 次實測）。legviewtest 量 15 種寬度×字級。
    選中的打勾放右上角、不佔名字的寬度。 */
 .tl-leg-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; padding: 10px;
   border: 2px solid var(--line); border-radius: 16px; background: var(--bg-elev-2, var(--bg)); }
