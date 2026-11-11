@@ -1874,6 +1874,10 @@ textarea.field { resize: vertical; line-height: 1.6; }
 .pq-main { flex: 1; min-width: 0; }
 .pq-title { font-weight: 700; line-height: 1.4; }
 .pq-btns { display: flex; gap: 8px; flex: none; }
+/* 行程頁任務列的「編輯／刪除」加大到 48px（2026-11-12 守夜，Dispatch 代決定、可推翻；替代選項是接受現狀）：
+   原本是 .tag-btn 的 44px，tagtest 量到剛好 44 對門檻 ≥44——剛好等於下限等於沒有餘裕，44 是無障礙的最低要求、不是目標值。
+   只改這一處，不動全站的 .tag-btn（景點頁那幾顆一起變大會碰到已經貼著門檻的 densitytest）。 */
+.pq-row .tag-btn { min-height: 48px; }
 .badge-who { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
 .badge-who-btn {
   appearance: none; border: 2px solid var(--line); background: var(--bg-elev); color: var(--text);
