@@ -20,7 +20,10 @@ const MUTS = [
     expectFalse: ['漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期'], rc: 4 },
   // K5（2026-11-12 守夜補預期）：mutlint 加了第 5 件（find 不准帶 \r）的對照組「判定：只有 find 帶 \r 那一類也判有問題」，
   // 它要求 problems 是空的——一律報有問題時它也會 false。事前寫、這次一起實跑。
-  { name: 'K5 一律報有問題（該放的擋住）', edits: [["  if (checked !== pop) problems.push(", "  problems.push('一律');\n  if (checked !== pop) problems.push("]], expectFalse: ['齊全', '漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期', '判定：只有 find 帶 \\r 那一類也判有問題'], rc: 4 },
+  // 同一天實跑（.logs/res-1112-mutlintmut2.log）多一個 false：「量尺：有驅動引用的歸②」——scripts/mutlint.mjs 那個對照組要求
+  // r.problems.length === 0，一律報有問題時必然 false。它是 2026-10-02（上次登記指紋）之後別的工作階段加的，K5 的預期當時沒跟著補、
+  // mutlint_mut 也一直沒重跑。這一筆是**事後**補的（共用慣例 §5.22）：只當下一次的基準，不是預測能力的檢驗。
+  { name: 'K5 一律報有問題（該放的擋住）', edits: [["  if (checked !== pop) problems.push(", "  problems.push('一律');\n  if (checked !== pop) problems.push("]], expectFalse: ['齊全', '漏一筆（find 拼成 fnd）', '讀不懂的一份', '登記過期', '判定：只有 find 帶 \\r 那一類也判有問題', '量尺：有驅動引用的歸②'], rc: 4 },
 ];
 let bad = 0;
 const RUN = MUTS;
