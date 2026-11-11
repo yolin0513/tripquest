@@ -249,7 +249,12 @@ function controls() {
     ok.push([/突變 11 條/.test(out), '母體 11 條（補丁格式不算）', '']);
     ok.push([r.status === 0, `從命令列入口跑完回 0（實際 ${r.status}）`, '']);
     let pass = true;
-    for (const [g, what, l] of ok) { if (!g) { pass = false; console.log(`✗ 對照組：${what}${l ? '；實際那一行：' + l : '；實際沒有那一行'}`); } }
+    // 過了的也印一行 ✓（2026-11-11）：突變執行器先跑原樣、數行首 ✓／✗ 的行當母體——只在失敗時印，原樣就一項都數不到，
+    // 守 mutstale 的突變一條都跑不起來；也照共用慣例 §5.20「通過的時候也要印出算過的東西」
+    for (const [g, what, l] of ok) {
+      if (g) console.log(`✓ 對照組：${what}`);
+      else { pass = false; console.log(`✗ 對照組：${what}${l ? '；實際那一行：' + l : '；實際沒有那一行'}`); }
+    }
     console.log(`對照組 ${ok.filter((x) => x[0]).length}/${ok.length}${pass ? '' : '——沒過'}`);
     return pass && ok.length === 15;
   } finally {

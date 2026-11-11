@@ -1,0 +1,146 @@
+[
+  {
+    "name": "項數少了不擋（改回只看總結行）",
+    "why": "2026-11-11 的盲點本身：接住例外、印了總結就結束的那一次會被記成紅。預期紅 mutatetest 的 N3、N4、N6 第一條（混在一起那條的「沒跑完 1」變成紅）。",
+    "expect": ["N3 有總結行", "N4「✗ 例外」", "N6 混在一起"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (items < pop) return { kind: 'short', items };\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "項數多了不擋",
+    "why": "比母體多的那一次照結束碼記成紅。預期只紅 N5。",
+    "expect": ["N5 項數比母體多"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (items > pop) return { kind: 'extra', items };\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "「✗ 例外」也算項目",
+    "why": "打斷在最後一項之前、多印一行「✗ 例外」，項數剛好湊回母體。預期只紅 N4（N4 的樣本同時依靠「少了要擋」——那一支拿掉時 N4 也紅，見第一條；這一支被它包含，造不出只打到它的樣本，照 §5.3 寫明）。",
+    "expect": ["N4「✗ 例外」"],
+    "file": "scripts/mutate.mjs",
+    "find": "export const NON_ITEM = ['✗ 例外', ",
+    "replace": "export const NON_ITEM = [",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "「✗ 對照組沒過——」也算項目",
+    "why": "檢查器（mutstale、mutlint）對照組沒過時多印一行結論；算進項目的話每一次真的紅都多一項，被判成「項數不符」、沒有結果。預期只紅 N7（N7 子程序跑滿 3 項、紅了，只差多印那一行）。",
+    "expect": ["N7「✗ 對照組沒過——」"],
+    "file": "scripts/mutate.mjs",
+    "find": ", '✗ 對照組沒過——'];",
+    "replace": "];",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "沒有總結行也當正常結束",
+    "why": "崩潰的那一次改走「數項數」：被停掉、丟例外的變成沒跑完（回 9）而不是崩潰（回 7）；原樣崩潰變成原樣不是綠的。預期紅 H 的帳本與回傳值兩條、N2、O2。",
+    "expect": ["H 帳本記成", "H 回 7", "N2 崩潰", "O2 原樣崩潰"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (r.status === null || !doneRe.test(r.out || '')) return 'crash';",
+    "replace": "  if (r.status === null) return 'crash';",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "逾時當崩潰",
+    "why": "逾時的那一次分不出來。預期紅 G 的回傳值、帳本 kind、--no-result 理由三條，與 O3 第一條。",
+    "expect": ["G 卡住 →", "G 帳本記成", "G --no-result 列出", "O3 原樣逾時 →"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (r.timedOut) return 'timeout';\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "原樣不是綠的也拿來當母體",
+    "why": "原樣就紅的測試，改壞後照樣紅、被記成紅。預期只紅 O1。",
+    "expect": ["O1 原樣不是綠的"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (r.status !== 0) return { kind: 'not-green', items };\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "原樣一項都數不到也照跑",
+    "why": "母體 0 時「項數＝母體」永遠成立，等於沒有這道檢查。預期只紅 O4。",
+    "expect": ["O4 原樣一項都數不到"],
+    "file": "scripts/mutate.mjs",
+    "find": "  if (!items) return { kind: 'zero', items };\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "回傳值不讓「沒紅」先講",
+    "why": "混在一起時回的是沒跑完的 9，確定的發現（沒紅）被蓋掉。預期只紅 N6 第一條。",
+    "expect": ["N6 混在一起"],
+    "file": "scripts/mutate.mjs",
+    "find": "export const CODE_ORDER = ['not-red', 'unapplied', 'short', 'extra', 'timeout', 'crash', 'nobase'];",
+    "replace": "export const CODE_ORDER = ['unapplied', 'short', 'extra', 'timeout', 'crash', 'nobase', 'not-red'];",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "沒跑的那條記兩次（驗各類相加的檢查）",
+    "why": "各類相加≠選到的條數時要回 4。只有相加檢查會擋這一條：拿掉相加檢查時回 3、O 組照樣綠（所以「只拿掉相加檢查」是等價突變，不單獨列）。預期紅 O1～O4 的第一條。",
+    "expect": ["O1 原樣不是綠的", "O2 原樣崩潰", "O3 原樣逾時 →", "O4 原樣一項都數不到"],
+    "file": "scripts/mutate.mjs",
+    "find": "outcomes.push({ name: m.name, kind: 'nobase' });",
+    "replace": "outcomes.push({ name: m.name, kind: 'nobase' }, { name: m.name, kind: 'nobase' });",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "原樣每一條都重跑",
+    "why": "同一個 cmd 的原樣應該只跑一次（省時間；不影響對錯）。預期只紅 N6 第二條。",
+    "expect": ["N6 同一個 cmd"],
+    "file": "scripts/mutate.mjs",
+    "find": "    if (bases.has(k)) continue;\n",
+    "replace": "",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "原樣紀錄帶 result 欄",
+    "why": "mutstale 把帶 result 的帳本紀錄當成突變結果，原樣那一筆沒有 name／file，會被報成孤兒。預期只紅 E 正常跑完。",
+    "expect": ["E 正常跑完"],
+    "file": "scripts/mutate.mjs",
+    "find": "outcome: b.kind, items: b.items, status: r.status });",
+    "replace": "outcome: b.kind, result: b.kind, items: b.items, status: r.status });",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "紅了那一行改回舊格式",
+    "why": "行首字樣是給人跟程式分辨結果用的固定錨點。預期只紅 E 輸出。",
+    "expect": ["E 輸出"],
+    "file": "scripts/mutate.mjs",
+    "find": "console.log(`✓ 紅了｜${m.name}（結束碼",
+    "replace": "console.log(`✓ ${m.name}：紅了（結束碼",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "沒紅那一行改回舊格式",
+    "why": "同上，沒紅那一種。預期只紅 N1。",
+    "expect": ["N1 正常結束"],
+    "file": "scripts/mutate.mjs",
+    "find": "console.log(`✗ 沒紅｜${m.name}：跑滿",
+    "replace": "console.log(`✗ ${m.name}：沒紅、跑滿",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "崩潰跟沒跑完同一個回傳值",
+    "why": "四種結束方式要各有回傳值。預期紅 H 回 7、N2。",
+    "expect": ["H 回 7", "N2 崩潰"],
+    "file": "scripts/mutate.mjs",
+    "find": "crash: { mark: '⊘', label: '崩潰', result: 'no-result', code: 7 },",
+    "replace": "crash: { mark: '⊘', label: '崩潰', result: 'no-result', code: 9 },",
+    "cmd": "node scripts/mutatetest.mjs"
+  },
+  {
+    "name": "逾時跟崩潰同一個回傳值",
+    "why": "同上，逾時那一種。預期只紅 G 卡住。",
+    "expect": ["G 卡住 →"],
+    "file": "scripts/mutate.mjs",
+    "find": "timeout: { mark: '⊘', label: '逾時', result: 'no-result', code: 8 },",
+    "replace": "timeout: { mark: '⊘', label: '逾時', result: 'no-result', code: 7 },",
+    "cmd": "node scripts/mutatetest.mjs"
+  }
+]

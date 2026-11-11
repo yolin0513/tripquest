@@ -7,6 +7,19 @@
 //
 // 每一條：把 file 裡的 find（字面字串，必須恰好出現一次）換成 replace → 跑 cmd → 還原。期望 cmd 失敗（exit ≠ 0）。
 //
+// 先跑原樣、數母體（2026-11-11 守夜；修「被打斷的測試也印總結行、被記成紅」的盲點）：
+//   突變之前，每一種「cmd＋總結行樣式」先跑一次沒改的（共用慣例 §5.11：先在同一個環境跑一次原樣、確認是綠的），
+//   數它印了幾項＝母體。項目＝子程序輸出裡行首是 ✓ 或 ✗ 的行（不靠各測試的總結行——格式十幾種、很多只印通過數）。
+//   原樣不成立（逾時、崩潰、結束碼不是 0、一項都數不到）→ 那一組的突變一條都不跑，回 3。
+//   突變那一次分四種結束方式，各有行首字樣與回傳值：
+//     正常結束——有總結行、項數＝母體：結束碼非 0 是「✓ 紅了」，0 是「✗ 沒紅」（回 1）
+//     崩潰——沒有最後那一行總結（丟例外沒接住、被強制停掉）：「⊘ 崩潰」（回 7）
+//     逾時——超過時限被整棵殺掉：「⊘ 逾時」（回 8）
+//     沒跑完——有總結行，但項數比母體少（測試接住例外、印了總結就結束）：「⊘ 沒跑完」；比母體多：「⊘ 項數不符」（都回 9）
+//   後三種都是「沒有結果」：帳本記 no-result，不算紅、也不算跑過。
+//   為什麼不能只看總結行：2026-11-11 legviewtest 被時序問題打斷在 7/25 項，測試接住例外、照樣印「6 項通過、1 項失敗」，
+//   執行器記成紅（第 547、550、557、560、561、563、565、567 次）。環境出錯的方式有無數種，結果只有一種：項數不夠。
+//
 // 為什麼要護欄：原本直接改主工作區、只靠 finally 寫回。程式被殺掉、當機、斷電時 finally 不會跑，壞檔留在工作區，
 // 下一次 commit 可能帶出去；下一次開跑還會把壞檔當成原檔備份，「還原」把壞檔還原回去。
 //
@@ -18,7 +31,10 @@
 //   · 有還原紀錄：帳本最後一筆未收尾的必須是同一次、同一支檔，否則拒絕（回 6）；一致 → 照它寫回原檔、核對雜湊、刪掉、帳本記「第 N 次中斷後已還原」。
 //   · 沒有還原紀錄、帳本卻有未收尾的：那支檔現在的雜湊 ≠ 帳本記的原檔雜湊 → 拒絕（回 5），指出第幾次、哪支檔；
 //     相等 → 照跑並註明（中斷落在「刪還原紀錄」與「記完成」之間時就是這樣，檔案沒事；一律拒絕會變成永遠關著的閘）。
-// 回傳值：0 照預期；1 有突變沒紅；2 工作區不符；4 檢查器自己壞了（讀不到、還原後雜湊不對）；5 上次中斷、還原紀錄不見；6 兩處紀錄不一致。
+// 回傳值：0 照預期（每一條都正常結束、跑滿母體、紅了）；1 有突變沒紅；2 工作區不符、清單被拒、或 find 對不上（沒套上）；
+//   3 原樣不成立（那一組沒跑）；4 檢查器自己壞了（讀不到、還原後雜湊不對、各類相加對不上）；5 上次中斷、還原紀錄不見；
+//   6 兩處紀錄不一致；7 有突變崩潰；8 有突變逾時；9 有突變項數不對母體（沒跑完或多了）。
+//   好幾條結果不同時照 CODE_ORDER 取第一個出現的（沒紅先講——那是確定的發現），最後一行列出每一類各幾條。
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,6 +75,55 @@ export function lintCmds(list) {
   return { checked: list.length, bad };
 }
 const short =(s) => String(s).slice(0, 12);
+
+// ---------- 跑完沒：數項數，對原樣的母體 ----------
+// 不算項目的行（登記制：只登記實際在突變紀錄裡看過、逐行看過的；比對行首字首）：
+//   「✗ 例外」——測試接住例外時印的，不是斷言（2026-11-11 盤 355 份 .logs/mutate-out.*.log：19 行）。
+//     不排除它的話，打斷在最後一項之前、再多印一行「✗ 例外」，項數剛好湊回母體。
+//   「✗ 對照組沒過——」——mutstale、mutlint 對照組沒過時多印的結論行（同一次盤點：19 行，只在這兩支）。那兩支的項目是
+//     每個對照組一行 ✓／✗，結論行只在沒過時印；算進去的話，每一次真的紅都會多一項、被判成「項數不符」。
+//     （第一次盤點時漏看了這一種、註解寫成「其他非斷言的 ✗ 行都沒出現過」——2026-11-11 用新規則回頭數 mutstale 的紀錄才發現，已更正。）
+//   新的非斷言行會讓項數多於母體 →「⊘ 項數不符」、沒有結果（保守的方向：不會把沒跑完的記成紅），看過再補登。
+export const NON_ITEM = ['✗ 例外', '✗ 對照組沒過——'];
+export const countItems = (out) => String(out || '').split(/\r?\n/).filter((l) => /^[✓✗]/.test(l) && !NON_ITEM.some((p) => l.startsWith(p))).length;
+// 一次子程序怎麼結束的（原樣與突變共用）：timeout 逾時被殺／crash 沒有總結行或被外力停掉／ended 正常結束
+export function endKind(r, doneRe) {
+  if (r.timedOut) return 'timeout';
+  if (r.status === null || !doneRe.test(r.out || '')) return 'crash';
+  return 'ended';
+}
+// 原樣那一次：正常結束、結束碼 0、數得到項目，才拿來當母體
+export function judgeBase(r, doneRe) {
+  const items = countItems(r.out);
+  const end = endKind(r, doneRe);
+  if (end !== 'ended') return { kind: end, items };
+  if (r.status !== 0) return { kind: 'not-green', items };
+  if (!items) return { kind: 'zero', items };
+  return { kind: 'ok', items };
+}
+// 突變那一次：正常結束而且項數＝母體，才看結束碼分紅／沒紅
+export function judge(r, doneRe, pop) {
+  const items = countItems(r.out);
+  const end = endKind(r, doneRe);
+  if (end !== 'ended') return { kind: end, items };
+  if (items < pop) return { kind: 'short', items };
+  if (items > pop) return { kind: 'extra', items };
+  return { kind: r.status !== 0 ? 'red' : 'not-red', items };
+}
+export const KIND = {
+  red: { mark: '✓', label: '紅了', result: 'red', code: 0 },
+  'not-red': { mark: '✗', label: '沒紅', result: 'not-red', code: 1 },
+  crash: { mark: '⊘', label: '崩潰', result: 'no-result', code: 7 },
+  timeout: { mark: '⊘', label: '逾時', result: 'no-result', code: 8 },
+  short: { mark: '⊘', label: '沒跑完', result: 'no-result', code: 9 },
+  extra: { mark: '⊘', label: '項數不符', result: 'no-result', code: 9 },
+  unapplied: { mark: '⊘', label: '沒套上', result: null, code: 2 },
+  nobase: { mark: '⊘', label: '沒跑', result: null, code: 3 },
+};
+export const CODE_ORDER = ['not-red', 'unapplied', 'short', 'extra', 'timeout', 'crash', 'nobase'];
+const BASE_WHY = {
+  timeout: '原樣逾時被殺', crash: '原樣崩潰（沒有最後那一行總結）', 'not-green': '原樣不是綠的', zero: '原樣一項都數不到（沒有行首是 ✓／✗ 的行，無法判斷突變那次有沒有跑完）',
+};
 
 function fsyncWrite(file, data, flag = 'w') {
   const fd = fs.openSync(file, flag);
@@ -190,17 +255,44 @@ async function main() {
     if (dirty.size) console.log(`註：--only 模式，工作區有 ${dirty.size} 個進版控的檔跟 HEAD 不一樣（允許）`);
   }
 
-  let bad = 0;
+  // 原樣基準：每一種「cmd＋總結行樣式」跑一次沒改的，數母體。逾時取那一組裡最長的。
+  fs.mkdirSync(LOGS, { recursive: true });
+  const groupKey = (m) => `${m.cmd}\u0000${m.done || ''}`;
+  const bases = new Map();
   for (const m of list) {
+    const k = groupKey(m);
+    if (bases.has(k)) continue;
+    const timeoutMs = Math.max(...list.filter((x) => groupKey(x) === k).map((x) => x.timeoutMs || 400000));
+    const doneRe = m.done ? new RegExp(m.done, 'm') : DONE_RE;
+    const seq = nextSeq(readLedger());
+    const r = await runWithTimeout(m.cmd, [], { cwd: ROOT, shell: true, timeoutMs });
+    const b = judgeBase(r, doneRe);
+    fs.writeFileSync(path.join(LOGS, `mutate-base.${seq}.log`), r.out || '');
+    // 不帶 name、不帶 result：帳本的讀者（--no-result、mutstale）只認有 result 的突變紀錄，原樣不是突變
+    ledgerAdd({ seq, event: 'baseline', cmd: m.cmd, ...(m.done ? { done: m.done } : {}), outcome: b.kind, items: b.items, status: r.status });
+    bases.set(k, { ...b, seq, doneRe, timeoutMs });
+    if (b.kind === 'ok') console.log(`原樣｜${m.cmd}：正常結束、結束碼 0、母體 ${b.items} 項（數行首 ✓／✗ 的行；第 ${seq} 次，全文 .logs/mutate-base.${seq}.log）`);
+    else {
+      const why = b.kind === 'timeout' ? `${BASE_WHY.timeout}（${timeoutMs / 1000} 秒）` : b.kind === 'not-green' ? `${BASE_WHY['not-green']}（結束碼 ${r.status}）` : BASE_WHY[b.kind];
+      const tail = (r.out || '').split('\n').map((l) => l.trimEnd()).filter(Boolean).slice(-8);
+      console.log(`⊘ 原樣不成立｜${m.cmd}：${why}——這一組的突變一條都不跑（第 ${seq} 次，全文 .logs/mutate-base.${seq}.log）\n${tail.map((l) => '     │ ' + l.slice(0, 160)).join('\n')}`);
+    }
+  }
+
+  const outcomes = [];   // 每一條突變的結果，各一筆；最後各類相加要等於選到的條數
+  const runSeqs = [];
+  for (const m of list) {
+    const base = bases.get(groupKey(m));
+    if (!base || base.kind !== 'ok') { outcomes.push({ name: m.name, kind: 'nobase' }); console.log(`⊘ 沒跑｜${m.name}：原樣不成立（見上面「原樣不成立」那一行）`); continue; }
     const f = path.join(ROOT, m.file);
     const orig = fs.readFileSync(f);
     let text = orig.toString('utf8'), okAll = true;
     for (const e of editsOf(m)) {
       const n = text.split(e.find).length - 1;
-      if (n !== 1) { console.log(`✗ ${m.name}：find 出現 ${n} 次（要恰好 1 次），沒跑\n     ${e.find.slice(0, 80)}`); okAll = false; break; }
+      if (n !== 1) { console.log(`⊘ 沒套上｜${m.name}：find 出現 ${n} 次（要恰好 1 次），沒跑\n     ${e.find.slice(0, 80)}`); okAll = false; break; }
       text = text.replace(e.find, e.replace);
     }
-    if (!okAll) { bad++; continue; }
+    if (!okAll) { outcomes.push({ name: m.name, kind: 'unapplied' }); continue; }
     if (fs.existsSync(PENDING)) { console.log('✗ 要寫還原紀錄時發現它已經存在（上一支還沒收尾）——停下'); return 6; }
     const sha = sha1(orig);
     const seq = nextSeq(readLedger());
@@ -216,21 +308,27 @@ async function main() {
     }
     if (sha1(fs.readFileSync(f)) !== sha) { console.log(`✗ ${m.file} 還原後雜湊不對——還原紀錄保留，下次啟動會照它還原`); return 4; }
     fs.rmSync(PENDING);
-    // 結果分三種：紅了／沒紅／沒有結果（逾時被殺）。**沒有結果不是通過**——記成跑過了，下一次就會被當成「跑過了」而跳過
-    // 跑完＝有最後那一行總結（2026-10-02，MealMate 撞到：Windows 上被強制停掉時結束碼是 1，跟斷言失敗一模一樣，
-    // 前面幾節本來就印 ✗ 的測試被停掉，會被記成「紅了」）。總結行預設是「N 項通過」或「✓ 全部通過」，測試不一樣的在清單裡寫 done（regex 字串）。
-    const doneRe = m.done ? new RegExp(m.done, 'm') : DONE_RE;
-    const finished = !r.timedOut && r.status !== null && doneRe.test(r.out || '');
-    const result = r.timedOut || !finished ? 'no-result' : r.status !== 0 ? 'red' : 'not-red';
-    const why = r.timedOut ? `逾時 ${(m.timeoutMs || 400000) / 1000} 秒被殺` : !finished ? `沒跑完：沒有最後那一行總結（結束碼 ${r.status}，可能是被強制停掉）` : null;
-    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, ...(why ? { reason: why } : {}) });
+    // 結果：紅了／沒紅／沒有結果（崩潰、逾時、沒跑完、項數不符）。**沒有結果不是通過**——記成跑過了，下一次就會被當成「跑過了」而跳過。
+    // 有總結行不等於跑完（2026-11-11）：測試接住例外、印了總結就結束，結束碼 1、跟斷言失敗一模一樣——所以還要項數＝原樣的母體。
+    // 沒有總結行＝崩潰（2026-10-02，MealMate：Windows 上被強制停掉時結束碼也是 1）。
+    // 總結行預設是「N 項通過」或「✓ 全部通過」，測試不一樣的在清單裡寫 done（regex 字串）；原樣那一次用同一個樣式，樣式過期會在原樣就擋下。
+    const j = judge(r, base.doneRe, base.items);
+    const result = KIND[j.kind].result;
+    const why = j.kind === 'timeout' ? `逾時 ${(m.timeoutMs || 400000) / 1000} 秒被殺`
+      : j.kind === 'crash' ? `崩潰：沒有最後那一行總結（結束碼 ${r.status}，丟了例外沒接住或被強制停掉）`
+        : j.kind === 'short' ? `沒跑完：只跑了 ${j.items}/${base.items} 項（結束碼 ${r.status}）`
+          : j.kind === 'extra' ? `項數不符：跑了 ${j.items} 項、原樣是 ${base.items} 項（結束碼 ${r.status}）` : null;
+    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, kind: j.kind, items: j.items, pop: base.items, base: base.seq, ...(why ? { reason: why } : {}) });
+    outcomes.push({ name: m.name, kind: j.kind });
+    runSeqs.push(seq);
     // 每一次都把子程序的全文留下來（不只沒有結果的時候）：判「紅的理由對不對」要看到**全部**紅的項目——
     // 別的情境也紅了，就是被別的規則碰巧擋下（2026-10-28：原本只印前 4 行 ✗、紅了不留全文，
     // pushgatetest 那條第 5 行以後有沒有紅、紅在哪，事後查不到，那筆結果只好重跑）
     fs.writeFileSync(path.join(LOGS, `mutate-out.${seq}.log`), r.out || '');
     const reds = (r.out || '').split('\n').map((l) => l.trimEnd()).filter((l) => l.startsWith('✗'));
-    if (result === 'red') console.log(`✓ ${m.name}：紅了（exit ${r.status}；✗ ${reds.length} 行，全部列在下面；全文在 .logs/mutate-out.${seq}.log）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
-    else { bad++; console.log(`✗ ${m.name}：${result === 'no-result' ? `${r.timedOut ? '逾時被殺' : '沒跑完（沒有最後那一行總結）'}——沒有結果（不算紅、也不算跑過）` : '沒紅（照樣全綠）'}`); }
+    if (result === 'red') console.log(`✓ 紅了｜${m.name}（結束碼 ${r.status}；跑滿 ${j.items}/${base.items} 項；✗ ${reds.length} 行，全部列在下面；全文在 .logs/mutate-out.${seq}.log）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
+    else if (result === 'not-red') console.log(`✗ 沒紅｜${m.name}：跑滿 ${j.items}/${base.items} 項、結束碼 0——照樣全綠`);
+    else { const lb = KIND[j.kind].label; console.log(`${KIND[j.kind].mark} ${lb}｜${m.name}：${why.startsWith(lb + '：') ? why.slice(lb.length + 1) : why}——沒有結果（不算紅、也不算跑過）`); }
     // 沒有結果時把子程序的輸出留下來：不然看不出是丟了例外、被殺、還是測試本來就不印總結行
     // （2026-10-28：scrolltest 兩條突變連兩天「沒有結果」，其實都紅了，只是 scrolltest 不印總結行）
     if (result === 'no-result') {
@@ -246,8 +344,17 @@ async function main() {
     if (!after || after.size) { console.log(`✗ 跑完工作區不等於 HEAD：${after ? [...after.keys()].join('、') : '讀不到'}`); return 4; }
     console.log('\n跑完工作區＝HEAD');
   }
-  console.log(`${list.length - bad}/${list.length} 條照預期紅`);
-  return bad ? 1 : 0;
+  // 各類從每一條自己的結果數；帳本那一側另外數（真的跑了的那幾條，帳本裡要各有一筆收尾）——兩個來源對不上就是執行器自己壞了
+  const tally = Object.fromEntries(Object.keys(KIND).map((k) => [k, outcomes.filter((o) => o.kind === k).length]));
+  const sum = Object.values(tally).reduce((a, b) => a + b, 0);
+  let ledgerDone = -1;
+  try { const L = readLedger(); ledgerDone = runSeqs.filter((s) => L.some((e) => e.seq === s && e.event === 'done')).length; } catch { ledgerDone = -1; }
+  console.log(`\n結果：紅 ${tally.red}、沒紅 ${tally['not-red']}、崩潰 ${tally.crash}、逾時 ${tally.timeout}、沒跑完 ${tally.short}、項數不符 ${tally.extra}、`
+    + `沒套上 ${tally.unapplied}、沒跑（原樣不成立）${tally.nobase}——相加 ${sum}、選到 ${list.length} 條；真的跑了 ${runSeqs.length} 條、帳本收尾 ${ledgerDone} 筆`);
+  if (sum !== list.length || outcomes.length !== list.length || ledgerDone !== runSeqs.length) { console.log('✗ 各類相加、選到的條數、帳本收尾筆數對不上——執行器自己算錯了'); return 4; }
+  console.log(`${tally.red}/${list.length} 條照預期紅`);
+  const first = CODE_ORDER.find((k) => tally[k]);
+  return first ? KIND[first].code : 0;
 }
 
 // 直接執行才跑（讓 lintMutations 可以被別支 import 去掃既有的突變清單）

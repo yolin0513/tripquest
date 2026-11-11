@@ -181,6 +181,9 @@ export function controls(tmp, log = console.log) {
   fs.rmSync(tmp, { recursive: true, force: true });
   fs.rmSync(srcRoot, { recursive: true, force: true });
   log(`對照組：${Object.entries(results).map(([k, v]) => `${k}＝${v}`).join('、')}`);
+  // 每個對照組一行 ✓／✗（2026-11-11）：突變執行器先跑原樣、數行首 ✓／✗ 的行當母體——原本過了一行都不印，母體 0 項，
+  // 守 mutlint 的突變一條都跑不起來。過與沒過都印、行數固定（沒過時多印的「✗ 對照組沒過——」結論行在執行器登記成不算項目）
+  for (const [k, v] of Object.entries(results)) log(`${v ? '✓' : '✗'} 對照組｜${k}`);
   return Object.values(results).every(Boolean);
 }
 

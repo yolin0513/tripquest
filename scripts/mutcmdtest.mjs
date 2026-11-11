@@ -48,7 +48,8 @@ cgit('config', 'core.autocrlf', 'false');
 // 工作區的版本蓋過去：被驗的是工作區這一份（含還沒 commit 的改動、含突變）
 for (const f of ['scripts/mutate.mjs', 'scripts/worktree-guard.mjs', 'scripts/run-timeout.mjs', 'scripts/proctree.mjs', '.gitignore']) fs.copyFileSync(path.join(ROOT, f), P(f));
 fs.writeFileSync(P('zz-target.txt'), 'alpha\n');
-fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了\\n\\n0 項通過，有失敗'); process.exit(1); } console.log('1 項通過');\n");
+// 原樣時印一行 ✓：mutate.mjs 先跑原樣、數母體（2026-11-11），一項都數不到會整組不跑
+fs.writeFileSync(P('scripts/zz-check.mjs'), "import fs from 'node:fs'; const b = fs.readFileSync('zz-target.txt', 'utf8').includes('BROKEN'); fs.mkdirSync('.logs', { recursive: true }); fs.appendFileSync('.logs/zz-marker.txt', (b ? 'broken' : 'orig') + '\\n'); if (b) { console.log('✗ 目標被改壞了\\n\\n0 項通過，有失敗'); process.exit(1); } console.log('✓ 目標是原樣\\n\\n1 項通過');\n");
 cgit('add', '-A');
 cgit('commit', '-q', '-m', 'mutcmd 起點');
 const START = cgit('rev-parse', 'HEAD').trim();
@@ -97,8 +98,8 @@ console.log('\n— I2 合形狀的照跑（反向） —');
   pre(reset(), '前置：I2 clone 在起點');
   const { f } = writeList([GOOD]);
   const r = run('--only', f);
-  yes(r.code === 0 && /^檢查 1\/1 條 cmd，0 條不是/m.test(r.out) && marks().join(',') === 'broken' && sha1(P('zz-target.txt')) === ORIG,
-    `I2 只有合形狀的 → 照跑：探針看到改壞版一次、目標檔還原（實得 ${r.code}、標記 ${marks().join(',') || '無'}）`, r.out.slice(-400));
+  yes(r.code === 0 && /^檢查 1\/1 條 cmd，0 條不是/m.test(r.out) && marks().join(',') === 'orig,broken' && sha1(P('zz-target.txt')) === ORIG,
+    `I2 只有合形狀的 → 照跑：探針先看到原樣一次、再看到改壞版一次、目標檔還原（實得 ${r.code}、標記 ${marks().join(',') || '無'}）`, r.out.slice(-400));
 }
 
 console.log('\n— I3 真實資料 —');

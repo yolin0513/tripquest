@@ -12,7 +12,7 @@ const COPY = path.join(REPO, '.logs', 'mg-mut');
 const MUTS = [
   { name: 'G0 不改（基準）', expect: [] },
   { name: 'G1 拿掉嚴格模式的工作區檢查', find: 'if (!onlyMode && dirty.size) {', repl: 'if (false) {', expect: ['A '] },
-  { name: 'G2 工作區檢查改成一律拒絕', find: 'if (!onlyMode && dirty.size) {', repl: 'if (true) {', expect: ["A' ", 'A" ', 'E '], expectUnformed: ['B—', 'C—', "C'—", 'C"—', 'D—', '前置：卡住的探針'] },   // 一律拒絕時 B／C／D 的殺程序情境造不出來＝未成立，不算擋下的證據
+  { name: 'G2 工作區檢查改成一律拒絕', find: 'if (!onlyMode && dirty.size) {', repl: 'if (true) {', expect: ["A' ", 'A" ', 'E ', 'N1 ', 'N5 ', 'N6 ', 'O1 ', 'O2 ', 'O3 原樣逾時 →', 'O4 '], expectUnformed: ['B—', 'C—', "C'—", 'C"—', 'D—', '前置：卡住的探針', '前置：N2', '前置：N3', '前置：N4', '前置：N7', '前置：O3'] },   // 一律拒絕時 B／C／D 的殺程序情境造不出來＝未成立，不算擋下的證據；N、O 組（2026-11-11 加）的預期是推論、這次沒實跑
   { name: 'G3 啟動時不寫回原檔', find: 'fs.writeFileSync(path.join(ROOT, pending.file), buf);', repl: 'void buf;', expect: ['B '] },
   { name: 'G4 拿掉兩處一致的檢查', find: 'if (!open || open.seq !== pending.seq || open.file !== pending.file || open.sha !== pending.sha) {', repl: 'if (false) {', expect: ['D '] },
   { name: 'G5 還原紀錄不見、檔案不是原檔也照跑', find: 'if (now !== want) {', repl: 'if (false) {', expect: ['C '] },
