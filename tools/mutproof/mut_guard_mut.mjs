@@ -12,7 +12,14 @@ const COPY = path.join(REPO, '.logs', 'mg-mut');
 const MUTS = [
   { name: 'G0 不改（基準）', expect: [] },
   { name: 'G1 拿掉嚴格模式的工作區檢查', find: 'if (!onlyMode && dirty.size) {', repl: 'if (false) {', expect: ['A '] },
-  { name: 'G2 工作區檢查改成一律拒絕', find: 'if (!onlyMode && dirty.size) {', repl: 'if (true) {', expect: ["A' ", 'A" ', 'E ', 'N1 ', 'N5 ', 'N6 ', 'O1 ', 'O2 ', 'O3 原樣逾時 →', 'O4 '], expectUnformed: ['B—', 'C—', "C'—", 'C"—', 'D—', '前置：卡住的探針', '前置：N2', '前置：N3', '前置：N4', '前置：N7', '前置：O3'] },   // 一律拒絕時 B／C／D 的殺程序情境造不出來＝未成立，不算擋下的證據；N、O 組（2026-11-11 加）的預期是推論、這次沒實跑
+  { name: 'G2 工作區檢查改成一律拒絕', find: 'if (!onlyMode && dirty.size) {', repl: 'if (true) {', expect: ["A' ", 'A" ', 'E ', 'N1 ', 'N5 ', 'N6 ', 'O1 ', 'O2 ', 'O3 原樣逾時 →', 'O4 '], expectUnformed: ['B—', 'C—', "C'—", 'C"—', 'D—', '前置：卡住的探針', '前置：N2', '前置：N3', '前置：N4', '前置：N7', '前置：O3 卡住的原樣', '前置：被停掉的探針', '前置：紅六項的那一條'] },   // 一律拒絕時 B／C／D 的殺程序情境造不出來＝未成立，不算擋下的證據；N、O 組（2026-11-11 加）的預期是推論、這次沒實跑
+  // 2026-11-12 守夜：「前置：O3」同時是「前置：O3 clone 在起點」與「前置：O3 卡住的原樣真的跑起來了」的開頭，預期檢查回 8（不唯一）、沒跑。
+  // 讀 mutatetest：前者是 reset()、跟 mutate 無關，一律拒絕時照樣成立；後者要 mutate 先跑原樣才有探針——一律拒絕時 mutate 在跑原樣前就回 2，
+  // 探針不會起來＝未成立。所以改成只對到後者（看到突變結果之前改的，仍是事前）。
+  // 同一天實跑（.logs/res-1112-item4b-guard.log）：G2 紅的 12 條全在 expect 裡，但多了 2 行預期外的「⊘ 情境未成立」——
+  // H 組「前置：被停掉的探針…」、I 組「前置：紅六項的那一條…」（一律拒絕時 mutate 不跑，H、I 的情境也造不出來；當初清單漏列）。
+  // scripts/evidence.mjs 據此判 G2＝情境未成立（驅動自己那行印 ✓，因為驅動的判定不看未成立——見 STATUS 待辦）。
+  // 這兩筆是**事後**補的（共用慣例 §5.22）：只當下一次的基準，不是預測能力的檢驗。
   { name: 'G3 啟動時不寫回原檔', find: 'fs.writeFileSync(path.join(ROOT, pending.file), buf);', repl: 'void buf;', expect: ['B '] },
   { name: 'G4 拿掉兩處一致的檢查', find: 'if (!open || open.seq !== pending.seq || open.file !== pending.file || open.sha !== pending.sha) {', repl: 'if (false) {', expect: ['D '] },
   { name: 'G5 還原紀錄不見、檔案不是原檔也照跑', find: 'if (now !== want) {', repl: 'if (false) {', expect: ['C '] },
@@ -57,5 +64,6 @@ for (const m of RUN) {
   for (const l of reds) console.log('     ✗ ' + l.slice(0, 90));
 }
 fs.rmSync(COPY, { recursive: true, force: true });
-console.log(bad ? `${bad} 條不照預期` : `${MUTS.length} 條全部照預期`);
+// 2026-11-12：原本印 MUTS.length——只跑 G0、G2 兩條時也印「8 條全部照預期」（共用慣例 §5.21：從清單走出來的數不算）。
+console.log(bad ? `${bad} 條不照預期（跑了 ${RUN.length} 條／清單 ${MUTS.length} 條）` : `跑了 ${RUN.length} 條（清單 ${MUTS.length} 條）全部照預期——驅動的判定只看紅的，「情境未成立」以 scripts/evidence.mjs 的分類為準`);
 process.exitCode = bad ? 1 : 0;

@@ -24,7 +24,10 @@ const MUTS = [
   // 2026-11-11 重新對準：mutate.mjs 改成「原樣母體＋四種結束方式」，原本那一行（timedOut 時 result 記 no-result）不在了。
   // 現在逾時那一支是 endKind 的第一行；拿掉它，逾時（status 為 null）會落到崩潰——分不出逾時。預期是推論、這次改寫後沒實跑。
   { name: 'T3 逾時分不出來（落到崩潰）', test: 'scripts/mutatetest.mjs', file: 'scripts/mutate.mjs',
-    find: "  if (r.timedOut) return 'timeout';\n", repl: '', expect: ['G 卡住', 'G 帳本記成 no-result', 'G --no-result 列出', 'O3 原樣逾時 →'] },
+    find: "  if (r.timedOut) return 'timeout';\n", repl: '', expect: ['G 卡住 →', 'G 帳本記成 no-result', 'G --no-result 列出', 'O3 原樣逾時 →'] },
+  // 2026-11-12 守夜：「G 卡住」同時是「G 卡住 → 回 8…」與「G 卡住的探針整棵被殺掉」的開頭，預期檢查回 8（不唯一）、沒跑。
+  // 逾時落到崩潰時紅的是回傳值那一條；殺程序樹照做（runWithTimeout 不經 endKind），後者不該紅——改成只對到前者
+  // （跟 mut_mutate_items「逾時當崩潰」的寫法一致；看到突變結果之前改的，仍是事前）。
   { name: 'T4 沒有結果的清單永遠是空的', test: 'scripts/mutatetest.mjs', file: 'scripts/mutate.mjs',
     find: "filter((e) => e.result === 'no-result')", repl: 'filter(() => false)', expect: ['B 被中斷的那一次', 'G --no-result 列出', 'G 手動把', 'G 再正常跑一次'] },
 ];
