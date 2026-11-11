@@ -12,7 +12,7 @@
     "file": "css/style.css", "find": ".fl-actions, .stay-actions {", "replace": ".fl-actions, .stay-actions { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); z-index: 5;",
     "cmd": "node scripts/recordstest.mjs" },
   { "name": "空值：清除鈕改回 append(null)", "why": "（事前寫 2026-11-11）bug 回來。預期只紅 legviewtest 兩行掃描：「全部沒設定時」（4 處 null）、「設了兩段、兩段沒設時」（2 處）。",
-    "file": "js/views/trip.js", "find": "  if (cur) pick.append(h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, '清除'));", "replace": "  pick.append(cur ? h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, '清除') : null);",
+    "file": "js/views/trip.js", "find": "  if (cur) pick.append(h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, h('span', { class: 'tl-leg-name' }, '清除')));", "replace": "  pick.append(cur ? h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, h('span', { class: 'tl-leg-name' }, '清除')) : null);",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過" },
   { "name": "空值掃描：不認 [object Object]", "why": "（事前寫 2026-11-11）預期 legviewtest 兩行掃描都紅（對照樣本沒中→ok 為假），第一行點名「文字 [object Object]」。",
     "file": "scripts/blanktext.mjs", "find": " || s.includes('[object Object]')", "replace": "",

@@ -3,7 +3,8 @@
 // 從一次性的 _legshots（被 .gitignore 擋）搬進來：2026-11-05 Dispatch——今天做的畫面只被不會自動跑的腳本驗過，
 // 明天任何改動弄壞它都不會有東西紅。截圖與「實際大小輪廓」那段留在一次性腳本，這支只放斷言。
 // 驗什麼：時間軸兩站之間的設定列（不預選、真實點擊設定、存 legFrom＋_f.leg）、播放游標依段換圖示
-// （夾著沒座標的站＝圓點）、重排（走「調整每天的行程」的 ▼ 按鈕）與刪站後舊選擇不套用＋沒動到的那段仍在。
+// （夾著沒座標的站＝圓點）、重排（走「調整每天的行程」的 ▼ 按鈕）與刪站後舊選擇不套用＋沒動到的那段仍在；
+// 選項格子（2026-11-11 A 方案：名字一律一行、15 種寬度×字級）與「點寫著搭車的那一格 → 存 car」。
 // 已知捷徑：刪站用 store.remove（畫面上的刪站在景點設定頁，這支沒走）。
 // 突變實測（2026-11-05，在 _legshots 上）：拿掉 js/legs.js 的 legFrom 比對 → 正好紅重排兩條＋刪站一條。
 // 圖磚攔成本機合成格線，不打 OSM。資料是合成的（日期 2024 年、店名自編）。
@@ -175,6 +176,71 @@ try {
   L = await legs();
   const b3 = Object.fromEntries(L.map((x) => [x.spot, x]));
   yes(b3[E]?.unset && b3[E].mode === '', `刪掉丁之後 乙→戊 不套用舊的「公車」（寫「${b3[E]?.text}」）`);
+
+  // 六、選項的格子（2026-11-11 Yolin 選 A：「選項內的文字及換行請整齊」；開車・計程車改名「搭車」）
+  // 現在順序是 甲 丙 乙 戊；丙那一列（甲→丙）沒設定、打開有 7 格。
+  // 打開用真的點擊（pickVia）。背景重畫會把打開的選項收起來（既有的時序問題，見 STATUS），這裡最多重點 3 次——
+  // 「點了會打開」那件事由上面第二步那條守，這裡守的是格子本身。
+  const openC = async () => { for (let k = 0; k < 3; k++) if (await pickVia(C)) return true; return false; };
+  // 量格子：每格的名字只准一行（文字範圍的每個框同一個 top），而且整段落在格子內緣（扣框線與內距）裡。
+  // 量的時候把選項區的 hidden 拿掉——換寬度、換字級時背景重畫可能把它收起來；這段量的是排版，不是開關。
+  const legFit = () => page.evaluate((id) => {
+    const pick = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-pick`);
+    if (!pick) return { n: 0, bad: ['找不到選項區'] };
+    pick.hidden = false;
+    const bad = []; let n = 0;
+    for (const b of pick.querySelectorAll('.tl-leg-opt')) {
+      const nm = b.querySelector('.tl-leg-name');
+      if (!nm) { bad.push('有一格沒有名字'); continue; }
+      n++;
+      const cs = getComputedStyle(b), r = b.getBoundingClientRect();
+      const L = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - 0.5;
+      const R = r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight) + 0.5;
+      const rg = document.createRange(); rg.selectNodeContents(nm);
+      const lines = new Set([...rg.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size;
+      const nr = rg.getBoundingClientRect();
+      if (lines !== 1) bad.push(`「${nm.textContent}」折成 ${lines} 行`);
+      if (nr.left < L || nr.right > R) bad.push(`「${nm.textContent}」超出格子（${Math.round(nr.left)}～${Math.round(nr.right)}，內緣 ${Math.round(L)}～${Math.round(R)}）`);
+    }
+    return { n, bad };
+  }, C);
+  const MOB = (w) => ({ width: w, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const setFs = (v) => page.evaluate((v) => { if (v === 'm') delete document.documentElement.dataset.fs; else document.documentElement.dataset.fs = v; }, v);
+  const opened6 = await openC();
+  const shown = await page.evaluate((id) => [...document.querySelectorAll(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-opt .tl-leg-name`)].map((e) => e.textContent.trim()), C);
+  const WANT = ['走路', '電車・捷運', '公車', '搭車', '船', '飛機', '其他'];
+  // 對照組：名字改成可以折行、字放大，在最窄＋最大字那一格必須量到「折成 2 行」——量法抓不到折行，下面的「都一行」就不算數
+  await page.setViewport(MOB(320)); await setFs('xl');
+  await page.evaluate(() => { const s = document.createElement('style'); s.id = 'ctl-wrap'; s.textContent = '.tl-leg-name { white-space: normal !important; font-size: 1.4rem !important; }'; document.head.append(s); });
+  await sleep(120);
+  const ctl = await legFit();
+  await page.evaluate(() => document.getElementById('ctl-wrap')?.remove());
+  const ctlCaught = ctl.bad.some((x) => /折成 [2-9] 行/.test(x));
+  const fitBad = []; let combos = 0;
+  for (const w of [320, 360, 390, 430, 440]) for (const fs of ['m', 'l', 'xl']) {
+    await page.setViewport(MOB(w)); await setFs(fs); await sleep(100);
+    const r = await legFit(); combos++;
+    if (r.n !== 7) fitBad.push(`${w}px／${fs}：只量到 ${r.n} 格（應為 7）`);
+    for (const b of r.bad) fitBad.push(`${w}px／${fs}：${b}`);
+  }
+  await setFs('m'); await page.setViewport(MOB(390)); await sleep(150);
+  yes(opened6 && shown.join('｜') === WANT.join('｜') && ctlCaught && combos === 15 && fitBad.length === 0,
+    `選項格子：7 格名字照順序（${shown.join('｜')}）、15 種寬度×字級每個名字都一行、都在格子裡（對照組：可折行＋大字時${ctlCaught ? '量得到折行' : '量不到折行'}）`,
+    [!opened6 && '選項打不開', `${fitBad.length} 處：` + fitBad.slice(0, 4).join('；'), !ctlCaught && `對照組 ${JSON.stringify(ctl.bad.slice(0, 2))}`].filter(Boolean).join('｜'));
+
+  // 選了之後存進去的值：從畫面上寫「搭車」的那一格點（使用者看到的是字），存進去的必須是代號 car——
+  // 不是字「搭車」、也不是新代號。顯示名稱和存進去的值是兩件事，改名時最容易把它們搞混。
+  await openC();
+  let carTile = null;
+  for (const t of await page.$$(`.daycollapse.open .tl-leg[data-spot="${C}"] .tl-leg-opt`)) {
+    if ((await t.$eval('.tl-leg-name', (e) => e.textContent.trim()).catch(() => '')) === '搭車') carTile = t;
+  }
+  if (carTile) await carTile.click();
+  await page.waitForFunction((id) => document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`)?.dataset.mode === 'car', { timeout: 8000 }, C).catch(() => {});
+  const rec6 = await page.evaluate(async (id) => { const s = await import('./js/store.js'); const x = s.get(id); return { legFrom: x.legFrom, legMode: x.legMode }; }, C);
+  const btn6 = await page.$eval(`.daycollapse.open .tl-leg[data-spot="${C}"] .tl-leg-btn`, (e) => e.textContent.trim()).catch(() => '');
+  yes(!!carTile && rec6.legMode === 'car' && rec6.legFrom === A && btn6.includes('搭車') && !btn6.includes('計程車'),
+    `點畫面上寫「搭車」的那一格 → 存進去的是代號 car、前一站＝甲；按鈕寫「${btn6}」`, `${carTile ? '' : '找不到寫「搭車」的格子｜'}${JSON.stringify(rec6)}`);
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {

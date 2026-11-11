@@ -479,12 +479,23 @@ button.card { appearance: none; font: inherit; }
   color: var(--text); font: inherit; font-size: 0.9rem; font-weight: 800; cursor: pointer; }
 .tl-leg-btn.is-unset { border-style: dashed; color: var(--muted); font-weight: 700; }
 .tl-leg-btn[aria-expanded="true"] .tl-leg-chev { display: inline-block; transform: rotate(90deg); }
-.tl-leg-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* 選項（2026-11-11 Yolin 選 A：收起來、點了才展開；「選項內的文字及換行請整齊」）：兩欄大格子，圖示在上、名字在下。
+   名字一律一行：寧可縮字或拉高格子，不准折成兩行（Dispatch 轉述的要求）。圖示放上面就是「拉高格子」——名字分到整格的寬度。
+   縮字：最長的名字「電車・捷運」5 個字，窄畫面＋大字時字級取 min(1rem, 10vw − 16px)；nowrap 是第二道（照現在的字長，
+   縮字那道在就不會折行，拿掉 nowrap 不會有測試紅——它守的是以後名字變長）。legviewtest 量 15 種寬度×字級。
+   選中的打勾放右上角、不佔名字的寬度。 */
+.tl-leg-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; padding: 10px;
+  border: 2px solid var(--line); border-radius: 16px; background: var(--bg-elev-2, var(--bg)); }
 .tl-leg-pick[hidden] { display: none; }
-.tl-leg-opt { min-height: 44px; padding: 6px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--card, var(--bg));
-  color: var(--text); font: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.tl-leg-opt.is-on { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
-.tl-leg-ic { font-size: 1.3rem; line-height: 1; }
+.tl-leg-ttl { grid-column: 1 / -1; padding: 0 2px 2px; font-size: 0.9rem; font-weight: 800; color: var(--muted); }
+.tl-leg-opt { position: relative; min-width: 0; min-height: 76px; padding: 8px 6px; border-radius: 12px; border: 2px solid var(--line);
+  background: var(--card, var(--bg)); color: var(--text); font: inherit; font-weight: 800; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.tl-leg-opt.is-on { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--card, var(--bg))); }
+.tl-leg-opt.is-on::after { content: '✓'; position: absolute; top: 4px; right: 8px; font-weight: 900; color: var(--primary); }
+.tl-leg-ic { font-size: 1.6rem; line-height: 1; min-height: 1em; }
+.tl-leg-name { white-space: nowrap; font-size: min(1rem, calc(10vw - 16px)); line-height: 1.25; }
 .tl-leg-clear { color: var(--muted); border-style: dashed; }
 .tl-leg-route { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 0 6px; font-size: 0.9rem; color: var(--muted); font-weight: 700; }
 .tl-leg-min:empty { display: none; }
