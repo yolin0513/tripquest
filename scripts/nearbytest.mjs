@@ -11,6 +11,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5601, OP = 8807;
@@ -145,7 +147,8 @@ try {
     const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('找附近'));
     return b ? { txt: b.textContent, h: b.getBoundingClientRect().height } : null;
   });
-  yes(entry && entry.txt.includes('停車場') && entry.h >= 40, `行程頁有「找附近」入口（${entry && Math.round(entry.h)}px）`);
+  const rEntry = M.within(entry ? entry.h : null, '>=', 40, 'px', '「找附近」入口');
+  yes(entry && entry.txt.includes('停車場') && rEntry.ok, `行程頁有「找附近」入口（${entry && Math.round(entry.h)}px）${rEntry.tail}`);
   await page.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('找附近')).click());
   await page.waitForSelector('.nl-cats', { timeout: 10000 });
   const arrived = await page.evaluate(() => ({ hash: location.hash, cats: !!document.querySelector('.nl-cats') }));
@@ -156,7 +159,9 @@ try {
   const cats = await page.$$eval('.nl-cat', (els) => els.map((e) => ({ t: e.textContent, h: e.getBoundingClientRect().height, emoji: e.querySelector('.nl-cat-emoji').getBoundingClientRect().height })));
   yes(cats.length === 4 && ['停車場', '廁所', '便利商店', '加油站'].every((x) => cats.some((c) => c.t.includes(x))), '四個分類都在');
   yes(!cats.some((c) => c.t.includes('藥局')), '藥局不在（SOS 頁已有，不重複）');
-  yes(cats.every((c) => c.h >= 52 && c.emoji >= 22), `分類是大按鈕（高 ${Math.round(cats[0].h)}px、大圖示）`);
+  // 原本訊息只印第一顆的高；餘裕取全部分類鈕裡最矮的那顆（判準不變：每一顆都要 ≥52、圖示 ≥22）
+  const rCatH = M.within(cats.map((c) => c.h), '>=', 52, 'px', '分類鈕的高'), rCatE = M.within(cats.map((c) => c.emoji), '>=', 22, 'px', '分類鈕的圖示');
+  yes(rCatH.ok && rCatE.ok, `分類是大按鈕（高 ${Math.round(cats[0].h)}px、大圖示）｜高${rCatH.tail.slice(1)}｜圖示${rCatE.tail.slice(1)}`);
 
   // ---------- 停車場（預設分類） ----------
   await page.waitForSelector('.nl-card', { timeout: 10000 });
@@ -300,7 +305,8 @@ try {
   yes(denied.btn === '🔍 用 Google 再查一次' && !denied.btnDisabled, `按鈕復原、可以再試（「${denied.btn}」）`);
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
-  yes(first.nameSize >= 16, `結果大字（名稱 ${first.nameSize}px）`);
+  const rName = M.within(first.nameSize, '>=', 16, 'px', '找附近結果的名稱字級');
+  yes(rName.ok, `結果大字（名稱 ${first.nameSize}px）${rName.tail}`);
 
   // ---------- 廁所 ----------
   await page.evaluate(() => [...document.querySelectorAll('.nl-cat')].find((x) => x.textContent.includes('廁所')).click());
@@ -372,7 +378,8 @@ try {
     return { has: !!btn, h: btn && btn.getBoundingClientRect().height, crewIdx,
       btnBelowLabel: btn && [...document.querySelectorAll('.section-label')][crewIdx].getBoundingClientRect().top < btn.getBoundingClientRect().top };
   });
-  yes(st0.has && st0.h >= 40 && st0.btnBelowLabel, `旅程設定頁有分享按鈕、緊貼「旅伴與電話」區（${Math.round(st0.h)}px，零旅伴時）`);
+  const rShare = M.within(st0.has ? st0.h : null, '>=', 40, 'px', '旅程設定頁的分享按鈕');
+  yes(st0.has && rShare.ok && st0.btnBelowLabel, `旅程設定頁有分享按鈕、緊貼「旅伴與電話」區（${Math.round(st0.h)}px，零旅伴時）${rShare.tail}`);
   // 多旅伴時也正常
   await page.evaluate(async (t) => {
     const s = await import('./js/store.js'); const { uuid } = await import('./js/ids.js');
@@ -426,6 +433,7 @@ try {
     yes(noRoute.length === 0, `${segs.length} 個 /trip/:id/… 目標都有註冊路由`, noRoute.join(','));
   }
 
+  console.log('\n' + M.summary());
   console.log('\n找附近測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

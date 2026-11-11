@@ -11,6 +11,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5787;
@@ -143,7 +145,8 @@ try {
     return Math.hypot(ex - r.pins[i].x, ey - r.pins[i].y);
   });
   const d0 = off(0), d10 = off(10);
-  yes(d0.every((d) => d < 1.5), `圖釘落在 node 獨立算的位置（誤差 ${d0.map((d) => d.toFixed(2)).join('、')}px）`);
+  const rPin = M.within(d0, '<', 1.5, 'px', '圖釘位置誤差');   // 對照組（下一條，故意偏 10px）不套：它在確認比對抓得到偏移，不是在守版面
+  yes(rPin.ok, `圖釘落在 node 獨立算的位置（誤差 ${d0.map((d) => d.toFixed(2)).join('、')}px）${rPin.tail}`);
   yes(d10.every((d) => d > 8), '對照組：故意偏 10px 每一根都抓得到');
 
   // 點天數列的第 2 天 → 切到第 2 天
@@ -174,6 +177,7 @@ try {
   const d = await read(p2);
   yes(d.offline.includes('目前沒有網路') && d.days.length === 3, `圖磚全部載不到 → 寫明沒網路、天數列照樣在（${d.offline.slice(0, 20)}…，${d.days.length} 天）`);
   await p2.close();
+  console.log('\n' + M.summary());
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {

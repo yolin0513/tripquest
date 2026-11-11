@@ -13,6 +13,8 @@ import { rm, mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const TMP = path.join(ROOT, '.tagtest-tmp');
@@ -139,6 +141,7 @@ try {
       btnsVisible: btns.filter(vis).length,
       labels: btns.map((b) => b.getAttribute('aria-label') || b.textContent),
       tooSmall: btns.filter((b) => b.getBoundingClientRect().height < 44).length,
+      btnH: btns.map((b) => b.getBoundingClientRect().height),   // 2026-11-12：最矮的那顆算餘裕
       // 整個任務清單裡不該再有「編輯」
       editButtons: [...document.querySelectorAll('.qcollapse button, .qline button')]
         .filter((b) => /編輯/.test(b.textContent)).length,
@@ -150,8 +153,9 @@ try {
   } else fail('行程頁任務卡上沒有加照片按鈕：' + JSON.stringify(front));
   if (front.editButtons === 0) ok('任務清單裡已經沒有「編輯」按鈕');
   else fail(`任務清單裡還有 ${front.editButtons} 顆「編輯」`);
-  if (front.tooSmall === 0) ok('任務卡上的按鈕觸控區 ≥ 44px');
-  else fail(`有 ${front.tooSmall} 顆按鈕太小`);
+  const rFront = M.within(front.btnH, '>=', 44, 'px', '任務卡上的按鈕');
+  if (rFront.ok) ok('任務卡上的按鈕觸控區 ≥ 44px' + rFront.tail);
+  else fail(`有 ${front.tooSmall} 顆按鈕太小` + rFront.tail);
 
   // 從打開行程到「開始加照片」需要點幾下 —— 直接數，不用猜
   const taps = await A.page.evaluate(() => {
@@ -194,14 +198,17 @@ try {
         .map((b) => b.getAttribute('aria-label') || b.textContent) : [],
       tooSmall: rows.reduce((n, r) => n + [...r.querySelectorAll('button')]
         .filter((b) => { const h = b.getBoundingClientRect().height; return h > 0 && h < 44; }).length, 0),
+      // 2026-11-12：同一個母體（看得見的＝高 > 0）的全部高度，最矮的算餘裕
+      btnH: rows.flatMap((r) => [...r.querySelectorAll('button')].map((b) => b.getBoundingClientRect().height).filter((h) => h > 0)),
     };
   });
   if (rowUI.editOrDelete === 0) ok('任務列已無「編輯 / 刪除」按鈕');
   else fail(`任務列仍有 ${rowUI.editOrDelete} 顆編輯/刪除按鈕`);
   if (rowUI.addBtns.length === 2 && rowUI.addBtns.every((t) => /拍照|相簿/.test(t))) ok(`任務列有兩顆加照片的按鈕：${rowUI.addBtns.join(' / ')}`);
   else fail('任務列的加照片按鈕不對：' + JSON.stringify(rowUI.addBtns));
-  if (rowUI.tooSmall === 0) ok(`任務列 ${rowUI.rows} 列的按鈕觸控區都 ≥ 44px`);
-  else fail(`任務列有 ${rowUI.tooSmall} 顆按鈕小於 44px`);
+  const rRows = M.within(rowUI.btnH, '>=', 44, 'px', '任務列的按鈕');
+  if (rRows.ok) ok(`任務列 ${rowUI.rows} 列的按鈕觸控區都 ≥ 44px` + rRows.tail);
+  else fail(`任務列有 ${rowUI.tooSmall} 顆按鈕小於 44px` + rRows.tail);
 
   // ---------- 景點設定頁只剩四件事 ----------
   await go(A.page, `/#/trip/${setup.tid}/spot/${setup.spotId}`);
@@ -371,14 +378,16 @@ try {
     return {
       chips: chips.length,
       small: chips.filter((c) => c.getBoundingClientRect().height < 44).length,
+      chipH: chips.map((c) => c.getBoundingClientRect().height),   // 2026-11-12：最矮的那顆算餘裕
       labels: [...document.querySelectorAll('.tagger-label')].map((l) => l.firstChild.textContent),
       hasNext: !!document.querySelector('.tagger-nav'),
     };
   });
   if (tagger.labels.join('|').includes('照片裡有誰') && tagger.labels.join('|').includes('這張是誰拍的')) ok('標記畫面有「照片裡有誰」與「這張是誰拍的」');
   else fail('標記畫面欄位不對：' + JSON.stringify(tagger.labels));
-  if (tagger.small === 0) ok(`標記畫面 ${tagger.chips} 顆名字按鈕都 ≥ 44px`);
-  else fail(`標記畫面有 ${tagger.small} 顆按鈕太小`);
+  const rChip = M.within(tagger.chipH, '>=', 44, 'px', '標記畫面的名字按鈕');
+  if (rChip.ok) ok(`標記畫面 ${tagger.chips} 顆名字按鈕都 ≥ 44px` + rChip.tail);
+  else fail(`標記畫面有 ${tagger.small} 顆按鈕太小` + rChip.tail);
   if (tagger.hasNext) ok('標記畫面可以連續切換到下一張');
   else fail('標記畫面沒有上一張/下一張');
 
@@ -403,13 +412,15 @@ try {
     edit: [...document.querySelectorAll('.pq-row .tag-btn')].map((b) => b.textContent),
     add: !![...document.querySelectorAll('.plan-quests .btn')].find((b) => b.textContent.includes('新增任務')),
     small: [...document.querySelectorAll('.pq-row .tag-btn')].filter((b) => b.getBoundingClientRect().height < 44).length,
+    btnH: [...document.querySelectorAll('.pq-row .tag-btn')].map((b) => b.getBoundingClientRect().height),   // 2026-11-12：最矮的那顆算餘裕
   }));
   if (planUI.quests > 0 && planUI.edit.includes('編輯') && planUI.edit.includes('刪除')) ok(`「調整每天的行程」可以編輯 / 刪除任務（${planUI.quests} 個任務）`);
   else fail('行程頁沒有任務編輯：' + JSON.stringify(planUI));
   if (planUI.add) ok('「調整每天的行程」可以新增任務');
   else fail('行程頁沒有新增任務');
-  if (planUI.small === 0) ok('行程頁的編輯 / 刪除按鈕觸控區 ≥ 44px');
-  else fail(`行程頁有 ${planUI.small} 顆按鈕太小`);
+  const rPlan = M.within(planUI.btnH, '>=', 44, 'px', '行程頁的編輯／刪除按鈕');
+  if (rPlan.ok) ok('行程頁的編輯 / 刪除按鈕觸控區 ≥ 44px' + rPlan.tail);
+  else fail(`行程頁有 ${planUI.small} 顆按鈕太小` + rPlan.tail);
 
   // 真的改一筆，確認寫得進去
   const before = await A.page.evaluate(async (sid) => (await import('./js/store.js')).questsOf(sid)[0].title, setup.spotId);
@@ -435,6 +446,7 @@ try {
   if (delAfter === delOK - 1) ok(`在「調整每天的行程」刪任務成功（${delOK} → ${delAfter}）`);
   else fail(`刪任務失敗：${delOK} → ${delAfter}`);
 
+  console.log('\n' + M.summary());
   console.log('\n照片標記測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

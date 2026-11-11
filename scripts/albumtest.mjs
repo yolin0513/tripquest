@@ -15,6 +15,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5581;
@@ -81,7 +83,8 @@ try {
   yes(g.cells === 210 && g.feedItems === 0, `格狀 ${g.cells} 格、沒有動態流卡片`);
   yes(g.days.length === 3 && g.days[0].includes('第 1 天') && g.days[0].includes('8/1') && g.days[0].includes('70 張'), `依天分組：${g.days.join(' ／ ')}`);
   yes(g.loaded < 210 && g.loaded >= 9, `延遲載入：210 格只先解碼可視範圍附近 ${g.loaded} 格`);
-  yes(g.cellPx >= 100 && g.modeBtnH >= 44, `格子 ${g.cellPx}px、切換鈕 ${g.modeBtnH}px（觸控區夠）`);
+  const rCell = M.within(g.cellPx, '>=', 100, 'px', '相簿格子'), rMode = M.within(g.modeBtnH, '>=', 44, 'px', '相簿切換鈕');
+  yes(rCell.ok && rMode.ok, `格子 ${g.cellPx}px、切換鈕 ${g.modeBtnH}px（觸控區夠）｜格子${rCell.tail.slice(1)}｜切換鈕${rMode.tail.slice(1)}`);
   // 捲到底 → 後面的格子才載
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await sleep(900);
@@ -130,7 +133,8 @@ try {
     };
   });
   yes(v.counter === '5 / 210' && v.imgSrc && v.imgOnScreen, `點第 5 格 → 全螢幕「${v.counter}」、圖片有載且在畫面中央（不是黑的）`);
-  yes(v.closeH >= 48 && v.reactH >= 44 && v.reacts === 4, `✕ ${v.closeH}px、按讚鈕 ${v.reactH}px、四種讚`);
+  const rClose = M.within(v.closeH, '>=', 48, 'px', '檢視器 ✕'), rReact = M.within(v.reactH, '>=', 44, 'px', '檢視器按讚鈕');
+  yes(rClose.ok && rReact.ok && v.reacts === 4, `✕ ${v.closeH}px、按讚鈕 ${v.reactH}px、四種讚｜✕${rClose.tail.slice(1)}｜按讚鈕${rReact.tail.slice(1)}`);
   yes(v.full, '縮圖先秀、全圖到了無縫換上（本機兩份都在 → 已是全圖）');
   // 交叉淡入（v1.57.2）：疊層出現期間底圖必須還在（不可能空窗）；減少動態時不做淡入
   const fadeChk = await page.evaluate(async () => {
@@ -281,6 +285,7 @@ try {
   await sleep(600);
   yes(await page.evaluate(() => document.querySelector('.wall-mode.on')?.textContent.includes('動態')), '檢視選擇有記住');
 
+  console.log('\n' + M.summary());
   console.log('\n相簿測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5401;
@@ -89,7 +91,8 @@ try {
   // v1.51 起多了 📌 釘住（排順序時當錨）—— 任務/設定兩顆仍要等寬
   // v1.51.5：📌 上移到名稱列，動作列回到兩顆（任務／設定）
   eq(pair.length, 2, '動作列兩顆（任務／設定）');
-  yes(Math.abs(pair[0].w - pair[1].w) <= 1, `任務與設定等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）`);
+  const rPair = M.within(pair.length === 2 ? Math.abs(pair[0].w - pair[1].w) : null, '<=', 1, 'px', '任務與設定的寬度差');
+  yes(rPair.ok, `任務與設定等寬（${pair.map((x) => x.t + '=' + x.w + 'px').join('、')}）${rPair.tail}`);
   const pinRow = await page.evaluate(() => {
     const nameRow = document.querySelector('.plan-name-row');
     const pin = nameRow?.querySelector('.plan-pin');
@@ -98,7 +101,8 @@ try {
     const pr = pin.getBoundingClientRect();
     return { sameRow: Math.abs(nr.top - pr.top) < nr.height + 6, h: Math.round(pr.height) };
   });
-  yes(pinRow && pinRow.sameRow && pinRow.h >= 40, `📌 在名稱同一列、觸控高度 ${pinRow && pinRow.h}px ≥ 40`);
+  const rPin = M.within(pinRow ? pinRow.h : null, '>=', 40, 'px', '📌 的觸控高度');
+  yes(pinRow && pinRow.sameRow && rPin.ok, `📌 在名稱同一列、觸控高度 ${pinRow && pinRow.h}px ≥ 40${rPin.tail}`);
 
   // ---------- 2. 目標在畫面外的跨天拖曳 ----------
   console.log('\n— 跨天拖曳（目標在畫面外）—');
@@ -359,6 +363,7 @@ try {
   const gone = await page.evaluate(async (sid) => !(await import('./js/store.js')).get(sid), ids.sid);
   yes(gone, '景點真的刪掉了');
 
+  console.log('\n' + M.summary());
   console.log('\n行程調整與景點設定測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

@@ -13,6 +13,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5503, GEO = 5504;
@@ -138,7 +140,8 @@ try {
     yes(g.hourSel.t >= g.daySel.b2 - 1, `${label}：幾點到那一列在兩欄下方`);
     yes(g.daySel.l >= g.panel.l - 1 && g.staySel.r <= g.panel.r + 1 && g.minSel.r <= g.panel.r + 1,
       `${label}：所有欄位都在容器內（容器 ${g.panel.l}–${g.panel.r}）`);
-    yes(Math.abs(g.daySel.w - g.staySel.w) <= 2, `${label}：兩欄等寬（${g.daySel.w}/${g.staySel.w}px）`);
+    const rEq = M.within(Math.abs(g.daySel.w - g.staySel.w), '<=', 2, 'px', `${label}兩欄的寬度差`);
+    yes(rEq.ok, `${label}：兩欄等寬（${g.daySel.w}/${g.staySel.w}px）${rEq.tail}`);
     yes(!g.overflow, `${label}：頁面不橫向溢出`);
   };
   let g = await gridCheck();
@@ -380,6 +383,7 @@ try {
   const tripTxt = await page.evaluate(() => document.getElementById('view').innerText);
   yes(tripTxt.includes('粉鳥林'), '行程頁看得到剛剛加入的景點');
 
+  console.log('\n' + M.summary());
   console.log('\n規劃第 1 批測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

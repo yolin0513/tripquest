@@ -13,6 +13,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5517, OSRM = 5518;
@@ -501,7 +503,8 @@ try {
     const n = document.querySelector('.plan-conflict');
     return n ? parseFloat(getComputedStyle(n).fontSize) : 0;
   });
-  yes(cfSize >= 13, `矛盾提示字級沒縮小（${cfSize}px）—— 長輩要看得到`);
+  const rCf = M.within(cfSize, '>=', 13, 'px', '矛盾提示字級');
+  yes(rCf.ok, `矛盾提示字級沒縮小（${cfSize}px）—— 長輩要看得到${rCf.tail}`);
 
   // 連鎖項目要收斂回根因（v1.70.2）：訂位 10:00 的景點被拖到 13:00 後面時，
   // 同一列本來會同時出現「⚠ 比預定晚 N 小時」與「順序可能排反了」——
@@ -571,6 +574,7 @@ try {
   const planner = await page.evaluate(() => [...document.querySelectorAll('button')].some((b) => b.textContent.includes('幫我規劃行程')));
   yes(planner, '建立行程頁有「🔍 幫我規劃行程」入口');
 
+  console.log('\n' + M.summary());
   console.log('\n規劃第 2 批測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

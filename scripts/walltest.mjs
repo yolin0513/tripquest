@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { rm } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5214, API = 8794;
@@ -103,9 +105,12 @@ try {
   const pickCount = await page.evaluate(() => document.querySelectorAll('.here-pick').length);
   if (pickCount === 3) ok(`「換一站」列出全部 ${pickCount} 個景點`);
   else fail('選單裡的景點數不對：' + pickCount);
-  const tooSmall = await page.evaluate(() => [...document.querySelectorAll('.here-pick')].filter((b) => b.getBoundingClientRect().height < 44).length);
-  if (tooSmall === 0) ok('選單的按鈕觸控區 ≥ 44px');
-  else fail(`${tooSmall} 顆太小`);
+  // 原本只數「幾顆 <44」：數到 0 顆時看不出最矮的那顆離 44 多遠；也收集全部的高、最矮的算餘裕（一顆都沒有＝量不到、不過）
+  const pickHs = await page.evaluate(() => [...document.querySelectorAll('.here-pick')].map((b) => b.getBoundingClientRect().height));
+  const tooSmall = pickHs.filter((h) => h < 44).length;
+  const rPick = M.within(pickHs, '>=', 44, 'px', '「換一站」選單的按鈕');
+  if (rPick.ok) ok('選單的按鈕觸控區 ≥ 44px' + rPick.tail);
+  else fail(`${tooSmall} 顆太小` + rPick.tail);
   const noCounts = await page.evaluate(() => [...document.querySelectorAll('.here-pick')]
     .every((b) => !/完成|任務|\d+\s*\/\s*\d+/.test(b.textContent)));
   if (noCounts) ok('選單裡不顯示任務數量，畫面乾淨');
@@ -342,15 +347,18 @@ try {
       ctlCount: ctls.length,
       filterLabel: document.querySelector('.wall-ctl .wall-ctl-label')?.textContent || '',
       small: ctls.filter((b) => { const r = b.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).length,
+      ctlSides: ctls.flatMap((b) => { const r = b.getBoundingClientRect(); return [r.width, r.height]; }),
       chipsGone: document.querySelectorAll('.wall-chips').length === 0,
     };
   });
   if (wall.hasBar && wall.ctlCount === 2 && wall.chipsGone) ok('控制項壓成一行（景點下拉 + 排序圖示），不再是一整排 chips');
   else fail('控制項沒有壓成一行：' + JSON.stringify(wall));
-  if (wall.barHeight <= 60) ok(`控制列只佔 ${wall.barHeight}px（一行）`);
-  else fail('控制列太高：' + wall.barHeight);
-  if (wall.small === 0) ok('下拉與排序圖示的觸控區 ≥ 44px');
-  else fail(`${wall.small} 顆太小`);
+  const rBar = M.within(wall.barHeight, '<=', 60, 'px', '照片牆控制列的高');
+  if (rBar.ok) ok(`控制列只佔 ${wall.barHeight}px（一行）${rBar.tail}`);
+  else fail('控制列太高：' + wall.barHeight + rBar.tail);
+  const rCtl = M.within(wall.ctlSides, '>=', 44, 'px', '照片牆下拉與排序圖示（寬與高）');
+  if (rCtl.ok) ok('下拉與排序圖示的觸控區 ≥ 44px' + rCtl.tail);
+  else fail(`${wall.small} 顆太小` + rCtl.tail);
   if (wall.filterLabel === '全部照片') ok('預設顯示「全部照片」');
   else fail('預設篩選標籤不對：' + wall.filterLabel);
 
@@ -361,8 +369,9 @@ try {
   });
   if (/最新在前/.test(sortBtn.text)) ok(`排序是「按一下就換」的切換鈕，按鈕上直接寫現在是哪一種：「${sortBtn.text}」`);
   else fail('排序鈕文字不對：' + sortBtn.text);
-  if (sortBtn.h >= 44) ok(`排序鈕觸控區 ${sortBtn.h}px`);
-  else fail('排序鈕太小：' + sortBtn.h);
+  const rSort = M.within(sortBtn.h, '>=', 44, 'px', '照片牆排序鈕');
+  if (rSort.ok) ok(`排序鈕觸控區 ${sortBtn.h}px${rSort.tail}`);
+  else fail('排序鈕太小：' + sortBtn.h + rSort.tail);
   if (/點一下換/.test(sortBtn.aria || '')) ok('排序鈕有講清楚按了會怎樣（給讀螢幕的人）');
   else fail('aria-label 不清楚：' + sortBtn.aria);
 
@@ -562,6 +571,7 @@ try {
   if (healed.here === shared.spots[0]) ok('恢復連線後自動同步出去，A 也看到了');
   else fail(`恢復連線後沒同步：${JSON.stringify(healed)} push=${JSON.stringify(pushed)} pull=${JSON.stringify(pulled)}`);
 
+  console.log('\n' + M.summary());
   console.log('\n照片牆與「現在這一站」測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

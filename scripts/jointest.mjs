@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { rm } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5583, API = 8793;
@@ -111,7 +113,8 @@ try {
   yes(card.txt.includes('宜蘭家族旅行') && card.txt.includes('2026-10-10') && card.txt.includes('2026-10-12'), '行程名（連結自帶）＋日期（伺服器摘要）都在卡片上');
   yes(card.txt.includes('媽媽') && card.txt.includes('爸爸'), '看到是誰邀請（旅伴名）');
   yes(card.txt.includes('第 1 天') && card.txt.includes('羅東夜市') && card.txt.includes('第 2 天') && card.txt.includes('太平山'), '看到前幾個景點的骨架（依天）');
-  yes(card.joinBtn >= 52, `「加入這個旅程」大按鈕 ${Math.round(card.joinBtn)}px`);
+  const rJoin = M.within(card.joinBtn, '>=', 52, 'px', '「加入這個旅程」大按鈕');   // 用原始值比（判準跟原本一樣），顯示才取整
+  yes(rJoin.ok, `「加入這個旅程」大按鈕 ${Math.round(card.joinBtn)}px${rJoin.tail}`);
 
   // ---------- 按加入：進度卡 → 行程頁 ----------
   console.log('\n— 加入 —');
@@ -302,6 +305,7 @@ try {
     yes(fTxt.includes('重新傳一次') && !/403|Error/.test(fTxt), `403 → 講「連結不完整、請重傳」不是技術錯誤（「${fTxt.slice(0, 24)}…」）`);
   }
 
+  console.log('\n' + M.summary());
   console.log('\n邀請加入測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { mkdir, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = new URL('../screenshots/_recapcard/', import.meta.url);
@@ -100,7 +102,8 @@ try {
       outX && `${outX.name} x0=${outX.x0} x1=${outX.x1} vs W=${res.W}`);
     // ③ 底部留白
     const last = res.boxes[res.boxes.length - 1];
-    yes(res.H - last.y1 >= 60, `底部留白足夠（${res.H - last.y1}px）`);
+    const rBottom = M.within(res.H - last.y1, '>=', 60, 'px', '回顧卡底部留白');
+    yes(rBottom.ok, `底部留白足夠（${res.H - last.y1}px）${rBottom.tail}`);
     // ④ 使用者回報的三個點位
     const by = (n) => res.boxes.find((b) => b.name === n);
     if (sc.ai?.opening) {
@@ -118,6 +121,7 @@ try {
     console.log('  📸 ' + file.split(/[\\/]/).pop() + `（${res.W}×${res.H}）`);
   }
 
+  console.log('\n' + M.summary());
   console.log('\n回顧卡測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

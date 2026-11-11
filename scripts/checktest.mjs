@@ -14,6 +14,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5631;
@@ -174,8 +176,10 @@ try {
     `預覽用具體時刻說明問題：「${panel.items[0].t}」`);
   yes(panel.items[0].btns.includes('這樣改') && panel.items[0].btns.includes('這樣沒關係'),
     '每一條都有「這樣改」與「這樣沒關係」（不逼使用者一定要處理）');
-  yes(panel.items[0].h >= 44, `按鈕夠大（${Math.round(panel.items[0].h)}px）`);
-  yes(panel.size >= 13, `問題文字沒縮小（${panel.size}px）`);
+  const rBtn = M.within(panel.items[0].h, '>=', 44, 'px', '行程檢查的按鈕');   // 用原始值比（判準跟原本一樣），顯示才取整
+  yes(rBtn.ok, `按鈕夠大（${Math.round(panel.items[0].h)}px）${rBtn.tail}`);
+  const rSize = M.within(panel.size, '>=', 13, 'px', '行程檢查的問題文字');
+  yes(rSize.ok, `問題文字沒縮小（${panel.size}px）${rSize.tail}`);
 
   // 套用
   await page.evaluate(() => [...document.querySelectorAll('.chk-item .btn')].find((b) => b.textContent.includes('這樣改')).click());
@@ -355,6 +359,7 @@ try {
   yes(notWritten.every((x) => x === null),
     `推算出來的時刻**沒有寫進景點**（startMin 全是空的：${JSON.stringify(notWritten)}）—— 三代理 3:0 的核心決議`);
 
+  console.log('\n' + M.summary());
   console.log('\n行程檢查測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));

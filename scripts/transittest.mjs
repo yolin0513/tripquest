@@ -17,6 +17,8 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
+import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5621, API = 5622;
@@ -234,7 +236,8 @@ try {
     `列出路線與上下車站與發車時刻：「${got.lines[0] || ''}」`);
   yes(got.drive.length === 3 && got.drive[0].includes('開車估算'),
     `開車估算降級成附註（「${got.drive[0] || ''}」）—— 一個是實際班次一個是估算，要看得出差別`);
-  yes(got.lineSize >= 13, `班次那一行字級沒縮小（${got.lineSize}px）—— 長輩要看得到幾點的車`);
+  const rLine = M.within(got.lineSize, '>=', 13, 'px', '班次那一行字級');
+  yes(rLine.ok, `班次那一行字級沒縮小（${got.lineSize}px）—— 長輩要看得到幾點的車${rLine.tail}`);
   yes(got.note.includes('實際時刻') && got.note.includes(ids.iso), `講明白這是哪一天查到的：「${got.note}」`);
 
   // 用量：算次數不算錢
@@ -366,13 +369,15 @@ try {
     yes(row.sameTop && row.sameH, `${w}px／${fs}：輸入框與按鈕同一行、等高（不歪斜）`);
     yes(row.acts.every((a) => a.lines === 1),
       `${w}px／${fs}：對話框的動作按鈕文字也不折行（${row.acts.map((a) => a.t + ' ' + a.lines + ' 行').join('、')}）`);
-    yes(row.overflow <= 1, `${w}px／${fs}：對話框沒有橫向溢出（${row.overflow}px）`);
+    const rOv = M.within(row.overflow, '<=', 1, 'px', `${w}px／${fs} 對話框溢出`);
+    yes(rOv.ok, `${w}px／${fs}：對話框沒有橫向溢出（${row.overflow}px）${rOv.tail}`);
     await page.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('取消'))?.click());
     await sleep(300);
   }
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
   await page.evaluate(() => { document.documentElement.dataset.fs = 'm'; });
 
+  console.log('\n' + M.summary());
   console.log('\n大眾運輸測試結束');
 } catch (e) {
   fail('例外：' + (e && e.stack || e));
