@@ -6,6 +6,15 @@
 
 ## 目前進行中／交接（給下一個接手的 Session）
 
+### 🔀 2026-11-11 下午 Yolin 對 v1.76.0（讚數）回「推」＝准了往下做；`v176` 已 rebase 到 main 上（本機，**沒推**）
+- **rebase**：`v176` 原本從 `c2dd8af`（v1.75.0）長出來；rebase 到本機 main `51ac92d`（＝遠端 `0a8469d` v1.75.1＋那筆還沒推的 STATUS commit；Dispatch 已說它跟下一批一起推）。rebase 前 `v176` **沒推過**：遠端只有 `main`、`v176` 沒設上游、沒有遠端追蹤紀錄，它的 2 個 commit 不在遠端 main 裡。
+- **衝突 2 檔，照這樣解**：`sw.js` 取 `tripquest-v1.76.0`（解完跟 rebase 前的 v176 那份逐字相同）；`docs/STATUS.md` 兩邊的章節都留——v176 的「⚠ safe-push」「▶ v1.76.0」兩節插在 main 的「🔑 2026-11-10」那節前面，v176 那份比較舊的「🔑」標題（多「（先讀）」）＋現況 2 行不重複放（解衝突的腳本核對：標記清光、其餘章節標題都在、只准少那一個舊名標題）。
+- **自動合併的 `css/style.css`、`js/views/trip.js` 核對過**：合併後跟 main 比的改動行，逐字等於 v176 原本的改動（11 行）；新舊 v176 的差異（扣掉 STATUS、sw.js）patch-id 等於 main 自己的改動，反向對照（少一個 commit 的範圍）patch-id 不同。語法檢查 14 支 js 都過（對照組：故意寫壞的檔被擋下）；`mutlint` 回 0（突變要找的字串在合併後的檔裡都還在、各一處）。
+- **舊 hash 重掃**：掃 v176 上 481 支文字檔、67402 行，找引用 rebase 前那 2 個 commit 的地方——**1 處**（上面「v1.75.0 已上線」那節的「v1.76.0 還沒開始」那一行，從 main 的 STATUS 帶過來），已改成不寫編號；分支自己的檔與 commit 訊息裡 0 處。掃描自己有對照組（rebase 前那 2 個編號的前綴必須判成失效、main 的 HEAD 必須判成有效、不存在的編號必須判成不認得），而且在 main 上真的抓到那 1 處（第二道對照）。順帶看到、**跟這次無關、沒動**的：5 個 2026-10-29 改寫歷史前的舊 commit 編號（本來就寫明是改寫前的）、56 個證據檔裡的檔案內容雜湊（rebase 不影響）。
+- **STATUS 裡不寫 v176 新 commit 的編號**：之後再 rebase 或修改就又失效；要用就 `git log main..v176`。
+- **推送前要知道**：`safe-push.sh` 推的是鎖定的 HEAD、寫成遠端 main；HEAD 不在 main 分支上就回 7、什麼都不推（程式第 35～37 行；2026-11-10 在 `v176` 上實跑回 7，見下面「⚠ 先讀」那節）。所以推 v1.76.0 要先把 main 快轉到 `v176`、在 main 上推——快轉之後 main 上有什麼就推什麼，推之前照例交分支、HEAD、`git status --porcelain` 給 Dispatch 核對。**第一次 push 以外的任何 push、改 repo 可見性、改寫已推送的歷史都要先問 Yolin**（Dispatch 2026-11-11）。
+- **跑了什麼（這不是全套）**：只有秒級的語法檢查 14 支、`mutlint`。**沒跑**：所有開瀏覽器的測試（重負載，清單交 Dispatch 等放行）；`test:affected`（推之前照每版流程必跑，會開瀏覽器）；v1.76.0 自己的守夜第一項 `layouttest`（約 11 分鐘）。
+
 ### ✅ 2026-11-11 13:52 v1.75.1 推上去了（Yolin 說推；Dispatch 逐步放行）：遠端 main ＝ `0a8469d`——**推完先停，等 Yolin 實機測完才談下一批**
 - **四步，每步 Dispatch 確認才下一步**（同 v1.75.0 那次）：
   1. 分支 `main`、HEAD `0a8469db54e62f2174afaa6fca420efb4df3f377`、`git status --porcelain` 0 行（佐證：同一個指令在這個 session 一開始印過 4 個 `M`，證明工作區髒時它會印；沒另外造髒檔——Dispatch：多碰一次工作區反而是風險）。
@@ -85,14 +94,14 @@
   3. 08:24 部署 Worker：更新既有的 `tripquest`，沒有建新資源，新版本 `d25282ee-54f0-47db-9b6b-3b2b5221b2a8`。綁定 D1 `DB`→`tripquest`、R2 `PHOTOS`→`tripquest-photos`、`MAX_BLOB_BYTES`、排程 `0 3 * * *`。08:25 `/health` 回 200。
   4. 08:26 `safe-push.sh` 回 0。它對鎖定的 `c2dd8af` 又跑了一次自查，結果相同。`git ls-remote` 確認遠端 main ＝ `c2dd8af`。
 - **踩坑：Session 的 Bash 工具讀不到 wrangler 登入，要用 Claude App 的終端機分頁。** Yolin 在終端機分頁登入後，從 Bash 跑 whoami 一直是未登入：從 Bash 看，`default.toml` 停在 10-08；`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\...` 底下也有一份大小、時間完全一樣的副本。從終端機分頁（`run_in_terminal`，每次呼叫都開新分頁）跑則讀得到登入，這是實測過的。**原因推測是 Windows 套件虛擬化，沒有證實**，所以不去動套件資料夾裡那份舊憑證。我曾推論「在終端機分頁登入，就會寫進 Bash 讀得到的那份」，結果錯了，是讀終端機畫面對照證據才查清楚。
-- **v1.76.0 還沒開始**，在 `v176` 分支（`4cc61d0`），等 Dispatch 放行。注意：本條 STATUS 是在 main 上新增的 commit，`v176` 已經不能 `--ff-only` 併進 main，到時要 rebase 或 merge。
+- **v1.76.0 還沒開始**（寫於 2026-11-11 上午），在 `v176` 分支，等 Dispatch 放行。注意：本條 STATUS 是在 main 上新增的 commit，`v176` 已經不能 `--ff-only` 併進 main，到時要 rebase 或 merge。〔同日下午更新：Yolin 准了、`v176` 已 rebase 到 main 上，見最上面「v176 rebase」那節。這一行原本寫了 rebase 前的 commit 編號，rebase 後失效，已拿掉。〕
 
 ### ⚠ 先讀：`safe-push` 推的是當下的 HEAD，不是 main（2026-11-10）
 - 機制：`scripts/safe-push.sh` 記下 `PIN=HEAD`，最後 `git push origin "$PIN:refs/heads/main"`——推上去的是**當下 checkout 的那個 commit**，寫成遠端的 main。**開分支本身不是防護**；擋住的是第 35～38 行「HEAD 不在 main 上就回 7、什麼都不推」（434de70 起就有）。
 - 2026-11-10 實跑：在 `v176` 上跑 safe-push → 回 7，遠端 main 前後不變；暫存 clone 裡拿掉那道閘門 → pushgatetest W2 紅（實得 0、遠端被推動），原樣綠。
 - 推論出的後果：只要 HEAD 在 main 上，main 上有什麼就推什麼——**v1.76.0 的 commit 在 `v176` 分支上，v1.75.0 推出之前絕不能進 main**。推 v1.75.0 那一次由 Dispatch 把關（先交 `git rev-parse HEAD` 與 `--abbrev-ref HEAD`，確認 main＝`c2dd8af` 才推）。
 
-### ▶ v1.76.0（2026-11-10，**分支 `v176`，還沒推**；v1.75.0 推出後 main 快轉過來才推）——讚數回來＋原本打的名字
+### ▶ v1.76.0（2026-11-10 寫；2026-11-11 rebase 到 v1.75.1 之上；**分支 `v176`，還沒推**）——讚數回來＋原本打的名字
 - **純客戶端版本：merge.js、workers/、server/ 一行都沒動，不用部署 Worker**（投票 6/6）。這推翻了先前「伺服器一定要先部署」——那句只在改到 merge.js／workers/ 時成立，以後翻到不要據此多做一次 Worker 部署。
 - **讚（投票 (c)）**：新型別 `like`，id `like:<照片>:<人>`，emoji 字串＝按著、null＝收回；整筆後寫者贏（跟 phototag 同一條路），不進 APPEND_ONLY／TRACKED（likesynctest 守衛）。純函式 `js/likes.js`，store 的 `likesOf(照片, 我)`；`reactionsOf`／`myReaction` 已刪，**所有讀讚的地方不准再數紀錄筆數**。
   - 讚數＝按著讚的**不同的人數**（Yolin 第 2 題）。相簿、動態、檢視器、任務頁寫數字；**0 不寫、行程頁任務列只標「我按過」不放數字**（第 4 題）；影片片尾照舊不印。
