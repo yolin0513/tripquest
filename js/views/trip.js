@@ -308,7 +308,8 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       // v1.73.6：這裡跟 watchHere 是同一個病，而且黑名單更短（只有四個）。
       // warmTripContent 要等 AI 回應、幾秒鐘才回來，這期間使用者早就換頁了 ——
       // 回來就把人家的畫面畫掉。改用同一個白名單判斷：網址正好是行程頁本身才重畫。
-      if (changed && onTripPage(tripId)) refreshPage();
+      // 2026-11-11：選項開著時一樣先不重畫，記下來等收起來再補（見 watchHere 上面）
+      if (changed && onTripPage(tripId)) { if (legPickOpen()) hereDirty = true; else refreshPage(); }
     }).catch(() => {});
   }
 }
@@ -709,7 +710,10 @@ function legRow(prev, s, i) {
   const btn = h('button', {
     class: 'tl-leg-btn' + (cur ? '' : ' is-unset'), type: 'button', 'aria-expanded': 'false',
     'aria-label': `從「${name(prev)}」到「${name(s)}」怎麼去：${cur ? LEG_LABEL[cur] : '還沒設定'}，點一下設定`,
-    onclick: () => { pick.hidden = !pick.hidden; btn.setAttribute('aria-expanded', String(!pick.hidden)); },
+    onclick: () => {
+      pick.hidden = !pick.hidden; btn.setAttribute('aria-expanded', String(!pick.hidden));
+      if (pick.hidden && flushHere) flushHere();     // 收起來：選項開著時擋下的背景重畫補上（見 watchHere 上面）
+    },
   }, label, h('span', { class: 'tl-leg-chev', 'aria-hidden': 'true' }, ' ▸'));
   // 選了交通方式才多一行「甲 → 乙」（錄影那批：站與站之間一行交通）。放在按鈕外面，按鈕的字不變。
   // 分鐘數只在走路／開車、而且路線服務真的算出來（src 'osrm'）時才補上（fillLegMinutes）；
@@ -902,21 +906,37 @@ function onTripPage(tripId) {
   return path === `/trip/${tripId}`;
 }
 
+// 使用者正打開「怎麼去」的選項時，背景來的變動先不整頁重畫（2026-11-11 守夜）。
+// 補維基圖片會 store.patch 站點的 heroHash／heroAttr／heroPool（真資料欄位，會推高 updatedAt）→ 上面的簽章變了
+// → 整頁重畫，剛點開的選項就被收起來；旅伴同步進來、AI 文案回來也一樣。legviewtest 原樣跑 6 次被這個打斷 5 次，
+// 真的使用者也會撞到：剛點開，背景一來就收起來。
+// 選項收起來時（再點一次那一列）補做一次；選了某一種的話 save() 自己會重畫，那一次就帶到最新的。
+// 只擋「選項開著」這一種：其他會被重畫打斷的操作（例：展開的任務卡）沒有實際回報，這次不擴大。
+function legPickOpen() { return !!document.querySelector('.tl-leg-pick:not([hidden])'); }
+let hereDirty = false;     // 選項開著時，有東西想重畫（簽章以外的來源，例：AI 文案回來）
+let flushHere = null;      // 選項收起來時叫它：剛才擋下的重畫補上
+
 function watchHere(tripId) {
   if (hereWatch) { hereWatch(); hereWatch = null; }
   let last = tripSignature(tripId);
-  hereWatch = store.subscribe(() => {
+  hereDirty = false;                                 // 這一次畫的就是最新的
+  const check = () => {
     if (!onTripPage(tripId)) return;
     const now = tripSignature(tripId);
-    if (now === last) return;
+    if (now === last && !hereDirty) return;
+    if (legPickOpen()) { hereDirty = true; return; }  // 先不重畫、last 不動；收起來時 flushHere 再看一次
     last = now;
+    hereDirty = false;
     refreshPage();
-  });
+  };
+  hereWatch = store.subscribe(check);
+  flushHere = check;
   // 而且離開就退訂 —— 光靠上面那道守衛，訂閱會一直掛著（plan.js 與 sos.js
   // 都有做這件事，只有這裡沒有）。守衛是第二道防線，不是唯一那道。
   const off = () => {
     if (onTripPage(tripId)) return;                 // 只是換了 query／同一頁的話不退
     if (hereWatch) { hereWatch(); hereWatch = null; }
+    flushHere = null;
     window.removeEventListener('hashchange', off);
   };
   window.addEventListener('hashchange', off);

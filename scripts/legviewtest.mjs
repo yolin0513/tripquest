@@ -4,7 +4,8 @@
 // 明天任何改動弄壞它都不會有東西紅。截圖與「實際大小輪廓」那段留在一次性腳本，這支只放斷言。
 // 驗什麼：時間軸兩站之間的設定列（不預選、真實點擊設定、存 legFrom＋_f.leg）、播放游標依段換圖示
 // （夾著沒座標的站＝圓點）、重排（走「調整每天的行程」的 ▼ 按鈕）與刪站後舊選擇不套用＋沒動到的那段仍在；
-// 選項格子（2026-11-11 A 方案：名字一律一行、15 種寬度×字級）與「點寫著搭車的那一格 → 存 car」。
+// 選項格子（2026-11-11 A 方案：名字一律一行、15 種寬度×字級）與「點寫著搭車的那一格 → 存 car」；
+// 背景寫入（補維基圖片那一類）不收起打開的選項、收起來時補重畫（2026-11-11 守夜）。
 // 已知捷徑：刪站用 store.remove（畫面上的刪站在景點設定頁，這支沒走）。
 // 突變實測（2026-11-05，在 _legshots 上）：拿掉 js/legs.js 的 legFrom 比對 → 正好紅重排兩條＋刪站一條。
 // 圖磚攔成本機合成格線，不打 OSM。資料是合成的（日期 2024 年、店名自編）。
@@ -181,6 +182,7 @@ try {
   // 現在順序是 甲 丙 乙 戊；丙那一列（甲→丙）沒設定、打開有 7 格。
   // 打開用真的點擊（pickVia）。背景重畫會把打開的選項收起來（既有的時序問題，見 STATUS），這裡最多重點 3 次——
   // 「點了會打開」那件事由上面第二步那條守，這裡守的是格子本身。
+  // （2026-11-11 守夜修了那個時序問題：選項開著時背景變動不重畫，由下面第七段守；重點 3 次留著、無害。）
   const openC = async () => { for (let k = 0; k < 3; k++) if (await pickVia(C)) return true; return false; };
   // 量格子：每格的名字只准一行（文字範圍的每個框同一個 top），而且整段落在格子內緣（扣框線與內距）裡。
   // 量的時候把選項區的 hidden 拿掉——換寬度、換字級時背景重畫可能把它收起來；這段量的是排版，不是開關。
@@ -252,6 +254,42 @@ try {
   const old6 = await page.evaluate((id) => { const li = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`); return { mode: li?.dataset.mode, text: li?.querySelector('.tl-leg-btn')?.textContent.trim() || '' }; }, B);
   yes(old6.mode === 'train' && old6.text.includes('鐵路') && !old6.text.includes('電車') && !old6.text.includes('還沒設定'),
     `舊版存的 train（直接寫進資料庫）→ 畫面寫新名字（「${old6.text}」）`, JSON.stringify(old6));
+
+  // 七、背景變動不收起打開的選項（2026-11-11 守夜第 2 項）。補維基圖片會 store.patch 站點的 heroHash／heroAttr 這類
+  // 真資料欄位、推高 updatedAt → 行程頁的簽章變了 → 整頁重畫，剛點開的選項就被收起來（這支原樣 6 次被打斷 5 次）。
+  // 造情境：直接 store.patch 甲的 heroAttr（跟補圖寫的同一類欄位；甲前面沒有「怎麼去」那一列，不會動到要量的東西）。
+  // 先做對照：選項關著時，同樣的寫入要讓整頁重畫（時間軸換成新節點）——不然「選項還開著」可能只是根本沒重畫。
+  // 現在順序是 甲 丙 乙 戊；戊那一列（乙→戊）沒設定。
+  const bgPatch = (n) => page.evaluate(async (id, n) => {
+    const s = await import('./js/store.js'); const b = s.get(id).updatedAt || 0;
+    await s.patch(id, { heroAttr: `背景補圖（測試 ${n}）` });
+    return s.get(id).updatedAt > b;
+  }, A, n);
+  const markTl = () => page.evaluate(() => { window.__tl7 = document.querySelector('.daycollapse.open .timeline'); });
+  const sameTl = () => page.evaluate(() => !!window.__tl7 && window.__tl7 === document.querySelector('.daycollapse.open .timeline'));
+  const redrawn = (ms) => page.waitForFunction(() => !!window.__tl7 && window.__tl7 !== document.querySelector('.daycollapse.open .timeline'), { timeout: ms }).then(() => true, () => false);
+  await stable('.daycollapse.open .timeline');
+  await markTl();
+  const t7 = Date.now();
+  const bumped0 = await bgPatch(0);
+  const redrew0 = await redrawn(6000);
+  const lag7 = Date.now() - t7;
+  const wait7 = Math.max(1500, lag7 * 3);
+  yes(bumped0 && redrew0, `前置：選項關著時背景寫一筆（甲的 heroAttr，updatedAt 有推高）→ 整頁重畫（${lag7} 毫秒）`, JSON.stringify({ bumped0, redrew0 }));
+  await stable('.daycollapse.open .timeline');
+  const open7 = await pickVia(E);
+  await markTl();
+  const bumped1 = await bgPatch(1);
+  await sleep(wait7);
+  const still7 = await page.evaluate((id) => { const p = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-pick`); return !!p && !p.hidden; }, E);
+  const same7 = await sameTl();
+  yes(redrew0 && open7 && bumped1 && still7 && same7, `選項打開時背景寫一筆 → 選項還開著、沒有整頁重畫（等了 ${wait7} 毫秒＝對照組的 3 倍、至少 1.5 秒）`,
+    JSON.stringify({ redrew0, open7, bumped1, still7, same7 }));
+  // 收起來（再點一次那一列）→ 剛才擋下的重畫要補上，不然補到的圖要等下一次別的變動才出現。
+  // 要先確認上一條真的擋下了（still7、same7），不然時間軸早就換過、這條會白白成立。
+  await page.click(`.daycollapse.open .tl-leg[data-spot="${E}"] .tl-leg-btn`);
+  const redrew1 = await redrawn(6000);
+  yes(still7 && same7 && redrew1, '收起選項 → 剛才擋下的重畫補上（時間軸換成新節點）', JSON.stringify({ still7, same7, redrew1 }));
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {
