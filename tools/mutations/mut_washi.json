@@ -1,7 +1,7 @@
 [
   {
     "name": "和紙：設定存了卻沒套到畫面",
-    "why": "點了「淺色（和紙）」畫面不變。預期紅 washitest 的 W2 立刻換、W3 重開仍是和紙、W5 底變純白，以及 W4／W5 逐頁掃（深色底上算的字照樣過，但 W2 那幾條先紅）。",
+    "why": "點了「淺色（和紙）」畫面不變。預期紅 washitest 的 W2 立刻換、W3 重開仍是和紙、W5 舊版開過高對比的人重開（照樣是和紙那一半），以及 W4 逐頁掃（深色底上算的字照樣過，但 W2 那幾條先紅）。（2026-11-12 以前 W5 是「和紙＋高對比：底變純白」。）",
     "file": "js/prefs.js",
     "find": "  if (washi) el.dataset.theme = 'washi'; else delete el.dataset.theme;",
     "replace": "  delete el.dataset.theme;",
@@ -24,11 +24,39 @@
     "cmd": "node scripts/washitest.mjs"
   },
   {
-    "name": "和紙：高對比的說明沒跟著改",
-    "why": "和紙下寫「背景更深、文字更白」是錯的話。預期只紅 washitest 的 W5 說明那一條。",
+    "name": "舊版的特大沒對應成大",
+    "why": "（事前寫 2026-11-12）特大拿掉之後，存著 fs=xl 的人掉回標準——選特大的人要的是大字。預期紅 washitest 的「W5 舊版選特大的人重開」「W5 設定頁字體大小選中的是「大」」。（原本那條「和紙：高對比的說明沒跟著改」隨高對比開關一起拿掉：它改的那段程式已經不在了。）",
+    "expect": ["W5 舊版選特大的人重開", "W5 設定頁字體大小選中的是「大」"],
+    "file": "js/prefs.js",
+    "find": "const FS_FALLBACK = { xl: 'l' };",
+    "replace": "const FS_FALLBACK = {};",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "特大又出現在設定頁",
+    "why": "（事前寫 2026-11-12）FS_LABELS 加回特大：設定頁多一顆「特大」，存著 xl 的人照樣是 xl——但樣式表已經沒有 xl 那條，畫面其實是標準字。預期紅「W5 字體大小只剩「標準／大」」「W5 舊版選特大的人重開」「W5 設定頁字體大小選中的是「大」」。",
+    "expect": ["W5 字體大小只剩「標準／大」", "W5 舊版選特大的人重開", "W5 設定頁字體大小選中的是「大」"],
+    "file": "js/prefs.js",
+    "find": "export const FS_LABELS = { m: '標準', l: '大' };",
+    "replace": "export const FS_LABELS = { m: '標準', l: '大', xl: '特大' };",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "舊版存的高對比留在存的資料裡",
+    "why": "（事前寫 2026-11-12）load() 不丟掉 contrast：畫面不受影響（樣式表沒有那一層、apply() 也不讀），但存的資料一直帶著一個沒有用的鍵。預期只紅「W5 改過一次設定之後」。",
+    "expect": ["W5 改過一次設定之後"],
+    "file": "js/prefs.js",
+    "find": "  delete p.contrast;\n",
+    "replace": "",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "設定頁又出現高對比開關",
+    "why": "（事前寫 2026-11-12）開關加回設定頁（點了也沒作用）。預期只紅「W5 設定頁沒有「高對比模式」」。",
+    "expect": ["W5 設定頁沒有「高對比模式」"],
     "file": "js/views/settings.js",
-    "find": "        h('div', { class: 'form-hint' }, prefs.theme === 'washi'",
-    "replace": "        h('div', { class: 'form-hint' }, false",
+    "find": "    // 「高對比模式」2026-11-12 拿掉",
+    "replace": "    h('label', { class: 'switch-row' }, h('div', {}, '高對比模式'), checkbox(false, () => {})),\n    // 「高對比模式」2026-11-12 拿掉",
     "cmd": "node scripts/washitest.mjs"
   }
 ]

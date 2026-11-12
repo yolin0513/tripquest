@@ -305,8 +305,9 @@ try {
   yes(denied.btn === '🔍 用 Google 再查一次' && !denied.btnDisabled, `按鈕復原、可以再試（「${denied.btn}」）`);
   yes(/dir\/.*destination=24\.6|destination=24\.6/.test(decodeURIComponent(first.href)), `導航用座標不用店名：${decodeURIComponent(first.href).slice(-28)}`);
   yes(/^\d+ (公尺|公里)/.test(first.dist.trim()) && !first.dist.includes('往'), `只顯示距離、不顯示方位：「${first.dist.trim()}」`);
-  const rName = M.within(first.nameSize, '>=', 16, 'px', '找附近結果的名稱字級');
-  yes(rName.ok, `結果大字（名稱 ${first.nameSize}px）${rName.tail}`);
+  // 門檻 2026-11-12 從 16 降到 13（Yolin 放棄長輩路線）：16 是照長輩「結果要大字」訂的；13 是全 App 一般文字的底線。
+  const rName = M.within(first.nameSize, '>=', 13, 'px', '找附近結果的名稱字級');
+  yes(rName.ok, `結果名稱不小於一般文字的底線（名稱 ${first.nameSize}px）${rName.tail}`);
 
   // ---------- 廁所 ----------
   await page.evaluate(() => [...document.querySelectorAll('.nl-cat')].find((x) => x.textContent.includes('廁所')).click());

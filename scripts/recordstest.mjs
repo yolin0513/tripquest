@@ -97,7 +97,7 @@ const formFit = (page, form) => page.$eval(form, (f) => {
   return { n: ins.length, bad, minW: d ? parseFloat(getComputedStyle(d).minWidth) || 0 : -1, fpx: d ? parseFloat(getComputedStyle(d).fontSize) : -1 };
 });
 const FIT_WIDTHS = [320, 360, 390, 430, 440];   // 440＝Yolin 那支（截圖 1320px ÷3）
-const FIT_FONTS = ['m', 'l', 'xl'];
+const FIT_FONTS = ['m', 'l'];   // 2026-11-12 拿掉 'xl'（「特大」從 App 拿掉，樣式表也沒有 xl 那條）
 async function fitChecks(page, form, label, nWant) {
   await page.setViewport(MOBILE(390));
   await setStyle(page, 'sim-ios', SIM_IOS); await setStyle(page, 'old-2col', OLD_TWO_COL); await sleep(80);

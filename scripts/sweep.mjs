@@ -235,12 +235,12 @@ try {
     ok(`分頁：從「${fromLabel}」四顆都切得過去且畫面正確`);
   }
 
-  // ---------- 5. 字級：特大時不能破版 ----------
-  console.log('\n— 特大字 —');
-  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); });
+  // ---------- 5. 字級：最大一段（2026-11-12 起是「大」，特大拿掉了）時不能破版 ----------
+  console.log('\n— 大字 —');
+  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'l'); });
   await sleep(400);
   for (const [label, h] of [['行程頁', `/trip/${ids.tid}`], ['照片牆', `/trip/${ids.tid}/people`], ['分帳', `/trip/${ids.tid}/expenses`], ['設定', '/settings']]) {
-    await inspect('特大字 · ' + label, h);
+    await inspect('大字 · ' + label, h);
   }
   await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'm'); });
 

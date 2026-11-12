@@ -60,12 +60,7 @@ export default async function settings({ drawPage, setTop }) {
           onclick: () => { setPref('theme', k); refreshPage(); } }, label))),
       h('div', { class: 'form-hint' }, '深色適合晚上、比較不刺眼；淺色像白紙，白天在戶外比較好看。'),
     ),
-    h('label', { class: 'switch-row' },
-      h('div', {}, h('div', { style: 'font-weight:700' }, '高對比模式'),
-        h('div', { class: 'form-hint' }, prefs.theme === 'washi'
-          ? '背景更白、文字更黑，看起來更清楚。'
-          : '背景更深、文字更白，看起來更清楚。')),
-      checkbox(prefs.contrast === 'high', (on) => { setPref('contrast', on ? 'high' : 'normal'); })),
+    // 「高對比模式」2026-11-12 拿掉（Yolin 放棄長輩路線）；以前打開過的人，prefs.js 會把那個設定丟掉。
 
     h('label', { class: 'switch-row' },
       h('div', {}, h('div', { style: 'font-weight:700' }, '減少動態效果'),

@@ -1,0 +1,17 @@
+[
+  { "name": "任務名字級掉到一般文字的底線以下",
+    "why": "（事前寫 2026-11-12）任務名字級門檻從 16 降到 13（放棄長輩路線）之後，還要擋得住比一般文字還小的字：0.65rem × 標準字級 18.88px ≈ 12.3px。預期只紅 densitytest 的「任務名字級」。",
+    "expect": ["任務名字級"],
+    "file": "css/style.css", "find": ".qline-title {\n  font-size: 1.05rem;", "replace": ".qline-title {\n  font-size: 0.65rem;",
+    "cmd": "node scripts/densitytest.mjs", "done": "^\\d+ 項通過" },
+  { "name": "大字那一節其實量到標準字",
+    "why": "（事前寫 2026-11-12）原本量特大字的那一節改量「大」；setPref 傳的若不是「大」，下面幾條都在量標準字、照樣綠。預期紅 densitytest 的「大字前置」（其餘幾條在標準字也過，不算多紅）。",
+    "expect": ["大字前置"],
+    "file": "scripts/densitytest.mjs", "find": "(await import('./js/prefs.js')).setPref('fs', 'l');", "replace": "(await import('./js/prefs.js')).setPref('fs', 'm');",
+    "cmd": "node scripts/densitytest.mjs", "done": "^\\d+ 項通過" },
+  { "name": "找附近結果名稱掉到一般文字的底線以下",
+    "why": "（事前寫 2026-11-12）名稱字級門檻從 16 降到 13 之後，12px 還是要紅。預期只紅 nearbytest 的「結果名稱不小於一般文字的底線」。",
+    "expect": ["結果名稱不小於一般文字的底線"],
+    "file": "css/style.css", "find": ".nl-name { font-size: 17px;", "replace": ".nl-name { font-size: 12px;",
+    "cmd": "node scripts/nearbytest.mjs" }
+]

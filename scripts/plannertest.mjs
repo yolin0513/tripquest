@@ -147,7 +147,8 @@ try {
   let g = await gridCheck();
   checkGeom(g, '390px');
   yes(g.hourDefault === '未設定', `幾點到是下拉、預設顯示「${g.hourDefault}」（不用原生 time input，iOS 不會畫成當下時間）`);
-  for (const [w, fs, label] of [[360, 'xl', '360px＋特大字級'], [320, 'xl', '320px＋特大字級']]) {
+  // 2026-11-12 特大拿掉，使用者選得到的最大字級是「大」
+  for (const [w, fs, label] of [[360, 'l', '360px＋大字級'], [320, 'l', '320px＋大字級']]) {
     await page.setViewport({ width: w, height: 780 });
     await page.evaluate(async (v) => (await import('./js/prefs.js')).setPref('fs', v), fs);
     await sleep(500);

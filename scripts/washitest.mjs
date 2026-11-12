@@ -14,7 +14,10 @@
 //      對照組：W1 那次載入（沒選過）同一個時刻記到的是「沒有 data-theme」
 //   W4 和紙下逐頁掃字的對比（首頁、旅程頁、設定頁、建立頁）：掃到的字 > 0、全部 ≥ 4.5；
 //      底是圖片的跳過、印出跳過幾個（不是 0 也不算錯，但要看得到）
-//   W5 和紙＋高對比：高對比的說明字跟著改成「背景更白、文字更黑」；底變純白；再掃一次
+//   W5 舊版存的偏好（2026-11-12 拿掉高對比與特大字之後）：設定頁沒有「高對比模式」、字體大小只剩「標準／大」；
+//      手機裡存著舊版的 contrast=high＋fs=xl＋和紙，重開 App：照樣是和紙（底不是純白）、沒有 data-contrast、
+//      特大對應成大（data-fs=l、字級 134%）、設定頁選中的是「大」；存的資料裡 contrast 被拿掉
+//      （原本的 W5「和紙＋高對比」2026-11-12 隨高對比模式拿掉）
 //   W6 切回深色：data-theme 拿掉、網址列顏色回 #0f1523
 //   W0 掃描器自己的對照組：在頁面上放一個粉彩字（珊瑚粉 #f2a497 在和紙白上），掃描器必須抓到它
 import { spawn } from 'node:child_process';
@@ -192,16 +195,42 @@ try {
   // ---- W4 逐頁掃 ----
   await scanPages(page, 'W4 和紙');
 
-  // ---- W5 和紙＋高對比 ----
+  // ---- W5 舊版存的偏好（2026-11-12 拿掉高對比與特大字之後；原本的「和紙＋高對比」隨模式拿掉） ----
   yes(await toSettings(page), 'W5 進設定頁');
-  const hint = await page.evaluate(() => [...document.querySelectorAll('label.switch-row')].find((x) => x.textContent.includes('高對比模式'))?.textContent || '');
-  yes(hint.includes('背景更白、文字更黑'), `W5 和紙下高對比的說明是「背景更白、文字更黑」（${hint.includes('背景更深') ? '還寫著背景更深' : hint.slice(0, 20)}）`);
-  const box = await page.evaluateHandle(() => [...document.querySelectorAll('label.switch-row')].find((x) => x.textContent.includes('高對比模式'))?.querySelector('input[type=checkbox]') || null);
-  if (!box.asElement()) throw new Error('找不到設定頁「高對比模式」那一列的開關（label.switch-row input[type=checkbox]）');
-  await box.asElement().click(); await sleep(200);
+  const st = await page.evaluate(() => ({
+    rows: [...document.querySelectorAll('label.switch-row')].map((x) => x.textContent),
+    fsBtns: [...document.querySelectorAll('.seg:not(.theme-seg) button')].map((b) => b.textContent.trim()),
+  }));
+  // 「沒有」要先有母體：開關列一個都找不到時，「沒有高對比」恆真
+  yes(st.rows.length > 0 && !st.rows.some((x) => x.includes('高對比')), `W5 設定頁沒有「高對比模式」（掃了 ${st.rows.length} 個開關列）`);
+  yes(st.fsBtns.join('｜') === '標準｜大', `W5 字體大小只剩「標準／大」（實得 ${st.fsBtns.join('／') || '沒找到'}）`);
+  // 造情境：舊版的人手機裡存著「和紙＋高對比＋特大」（舊版的設定頁存的就是這三個鍵與值）
+  const old = await page.evaluate(() => {
+    const p = JSON.parse(localStorage.getItem('tripquest.prefs') || '{}');
+    localStorage.setItem('tripquest.prefs', JSON.stringify({ ...p, theme: 'washi', contrast: 'high', fs: 'xl' }));
+    return JSON.parse(localStorage.getItem('tripquest.prefs'));
+  });
+  yes(old.contrast === 'high' && old.fs === 'xl' && old.theme === 'washi', `W5 前置：手機裡存的是舊版的偏好（contrast ${old.contrast}、fs ${old.fs}、theme ${old.theme}）`);
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.trip-card');
   t = await theme(page);
-  yes(t.attr === 'washi' && t.bg === 'rgb(255, 255, 255)', `W5 和紙＋高對比：底變純白（${t.bg}）`);
-  await scanPages(page, 'W5 和紙＋高對比');
+  const de = await page.evaluate(() => ({
+    contrast: document.documentElement.dataset.contrast ?? null,
+    fs: document.documentElement.dataset.fs ?? null,
+    px: getComputedStyle(document.documentElement).fontSize,
+  }));
+  yes(t.attr === 'washi' && t.bg === 'rgb(255, 252, 246)' && de.contrast === null,
+    `W5 舊版開過高對比的人重開：照樣是和紙、底不是純白、沒有 data-contrast（底 ${t.bg}、data-contrast ${de.contrast}）`);
+  yes(de.fs === 'l' && de.px === '21.44px', `W5 舊版選特大的人重開：對應成「大」（data-fs ${de.fs}、字級 ${de.px}，應為 l／21.44px）`);
+  yes(await toSettings(page), 'W5 重開後進設定頁');
+  const onFs = await page.evaluate(() => document.querySelector('.seg:not(.theme-seg) button.on')?.textContent.trim() ?? null);
+  yes(onFs === '大', `W5 設定頁字體大小選中的是「大」（實得 ${onFs}）`);
+  yes(await clickText(page, '.seg:not(.theme-seg) button', '標準'), 'W5 點字體大小「標準」');
+  await sleep(200);
+  const after = await page.evaluate(() => ({ s: JSON.parse(localStorage.getItem('tripquest.prefs') || '{}'), px: getComputedStyle(document.documentElement).fontSize }));
+  yes(!('contrast' in after.s) && after.s.fs === 'm' && after.px === '18.88px',
+    `W5 改過一次設定之後，存的資料裡沒有 contrast、字級回標準（存的鍵 ${Object.keys(after.s).join('、')}、字級 ${after.px}）`);
 
   // ---- W6 切回深色 ----
   yes(await toSettings(page), 'W6 進設定頁');

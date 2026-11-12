@@ -1,7 +1,7 @@
 [
   {
     "name": "和紙：文字變數換成粉彩",
-    "why": "粉彩當字（這個主題唯一可能做壞的地方）。預期紅 palettetest 真樣式表的 P2／P3 和紙（含和紙＋高對比）。",
+    "why": "粉彩當字（這個主題唯一可能做壞的地方）。預期紅 palettetest 真樣式表的 P2／P3 和紙。（2026-11-12 高對比主題拿掉之前，也紅「和紙＋高對比」那一份。）",
     "file": "css/style.css",
     "find": "  --primary-text: #9a3a2b;",
     "replace": "  --primary-text: #f2a497;",
@@ -17,7 +17,7 @@
   },
   {
     "name": "檢查器：不看上一層的底色",
-    "why": "預期紅對照組「上一層的底色要算進去」，以及真樣式表深色兩個主題的 P2／P3（日期列選中格 .ds-day.on .ds-sub、底部分頁 #tabbar .tab.active 被改成對頁面算）。",
+    "why": "預期紅對照組「上一層的底色要算進去」，以及真樣式表深色主題的 P2／P3（2026-11-12 以前是深色、深色＋高對比兩個；日期列選中格 .ds-day.on .ds-sub、底部分頁 #tabbar .tab.active 被改成對頁面算）。",
     "file": "scripts/palettetest.mjs",
     "find": "      const pc = par ? ownColors(par) : { fg: null, bg: null };",
     "replace": "      const pc = { fg: null, bg: null };",
@@ -57,10 +57,37 @@
   },
   {
     "name": "檢查器：例外不分主題",
-    "why": "「深色｜選擇器」也放行和紙。預期紅對照組「只登記深色，和紙照樣擋」，以及真樣式表的「登記的例外每一條都真的用到」（深色＋高對比那一份被深色那一份搶先用掉）。",
+    "why": "「深色｜選擇器」也放行和紙。預期紅對照組「只登記深色，和紙照樣擋」。（2026-11-12 註：括號裡原本寫的「真樣式表的登記的例外每一條都真的用到」靠的是深色登記清單與深色＋高對比主題，兩個都沒了，那一半不再成立。）",
     "file": "scripts/palettetest.mjs",
     "find": "    const exemptKey = (sel) => [`${name}｜${sel}`, sel].find((k) => exempt[k] != null);",
     "replace": "    const exemptKey = (sel) => Object.keys(exempt).find((k) => k === sel || k.endsWith('｜' + sel));",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "樣式表：加回一層沒登記的主題（高對比）",
+    "why": "（事前寫 2026-11-12）高對比拿掉之後，有人把那一層加回樣式表、卻沒登記進 THEMES——那一層的配色從沒被算過。預期只紅真樣式表的「P0 宣告變數的主題層都有登記」。",
+    "expect": ["P0 宣告變數的主題層都有登記"],
+    "file": "css/style.css",
+    "find": "  color-scheme: light;\n}\n",
+    "replace": "  color-scheme: light;\n}\nhtml[data-contrast=\"high\"] { --bg: #000; --text: #ffffff; }\n",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：沒登記的主題層不報",
+    "why": "（事前寫 2026-11-12）孤兒檢查形同沒有。預期只紅對照組「沒有和紙那一層」（少了 P0 宣告那一條，紅的條數對不上）與「沒登記的主題層」。",
+    "expect": ["對照組 沒有和紙那一層", "對照組 沒登記的主題層"],
+    "file": "scripts/palettetest.mjs",
+    "find": "    .filter((s) => !layered.has(s));",
+    "replace": "    .filter(() => false);",
+    "cmd": "node scripts/palettetest.mjs"
+  },
+  {
+    "name": "檢查器：沒宣告變數的 html 規則也當成主題層",
+    "why": "（事前寫 2026-11-12）只改字級的 html[data-fs] 被當成沒登記的主題層，誤報。預期紅對照組「只改字級的 html 規則不算主題層」，以及真樣式表的「P0 宣告變數的主題層都有登記」（真的 html[data-fs=\"l\"] 被誤報）。",
+    "expect": ["對照組 只改字級的 html 規則不算主題層", "P0 宣告變數的主題層都有登記"],
+    "file": "scripts/palettetest.mjs",
+    "find": "isLayer(r.sel) && r.decls.some((d) => d.prop.startsWith('--'))",
+    "replace": "isLayer(r.sel) && r.decls.length >= 0",
     "cmd": "node scripts/palettetest.mjs"
   }
 ]

@@ -315,7 +315,7 @@ try {
     `來源標示誠實：「${ui.note.slice(0, 34)}…」`);
   yes(ui.pins === 5, '每一列都有 📌 釘住鈕');
 
-  // 工具區排版（實機回報四顆擠一列全折行）：兩層、全部不折行，360px＋特大字級也要
+  // 工具區排版（實機回報四顆擠一列全折行）：兩層、全部不折行，360px＋大字級也要（2026-11-12 以前是特大字級，特大拿掉了）
   const toolCheck = () => page.evaluate(() => {
     const q = (t) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(t));
     const rowTop = (el) => Math.round(el.getBoundingClientRect().top);
@@ -333,11 +333,11 @@ try {
   yes(tc.dayRowSame && tc.exportBelow, '天數控制同一列、匯出在下一列');
   yes(!tc.wrapped.length && !tc.overflow, '390px：工具按鈕不折行', tc.wrapped.join('、'));
   await page.setViewport({ width: 360, height: 780 });
-  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'xl'));
+  await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'l'));
   await sleep(500);
   tc = await toolCheck();
   yes(!tc.wrapped.length && !tc.overflow && tc.dayRowSame,
-    '360px＋特大字級：文字不折行、不橫向溢出', tc.wrapped.join('、'));
+    '360px＋大字級：文字不折行、不橫向溢出', tc.wrapped.join('、'));
   await page.evaluate(async () => (await import('./js/prefs.js')).setPref('fs', 'm'));
   await page.setViewport({ width: 390, height: 844 });
   await sleep(400);
@@ -536,7 +536,7 @@ try {
     }
     return tid;
   });
-  for (const [w, fs] of [[390, 'm'], [360, 'xl']]) {
+  for (const [w, fs] of [[390, 'm'], [360, 'l']]) {   // 2026-11-12 'xl' → 'l'（特大拿掉）
     await page.setViewport({ width: w, height: 844, deviceScaleFactor: 2 });
     await page.goto('about:blank');
     await page.goto(`http://localhost:${WEB}/#/trip/${numIds}/plan`, { waitUntil: 'networkidle0' });

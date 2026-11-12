@@ -19,11 +19,11 @@ const CSS_PATH = 'css/style.css';
 export const MIN = 4.5;
 
 // 主題 → 依序疊上的選擇器（後面的蓋前面的）
+// 2026-11-12 拿掉「深色＋高對比」「和紙＋高對比」：高對比模式從 App 拿掉了（Yolin 放棄長輩路線），
+// 樣式表裡那兩層也一起刪掉——這裡留著的話 P0 會報「樣式表裡沒有這一層」。門檻 MIN 4.5 沒動（等 Yolin 決定）。
 export const THEMES = {
   '深色': [':root'],
-  '深色＋高對比': [':root', 'html[data-contrast="high"]'],
   '和紙': [':root', 'html[data-theme="washi"]'],
-  '和紙＋高對比': [':root', 'html[data-theme="washi"]', 'html[data-theme="washi"][data-contrast="high"]'],
 };
 
 // 登記的例外（登記制：只有列在這裡的才放行；登記了卻沒用到也報）
@@ -73,7 +73,7 @@ const ALL_THEMES = {
 // 以後深色主題有新的對比不足要直接修，要登記就得寫理由。
 const DARK_KNOWN = [];
 export const EXEMPT = { ...ALL_THEMES };
-for (const s of DARK_KNOWN) for (const t of ['深色', '深色＋高對比']) EXEMPT[`${t}｜${s}`] = '深色主題既有的對比不足，另案';
+for (const s of DARK_KNOWN) EXEMPT[`深色｜${s}`] = '深色主題既有的對比不足，另案';
 
 // ---------- 顏色 ----------
 export function parseColor(v) {
@@ -232,6 +232,14 @@ export function checkPalette(text, { exempt = {}, themes = THEMES } = {}) {
     say(n > 0 && bad.length === 0, `P2／P3 ${name}：算了 ${n} 條規則的文字對比，${n - nEx - bad.length} 條 ≥ ${MIN}、${nEx} 條不到但登記過${bad.length ? `；不到的 ${bad.length} 條：` + bad.join('｜') : ''}`);
     say(unres.length === 0, `P4 ${name}：解不出來的顏色都有登記${unres.length ? `；沒登記的 ${unres.length} 條：` + unres.join('｜') : ''}`);
   }
+  // P0 孤兒檢查：樣式表裡宣告了變數的主題層（只由 :root／html 加屬性組成的選擇器），都要在 themes 裡。
+  // 上面的迴圈跳過所有 html[data-…] 開頭的規則，沒登記的一層等於從沒算過配色。
+  // 2026-11-12 拿掉高對比時補：以後有人加回一層（或拿掉主題時漏刪樣式表那一層），這一條會紅。
+  const layered = new Set(Object.values(themes).flat());
+  const isLayer = (s) => /^(:root|html(\[data-[a-z-]+(="[^"]*")?\])+)$/.test(s);
+  const orphan = [...new Set(rules.filter((r) => isLayer(r.sel) && r.decls.some((d) => d.prop.startsWith('--'))).map((r) => r.sel))]
+    .filter((s) => !layered.has(s));
+  say(orphan.length === 0, `P0 宣告變數的主題層都有登記（登記 ${layered.size} 層${orphan.length ? '；沒登記：' + orphan.join('、') : ''}）`);
   const stale = Object.keys(exempt).filter((k) => !usedExempt.has(k));
   say(stale.length === 0, `P4 登記的例外每一條都真的用到（${Object.keys(exempt).length} 條${stale.length ? '；沒用到：' + stale.join('｜') : ''}）`);
   return { ok, lines, counts };
@@ -243,13 +251,11 @@ if (isMain) {
   let pass = 0;
   const yes = (cond, msg) => { if (cond) { pass++; console.log('✓ ' + msg); } else { console.log('✗ ' + msg); process.exitCode = 1; } };
 
-  // 對照組：同一個 checkPalette，餵合成的樣式表（四個主題都有）。wantRed 寫「類別＋主題」的開頭，
+  // 對照組：同一個 checkPalette，餵合成的樣式表（兩個主題都有）。wantRed 寫「類別＋主題」的開頭，
   // 每一類都要紅到、而且不准紅到別類。
   const THEME_CSS = [
     ':root { --bg: #101010; --bg-elev: #181818; --bg-elev-2: #202020; --text: #ffffff; --primary: #4f8dff; --primary-text: #8fb6ff; }',
-    'html[data-contrast="high"] { --bg: #000000; }',
     'html[data-theme="washi"] { --bg: #fffcf6; --bg-elev: #f8f0e3; --bg-elev-2: #efe4d2; --text: #3e3a39; --primary: #f2a497; --primary-text: #9a3a2b; }',
-    'html[data-theme="washi"][data-contrast="high"] { --bg: #ffffff; }',
   ].join('\n');
   const GOOD = THEME_CSS + '\n.ok { color: var(--primary-text); }\n.blk { background: var(--primary); color: var(--primary-ink, #000000); }';
   const ctl = (name, css, wantRed, exempt = {}) => {
@@ -261,7 +267,10 @@ if (isMain) {
     yes(hit, `對照組 ${name}：${want.length ? '應只紅 ' + want.join('＋') : '應全過'}，實際紅 ${red.length} 條${red.length ? '（' + red.map((l) => l.slice(2, 34)).join('｜') + '）' : ''}`);
   };
   ctl('合格的樣式表', GOOD, null);
-  ctl('沒有和紙那一層', GOOD.replace('html[data-theme="washi"] {', 'html[data-theme="xx"] {'), ['P0 和紙']);
+  ctl('沒有和紙那一層', GOOD.replace('html[data-theme="washi"] {', 'html[data-theme="xx"] {'), ['P0 和紙', 'P0 宣告變數的主題層']);
+  // 2026-11-12：沒登記的主題層（例：拿掉高對比時樣式表那一層漏刪）要紅；只動字級、不宣告變數的 html[data-fs] 不算主題層
+  ctl('沒登記的主題層', GOOD + '\nhtml[data-contrast="high"] { --bg: #000000; }', ['P0 宣告變數的主題層']);
+  ctl('只改字級的 html 規則不算主題層', GOOD + '\nhtml[data-fs="l"] { font-size: 134%; }', null);
   ctl('粉彩當字', GOOD + '\n.bad { color: var(--primary); }', ['P2／P3 和紙']);
   ctl('沒定義的變數', GOOD + '\n.bad { color: var(--nope); }', ['P1 ', 'P4 深色', 'P4 和紙']);
   ctl('只設底色、繼承的字太淡', GOOD + '\n.bad { background: var(--text); }', ['P2／P3 ']);

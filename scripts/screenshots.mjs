@@ -146,13 +146,13 @@ try {
   await page.waitForSelector('.seg');
   await shot('09-settings');
 
-  // 字級切換
-  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); });
+  // 字級切換（2026-11-12 特大拿掉，最大一段是「大」）
+  await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'l'); });
   await go(`/#/trip/${tripId}`);
   await page.waitForSelector('.qline');
-  await shot('10-trip-xl-font');
+  await shot('10-trip-l-font');
   const fsAttr = await page.evaluate(() => document.documentElement.dataset.fs);
-  if (fsAttr === 'xl') ok('字級切換（特大）'); else fail('字級切換：' + fsAttr);
+  if (fsAttr === 'l') ok('字級切換（大）'); else fail('字級切換：' + fsAttr);
   await page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'm'); });
 
   // 分享代碼往返（測「複製一份任務清單」的無同步路徑）

@@ -226,8 +226,10 @@ try {
   yes(foods.length >= 2 && new Set(foods).size === foods.length && !foods.some((t) => cut.includes(t)),
     `同前綴的任務名彼此分得出來（${foods.join('／') || '無'}，畫面上沒被截掉）`, cut.join('、'));
   const fsize = await page.$eval('.qline-title', (e) => parseFloat(getComputedStyle(e).fontSize));
-  const rFs = M.within(fsize, '>=', 16, 'px', '任務名字級');
-  yes(rFs.ok, `任務名字級 ${fsize}px —— 縮的是圖與留白，不是字${rFs.tail}`);
+  // 門檻 2026-11-12 從 16 降到 13（Yolin 放棄長輩路線）：16 是照長輩訂的；13 是全 App 一般文字的底線
+  // （checktest 行程檢查、transittest 班次那一行用的同一個數），任務名不該比一般文字還小。
+  const rFs = M.within(fsize, '>=', 13, 'px', '任務名字級');
+  yes(rFs.ok, `任務名字級 ${fsize}px —— 不小於一般文字的底線${rFs.tail}`);
 
   // ---------- ③ 收合狀態就能加照片 ----------
   console.log('\n— 收合就能加照片 —');
@@ -322,11 +324,12 @@ try {
   eq(credits.onThumb, 0, '56px 的縮圖不壓授權小字（糊成一團看不清）');
   yes(credits.onBig > 0, '展開的大圖仍然是標示出處的地方');
 
-  // ---------- 特大字與高對比 ----------
-  console.log('\n— 特大字 / 高對比 —');
+  // ---------- 大字 ----------
+  // 2026-11-12 拿掉「特大」與高對比（Yolin 放棄長輩路線）：使用者選得到的最大字級變成「大」，這一節改量它。
+  // 原本是「特大字」「特大字＋高對比」兩種；高對比只換顏色、不影響版面，拿掉不少量任何尺寸。
+  console.log('\n— 大字 —');
   for (const [label, apply] of [
-    ['特大字', async () => page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'xl'); })],
-    ['特大字＋高對比', async () => page.evaluate(async () => { (await import('./js/prefs.js')).setPref('contrast', 'high'); })],
+    ['大字', async () => page.evaluate(async () => { (await import('./js/prefs.js')).setPref('fs', 'l'); })],
   ]) {
     await apply();
     await sleep(400);
@@ -335,7 +338,7 @@ try {
       const rows = [...document.querySelectorAll('.qline')];
       const btns = [...document.querySelectorAll('.qline-act button')];
       return {
-        fs: de.dataset.fs || '', contrast: de.dataset.contrast || '',
+        fs: de.dataset.fs || '',
         overflow: de.scrollWidth > de.clientWidth + 2,
         btnH: btns.map((b) => Math.round(b.getBoundingClientRect().height)),
         maxH: Math.max(...rows.filter((x) => !x.classList.contains('open')).map((x) => Math.round(x.getBoundingClientRect().height))),
@@ -343,7 +346,9 @@ try {
       };
     });
     const cut = await cutTitles();
-    yes(!r.overflow, `${label}：沒有橫向破版（fs=${r.fs || 'm'} contrast=${r.contrast || 'normal'}）`);
+    // 前置：真的套上了「大」（setPref 若把 l 當成不認得的值退回標準，下面幾條都在量標準字）
+    yes(r.fs === 'l', `${label}前置：字級真的是「大」（data-fs=${r.fs || 'm'}）`);
+    yes(!r.overflow, `${label}：沒有橫向破版（fs=${r.fs || 'm'}）`);
     // 原本只數「幾顆 <44」：數到 0 顆時看不出最矮的那顆離 44 多遠。改成取全部的高、最矮的算餘裕
     const rXlBtn = M.within(r.btnH, '>=', 44, 'px', `${label}的相機鈕`);
     yes(rXlBtn.ok, `${label}：相機鈕仍然 ≥44px（${r.btnH.length} 顆）${rXlBtn.tail}`);
@@ -352,12 +357,14 @@ try {
     // 220 的依據（2026-10-28 實測，390×844、特大字、這份種子）：名字一行的列 126px、三行 161px、
     // 最長的「拍下 太平山 最開闊的一景」四行 196px。超過 220 ＝ 名字要折到五行以上（名字欄又被壓窄了）。
     // 舊的 160 是 v1.41 為了抓「收合後內容漏出來」（量到 587px）訂的，沒有量過特大字；漏出來改由上一條直接驗。
+    // ⚠ 2026-11-12 改量「大」字之後，220 是沿用特大字的數字、還沒在大字量過（推論：字小一段、列應該比較矮，
+    //   不至於誤擋，但可能太鬆）。下一次跑到這支時看餘裕，照大字的實測重訂、寫明依據。
     const rXl = M.within(r.maxH, '<=', 220, 'px', `${label}的收合列`);
     yes(rXl.ok, `${label}：收合列最高 ${r.maxH}px（名字最多四行）${rXl.tail}`);
   }
   await page.evaluate(async () => {
     const p = await import('./js/prefs.js');
-    p.setPref('fs', 'm'); p.setPref('contrast', 'normal');
+    p.setPref('fs', 'm');
   });
 
   yes(errs.length === 0, '整段沒有 JS 例外', errs.join(' | '));

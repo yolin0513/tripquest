@@ -2,7 +2,7 @@
 //
 // 為什麼要有這一支：最近幾個 bug 都是「斷言全綠但畫面壞掉」。
 // 既有的斷言驗的是「東西在不在」，驗不到「並排在一起會不會擠爆」。
-// 所以這裡不抽樣：**每一頁 × 標準／大／特大字級 × 320/360/390/430px，逐一渲染**，
+// 所以這裡不抽樣：**每一頁 × 標準／大字級 × 320/360/390/430px，逐一渲染**（2026-11-12 拿掉「特大」之前是三段），
 // 加上每一個對話框，機械化檢查這些：
 //   1. 橫向溢出（整頁能左右捲＝版面已經爆了）
 //   2. 文字被截斷（scrollWidth > clientWidth 且沒有 overflow 設定）
@@ -75,7 +75,8 @@ const yes = (c, m, extra = '') => {
 };
 
 const WIDTHS = [320, 360, 390, 430];
-const FONTS = ['m', 'l', 'xl'];
+// 2026-11-12 拿掉 'xl'：「特大」從 App 拿掉了（樣式表也沒有 xl 那條，留著只是在量標準字）
+const FONTS = ['m', 'l'];
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 try {
@@ -526,8 +527,8 @@ try {
         const list = await page.evaluate(CHECK);
         combos++;
         record(`${name}/${w}px/${fs2}`, list);
-        if (SHOTS && fs2 === 'xl' && w === 320) {
-          await page.screenshot({ path: path.join(SHOTS, `${name}-320-xl.png`) });
+        if (SHOTS && fs2 === 'l' && w === 320) {
+          await page.screenshot({ path: path.join(SHOTS, `${name}-320-l.png`) });
         }
       }
     }
@@ -538,7 +539,7 @@ try {
     `掃了 ${combos} 種「頁面 × 字級 × 寬度」組合`);
 
   // ---------- 對話框 ----------
-  console.log('\n— 對話框（最壞情況：320px × 特大字級）—');
+  console.log('\n— 對話框（最壞情況：320px × 大字級）—');
   await page.setViewport({ width: 320, height: 844, deviceScaleFactor: 1 });
   const MODALS = [
     ['建議順序', `/trip/${ids.tid}/plan`, () => [...document.querySelectorAll('.pd-opt')][0]?.click()],
@@ -564,7 +565,7 @@ try {
     }
     await page.goto('about:blank');
     await page.goto(`http://localhost:${WEB}/#${route}`, { waitUntil: 'networkidle0' }).catch(() => {});
-    await page.evaluate(() => { document.documentElement.dataset.fs = 'xl'; });
+    await page.evaluate(() => { document.documentElement.dataset.fs = 'l'; });
     await page.waitForSelector('.page', { timeout: 15000 }).catch(() => {});
     await sleep(900);
     await page.evaluate(open).catch(() => {});

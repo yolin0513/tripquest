@@ -214,22 +214,23 @@ try {
   // 對照組：名字改成可以折行、寬度壓到 1 個字，必須量到「折成 2 行」——量法抓不到折行，下面的「都一行」就不算數。
   // 第一版用「可折行＋字放大」：名字改短（最長 2 個字）之後放大也折不了行，對照組量不到、自己報紅（2026-11-11）——
   // 對照組不能靠名字的長度，所以改成壓寬度，任何 2 個字以上的名字都一定折。
-  await page.setViewport(MOB(320)); await setFs('xl');
+  await page.setViewport(MOB(320)); await setFs('l');
   await page.evaluate(() => { const s = document.createElement('style'); s.id = 'ctl-wrap'; s.textContent = '.tl-leg-name { white-space: normal !important; display: inline-block; width: 1em !important; }'; document.head.append(s); });
   await sleep(120);
   const ctl = await legFit();
   await page.evaluate(() => document.getElementById('ctl-wrap')?.remove());
   const ctlCaught = ctl.bad.some((x) => /折成 [2-9] 行/.test(x));
   const fitBad = []; let combos = 0;
-  for (const w of [320, 360, 390, 430, 440]) for (const fs of ['m', 'l', 'xl']) {
+  // 2026-11-12 拿掉 'xl'（「特大」從 App 拿掉）：5 種寬度 × 2 種字級 = 10 種
+  for (const w of [320, 360, 390, 430, 440]) for (const fs of ['m', 'l']) {
     await page.setViewport(MOB(w)); await setFs(fs); await sleep(100);
     const r = await legFit(); combos++;
     if (r.n !== 7) fitBad.push(`${w}px／${fs}：只量到 ${r.n} 格（應為 7）`);
     for (const b of r.bad) fitBad.push(`${w}px／${fs}：${b}`);
   }
   await setFs('m'); await page.setViewport(MOB(390)); await sleep(150);
-  yes(opened6 && shown.join('｜') === WANT.join('｜') && ctlCaught && combos === 15 && fitBad.length === 0,
-    `選項格子：7 格名字照順序（${shown.join('｜')}）、15 種寬度×字級每個名字都一行、都在格子裡（對照組：可折行＋壓成 1 字寬時${ctlCaught ? '量得到折行' : '量不到折行'}）`,
+  yes(opened6 && shown.join('｜') === WANT.join('｜') && ctlCaught && combos === 10 && fitBad.length === 0,
+    `選項格子：7 格名字照順序（${shown.join('｜')}）、${combos} 種寬度×字級每個名字都一行、都在格子裡（對照組：可折行＋壓成 1 字寬時${ctlCaught ? '量得到折行' : '量不到折行'}）`,
     [!opened6 && '選項打不開', `${fitBad.length} 處：` + fitBad.slice(0, 4).join('；'), !ctlCaught && `對照組 ${JSON.stringify(ctl.bad.slice(0, 2))}`].filter(Boolean).join('｜'));
 
   // 選了之後存進去的值：從畫面上寫「搭車」的那一格點（使用者看到的是字），存進去的必須是代號 car——

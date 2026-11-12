@@ -1,6 +1,8 @@
-/* TripQuest —— 手機優先、深色為主、長輩友善
-   設計核心：大字、大按鈕、淺層級、明確回饋、少打字。
-   全站以 rem 排版，字級由 <html data-fs> 控制（標準 / 大 / 特大）。 */
+/* TripQuest —— 手機優先、深色為主
+   全站以 rem 排版，字級由 <html data-fs> 控制（標準 / 大）。
+   2026-11-12 Yolin 放棄長輩路線、改做年輕人會喜歡的介面：拿掉「特大」字級與高對比模式。
+   下面註解裡的「長輩」「特大字」是當時的理由，規則本身照留（拿掉要另外驗版面）。
+   文字對比 ≥ 4.5、觸控 ≥ 44px 兩條底線還在，等 Yolin 決定（palettetest、tagtest 等照舊守）。 */
 
 :root {
   --bg: #0f1523;
@@ -45,20 +47,10 @@
   color-scheme: dark;
 }
 
-/* 字級三段 —— 影響整站（都用 rem） */
+/* 字級兩段 —— 影響整站（都用 rem）。「特大」156% 2026-11-12 拿掉，舊存的特大由 prefs.js 對應成「大」。
+   標準 118% 是當初照長輩訂的；要不要調小跟改版的字級一起定（改一次版面就好），這一版不動。 */
 html { font-size: 118%; -webkit-text-size-adjust: 100%; }
 html[data-fs="l"]  { font-size: 134%; }
-html[data-fs="xl"] { font-size: 156%; }
-
-/* 高對比模式 */
-html[data-contrast="high"] {
-  --bg: #000;
-  --bg-elev: #14203a;
-  --bg-elev-2: #22345f;
-  --line: #5a7099;
-  --text: #ffffff;
-  --muted: #dbe4f7;
-}
 
 /* 淺色「和紙」主題（設定頁可切換）：和紙白底、墨灰字；四個粉彩只當底色與色塊。
    字一律用墨色系——粉彩當字的對比只有 1.5～2，長輩看不清楚。 */
@@ -88,14 +80,6 @@ html[data-theme="washi"] {
   --warn-text: #765000;
   --mark-text: #765000;
   color-scheme: light;
-}
-html[data-theme="washi"][data-contrast="high"] {
-  --bg: #ffffff;
-  --bg-elev: #fbf6ee;
-  --bg-elev-2: #f2e9db;
-  --line: #3e3a39;
-  --text: #000000;
-  --muted: #2e2a29;
 }
 
 * { box-sizing: border-box; }

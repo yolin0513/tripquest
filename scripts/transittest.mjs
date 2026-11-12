@@ -328,8 +328,8 @@ try {
   yes(cfg.tts === 0, `設定頁完全沒有語音／TTS 的字樣（實際 ${cfg.tts} 處）`);
   yes(cfg.hasAi && cfg.hasMaps, 'AI 加值與地圖加值兩張卡都在，收在同一個「自帶金鑰」區塊底下');
 
-  // 貼上對話框：按鈕不折行、跟輸入框對齊；360px 特大字級也要成立
-  for (const [w, fs] of [[390, 'm'], [360, 'xl']]) {
+  // 貼上對話框：按鈕不折行、跟輸入框對齊；360px 大字級也要成立（2026-11-12 以前是特大字級，特大拿掉了）
+  for (const [w, fs] of [[390, 'm'], [360, 'l']]) {
     await page.setViewport({ width: w, height: 844, deviceScaleFactor: 2 });
     await page.evaluate((v) => { document.documentElement.dataset.fs = v; }, fs);
     await sleep(300);
