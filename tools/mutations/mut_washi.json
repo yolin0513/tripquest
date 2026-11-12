@@ -17,10 +17,29 @@
   },
   {
     "name": "和紙：第一個畫面先閃深色",
-    "why": "boot-theme.js 不設 data-theme，等 app.js 載完才由 prefs.js 套上。重開後最後照樣是和紙（W3 照樣過），只有剛打開那一下是深藍。預期只紅 washitest 的 W7「<body> 出現那一刻就已經是和紙」。",
+    "why": "（2026-11-13 改寫：預設改和紙之後，和紙是 index.html 的 <html> 直接寫 data-theme=\"washi\"，boot-theme.js 只處理選深色的人。原本這條改的是 boot-theme 設和紙那一行，那一行已經不在了。）index.html 不寫靜態和紙：等 app.js 載完才由 prefs.js 套上，最後照樣是和紙（W1、W3 照樣過），只有剛打開那一下是深藍。預期紅 W7 的兩條：沒選過的那一次、選了和紙重開的那一次。依據：事後——2026-11-13 改寫前用一次性腳本跑過這個改動，紅的正是這兩條（第二條是跑了才補進預期的）。",
+    "expect": ["W7 沒選過時", "W7 重開時"],
+    "file": "index.html",
+    "find": "<html lang=\"zh-Hant\" data-theme=\"washi\">",
+    "replace": "<html lang=\"zh-Hant\">",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "選深色的人第一個畫面先閃白",
+    "why": "（2026-11-13 新增）boot-theme.js 不處理選了深色的人：<html> 照 index.html 是和紙，等 app.js 載完 prefs.js 才拿掉——最後照樣是深色（W9 重開仍是深色照樣過），只有剛打開那一下是白的。預期只紅 W7 的對照組。依據：事後（同一次一次性腳本）。",
+    "expect": ["W7 對照組"],
     "file": "js/boot-theme.js",
-    "find": "      document.documentElement.setAttribute('data-theme', 'washi');",
-    "replace": "",
+    "find": "    if (p && p.theme === 'dark') {",
+    "replace": "    if (p && p.theme === 'darkx') {",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "預設又變回深色",
+    "why": "（2026-11-13 新增）prefs.js 的預設改回 dark：沒選過的人一打開是和紙（index.html 靜態），app.js 載完又被 apply() 換成深色。預期只紅「W1 沒選過是和紙」（W7 記的是 <body> 出現那一刻，那時還是和紙，照樣過）。依據：事後（同一次一次性腳本）。",
+    "expect": ["W1 沒選過是和紙"],
+    "file": "js/prefs.js",
+    "find": "const DEFAULTS = { fs: 'm', theme: 'washi',",
+    "replace": "const DEFAULTS = { fs: 'm', theme: 'dark',",
     "cmd": "node scripts/washitest.mjs"
   },
   {

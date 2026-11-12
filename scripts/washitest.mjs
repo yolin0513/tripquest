@@ -6,12 +6,13 @@
 // 這支驗瀏覽器**實際算出來**的顏色：每一個畫面上看得到的字，對它實際的底（往上找到不透明的底，
 // 半透明的一層層疊上去）算對比，≥ 4.5。入口走使用者的路：底部分頁「⚙️ 設定」→「畫面顏色」點「淺色（和紙）」。
 //
-//   W1 對照組：沒選過 → 深色（<html> 沒有 data-theme、底是 #0f1523）
+//   W1 沒選過 → 和紙（2026-11-13 起預設改成和紙；<html> 有 data-theme=washi、底 #fffcf6、網址列 #fffcf6）
+//   W9 設定頁點「深色」→ 立刻換成深色；重開仍是深色；<body> 出現那一刻就沒有 data-theme（選深色的人不先閃白）
 //   W2 設定頁點「淺色（和紙）」→ 立刻換：data-theme=washi、底 #fffcf6、網址列顏色 #fffcf6、那顆按鈕選中
 //   W3 重開 App 仍是和紙
 //   W7 第一個畫面就是和紙，不先閃一下深色：<body> 剛被插進來的那一刻，<html> 就已經有 data-theme=washi
 //      （prefs.js 的 apply() 在 app.js 這個 module 裡，要等整頁解析完才跑；靠的是 head 裡同步執行的 boot-theme.js）。
-//      對照組：W1 那次載入（沒選過）同一個時刻記到的是「沒有 data-theme」
+//      對照組：W9 那次載入（選了深色）同一個時刻記到的是「沒有 data-theme」
 //   W4 和紙下逐頁掃字的對比（首頁、旅程頁、設定頁、建立頁）：掃到的字 > 0、全部 ≥ 4.5；
 //      底是圖片的跳過、印出跳過幾個（不是 0 也不算錯，但要看得到）
 //   W5 舊版存的偏好（2026-11-12 拿掉高對比與特大字之後）：設定頁沒有「高對比模式」、字體大小只剩「標準／大」；
@@ -162,11 +163,25 @@ try {
     yes(h === '#/', `W8 被蓋住時沒有按下去（還在 ${h}）`);
   }
 
-  // ---- W1 對照組 ----
+  // ---- W1 沒選過 → 和紙（2026-11-13 起預設；原本沒選過是深色） ----
   const bt1 = await bodyTheme(page);
-  yes(bt1 === null, `W7 對照組：沒選過時，<body> 出現那一刻沒有 data-theme（實得 ${bt1}）`);
+  yes(bt1 === 'washi', `W7 沒選過時，<body> 出現那一刻就已經是和紙（實得 ${bt1}）`);
   let t = await theme(page);
-  yes(t.attr === null && t.bg === 'rgb(15, 21, 35)' && t.meta === '#0f1523', `W1 沒選過是深色（data-theme ${t.attr}、底 ${t.bg}、網址列 ${t.meta}）`);
+  yes(t.attr === 'washi' && t.bg === 'rgb(255, 252, 246)' && t.meta === '#fffcf6', `W1 沒選過是和紙（data-theme ${t.attr}、底 ${t.bg}、網址列 ${t.meta}）`);
+
+  // ---- W9 選深色：立刻換、重開仍是深色、第一個畫面不先閃白（這一次記到的「沒有 data-theme」也是 W7 的對照組） ----
+  yes(await toSettings(page), 'W9 從底部分頁「⚙️ 設定」進設定頁');
+  yes(await clickText(page, '.theme-seg button', '深色'), 'W9 點「畫面顏色」的「深色」');
+  await sleep(200);
+  t = await theme(page);
+  yes(t.attr === null && t.bg === 'rgb(15, 21, 35)' && t.meta === '#0f1523', `W9 立刻換成深色（data-theme ${t.attr}、底 ${t.bg}、網址列 ${t.meta}）`);
+  await page.goto('about:blank');
+  await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.trip-card');
+  t = await theme(page);
+  yes(t.attr === null && t.bg === 'rgb(15, 21, 35)' && t.meta === '#0f1523', `W9 重開仍是深色（data-theme ${t.attr}、底 ${t.bg}、網址列 ${t.meta}）`);
+  const bt9 = await bodyTheme(page);
+  yes(bt9 === null, `W7 對照組：選了深色的人重開時，<body> 出現那一刻沒有 data-theme、不先閃白（實得 ${bt9}）`);
 
   // ---- W2 設定頁點「淺色（和紙）」 ----
   yes(await toSettings(page), 'W2 從底部分頁「⚙️ 設定」進設定頁');

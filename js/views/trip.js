@@ -709,6 +709,7 @@ function legRow(prev, s, i) {
   if (cur) pick.append(h('button', { class: 'tl-leg-opt tl-leg-clear', type: 'button', onclick: () => save(null) }, h('span', { class: 'tl-leg-name' }, '清除')));
   const btn = h('button', {
     class: 'tl-leg-btn' + (cur ? '' : ' is-unset'), type: 'button', 'aria-expanded': 'false',
+    ...(cur ? { dataset: { mode: cur } } : {}),   // 和紙主題照選的方式上色（css .tl-leg-btn[data-mode]）
     'aria-label': `從「${name(prev)}」到「${name(s)}」怎麼去：${cur ? LEG_LABEL[cur] : '還沒設定'}，點一下設定`,
     onclick: () => {
       pick.hidden = !pick.hidden; btn.setAttribute('aria-expanded', String(!pick.hidden));

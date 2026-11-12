@@ -95,7 +95,7 @@ export const READ_RE = /\.theme\b|\bstoredThemeOf\s*\(/;
 export const KINDS = ['color', 'number', 'internal', 'write', 'fresh', 'model', 'prefs'];
 export const REGISTRY = [
   { file: 'js/aicontent.js', needle: "[x.region || '—', x.theme]", kind: 'model', why: 'tripTextDayList：x.theme 是 digestFrom 用 trustedThemeOf 算的類別名' },
-  { file: 'js/boot-theme.js', needle: "p.theme === 'washi'", kind: 'prefs', why: '介面主題' },
+  { file: 'js/boot-theme.js', needle: "p.theme === 'dark'", kind: 'prefs', why: '介面主題' },
   { file: 'js/prefs.js', needle: "const washi = prefs.theme === 'washi';", kind: 'prefs', why: '介面主題' },
   { file: 'js/prefs.js', needle: "el.dataset.theme = 'washi'", kind: 'prefs', why: '介面主題（同一行兩處算一處）' },
   { file: 'js/poster/index.js', needle: 'const p = styleFor(preset, themeMeta(page.theme));', kind: 'color', why: '那一張的配色（styleFor 只換顏色，插圖與時間軸一律中性）；page.theme 來自 layout.js 帶過來的模型主題' },

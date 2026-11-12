@@ -39,6 +39,23 @@
      字照樣繼承得到，但卡片沒有底色、「選中」的那格也沒有變色。補上定義。 */
   --fg: var(--text);
   --card: var(--bg-elev-2);
+  /* 2026-11-13 貼紙風（Yolin 核可，先只做和紙）：會換底色或字色的地方都走變數，palettetest 才算得到對比。
+     深色主題裡這些變數都等於原本的樣子——深色畫面不變。 */
+  --sky: #aad3e7;
+  --lilac: #d2c3e7;
+  --blush: #fdf0ea;
+  --tag-bg: var(--bg-elev-2);
+  --tag-fg: var(--muted);
+  --label-fg: var(--muted);
+  --now-bg: var(--bg-elev);
+  --dot-fill: var(--bg);
+  --dot-edge: var(--primary);
+  --mode-walk: var(--bg);
+  --mode-train: var(--bg);
+  --mode-bus: var(--bg);
+  --mode-car: var(--bg);
+  --mode-boat: var(--bg);
+  --mode-plane: var(--bg);
   --radius: 20px;
   --tabbar-h: 76px;
   --topbar-h: 60px;
@@ -56,9 +73,25 @@ html[data-fs="l"]  { font-size: 134%; }
    字一律用墨色系——粉彩當字的對比只有 1.5～2，長輩看不清楚。 */
 html[data-theme="washi"] {
   --bg: #fffcf6;
-  --bg-elev: #f8f0e3;
+  /* 2026-11-13：卡片底換純白（貼紙風）；框線換墨色——原本 #b3a698 對頁面底只有 2.32，
+     不到 WCAG 對非文字元件要求的 3（palettetest P5 守） */
+  --bg-elev: #ffffff;
   --bg-elev-2: #efe4d2;
-  --line: #b3a698;
+  --card: #ffffff;
+  --line: #2f2c2a;
+  --tag-bg: var(--accent);
+  --tag-fg: var(--text);
+  --label-fg: var(--text);
+  --now-bg: var(--blush);
+  --dot-fill: var(--accent);
+  --dot-edge: var(--line);
+  /* 交通方式一種一色（只照使用者選的方式上色，不猜）：火車若竹綠、步行薰衣草…… */
+  --mode-walk: var(--lilac);
+  --mode-train: var(--ok);
+  --mode-bus: var(--accent);
+  --mode-car: var(--sky);
+  --mode-boat: var(--blush);
+  --mode-plane: var(--primary);
   --text: #3e3a39;
   --muted: #5c5551;
   --primary: #f2a497;
@@ -288,8 +321,8 @@ button.card { appearance: none; font: inherit; }
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 999px;
-  background: var(--bg-elev-2);
-  color: var(--muted);
+  background: var(--tag-bg);
+  color: var(--tag-fg);
   border: 1px solid var(--line);
 }
 .tag-curated { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
@@ -312,7 +345,7 @@ button.card { appearance: none; font: inherit; }
 .section-label {
   font-size: 0.9rem;
   font-weight: 800;
-  color: var(--muted);
+  color: var(--label-fg);
   margin: 26px 2px 10px;
 }
 
@@ -448,7 +481,7 @@ button.card { appearance: none; font: inherit; }
 .tl-time:empty { display: none; }
 /* 點的中心對準線的中心：線在 --tl-line、寬 3px；點連框共 19px */
 .tl-dot { position: absolute; left: calc(var(--tl-line) - var(--tl-col) + 1.5px - 9.5px); top: 1.45rem;
-  width: 13px; height: 13px; border-radius: 50%; background: var(--bg); border: 3px solid var(--primary); }
+  width: 13px; height: 13px; border-radius: 50%; background: var(--dot-fill); border: 3px solid var(--dot-edge); }
 .tl-item:has(.qcollapse.is-here) .tl-dot { background: var(--primary); }
 /* 三態（只有進行中、看的是今天、今天有現在這一站時才有）：
    已到＝實心灰點；現在＝實心主色、大一點；未到＝空心點、卡片換成虛線框、底色透明。
@@ -457,11 +490,20 @@ button.card { appearance: none; font: inherit; }
 .tl-now .tl-dot { background: var(--primary); width: 17px; height: 17px; top: 1.3rem; left: calc(var(--tl-line) - var(--tl-col) + 1.5px - 11.5px); }
 .tl-next > .qcollapse { border-style: dashed; background: transparent; }
 .tl-next .qc-name { color: var(--muted); }
+/* 現在這一站的卡片：和紙換淡粉底（2026-11-13 貼紙風）；深色等於原本的卡片底 */
+.tl-now > .qcollapse { background: var(--now-bg); }
 /* 兩站之間「怎麼去」：落在虛線上的一顆小按鈕。沒設定用虛線框＋淡字（看得到、但不搶卡片）；設了就實線框＋圖示。 */
 .tl-leg { position: relative; margin: 8px 0 -2px; }
 .tl-leg-btn { min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 2px solid var(--line); background: var(--bg);
   color: var(--text); font: inherit; font-size: 0.9rem; font-weight: 800; cursor: pointer; }
 .tl-leg-btn.is-unset { border-style: dashed; color: var(--muted); font-weight: 700; }
+/* 選了交通方式：一種一色（和紙；深色等於原本的底）。只照使用者自己選的 data-mode 上色。 */
+.tl-leg-btn[data-mode="walk"] { background: var(--mode-walk); }
+.tl-leg-btn[data-mode="train"] { background: var(--mode-train); }
+.tl-leg-btn[data-mode="bus"] { background: var(--mode-bus); }
+.tl-leg-btn[data-mode="car"] { background: var(--mode-car); }
+.tl-leg-btn[data-mode="boat"] { background: var(--mode-boat); }
+.tl-leg-btn[data-mode="plane"] { background: var(--mode-plane); }
 .tl-leg-btn[aria-expanded="true"] .tl-leg-chev { display: inline-block; transform: rotate(90deg); }
 /* 選項（2026-11-11 Yolin 選 A：收起來、點了才展開；「選項內的文字及換行請整齊」）：兩欄大格子，圖示在上、名字在下。
    名字一律一行：寧可縮字或拉高格子，不准折成兩行（Dispatch 轉述的要求）。圖示放上面就是「拉高格子」——名字分到整格的寬度。
@@ -695,7 +737,23 @@ button.card { appearance: none; font: inherit; }
 html[data-theme="washi"] .dc-head { border: 2.5px solid var(--text); border-radius: 18px; }
 html[data-theme="washi"] .dc-head.is-today { border-color: var(--text); }
 html[data-theme="washi"] .ds-day { border: 2px solid var(--text); }
-html[data-theme="washi"] .qcollapse { border: 2px solid var(--text); border-left-width: 5px; }
+html[data-theme="washi"] .qcollapse { border: 2.5px solid var(--line); border-left-width: 5px; box-shadow: 4px 4px 0 var(--line); }
+/* 2026-11-13 貼紙風（Yolin 核可，先只做和紙）：墨色粗框＋往右下的實心影子。
+   影子（box-shadow）不佔版面；框從 1～2px 變 2.5px 會多佔一點高度——densitytest 量過才算數。
+   只動框線與影子，不碰字色與底色（那些走 :root 的變數，palettetest 才算得到）。 */
+html[data-theme="washi"] .card,
+html[data-theme="washi"] .fl-card,
+html[data-theme="washi"] .stay-card { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+html[data-theme="washi"] .stay-card.is-out { border-style: dashed; }
+/* 按鈕：墨框＋硬影子＋內圈白色虛線「縫線」；按下去往右下沉、影子收掉。高度不變（框原本就是 2px）。 */
+html[data-theme="washi"] .btn { position: relative; border-color: var(--line); box-shadow: 3px 3px 0 var(--line); }
+html[data-theme="washi"] .btn::after { content: ""; position: absolute; inset: 4px; border: 1.5px dashed rgba(255, 255, 255, 0.95);
+  border-radius: 10px; pointer-events: none; }
+html[data-theme="washi"] .btn:active { transform: translate(3px, 3px); box-shadow: none; }
+html[data-theme="washi"].reduce-motion .btn:active { transform: none; }
+html[data-theme="washi"] .tag { border-width: 1.5px; }
+/* 區塊標題放大、區塊之間拉開（字色走 --label-fg） */
+html[data-theme="washi"] .section-label { font-size: 1.1rem; margin: 40px 2px 12px; }
 html[data-theme="washi"] .tl-next > .qcollapse { border-style: dashed; }
 html[data-theme="washi"] .tl-crew { padding-bottom: 10px; border-bottom: 2px dashed var(--line); }
 html[data-theme="washi"] .page:has(.daystrip)::after {

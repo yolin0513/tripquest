@@ -6,7 +6,9 @@
 // 這兩條都只動這支手機的顯示偏好，不碰任何行程資料。
 
 const KEY = 'tripquest.prefs';
-const DEFAULTS = { fs: 'm', theme: 'dark', reduceMotion: false, autoScroll: true, keepOriginal: false };
+// 2026-11-13 預設改成和紙（Yolin 核可）。注意：舊版存檔時會把整份偏好（含當時的預設 theme: 'dark'）一起存，
+// 所以改過任何設定的人手機裡都存著 dark——分不出是不是特地選的，照存的值維持深色；沒存過偏好的人才變和紙。
+const DEFAULTS = { fs: 'm', theme: 'washi', reduceMotion: false, autoScroll: true, keepOriginal: false };
 // 和紙主題的底色；網址列／狀態列的顏色（theme-color）要跟著換，不然上面一條深藍。
 const THEME_BG = { dark: '#0f1523', washi: '#fffcf6' };
 

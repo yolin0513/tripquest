@@ -10,6 +10,7 @@
 //      （--bg、--bg-elev、--bg-elev-2，取最差的）——對比 ≥ 4.5（WCAG AA 一般文字）
 //   P3 每一條只設了底色、沒設文字色的規則：繼承來的 --text 在那個底色上 ≥ 4.5
 //   P4 解不出來的顏色（漸層、半透明、color-mix 以外的函式）只准是登記過的例外——靜默略過就是排除制
+//   P5 框線對比（2026-11-13）：EDGE_THEMES 裡的主題，--line 對頁面三種底 ≥ 3（WCAG 非文字元件）
 // 「這條規則實際用在哪裡、上面疊了什麼」靜態看不出來，那部分由 layouttest／截圖逐頁看（開瀏覽器）。
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -170,7 +171,13 @@ export function bgStops(decl) {
 
 // 回 { ok, lines, counts }
 // exempt：鍵是「選擇器」（每個主題都放行）或「主題名｜選擇器」（只放行那個主題），值是理由
-export function checkPalette(text, { exempt = {}, themes = THEMES } = {}) {
+// P5（2026-11-13 補）框線對比：列在這裡的主題，--line 對頁面三種底（--bg、--bg-elev、--bg-elev-2，取最差的）≥ 3
+// ——WCAG 對非文字元件（卡片、按鈕、輸入框的外框）的要求。和紙原本的 #b3a698 只有 2.32，這一版改成墨色時補上。
+// 深色不在清單：深色的框線這一版沒動，要不要一起拉到 3 另外決定（不在 Yolin 核可的範圍）。
+export const EDGE_THEMES = ['和紙'];
+export const EDGE_MIN = 3;
+
+export function checkPalette(text, { exempt = {}, themes = THEMES, edgeThemes = EDGE_THEMES } = {}) {
   const lines = [];
   let ok = true;
   const say = (good, msg) => { lines.push((good ? '✓ ' : '✗ ') + msg); if (!good) ok = false; };
@@ -231,7 +238,13 @@ export function checkPalette(text, { exempt = {}, themes = THEMES } = {}) {
     say(undef.size === 0, `P1 ${name}：用到的變數都有定義${undef.size ? '；沒定義：' + [...undef].join('、') : ''}`);
     say(n > 0 && bad.length === 0, `P2／P3 ${name}：算了 ${n} 條規則的文字對比，${n - nEx - bad.length} 條 ≥ ${MIN}、${nEx} 條不到但登記過${bad.length ? `；不到的 ${bad.length} 條：` + bad.join('｜') : ''}`);
     say(unres.length === 0, `P4 ${name}：解不出來的顏色都有登記${unres.length ? `；沒登記的 ${unres.length} 條：` + unres.join('｜') : ''}`);
+    if (edgeThemes.includes(name)) {
+      const ln = resolve('var(--line)', tk);
+      const ew = ln.color ? Math.min(...pages.map((p) => contrast(ln.color, p))) : null;
+      say(ew != null && ew + 1e-9 >= EDGE_MIN, `P5 ${name}：框線 --line 對頁面三種底最差 ${ew == null ? '解不出來（' + ln.unresolved + '）' : ew.toFixed(2)}（要 ≥ ${EDGE_MIN}）`);
+    }
   }
+  for (const n of edgeThemes) if (!(n in themes)) say(false, `P5 ${n}：要驗框線的主題不在主題清單裡（改名或拿掉主題時漏改，這一條就沒驗）`);
   // P0 孤兒檢查：樣式表裡宣告了變數的主題層（只由 :root／html 加屬性組成的選擇器），都要在 themes 裡。
   // 上面的迴圈跳過所有 html[data-…] 開頭的規則，沒登記的一層等於從沒算過配色。
   // 2026-11-12 拿掉高對比時補：以後有人加回一層（或拿掉主題時漏刪樣式表那一層），這一條會紅。
@@ -255,7 +268,7 @@ if (isMain) {
   // 每一類都要紅到、而且不准紅到別類。
   const THEME_CSS = [
     ':root { --bg: #101010; --bg-elev: #181818; --bg-elev-2: #202020; --text: #ffffff; --primary: #4f8dff; --primary-text: #8fb6ff; }',
-    'html[data-theme="washi"] { --bg: #fffcf6; --bg-elev: #f8f0e3; --bg-elev-2: #efe4d2; --text: #3e3a39; --primary: #f2a497; --primary-text: #9a3a2b; }',
+    'html[data-theme="washi"] { --bg: #fffcf6; --bg-elev: #f8f0e3; --bg-elev-2: #efe4d2; --text: #3e3a39; --primary: #f2a497; --primary-text: #9a3a2b; --line: #2f2c2a; }',
   ].join('\n');
   const GOOD = THEME_CSS + '\n.ok { color: var(--primary-text); }\n.blk { background: var(--primary); color: var(--primary-ink, #000000); }';
   const ctl = (name, css, wantRed, exempt = {}) => {
@@ -287,6 +300,9 @@ if (isMain) {
   ctl('登記過的例外放行', GOOD + '\n.bad { color: var(--primary); }', null, { '.bad': '測試' });
   ctl('只登記深色，和紙照樣擋', GOOD + '\n.bad { color: var(--primary); }', ['P2／P3 和紙', 'P4 登記'], { '深色｜.bad': '測試' });
   ctl('登記了卻沒用到', GOOD, ['P4 登記'], { '.不存在': '測試' });
+  // P5：和紙原本的框線色（2.32）要紅；框線沒定義（解不出來）也要紅，不能當成過
+  ctl('和紙的框線太淡', GOOD.replace('--line: #2f2c2a', '--line: #b3a698'), ['P5 和紙']);
+  ctl('和紙的框線沒定義', GOOD.replace(' --line: #2f2c2a;', ''), ['P5 和紙']);
 
   // 真的樣式表
   let text = null;
