@@ -31,7 +31,8 @@
 //   · 有還原紀錄：帳本最後一筆未收尾的必須是同一次、同一支檔，否則拒絕（回 6）；一致 → 照它寫回原檔、核對雜湊、刪掉、帳本記「第 N 次中斷後已還原」。
 //   · 沒有還原紀錄、帳本卻有未收尾的：那支檔現在的雜湊 ≠ 帳本記的原檔雜湊 → 拒絕（回 5），指出第幾次、哪支檔；
 //     相等 → 照跑並註明（中斷落在「刪還原紀錄」與「記完成」之間時就是這樣，檔案沒事；一律拒絕會變成永遠關著的閘）。
-// 回傳值：0 照預期（每一條都正常結束、跑滿母體、紅了）；1 有突變沒紅；2 工作區不符、清單被拒、或 find 對不上（沒套上）；
+// 紅了的那幾條，另外拿 ✗ 行跟清單裡的 expect 對，印「紅在預期／另有 N 行非預期的紅／預期要紅卻沒紅／沒寫 expect」（見 compareExpect；只印，不影響回傳值）。
+// 回傳值：0 每一條都正常結束、跑滿母體、紅了（紅的是不是 expect 那幾行看上面那幾行說明）；1 有突變沒紅；2 工作區不符、清單被拒、或 find 對不上（沒套上）；
 //   3 原樣不成立（那一組沒跑）；4 檢查器自己壞了（讀不到、還原後雜湊不對、各類相加對不上）；5 上次中斷、還原紀錄不見；
 //   6 兩處紀錄不一致；7 有突變崩潰；8 有突變逾時；9 有突變項數不對母體（沒跑完或多了）。
 //   好幾條結果不同時照 CODE_ORDER 取第一個出現的（沒紅先講——那是確定的發現），最後一行列出每一類各幾條。
@@ -86,6 +87,38 @@ const short =(s) => String(s).slice(0, 12);
 //   新的非斷言行會讓項數多於母體 →「⊘ 項數不符」、沒有結果（保守的方向：不會把沒跑完的記成紅），看過再補登。
 export const NON_ITEM = ['✗ 例外', '✗ 對照組沒過——'];
 export const countItems = (out) => String(out || '').split(/\r?\n/).filter((l) => /^[✓✗]/.test(l) && !NON_ITEM.some((p) => l.startsWith(p))).length;
+// 紅了的時候，拿每一行 ✗ 跟這條突變事前寫的 expect（斷言訊息的開頭）對（2026-11-12；Dispatch：「多紅」也要變成執行器會報的東西）。
+//   原本「紅了」只看結束碼與項數：expect 寫 C、實際紅 C 和 G，照樣記成紅、最後一行還寫「照預期紅」——多紅的那幾行沒人看就過去了，
+//   而它可能是另一道防線（好消息），也可能是真的問題（2026-11-12 mut_evstop1112 第 4 條就是這樣，靠人逐行對才發現）。
+//   extra＝一條 expect 都對不到的 ✗（非預期的紅）；missing＝沒有任何一行 ✗ 對到的 expect（預期要紅卻沒紅，紅的可能是別的規則碰巧擋下的）。
+//   比法跟 tools/mutproof/expect-check.mjs、scripts/evidence.mjs 一樣：去掉行首「✗ 」之後比**開頭**（不在整行裡找子字串——訊息中間提到
+//   別條的編號不能算對到）。NON_ITEM 那幾種 ✗（例外、對照組結論行）不是斷言，expect 不會寫它們，不比。
+//   **只印、不改判定**：回傳值與帳本的 result 照舊（Dispatch：「不一定要判紅，但至少要印」）；帳本另記 extraRed、expectMissing 供事後查。
+const expectHit = (msg, p) => msg.startsWith(p);
+export function compareExpect(out, expect) {
+  const msgs = String(out || '').split(/\r?\n/).map((l) => l.trimEnd())
+    .filter((l) => l.startsWith('✗') && !NON_ITEM.some((p) => l.startsWith(p))).map((l) => l.replace(/^✗ ?/, ''));
+  const exp = Array.isArray(expect) ? expect.filter((p) => typeof p === 'string' && p.length > 0) : [];
+  return {
+    has: exp.length > 0,
+    n: exp.length,
+    reds: msgs.length,
+    extra: msgs.filter((msg) => !exp.some((p) => expectHit(msg, p))),
+    missing: exp.filter((p) => !msgs.some((msg) => expectHit(msg, p))),
+  };
+}
+// 印在「✓ 紅了｜」那一段底下的說明行（行首是空白，不是判定符號——不會被讀輸出的人或程式當成一條 ✓／✗）
+export function expectLines(c) {
+  if (!c.has) return [`（這條沒寫 expect：✗ ${c.reds} 行分不出哪些是預期的；事後補寫的不算預測）`];
+  const out = [];
+  if (!c.missing.length && !c.extra.length) out.push(`預期對照：expect ${c.n} 條都紅了、沒有別的紅——紅在預期`);
+  if (c.missing.length) out.push(`預期要紅卻沒紅 ${c.missing.length} 條（紅的可能是別的規則碰巧擋下的）：${c.missing.join('、')}`);
+  if (c.extra.length) {
+    out.push(`另有 ${c.extra.length} 行非預期的紅（不在 expect 裡；可能是另一道防線，也可能是真的問題，要逐行看）：`);
+    for (const l of c.extra) out.push('  · ' + l.slice(0, 160));
+  }
+  return out;
+}
 // 一次子程序怎麼結束的（原樣與突變共用）：timeout 逾時被殺／crash 沒有總結行或被外力停掉／ended 正常結束
 export function endKind(r, doneRe) {
   if (r.timedOut) return 'timeout';
@@ -318,15 +351,17 @@ async function main() {
       : j.kind === 'crash' ? `崩潰：沒有最後那一行總結（結束碼 ${r.status}，丟了例外沒接住或被強制停掉）`
         : j.kind === 'short' ? `沒跑完：只跑了 ${j.items}/${base.items} 項（結束碼 ${r.status}）`
           : j.kind === 'extra' ? `項數不符：跑了 ${j.items} 項、原樣是 ${base.items} 項（結束碼 ${r.status}）` : null;
-    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, kind: j.kind, items: j.items, pop: base.items, base: base.seq, ...(why ? { reason: why } : {}) });
-    outcomes.push({ name: m.name, kind: j.kind });
+    const cmp = result === 'red' ? compareExpect(r.out, m.expect) : null;
+    ledgerAdd({ seq, event: 'done', name: m.name, file: m.file, result, kind: j.kind, items: j.items, pop: base.items, base: base.seq, ...(why ? { reason: why } : {}),
+      ...(cmp ? (cmp.has ? { extraRed: cmp.extra.length, expectMissing: cmp.missing } : { expectNone: true }) : {}) });
+    outcomes.push({ name: m.name, kind: j.kind, cmp });
     runSeqs.push(seq);
     // 每一次都把子程序的全文留下來（不只沒有結果的時候）：判「紅的理由對不對」要看到**全部**紅的項目——
     // 別的情境也紅了，就是被別的規則碰巧擋下（2026-10-28：原本只印前 4 行 ✗、紅了不留全文，
     // pushgatetest 那條第 5 行以後有沒有紅、紅在哪，事後查不到，那筆結果只好重跑）
     fs.writeFileSync(path.join(LOGS, `mutate-out.${seq}.log`), r.out || '');
     const reds = (r.out || '').split('\n').map((l) => l.trimEnd()).filter((l) => l.startsWith('✗'));
-    if (result === 'red') console.log(`✓ 紅了｜${m.name}（結束碼 ${r.status}；跑滿 ${j.items}/${base.items} 項；✗ ${reds.length} 行，全部列在下面；全文在 .logs/mutate-out.${seq}.log）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}`);
+    if (result === 'red') console.log(`✓ 紅了｜${m.name}（結束碼 ${r.status}；跑滿 ${j.items}/${base.items} 項；✗ ${reds.length} 行，全部列在下面；全文在 .logs/mutate-out.${seq}.log）\n${reds.map((l) => '     ' + l.slice(0, 160)).join('\n')}\n${expectLines(cmp).map((l) => '     ' + l).join('\n')}`);
     else if (result === 'not-red') console.log(`✗ 沒紅｜${m.name}：跑滿 ${j.items}/${base.items} 項、結束碼 0——照樣全綠`);
     else { const lb = KIND[j.kind].label; console.log(`${KIND[j.kind].mark} ${lb}｜${m.name}：${why.startsWith(lb + '：') ? why.slice(lb.length + 1) : why}——沒有結果（不算紅、也不算跑過）`); }
     // 沒有結果時把子程序的輸出留下來：不然看不出是丟了例外、被殺、還是測試本來就不印總結行
@@ -352,7 +387,16 @@ async function main() {
   console.log(`\n結果：紅 ${tally.red}、沒紅 ${tally['not-red']}、崩潰 ${tally.crash}、逾時 ${tally.timeout}、沒跑完 ${tally.short}、項數不符 ${tally.extra}、`
     + `沒套上 ${tally.unapplied}、沒跑（原樣不成立）${tally.nobase}——相加 ${sum}、選到 ${list.length} 條；真的跑了 ${runSeqs.length} 條、帳本收尾 ${ledgerDone} 筆`);
   if (sum !== list.length || outcomes.length !== list.length || ledgerDone !== runSeqs.length) { console.log('✗ 各類相加、選到的條數、帳本收尾筆數對不上——執行器自己算錯了'); return 4; }
-  console.log(`${tally.red}/${list.length} 條照預期紅`);
+  // 原本這一行寫「N/M 條照預期紅」，其實只數了結束碼（2026-11-12 改）：紅的裡面另外跟 expect 對，分四種印出來，不影響回傳值
+  const ex = { ok: 0, extra: 0, extraLines: 0, missing: 0, none: 0 };
+  for (const o of outcomes) {
+    if (o.kind !== 'red' || !o.cmp) continue;
+    if (!o.cmp.has) { ex.none++; continue; }
+    if (!o.cmp.extra.length && !o.cmp.missing.length) ex.ok++;
+    if (o.cmp.extra.length) { ex.extra++; ex.extraLines += o.cmp.extra.length; }
+    if (o.cmp.missing.length) ex.missing++;
+  }
+  console.log(`紅 ${tally.red}/${list.length} 條（只看結束碼與項數）；紅的再跟 expect 對：紅在預期 ${ex.ok} 條、另有非預期的紅 ${ex.extra} 條（共 ${ex.extraLines} 行）、預期要紅卻沒紅 ${ex.missing} 條、沒寫 expect ${ex.none} 條`);
   const first = CODE_ORDER.find((k) => tally[k]);
   return first ? KIND[first].code : 0;
 }
