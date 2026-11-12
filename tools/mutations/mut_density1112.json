@@ -22,5 +22,9 @@
   { "name": "最壞情況·名字短的站先拿", "why": "（事前寫 2026-11-12 守夜）同主題的站照名字由短到長拿句子：太平山先拿走最長的「拍下 {name} 最開闊的一景」，礁溪溫泉拿不到——抽得到，但不是最壞。只有「最長的那句在名字最長的站」擋得住。預期新紅的只有 densitytest 的「前置：最壞情況」。",
     "expect": ["前置：最壞情況"],
     "file": "scripts/densitytest.mjs", "find": ".sort((a, b) => b.name.length - a.name.length);", "replace": ".sort((a, b) => a.name.length - b.name.length);",
+    "cmd": "node scripts/densitytest.mjs", "done": "^\\d+ 項通過" },
+  { "name": "大字收合列多 26px（舊門檻 220 放行的退步）", "why": "（事前寫 2026-11-12 傍晚）只在大字把收合列的上下內距 7→20px，列高約多 26px：實測 158 → 約 184，落在 170～220 之間——舊門檻 220 照樣綠，這條就是 220 改成 170 要抓的那種退步。只動大字、只動列的上下內距：標準字級那幾條、相機鈕、名字截斷、漏出來都不受影響。預期新紅的只有 densitytest 的「大字：收合列最高」。跑完看印出來的列高，確認真的落在 170～220 之間，不是超過 220（超過 220 就證明不了舊門檻會放行）。",
+    "expect": ["大字：收合列最高"],
+    "file": "css/style.css", "find": "html[data-fs=\"l\"]  { font-size: 134%; }", "replace": "html[data-fs=\"l\"]  { font-size: 134%; }\nhtml[data-fs=\"l\"] .qline-head { padding-top: 20px; padding-bottom: 20px; }",
     "cmd": "node scripts/densitytest.mjs", "done": "^\\d+ 項通過" }
 ]
