@@ -1,0 +1,22 @@
+[
+  { "name": "取樣器自己·判斷拿掉", "why": "（事前寫 2026-11-12 21:1x）等於回到修正前的分類：自己落回「系統」，self 欄照印、但每窗都是 0。格式沒變，loadjudge 照樣讀得懂。預期只紅 L3。",
+    "expect": ["L3："],
+    "file": "tools/loadsample.ps1", "find": "  if ($e.id -eq $PID) { return 'self' }", "replace": "",
+    "cmd": "node scripts/loadsampletest.mjs" },
+  { "name": "取樣器自己·self 欄插到 foreign 前面", "why": "（事前寫 2026-11-12 21:1x）值照算、照印，只是位置在 foreign 前面：loadjudge 的行格式要 own 後面緊接 foreign，整段讀到 0 窗。self 的值在哪個位置都抓得到、照樣 > 0。預期紅 L2、L4。",
+    "expect": ["L2：", "L4："],
+    "file": "tools/loadsample.ps1", "find": "\"{0} system={1} observer={2} own={3} foreign={4} self={5} top=[{6}] systop=[{7}]\"", "replace": "\"{0} system={1} observer={2} own={3} self={5} foreign={4} top=[{6}] systop=[{7}]\"",
+    "cmd": "node scripts/loadsampletest.mjs" },
+  { "name": "取樣器自己·self 欄沒印", "why": "（事前寫 2026-11-12 21:1x）分類照做、只是格式字串沒有 self：每一行沒有 self 欄，值抓不到。其餘欄位位置不變，loadjudge 照樣讀得懂。預期紅 L2、L3。",
+    "expect": ["L2：", "L3："],
+    "file": "tools/loadsample.ps1", "find": " foreign={4} self={5} top=", "replace": " foreign={4} top=",
+    "cmd": "node scripts/loadsampletest.mjs" },
+  { "name": "取樣器自己·loadjudge 行格式收緊成 foreign 後面緊接 top", "why": "（事前寫 2026-11-12 21:1x）判定端的改動：loadjudge 自己的對照組都是舊格式（foreign 後面就是 top），照樣全過；只有拿真的新紀錄餵它才會發現讀到 0 窗。取樣器本身沒變。預期只紅 L4。",
+    "expect": ["L4："],
+    "file": "scripts/loadjudge.mjs", "find": "foreign=([\\d.]+)/;", "replace": "foreign=([\\d.]+) top=/;",
+    "cmd": "node scripts/loadsampletest.mjs" },
+  { "name": "取樣器自己·抓 self 值不看前面的邊界", "why": "（事前寫 2026-11-12 21:1x）驗法自己的擷取：拿掉「前面要是行首或空白」，對照組裡 top=[myself=0.9] 會被當成 self 0.9。真紀錄裡沒有這種程序名，L1～L4 不受影響。預期只紅 擷取對照組。",
+    "expect": ["擷取對照組："],
+    "file": "scripts/loadsampletest.mjs", "find": "const m = /(?:^| )self=([\\d.]+)/.exec(l);", "replace": "const m = /self=([\\d.]+)/.exec(l);",
+    "cmd": "node scripts/loadsampletest.mjs" }
+]

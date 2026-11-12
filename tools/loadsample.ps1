@@ -4,7 +4,9 @@
 #   own      = 路徑含 ms-playwright 或 .cache\puppeteer 的瀏覽器，或命令列含本 repo 名稱／mutate.mjs／layouttest／playwright 的 node
 #   system   = 路徑在 系統目錄（%SystemRoot%） 底下、或讀不到路徑的
 #   foreign  = 其餘全部
-# 每行印 top=[外來前三名] systop=[系統前三名]。
+#   self     = 取樣器自己（$PID）。2026-11-12 起另成一欄、不再算進上面任何一塊（見盲點⑨）；第一個判斷，所以不管用哪一支 powershell 跑都歸這裡。
+# 每行印 HH:MM:SS system= observer= own= foreign= self= top=[外來前三名] systop=[系統前三名]。
+#   self 放在 foreign 後面：loadjudge 的行格式只認到 foreign、後面不管，舊紀錄（沒有 self）照樣讀得懂。
 #
 # 為什麼系統那一塊也要印前幾名、也要設門檻（2026-10-29 補洞）：
 #   2026-10-28 一輪突變期間，安裝程式（推論是 msiexec，在 系統目錄（%SystemRoot%） 底下）吃掉約 20%，被算進「系統」；
@@ -27,6 +29,13 @@
 #   ⑧ 2026-10-29：「時段中間結束的程序整個漏算」（下面已知限制第一條）第一次真的碰上——查詢島停背景工作停不乾淨，
 #      外層停了、底下的 sh／node 還在跑、還接著開下一個突變，到 16:34:07 才全停；取樣器 16:34:00 開始的第一窗外來只有 1.4，
 #      那幾支在第二次快照前就結束了，整個沒算進去。loadjudge 判乾淨——不是新的洞，是已知限制；但「已知」不等於「量得到」。
+#   ⑨ 2026-11-12：取樣器自己是 powershell、路徑在系統目錄底下 → 一直算進「系統」（同日空機三窗實測：系統 0.36～0.65，其中自己 0.09～0.15）。
+#      補（同日，Dispatch 指示）：排除自己的 PID、另印 self=。
+#      **系統的數字會比舊紀錄低約 0.1，不能直接跟舊紀錄比。**
+#      loadjudge 的系統基線 1.2 是含自己量的，基線沒改：差 0.1、門檻 9.5，約 1%，方向是稍微放寬。
+#      用不在系統目錄的 pwsh 跑時，舊版把自己算進「外來」；現在兩種都歸 self。
+#      仍量不到的：自己叫 Get-CimInstance 時 WmiPrvSE 替它做的事（算系統；同日空機實測 0）；
+#      還有一個順帶查到的：每窗結束後分類、寫檔、下一窗重新快照之前的那段空檔（每窗都重新快照），自己與別人在那段空檔的 CPU 哪一窗都不算。
 #
 # 已知限制：
 #   - 時段中間結束的程序整個漏算（第二次快照沒有它）；時段越短漏得越少，預設用 10 秒。
@@ -52,6 +61,7 @@ function CmdLine($id) {
   return $cmd[$id]
 }
 function Classify($e) {
+  if ($e.id -eq $PID) { return 'self' }
   $n = $e.name.ToLower(); $p = if ($e.path) { $e.path.ToLower() } else { '' }
   if ($n -like 'claude*') { return 'observer' }
   if ($p -like '*ms-playwright*' -or $p -like '*\.cache\puppeteer\*') { return 'own' }
@@ -64,7 +74,7 @@ while ($Count -eq 0 -or $i -lt $Count) {
   $a = Snap; $t0 = Get-Date
   Start-Sleep -Seconds $Seconds
   $b = Snap; $dt = ((Get-Date) - $t0).TotalMilliseconds
-  $sum = @{ system = 0.0; observer = 0.0; own = 0.0; foreign = 0.0 }; $top = @{}; $stop = @{}
+  $sum = @{ system = 0.0; observer = 0.0; own = 0.0; foreign = 0.0; self = 0.0 }; $top = @{}; $stop = @{}
   foreach ($k in $b.Keys) {
     $e = $b[$k]; if ($e.name -eq 'Idle') { continue }
     $d = if ($a.ContainsKey($k)) { $e.ms - $a[$k].ms } else { $e.ms }
@@ -75,7 +85,7 @@ while ($Count -eq 0 -or $i -lt $Count) {
   }
   $pct = { param($v) [math]::Round(100 * $v / ($dt * $cores), 1) }
   $fmt = { param($h) ($h.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Key)=$(& $pct $_.Value)" }) -join ',' }
-  $line = "{0} system={1} observer={2} own={3} foreign={4} top=[{5}] systop=[{6}]" -f $t0.ToString('HH:mm:ss'), (& $pct $sum.system), (& $pct $sum.observer), (& $pct $sum.own), (& $pct $sum.foreign), (& $fmt $top), (& $fmt $stop)
+  $line = "{0} system={1} observer={2} own={3} foreign={4} self={5} top=[{6}] systop=[{7}]" -f $t0.ToString('HH:mm:ss'), (& $pct $sum.system), (& $pct $sum.observer), (& $pct $sum.own), (& $pct $sum.foreign), (& $pct $sum.self), (& $fmt $top), (& $fmt $stop)
   if ($Out) { Add-Content -Path $Out -Value $line -Encoding utf8 } else { $line }
   $i++
 }
