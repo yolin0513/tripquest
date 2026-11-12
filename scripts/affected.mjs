@@ -144,6 +144,7 @@ export const ORPHAN_OK = {
   'livecheck-import': '打正式站、會寫入正式 D1；接在 npm run sweep 後面，只在 Yolin 明確許可時手動跑（2026-10-29 起不是每版流程）',
   'prepush-scan': '推送閘自己呼叫的公開前自查；行為由 pushgatetest 驗',
   convcheck: '共用慣例副本與主檔的比對器（函式庫）；行為由 convtest 驗（convtest 在鏈裡、也在底線）',
+  'find-runall-check': 'tools/ev 兩支停程序工具（認 run-all.sh 的 bash）的驗法，2026-11-12；開真的 bash／誘餌程序、只查不殺；run-all.sh 已被 run-segment.sh 取代、平常不跑，改 tools/ev/find-runall.mjs 或那兩支時手動跑',
 };
 // scriptNames：scripts/ 底下 .mjs／.js 的檔名（不含副檔名）；chainNames：鏈上的名字
 export function findOrphans(scriptNames, chainNames, ok = ORPHAN_OK) {
