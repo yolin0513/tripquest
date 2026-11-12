@@ -72,8 +72,10 @@ if (r.error) {
     const from = hms[0], to = fmt((toSec(hms[hms.length - 1]) + 1) % 86400);
     const j = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'loadjudge.mjs'), LOG, from, to, '--base-foreign', '100'], { cwd: ROOT, encoding: 'utf8' });
     const jout = (j.stdout || '') + (j.stderr || '');
+    // 判定只看上面那一句有沒有原樣出現；下面抓實得幾窗只是印出來看（抓不到就印「抓不到」，不影響判定）
+    const gotWin = (/這段（[^）]*）(\d+) 窗/.exec(jout) || [])[1];
     yes((j.status === 0 || j.status === 1) && jout.includes(`這段（${from}～${to}）${lines.length} 窗`),
-      `L4：loadjudge 讀得懂新格式——這段（${from}～${to}）讀到 ${lines.length} 窗（實得 回 ${j.status}）`, jout);
+      `L4：loadjudge 讀得懂新格式——這段（${from}～${to}）應讀到 ${lines.length} 窗、實得 ${gotWin === undefined ? '抓不到' : gotWin + ' 窗'}（回 ${j.status}）`, jout);
   } else {
     yes(false, `L4：loadjudge 讀得懂新格式——紀錄行開頭沒有時間，沒辦法給它範圍（${hms.length}／${lines.length} 行有時間）`);
   }
