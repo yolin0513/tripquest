@@ -2,6 +2,7 @@
 // 每 2 秒取一次程序表，只數這支指令的子孫（子程序要比父程序晚建立——PID 重用時不會把早就在的別人家程序算進來），
 // 工作程序＝node、python、瀏覽器實例（父程序不是瀏覽器的那個 chrome）；git、shell 不算個數、記憶體照算。
 // 先做對照：一個只睡 4 秒的假工作，跑著時要數到 ≥1、結束後要數到 0；沒過就不採信、回 4。
+// 同名的舊紀錄不覆寫：開跑前改名成帶時間戳的檔保留（2026-11-12，見「不覆寫舊紀錄」那段）；換不了名回 5。
 //   node tools/sample-run.mjs <紀錄檔> <指令> [參數...]
 import os from 'node:os';
 import fs from 'node:fs';
@@ -71,6 +72,38 @@ export function endLine(ev, { alive, missed }) {
 const [out, ...cmd] = process.argv.slice(2);
 if (!out || !cmd.length) { console.log('用法：node tools/sample-run.mjs <紀錄檔> <指令> [參數...]'); process.exit(2); }
 const lines = [];
+
+// ---------- 不覆寫舊紀錄（2026-11-12）----------
+// 原本每一場都整份覆寫紀錄檔：11-12 下午一直用同一個檔名，前面幾場的資源紀錄被蓋掉、找不回來（Dispatch：「把覆寫這件事本身修掉」）。
+// 現在：開跑前，同名的紀錄檔、以及上一場被中途停掉留下的 <紀錄檔>.partial，先改名成帶時間戳的檔——
+//   res.log → res.20261112-193512.log；res.log.partial → res.log.20261112-193512.partial
+//   （時間＝那個檔最後寫入的時間；同一秒撞名就加 -2、-3…）。新的這一場照樣寫原本的名字，讀固定檔名的呼叫端不用改。
+// 為什麼不是「附加」、也不是「新檔帶時間戳」：tools/ev/progress.mjs 讀固定的 .logs/ev/run-<驅動>.txt，而且假設一個檔＝一次輸出
+//   （同一次輸出裡同一個情境出現兩次就報錯）——附加會把重跑的情境誤報成重複；新檔帶時間戳它讀不到檔，會直接跳過那道檢查、不報錯。
+// 換名：COPYFILE_EXCL 複製（目標已經在就失敗、不蓋掉任何檔；撞名換下一個號碼）再刪原檔。換不了名就停、回 5，不覆寫。
+// 跑完、整份紀錄寫好之後刪掉自己的 .partial（內容整份都在紀錄檔裡）；所以留下來的 .partial 只會是被中途停掉的那一場。
+// 驗法：scripts/samplerun-keep-check.mjs（從這支的命令列入口連跑四場＋一場換不了名）。
+const stampOf = (ms) => {
+  const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+};
+function keepOld(file) {
+  if (!fs.existsSync(file)) return null;
+  const { dir, name, ext } = path.parse(file);
+  const stamp = stampOf(fs.statSync(file).mtimeMs);
+  for (let i = 1; i < 100; i++) {
+    const to = path.join(dir, `${name}.${stamp}${i > 1 ? `-${i}` : ''}${ext}`);
+    try { fs.copyFileSync(file, to, fs.constants.COPYFILE_EXCL); } catch (e) { if (e.code === 'EEXIST') continue; throw e; }
+    fs.rmSync(file);
+    return to;
+  }
+  throw new Error('帶時間戳的檔名 1～99 號都被占用');
+}
+for (const f of [out, out + '.partial']) {
+  let to;
+  try { to = keepOld(f); } catch (e) { console.log(`✗ 舊的紀錄檔換不了名（${f}：${String(e.message).split('\n')[0]}）——不覆寫，停`); process.exit(5); }
+  if (to) lines.push(`舊紀錄改名保留：${path.basename(f)} → ${path.basename(to)}`);
+}
 {
   const probe = spawn(process.execPath, ['-e', 'setTimeout(()=>{},4000)']);
   await new Promise((r) => setTimeout(r, 800));
@@ -194,4 +227,6 @@ lines.push(`結束：exit ${child.exitCode}、${((Date.now() - t0) / 1000).toFix
 lines.push(endLine(ev, ender));
 lines.push(ender.missed.length ? '取樣漏算：算不出（逐一計數的峰值不可信）' : missLine(ev, peak, peakAll));
 fs.writeFileSync(out, lines.join('\n') + '\n\n' + log);
+// 整份寫好了才刪 .partial（刪不掉也不會遺失：下一場開跑時它會被改名保留）
+try { fs.rmSync(out + '.partial', { force: true }); } catch (e) { console.log(`（${path.basename(out)}.partial 刪不掉：${e.code || e.message}——下一場開跑時會被改名保留）`); }
 process.exitCode = child.exitCode;
