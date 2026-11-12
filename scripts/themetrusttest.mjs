@@ -109,7 +109,6 @@ export const REGISTRY = [
   { file: 'js/theme.js', needle: '.map((s) => s.theme || themeForSpot(s, themes));', kind: 'internal', why: 'majorityTheme；呼叫端在 guesscensustest 登記' },
   { file: 'js/views/quest.js', needle: 'spot ? (spot.theme || themeForSpot(spot))', kind: 'color', why: '佔位圖只是色圓與波浪' },
   { file: 'js/views/settings.js', needle: "(prefs.theme === 'washi' ? 'washi' : 'dark')", kind: 'prefs', why: '介面主題' },
-  { file: 'js/views/settings.js', needle: "h('div', { class: 'form-hint' }, prefs.theme === 'washi'", kind: 'prefs', why: '介面主題' },
   { file: 'js/views/trip.js', needle: 'const tk = s.theme || themeForSpot(s);', kind: 'color', why: '只給 --theme-accent；標題列的字用 trustedTheme' },
   { file: 'js/views/trip.js', needle: 'sp ? (sp.theme || themeForSpot(sp))', kind: 'color', why: '佔位圖只是色圓與波浪' },
 ];
