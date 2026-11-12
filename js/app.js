@@ -23,7 +23,7 @@ backBtn.addEventListener('click', () => {
 function isMainScreen(p) {
   if (p === '/' || p === '/settings') return true;
   if (/^\/trip\/[^/]+$/.test(p)) return true;                       // 旅程首頁（任務清單）
-  if (/^\/trip\/[^/]+\/(people|expenses|memories)$/.test(p)) return true;  // 底部分頁
+  if (/^\/trip\/[^/]+\/(itinerary|people|expenses|memories)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）
   return false;
 }
 topActionBtn.addEventListener('click', () => { if (_action) _action.onClick(); });
@@ -66,7 +66,10 @@ function setTop({ title, back = true, action = null }) {
   _action = action;
   if (action) {
     topActionBtn.hidden = false;
-    topActionBtn.textContent = action.icon || '＋';
+    // 2026-11-13 頁首右上改成有字的按鈕（風格提案第 11 項）：圖示＋短字；讀螢幕的軟體照舊讀完整的 label
+    topActionBtn.replaceChildren(
+      h('span', { 'aria-hidden': 'true' }, action.icon || '＋'),
+      h('span', { class: 'top-act-text', 'aria-hidden': 'true' }, action.short || action.label || ''));
     topActionBtn.setAttribute('aria-label', action.label || '');
   } else {
     topActionBtn.hidden = true;
@@ -114,12 +117,16 @@ function renderTabs() {
 
   if (tid && store.get(tid)) {
     const base = `/trip/${tid}`;
-    const isTasks = p === base || /^\/trip\/[^/]+\/(plan|poster|weather|spot)/.test(p) || p.startsWith('/quest/');
+    // 2026-11-13「行程」分頁（Yolin 11-11 提、11-13 守夜做）：航班、住宿、待買、調整每天的行程、每天的行程與地圖都在這一格。
+    // 任務頁留「帶我去下一站」「拍照解任務」與各站的任務。
+    const isTasks = p === base || /^\/trip\/[^/]+\/(poster|weather|spot)/.test(p) || p.startsWith('/quest/');
+    const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy)$/.test(p);
     const isPhotos = p === `${base}/people`;
     const isSplit = p === `${base}/expenses`;
     const isMem = /^\/trip\/[^/]+\/(memories|album|badges|recap)$/.test(p);
     mount(tabbar,
       tabItem('📋', '任務', base, isTasks),
+      tabItem('🗓️', '行程', `${base}/itinerary`, isItin),
       tabItem('📸', '照片', `${base}/people`, isPhotos),
       tabItem('💰', '分帳', `${base}/expenses`, isSplit),
       tabItem('🎁', '回顧', `${base}/memories`, isMem),
@@ -141,6 +148,7 @@ route('/join', async ({ query, drawPage, setTop }) => (await import('./views/joi
 // fresh 只有「真的導覽到這一頁」時才是 true —— 頁面內部自己重繪（補完景點圖、AI 文案
 // 回來，走 refreshPage）不算，不然畫面會在使用者看到一半時又自己捲一次。
 route('/trip/:id', async ({ params, fresh, drawPage, setTop }) => (await import('./views/trip.js')).default(params.id, { fresh, drawPage, setTop }));
+route('/trip/:id/itinerary', async ({ params, drawPage, setTop }) => (await import('./views/trip.js')).itinerary(params.id, { drawPage, setTop }));
 route('/trip/:id/settings', async ({ params, drawPage, setTop }) => (await import('./views/trip.js')).settings(params.id, { drawPage, setTop }));
 route('/trip/:id/people', async ({ params, drawPage, setTop }) => (await import('./views/people.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/album', async ({ params, drawPage, setTop }) => (await import('./views/album.js')).default(params.id, { drawPage, setTop }));

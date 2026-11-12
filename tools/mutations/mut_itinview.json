@@ -35,8 +35,8 @@
     "name": "時間軸：沒填時間就補一個",
     "why": "猜出來的時間變成使用者看得到的字（v1.74 原則）。預期只紅 itinviewtest 的 T1 甲二。",
     "file": "js/views/trip.js",
-    "find": "        h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),",
-    "replace": "        h('span', { class: 'tl-time' }, spotTimes(s).startTime || '09:00'),",
+    "find": "states[s.id] : '') },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),",
+    "replace": "states[s.id] : '') },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || '09:00'),",
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {
@@ -100,8 +100,8 @@
     "name": "第 1 批：當日標題卡沒有第一站 → 最後一站",
     "why": "預期只紅 itinviewtest 的 B2。",
     "file": "js/views/trip.js",
-    "find": "        route ? h('span', { class: 'dc-route' }, route) : null,",
-    "replace": "        null,",
+    "find": "\n        route ? h('span', { class: 'dc-route' }, route) : null,",
+    "replace": "\n        null,",
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {

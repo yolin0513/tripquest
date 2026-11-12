@@ -109,6 +109,14 @@ async function scanPages(page, tag) {
   // 打開第一個景點，裡面的任務字也要掃到
   await clickText(page, '.qc-toggle', '甲一'); await sleep(400);
   s = await scan(page); yes(s.n > 0 && s.bad.length === 0, report(`${tag} 旅程頁`, s));
+  // 2026-11-13 第二段：新的「行程」分頁也掃（旅途資訊卡、每天的行程）
+  await clickText(page, 'a.tab', '行程');
+  await page.waitForSelector('.info-card', { timeout: 15000 }); await sleep(700);
+  s = await scan(page); yes(s.n > 0 && s.bad.length === 0, report(`${tag} 行程頁`, s));
+  // 行程是底部分頁（主畫面）：按左上返回要一步回「我的旅程」，跟任務分頁一樣（2026-11-13 第一版漏了，返回只退回任務頁）
+  await clickText(page, '#backBtn', '‹');
+  const home = await page.waitForFunction(() => (location.hash === '#/' || location.hash === '') && document.querySelector('.trip-card'), { timeout: 5000 }).then(() => true, () => false);
+  yes(home, `${tag} 行程分頁按左上返回 → 一步回「我的旅程」（實得 ${await page.evaluate(() => location.hash || '（空）')}）`);
   yes(await toSettings(page), `${tag} 進設定頁`);
   s = await scan(page); yes(s.n > 0 && s.bad.length === 0, report(`${tag} 設定頁`, s));
   yes(await toHome(page), `${tag} 回首頁`);
@@ -209,6 +217,42 @@ try {
 
   // ---- W4 逐頁掃 ----
   await scanPages(page, 'W4 和紙');
+
+  // ---- W10（2026-11-13 第二段）今天主角卡、拍照解任務、頁首有字的按鈕：從首頁點進行程（使用者的路） ----
+  yes(await toHome(page), 'W10 回「我的旅程」');
+  await clickText(page, '.trip-card', '和紙測試');
+  await page.waitForSelector('.today-card', { timeout: 15000 }); await sleep(700);
+  const tc = await page.evaluate(() => {
+    const c = document.querySelector('.today-card'); const tm = c.querySelector('.today-time');
+    const b = document.getElementById('topActionBtn'); const br = b.getBoundingClientRect();
+    return { label: c.querySelector('.today-label')?.textContent, time: tm?.textContent || '', fs: tm ? parseFloat(getComputedStyle(tm).fontSize) : 0,
+      root: parseFloat(getComputedStyle(document.documentElement).fontSize), nav: !!c.querySelector('.nextstn-btn, .nextstn-plain'),
+      shot: c.querySelector('.today-shot')?.textContent || '', top: b.textContent, aria: b.getAttribute('aria-label'), bw: br.width, bh: br.height };
+  });
+  yes(tc.label === '下一站' && tc.time === '09:30' && tc.fs >= tc.root * 1.6 - 0.01,
+    `W10 今天主角卡：「${tc.label} ${tc.time}」、時間是大字（${tc.fs}px＝字級的 ${(tc.fs / tc.root).toFixed(2)} 倍，要 ≥ 1.6）`);
+  yes(tc.nav && tc.shot.startsWith('📸 拍照解任務'), `W10 卡裡有帶路，還有「${tc.shot}」`);
+  yes(tc.top === '⚙️設定' && tc.aria === '旅程設定' && tc.bw >= 56 && tc.bh >= 44,
+    `W10 頁首右上是有字的按鈕「${tc.top}」（讀出「${tc.aria}」、${Math.round(tc.bw)}×${Math.round(tc.bh)}，觸控 ≥ 44 沒動）`);
+  // 造情境：日期列換到第 2 天、甲一（第 1 天、下一站）收起來 → 點「拍照解任務」要換回第 1 天、展開甲一、捲到看得到
+  const spotState = () => page.evaluate(() => {
+    const q = [...document.querySelectorAll('.qcollapse')].find((x) => x.textContent.includes('甲一'));
+    const r = q?.getBoundingClientRect();
+    const se = document.scrollingElement;
+    return { day: document.querySelector('.daycollapse.open')?.dataset.day, open: !!q?.classList.contains('open'), top: r ? Math.round(r.top) : null, h: r ? Math.round(r.height) : 0,
+      y: Math.round(se.scrollTop), maxY: Math.round(se.scrollHeight - window.innerHeight) };
+  });
+  await page.evaluate(() => { const q = [...document.querySelectorAll('.qcollapse')].find((x) => x.textContent.includes('甲一')); if (q?.classList.contains('open')) q.querySelector('.qc-toggle').click(); });
+  await clickText(page, '.daystrip .ds-day', '第 2 天');
+  await sleep(600);
+  const pre10 = await spotState();
+  yes(pre10.day === '2' && pre10.open === false, `W10 前置：日期列在第 2 天、甲一收起來（第 ${pre10.day} 天、展開＝${pre10.open}）`);
+  await clickText(page, '.today-shot', '拍照解任務');
+  await sleep(1200);
+  const post10 = await spotState();
+  // 「捲到」＝那一站的頂在日期列下方附近（≤ 260px），或頁面已經捲到底、不能再往下
+  yes(post10.day === '1' && post10.open && post10.h > 0 && post10.top >= 0 && (post10.top <= 260 || post10.y >= post10.maxY - 2),
+    `W10 點「拍照解任務」→ 換回第 1 天、甲一展開、捲到那一站（第 ${post10.day} 天、展開＝${post10.open}、離頂 ${post10.top}px、捲動 ${post10.y}／最多 ${post10.maxY}）`);
 
   // ---- W5 舊版存的偏好（2026-11-12 拿掉高對比與特大字之後；原本的「和紙＋高對比」隨模式拿掉） ----
   yes(await toSettings(page), 'W5 進設定頁');

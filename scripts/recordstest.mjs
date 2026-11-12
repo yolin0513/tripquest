@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
 import { blankTextScan } from './blanktext.mjs';
+import { clickText } from './userclick.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5799;
@@ -165,10 +166,17 @@ const blankOk = async (page, label) => {
     r.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
 };
 const clickModalBtn = (page, text) => page.evaluate((t) => [...document.querySelectorAll('.modal-card .btn')].find((b) => b.textContent === t)?.click(), text);
+// 2026-11-13 三樣入口搬到「行程」分頁（合成一張卡）：從任務頁點底部分頁「行程」進去（使用者的路），不直接 goto
+const toItin = async (page, sel) => {
+  await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
+  await clickText(page, '#tabbar a.tab', '行程');
+  await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
+  await page.waitForSelector(sel, { timeout: 10000 });
+};
 const backToTrip = async (page, tid, sel) => {
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
   await page.reload({ waitUntil: 'networkidle0' });
-  await page.waitForSelector(sel, { timeout: 10000 });
+  await toItin(page, sel);
   return page.$eval(sel, (e) => e.textContent);
 };
 
@@ -178,7 +186,20 @@ async function buy() {
   const page = await newPage();
   const { tid, mid } = await seedTrip(page, '2024-03-10', '2024-03-11', '小美');
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.buy-entry', { timeout: 10000 });
+  // 搬家前置：任務頁看得到「找附近」（頁面真的畫好了），但已經沒有三樣入口
+  await page.waitForFunction(() => [...document.querySelectorAll('.page button')].some((b) => b.textContent.includes('找附近')), { timeout: 10000 }).catch(() => {});
+  const onTask = await page.evaluate(() => ({ near: [...document.querySelectorAll('.page button')].some((b) => b.textContent.includes('找附近')),
+    n: document.querySelectorAll('.page .fl-entry, .page .stay-entry, .page .buy-entry').length }));
+  yes(onTask.near && onTask.n === 0, `任務頁已經沒有航班／住宿／待買入口（找附近在：${onTask.near}；入口 ${onTask.n} 個）`);
+  await toItin(page, '.buy-entry');
+  // 進了行程分頁：底部「行程」亮著、「任務」不亮；三樣入口在同一張卡裡（同類合成一張卡）
+  const it = await page.evaluate(() => {
+    const on = [...document.querySelectorAll('#tabbar a.tab.active')].map((a) => a.textContent.trim());
+    const cards = [...new Set(['.fl-entry', '.stay-entry', '.buy-entry'].map((s) => document.querySelector(s)?.closest('.info-card')).filter(Boolean))];
+    return { on: on.join(','), cards: cards.length, rows: cards[0] ? cards[0].querySelectorAll('.info-row').length : 0 };
+  });
+  yes(it.on === '🗓️行程', `行程分頁：底部亮的是「行程」（亮著：${it.on || '沒有'}）`);
+  yes(it.cards === 1 && it.rows === 3, `航班／住宿／待買合成一張卡（${it.cards} 張卡、${it.rows} 列）`);
   let entry = await page.$eval('.buy-entry', (e) => e.textContent);
   yes(entry === '🛒 待買清單', `一項都沒有：入口只寫名字、不寫 0 項（${entry}）`);
   await page.click('.buy-entry');
@@ -251,7 +272,7 @@ async function stays() {
   const page = await newPage();
   const { tid } = await seedTrip(page, '2024-03-10', '2024-03-12');
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.stay-entry', { timeout: 10000 });
+  await toItin(page, '.stay-entry');
   let entry = await page.$eval('.stay-entry', (e) => e.textContent);
   yes(entry === '🏨 住宿', `一間都沒有：入口只寫名字（${entry}）`);
   await page.click('.stay-entry');
@@ -323,7 +344,7 @@ async function flights() {
   const page = await newPage();
   const { tid } = await seedTrip(page, iso(3), iso(6));
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.fl-entry', { timeout: 10000 });
+  await toItin(page, '.fl-entry');
   let entry = await page.$eval('.fl-entry', (e) => e.textContent);
   yes(entry === '✈️ 航班', `一班都沒有：入口只寫名字（${entry}）`);
   await page.click('.fl-entry');
@@ -361,6 +382,16 @@ async function flights() {
   const go = C.find((c) => c.no === 'XX 101');
   yes(go?.cd === '還有 3 天起飛', `三天後那班：還有 3 天起飛（${go?.cd}）`);
   yes(go?.ends[0].includes('08:30') && go.ends[0].includes('範例機場 T2') && go.ends[1].includes('12:45'), `起飛、抵達都照填的寫（${go?.ends.join('｜')}）`);
+  // 大數字（2026-11-13 第二段）：起飛時間是大字；沒填的「時間未填」不放大（不把缺的東西做成主角）
+  const big = await page.evaluate((id, id2) => {
+    const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const t = document.querySelector(`.fl-card[data-id="${id}"] .fl-time`);
+    const none = document.querySelector(`.fl-card[data-id="${id2}"] .fl-time-none`);
+    return { t: t?.textContent, k: t ? parseFloat(getComputedStyle(t).fontSize) / root : 0,
+      none: none?.textContent, kn: none ? parseFloat(getComputedStyle(none).fontSize) / root : 0 };
+  }, go?.id, C.find((c) => c.no === 'XX 102')?.id);
+  yes(big.t === '08:30' && big.k >= 1.5 && big.none === '時間未填' && big.kn < 1.2,
+    `航班大數字：起飛「${big.t}」是字級的 ${big.k.toFixed(2)} 倍（要 ≥ 1.5）；「${big.none}」${big.kn.toFixed(2)} 倍（不放大，< 1.2）`);
   const back = C.find((c) => c.no === 'XX 102');
   yes(back?.ends[1] === '抵達日期未填 時間未填', `沒填抵達：寫「日期未填 時間未填」、不從起飛日推（${back?.ends[1]}）`);
   const past = C.find((c) => c.no === 'XX 099');

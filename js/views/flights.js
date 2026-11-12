@@ -8,7 +8,12 @@ import { flightsOf, flightCountdown, checkFlight, saveFlight, removeFlight } fro
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const md = (iso) => { const d = new Date(iso + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）`; };
-const end = (date, time, place) => [date ? md(date) : '日期未填', time || '時間未填'].join(' ') + (place ? `・${place}` : '');
+// 2026-11-13 大數字（風格提案第 8 項）：時間與機場放大，日期維持一般字。字（textContent）跟原本一模一樣：「日期 時間・地點」。
+// 沒填的照寫「日期未填」「時間未填」，不放大（不讓「未填」看起來像一個時間）。
+const end = (date, time, place) => h('span', { class: 'fl-endtext' },
+  h('span', { class: 'fl-date' }, date ? md(date) : '日期未填'), ' ',
+  h('span', { class: time ? 'fl-time' : 'fl-time-none' }, time || '時間未填'),
+  place ? '・' : null, place ? h('span', { class: 'fl-place' }, place) : null);
 
 export default async function flightsView(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);

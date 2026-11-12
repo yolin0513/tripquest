@@ -89,7 +89,7 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
 
   setTop({
     title: t.title,
-    action: { icon: '⚙️', label: '旅程設定', onClick: () => navigate(`/trip/${tripId}/settings`) },
+    action: { icon: '⚙️', label: '旅程設定', short: '設定', onClick: () => navigate(`/trip/${tripId}/settings`) },
   });
 
   const prog = store.tripProgress(tripId);
@@ -149,25 +149,20 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       ? h('div', {},
           h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/memories`) },
             allDone ? '🎉 全部完成！去看回顧與回憶影片' : '🎁 旅程結束了，來看回顧'),
-          nextStationButton(tripId, t, allDone))
-      : nextStationButton(tripId, t, allDone),
+          todayCard(tripId, t, allDone, () => jumpToSpot))
+      : todayCard(tripId, t, allDone, () => jumpToSpot),
 
     h('div', { class: 'stack', style: 'margin-top:6px' },
       // 找附近（v1.59）：自駕最常用——獨立入口、不塞 SOS（緊急頁不放生活設施）
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
-      // 待買清單（2026-11-05 投票）：有東西才寫還剩幾項；一項都沒有就只寫名字，不寫「0 項」
-      // 航班（同一次投票）：有下一班（今天或之後）就寫它的倒數；一班都沒有只寫名字
-      flightButton(tripId),
-      buyButton(tripId),
-      // 住宿（同一次投票）：有幾間就寫幾間；一間都沒有只寫名字
-      h('button', { class: 'btn btn-soft btn-block stay-entry', onclick: () => navigate(`/trip/${tripId}/stays`) },
-        `🏨 住宿${staysOf(tripId).length ? `・${staysOf(tripId).length} 間` : ''}`),
-      spots.length ? h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/plan`) }, '📅 調整每天的行程') : null,
+      // 航班、待買清單、住宿、調整每天的行程 2026-11-13 搬到「行程」分頁（itinerary()）。
       // 「把任務分享給旅伴」移到旅程設定（v1.59.1）——分享＝邀請旅伴加入，
       // 語意屬於「旅伴與電話」那一區；行程頁保持「出遊當下」的操作。
       // 不另留快速入口：⚙️ 一步就到，而且旅伴清單（頭像列點開）裡也有「分享邀請連結」。
     ),
   );
+  // 「📸 拍照解任務」：換到那一站那一天、展開那一站、捲過去（下面排好天之後才接得上）
+  let jumpToSpot = null;
 
   if (spots.length === 0) {
     container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'),
@@ -226,7 +221,8 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     let sel = defaultDay({ dayNums, todayDay, focusDay });
     try {
       const stored = Number(localStorage.getItem(selKey));
-      if (dayNums.includes(stored) || (stored === 0 && localStorage.getItem(selKey) === '0' && dayNums.length > 1)) sel = stored;
+      // 「總覽」（第 0 格）2026-11-13 跟地圖一起搬到「行程」分頁，任務頁不再接受 0
+      if (dayNums.includes(stored)) sel = stored;
       // 剛在景點設定頁改過某一站 → 停在那一站那一天（spot.js 存的，只用一次）
       const jump = takeDayJump(localStorage, tripId, dayNums);
       if (jump != null) {
@@ -236,33 +232,36 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     } catch { /* noop */ }
 
     const daySecs = new Map();
-    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: dayNums.length > 1 });
-    function pick(d) {
+    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: false });
+    function pick(d, { scroll = true } = {}) {
       for (const [n, sec] of daySecs) sec.classList.toggle('open', n === d);
       strip.select(d);
       try { localStorage.setItem(selKey, String(d)); } catch { /* noop */ }
       // 換天之後把那一天的開頭帶到日期列下面；本來就看得到就不動
-      const head = daySecs.get(d)?.querySelector('.dc-head');
+      const head = scroll ? daySecs.get(d)?.querySelector('.dc-head') : null;
       if (head) {
         const stripH = strip.el.getBoundingClientRect().bottom;
         const r = head.getBoundingClientRect();
         if (r.top < stripH || r.top > window.innerHeight * 0.6) smoothScrollTo(Math.max(0, window.scrollY + r.top - stripH - 8));
       }
     }
+    jumpToSpot = (spot) => {
+      // 換天但不讓 pick 自己捲（兩個平滑捲動同時跑會互相蓋掉，2026-11-13 實測）
+      pick(spot.day || 1, { scroll: false });
+      const el = container.querySelector(`.qcollapse[data-spot="${spot.id}"]`);
+      if (!el) return;
+      if (!el.classList.contains('open')) el.querySelector('.qc-toggle')?.click();
+      // 日期列是 sticky：點的當下它多半還沒黏到頂、位置在下面，不能拿它「現在的底」當偏移，
+      // 要用「黏住之後」的底＝sticky 的 top＋日期列自己的高（只有一天時沒有日期列，用頂列的高）
+      const stuck = strip.el.isConnected
+        ? (parseFloat(getComputedStyle(strip.el).top) || 0) + strip.el.offsetHeight
+        : (document.getElementById('topbar')?.offsetHeight || 70);
+      smoothScrollTo(Math.max(0, window.scrollY + el.getBoundingClientRect().top - stuck - 8));
+    };
     // 只有一天就不需要日期列（只有一格，沒東西可以切）
     // 日期列放在「全部展開／收合」上面：它是這一區的目錄
     if (dayNums.length > 1) container.insertBefore(strip.el, container.querySelector('.day-tools'));
-    if (dayNums.length > 1) {
-      // 總覽：跟各天一樣是一個 section，選中才顯示；用 dc-head 讓 pick() 換過來時一樣把開頭帶到日期列下面
-      const ov = h('section', { class: 'daycollapse dc-overview' + (sel === 0 ? ' open' : ''), dataset: { day: '0' } },
-        h('div', { class: 'dc-head' }, h('span', { class: 'dc-main' },
-          h('span', { class: 'dc-row1' }, h('span', { class: 'dc-daynum' }, '總覽')),
-          h('span', { class: 'dc-meta' }, h('span', {}, `全部 ${dayNums.length} 天 · ${spots.length} 個景點`)))),
-        h('div', { class: 'dc-body' }, h('div', { class: 'dc-inner' },
-          tripOverviewMap(byDay, dayNums, { onPickDay: (d) => pick(d) }))));
-      daySecs.set(0, ov);
-      container.append(ov);
-    }
+    // 「總覽」地圖 2026-11-13 搬到「行程」分頁（overviewSection()），跟每天的地圖放一起
     for (const day of dayNums) {
       const sec = dayCollapse(day, byDay.get(day), tripId, t, { todayDay, focusId, hereId, open: day === sel });
       daySecs.set(day, sec);
@@ -399,6 +398,26 @@ function nextStationButton(tripId, t, allDone) {
     h('button', { class: 'nextstn-switch', onclick: () => pickHereSpot(tripId) },
       manual ? '不是這一站？換一站' : '換一站'),
   );
+}
+
+// 2026-11-13「今天」主角卡（風格提案第 10 項）：下一站的時間（有填才寫，大數字；沒填不補猜的）＋帶路＋拍照解任務。
+// 帶路那顆與「換一站」照舊是 nextStationButton（文字與行為都沒變）；這張卡把它們包起來、加上時間與「📸 拍照解任務」。
+// 拍照解任務＝換到那一站那一天、展開那一站、捲過去（任務頁的相機鈕就在那裡），不另開一頁。
+function todayCard(tripId, t, allDone, getJump) {
+  const nav = nextStationButton(tripId, t, allDone);
+  if (!nav) return null;
+  const next = currentSpot(tripId);
+  const label = store.getHereSpot(tripId) ? '現在這一站' : '下一站';
+  const time = spotTimes(next).startTime || '';
+  const p = store.spotProgress(next.id);
+  const left = p.total - p.done;
+  return h('section', { class: 'today-card', 'aria-label': label },
+    h('div', { class: 'today-head' },
+      h('span', { class: 'today-label' }, label),
+      time ? h('span', { class: 'today-time' }, time) : null),
+    nav,
+    left > 0 ? h('button', { class: 'btn btn-ok btn-block today-shot', type: 'button', onclick: () => getJump()?.(next) },
+      `📸 拍照解任務・還有 ${left} 個`) : null);
 }
 
 // 選「現在在哪一站」。也提供「自動」把手動狀態關掉，不會被困住。
@@ -599,13 +618,7 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
     ),
     h('div', { class: 'dc-body' },
       h('div', { class: 'dc-inner' },
-        // 當日真實地圖（js/realmap.js）：有座標的站才畫得上去，沒座標的在圖下列出來；沒網路退回示意圖（js/daymap.js）
-        dayRealMap(daySpots, (s) => spotTimes(s).startTime || '', {
-          playKey: `${tripId}:${day}`,   // 播放中整頁重畫（同步進來）時，新畫出來的播放器接著播
-          hasPhoto: (s) => !!latestSpotSub(s),
-          // 縮圖優先（同步保證會到的那一份），拿不到再試全圖；都拿不到回空字串 → 圖釘維持圓點
-          photoOf: async (s) => { const sub = latestSpotSub(s); return sub ? ((await blobURL(sub.thumbHash)) || (await blobURL(sub.photoHash))) : ''; },
-        }),
+        // 當日地圖（查看路線）2026-11-13 搬到「行程」分頁（itinerary() 的 dayMap()）：它畫的是計畫中的景點，屬於行程。
         crewStrip(t),
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
@@ -674,16 +687,32 @@ async function fillWeather(slot, container, tripId, trip) {
 // 兩站之間「怎麼去」的那一列。prev＝現在排在前面的那一站；顯示與否完全交給 legModeOf：
 // 記下的前一站不是現在這一站（重排、刪站、換天）就當成沒設定——舊選擇不套到沒人選過的路段上。
 // 沒設定就寫「還沒設定」，不預選任何一種（不拿最常見的去填）。
-function flightButton(tripId) {
+// 2026-11-13 同類合成一張卡（風格提案第 9 項）：航班、住宿、待買三列放同一張卡，每列一顆按鈕（≥56px，觸控底線沒動）。
+// 每列的字跟原本那三顆按鈕一樣（2026-11-05 投票：有東西才寫數量，沒有就只寫名字，不寫 0）。
+function infoCard(tripId) {
   const nf = nextFlight(tripId);
-  const sub = nf ? `・${nf.flightNo ? nf.flightNo + ' ' : ''}${flightCountdown(nf)}` : (flightsOf(tripId).length ? `・${flightsOf(tripId).length} 段` : '');
-  return h('button', { class: 'btn btn-soft btn-block fl-entry', onclick: () => navigate(`/trip/${tripId}/flights`) }, `✈️ 航班${sub}`);
+  const flSub = nf ? `・${nf.flightNo ? nf.flightNo + ' ' : ''}${flightCountdown(nf)}` : (flightsOf(tripId).length ? `・${flightsOf(tripId).length} 段` : '');
+  const { total, left } = buyCounts(tripId);
+  const buySub = total === 0 ? '' : (left === 0 ? '・全部買齊了' : `・還有 ${left} 項沒買`);
+  const n = staysOf(tripId).length;
+  // 右邊的「›」用偽元素畫（css .info-row::after）：按鈕的字照舊是「✈️ 航班・…」，讀螢幕的軟體也不會多念一個符號
+  const row = (cls, name, sub, path) => h('button', { class: 'info-row ' + cls, type: 'button', onclick: () => navigate(`/trip/${tripId}/${path}`) },
+    h('span', { class: 'info-name' }, name), sub ? h('span', { class: 'info-sub' }, sub) : null);
+  return h('div', { class: 'info-card' },
+    row('fl-entry', '✈️ 航班', flSub, 'flights'),
+    row('stay-entry', '🏨 住宿', n ? `・${n} 間` : '', 'stays'),
+    row('buy-entry', '🛒 待買清單', buySub, 'buy'));
 }
 
-function buyButton(tripId) {
-  const { total, left } = buyCounts(tripId);
-  const sub = total === 0 ? '' : (left === 0 ? '・全部買齊了' : `・還有 ${left} 項沒買`);
-  return h('button', { class: 'btn btn-soft btn-block buy-entry', onclick: () => navigate(`/trip/${tripId}/buy`) }, `🛒 待買清單${sub}`);
+// 當日地圖（查看路線；js/realmap.js）：有座標的站才畫得上去，沒座標的在圖下列出來；沒網路退回示意圖（js/daymap.js）。
+// 2026-11-13 從任務頁搬到「行程」分頁。
+function dayMap(daySpots, tripId, day) {
+  return dayRealMap(daySpots, (s) => spotTimes(s).startTime || '', {
+    playKey: `${tripId}:${day}`,   // 播放中整頁重畫（同步進來）時，新畫出來的播放器接著播
+    hasPhoto: (s) => !!latestSpotSub(s),
+    // 縮圖優先（同步保證會到的那一份），拿不到再試全圖；都拿不到回空字串 → 圖釘維持圓點
+    photoOf: async (s) => { const sub = latestSpotSub(s); return sub ? ((await blobURL(sub.thumbHash)) || (await blobURL(sub.photoHash))) : ''; },
+  });
 }
 
 function legRow(prev, s, i) {
@@ -902,9 +931,11 @@ function tripSignature(tripId) {
 // 黑名單在這裡註定會漏：每加一個子頁就要記得回來補一行，而漏掉的後果是
 // 「使用者在那一頁做任何會寫入的事，畫面就被抽掉」。改成問一個不會漏的問題：
 // **網址是不是正好就是行程頁本身**（後面沒有東西）。新增子頁不必再回來改。
+// 2026-11-13 白名單多一頁：「行程」分頁（itinerary()）。它也畫整趟的資料（航班、住宿、待買、每天的行程），
+// 旅伴同步進來要跟著更新；兩頁共用同一個訂閱（watchHere），在兩頁之間切換不退訂，重畫的是當下那一頁。
 function onTripPage(tripId) {
   const path = (location.hash.replace(/^#/, '') || '/').split('?')[0].replace(/\/+$/, '');
-  return path === `/trip/${tripId}`;
+  return path === `/trip/${tripId}` || path === `/trip/${tripId}/itinerary`;
 }
 
 // 使用者正打開「怎麼去」的選項時，背景來的變動先不整頁重畫（2026-11-11 守夜）。
@@ -917,13 +948,13 @@ function legPickOpen() { return !!document.querySelector('.tl-leg-pick:not([hidd
 let hereDirty = false;     // 選項開著時，有東西想重畫（簽章以外的來源，例：AI 文案回來）
 let flushHere = null;      // 選項收起來時叫它：剛才擋下的重畫補上
 
-function watchHere(tripId) {
+function watchHere(tripId, sig = tripSignature) {
   if (hereWatch) { hereWatch(); hereWatch = null; }
-  let last = tripSignature(tripId);
+  let last = sig(tripId);
   hereDirty = false;                                 // 這一次畫的就是最新的
   const check = () => {
     if (!onTripPage(tripId)) return;
-    const now = tripSignature(tripId);
+    const now = sig(tripId);
     if (now === last && !hereDirty) return;
     if (legPickOpen()) { hereDirty = true; return; }  // 先不重畫、last 不動；收起來時 flushHere 再看一次
     last = now;
@@ -1457,6 +1488,91 @@ async function doShare(tripId) {
 }
 
 // ---------- 旅程設定 ----------
+// 2026-11-13「行程」分頁（Yolin 11-11 提、11-13 守夜做；決定與替代方案見 STATUS）。
+// 放：航班／住宿／待買（合成一張卡）、調整每天的行程、每天的行程（時間、兩站之間怎麼去、當天地圖＝查看路線）。
+// 「怎麼去」在任務頁也有一份（Yolin 11-12：留在任務頁、行程頁也顯示）——兩邊是同一個 legRow，改哪一邊都存同一筆。
+export async function itinerary(tripId, { drawPage, setTop } = {}) {
+  const t = store.get(tripId);
+  if (!t) { navigate('/', { replace: true }); return; }
+  setTop({ title: t.title, action: { icon: '⚙️', label: '旅程設定', short: '設定', onClick: () => navigate(`/trip/${tripId}/settings`) } });
+  const spots = store.spotsOf(tripId);
+  const byDay = new Map();
+  for (const s of spots) { const d = s.day || 1; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(s); }
+  const page = h('div', { class: 'page itin-page' },
+    h('div', { class: 'section-label' }, '旅途資訊'),
+    infoCard(tripId),
+    h('div', { class: 'section-label' }, '每天的行程'),
+    h('button', { class: 'btn btn-soft btn-block itin-edit', onclick: () => navigate(`/trip/${tripId}/plan`) },
+      spots.length ? '📅 調整每天的行程' : '＋ 去安排景點'),
+  );
+  if (spots.length) {
+    const dayNums = [...byDay.keys()].sort((a, b) => a - b);
+    const todayDay = dayForToday(t);
+    const key = 'tripquest.itinDay.' + tripId;
+    const many = dayNums.length > 1;
+    let sel = dayNums.includes(todayDay) ? todayDay : dayNums[0];
+    try {
+      const raw = localStorage.getItem(key), s = Number(raw);
+      if (dayNums.includes(s) || (many && raw === '0')) sel = s;
+    } catch { /* noop */ }
+    const secs = new Map();
+    const pickDay = (d) => {
+      for (const [n, sec] of secs) sec.classList.toggle('open', n === d);
+      strip.select(d);
+      try { localStorage.setItem(key, String(d)); } catch { /* noop */ }
+    };
+    // 日期列最前面一格是「總覽」（整趟所有天畫在同一張地圖；Yolin 2026-11-05 選 A；2026-11-13 從任務頁搬來）
+    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: pickDay, overview: many });
+    if (many) {
+      page.append(strip.el);
+      const ov = h('section', { class: 'daycollapse dc-overview' + (sel === 0 ? ' open' : ''), dataset: { day: '0' } },
+        h('div', { class: 'dc-head' }, h('span', { class: 'dc-main' },
+          h('span', { class: 'dc-row1' }, h('span', { class: 'dc-daynum' }, '總覽')),
+          h('span', { class: 'dc-meta' }, h('span', {}, `全部 ${dayNums.length} 天 · ${spots.length} 個景點`)))),
+        h('div', { class: 'dc-body' }, h('div', { class: 'dc-inner' },
+          tripOverviewMap(byDay, dayNums, { onPickDay: pickDay }))));
+      secs.set(0, ov);
+      page.append(ov);
+    }
+    for (const day of dayNums) {
+      const ds = byDay.get(day);
+      const dstr = dayDate(t, day);
+      const route = dayRoute(ds);
+      const isToday = todayDay === day && todayDay > 0;
+      const meta = [dstr ? `${dstr} ${weekdayLabel(t.startDate, day)}`.trim() : null, `${ds.length} 個景點`].filter(Boolean).join(' · ');
+      const sec = h('section', { class: 'daycollapse itin-day' + (day === sel ? ' open' : ''), dataset: { day: String(day) } },
+        h('div', { class: 'dc-head' + (isToday ? ' is-today' : '') },
+          h('span', { class: 'dc-main' },
+            h('span', { class: 'dc-row1' }, h('span', { class: 'dc-daynum' }, `第 ${day} 天`),
+              isToday ? h('span', { class: 'dc-todaytag' }, '今天') : null),
+            route ? h('span', { class: 'dc-route' }, route) : null,
+            h('span', { class: 'dc-meta' }, h('span', {}, meta)))),
+        h('div', { class: 'dc-body' }, h('div', { class: 'dc-inner' },
+          dayMap(ds, tripId, day),
+          legTimeline(ds, (s) => h('li', { class: 'tl-item' },
+            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
+            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
+            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))))));
+      secs.set(day, sec);
+      page.append(sec);
+    }
+  }
+  drawPage(page);
+  // 旅伴同步進來（例：別人加了航班、改了行程）→ 整頁重畫（見 onTripPage）。簽章只放這一頁畫得到的東西：
+  // 背景補維基圖片（heroHash）、AI 文案這些這一頁不顯示的欄位改了不重畫——不然點到一半，按鈕被換掉（overviewtest 實測）。
+  watchHere(tripId, itinSignature);
+}
+
+function itinSignature(tripId) {
+  const t = store.get(tripId);
+  if (!t) return '';
+  const { total, left } = buyCounts(tripId);
+  const fl = flightsOf(tripId).map((f) => [f.id, f.flightNo, f.depDate, f.depTime].join(',')).join(';');
+  const sp = store.spotsOf(tripId).map((s) => [s.id, s.name, s.emoji, s.day, s.order, s.startMin, s.startTime, s.stayMin, s.endTime,
+    s.legFrom, s.legMode, s.lat, s.lng].join(',')).join(';');
+  return [t.title, t.startDate, t.endDate, staysOf(tripId).length, total, left, fl, sp, store.submissionsOfTrip(tripId).length].join('|');
+}
+
 export async function settings(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }

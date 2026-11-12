@@ -1,0 +1,147 @@
+[
+  {
+    "name": "行程分頁：返回只退回任務頁",
+    "why": "（事前寫 2026-11-13）isMainScreen 不認行程分頁：在「行程」按左上返回，退回上一頁（任務頁），不是一步回「我的旅程」——第一版就是這樣，washitest 新加的路徑才抓到。預期只紅 W4 的「行程分頁按左上返回」（之後 toSettings 自己會再按一次返回，不連帶別條）。",
+    "expect": ["W4 和紙 行程分頁按左上返回"],
+    "file": "js/app.js",
+    "find": "  if (/^\\/trip\\/[^/]+\\/(itinerary|people|expenses|memories)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）",
+    "replace": "  if (/^\\/trip\\/[^/]+\\/(people|expenses|memories)$/.test(p)) return true;",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "拍照解任務：拿日期列現在的底當偏移",
+    "why": "（事前寫 2026-11-13）第一版的算法：日期列是 sticky，點的當下還沒黏到頂、位置在下面，偏移算太大、捲不到那一站（實測停在離頂 600 多 px）。預期只紅 W10「點拍照解任務」。",
+    "expect": ["W10 點「拍照解任務」"],
+    "file": "js/views/trip.js",
+    "find": "      smoothScrollTo(Math.max(0, window.scrollY + el.getBoundingClientRect().top - stuck - 8));",
+    "replace": "      smoothScrollTo(Math.max(0, window.scrollY + el.getBoundingClientRect().top - Math.max(strip.el.getBoundingClientRect().bottom, 70) - 8));",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "拍照解任務：不換天",
+    "why": "（事前寫 2026-11-13）日期列停在第 2 天時點「拍照解任務」，不換回那一站的那一天：那一站在藏起來的那一天裡，展開了也看不到。預期只紅 W10「點拍照解任務」。",
+    "expect": ["W10 點「拍照解任務」"],
+    "file": "js/views/trip.js",
+    "find": "      pick(spot.day || 1, { scroll: false });",
+    "replace": "      void 0;",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "今天主角卡：時間不是大字",
+    "why": "（事前寫 2026-11-13）「今天」主角卡的時間跟內文一樣大。預期只紅 W10「今天主角卡」。",
+    "expect": ["W10 今天主角卡"],
+    "file": "css/style.css",
+    "find": ".today-time { font-size: 1.7rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }",
+    "replace": ".today-time { font-size: 1rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "今天主角卡：沒有帶路",
+    "why": "（事前寫 2026-11-13）主角卡裡少了「用地圖帶我去」那顆（帶路按鈕仍要留在任務頁）。預期只紅 W10「卡裡有帶路」。",
+    "expect": ["W10 卡裡有帶路"],
+    "file": "js/views/trip.js",
+    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav,",
+    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    null,",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "頁首按鈕只剩圖示",
+    "why": "（事前寫 2026-11-13）頁首右上又變回只有齒輪、沒有字。預期只紅 W10「頁首右上是有字的按鈕」。",
+    "expect": ["W10 頁首右上是有字的按鈕"],
+    "file": "js/app.js",
+    "find": "      h('span', { class: 'top-act-text', 'aria-hidden': 'true' }, action.short || action.label || ''));",
+    "replace": "      '');",
+    "cmd": "node scripts/washitest.mjs"
+  },
+  {
+    "name": "任務頁還留著航班／住宿／待買",
+    "why": "（事前寫 2026-11-13）三樣入口搬到行程分頁之後，任務頁也還放一份。預期只紅 recordstest 的「任務頁已經沒有航班／住宿／待買入口」。",
+    "expect": ["任務頁已經沒有航班／住宿／待買入口"],
+    "file": "js/views/trip.js",
+    "find": "      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),",
+    "replace": "      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'), infoCard(tripId),",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "行程分頁不亮",
+    "why": "（事前寫 2026-11-13）進了行程分頁，底部沒有任何一格亮著。預期只紅 recordstest 的「行程分頁：底部亮的是「行程」」。",
+    "expect": ["行程分頁：底部亮的是「行程」"],
+    "file": "js/app.js",
+    "find": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy)$/.test(p);",
+    "replace": "    const isItin = false;",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "三樣入口不在同一張卡",
+    "why": "（事前寫 2026-11-13）航班／住宿／待買不是包在同一張旅途資訊卡裡。預期只紅 recordstest 的「航班／住宿／待買合成一張卡」。",
+    "expect": ["航班／住宿／待買合成一張卡"],
+    "file": "js/views/trip.js",
+    "find": "  return h('div', { class: 'info-card' },",
+    "replace": "  return h('div', { class: 'info-box' },",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "航班時間不是大字",
+    "why": "（事前寫 2026-11-13）航班卡的起飛時間跟內文一樣大。預期只紅 recordstest 的「航班大數字」。",
+    "expect": ["航班大數字"],
+    "file": "css/style.css",
+    "find": ".fl-time { font-size: 1.6rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }",
+    "replace": ".fl-time { font-size: 1rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }",
+    "cmd": "node scripts/recordstest.mjs"
+  },
+  {
+    "name": "任務頁還有當天地圖",
+    "why": "（事前寫 2026-11-13）當天地圖（查看路線）搬到行程分頁之後，任務頁每天也還畫一張。預期只紅 legviewtest 的「任務頁沒有當天地圖」。",
+    "expect": ["任務頁沒有當天地圖"],
+    "file": "js/views/trip.js",
+    "find": "        crewStrip(t),",
+    "replace": "        dayMap(daySpots, tripId, day), crewStrip(t),",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程頁的怎麼去是空的",
+    "why": "（事前寫 2026-11-13）行程頁的時間軸畫了、但兩站之間「怎麼去」都是空的（沒讀那一站的 legMode；地圖照舊有）。預期只紅 legviewtest 的「行程頁也看得到同一份「怎麼去」」。",
+    "expect": ["行程頁也看得到同一份「怎麼去」"],
+    "file": "js/views/trip.js",
+    "find": "          legTimeline(ds, (s) => h('li', { class: 'tl-item' },",
+    "replace": "          legTimeline(ds.map((x) => ({ ...x, legMode: null })), (s) => h('li', { class: 'tl-item' },",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程頁不跟著資料重畫",
+    "why": "（事前寫 2026-11-13）onTripPage 不認行程分頁：別人改了行程，停在行程頁看不到（要離開再進來）。第一版就是這樣，overviewtest 改走行程分頁後抓到。預期只紅 overviewtest 的「前置：整頁真的重畫了」。",
+    "expect": ["前置：整頁真的重畫了"],
+    "file": "js/views/trip.js",
+    "find": "  return path === `/trip/${tripId}` || path === `/trip/${tripId}/itinerary`;",
+    "replace": "  return path === `/trip/${tripId}`;",
+    "cmd": "node scripts/overviewtest.mjs", "done": "^總覽地圖：\\d+ 項通過"
+  },
+  {
+    "name": "任務頁日期列又出現總覽格",
+    "why": "（事前寫 2026-11-13）總覽搬到行程分頁之後，任務頁的日期列又多出「總覽」那一格（點了也沒有總覽可看）。scrolltest 那條原本要求總覽格要在，第二段改成要求不在；這條證明改過的條件會紅。預期只紅 scrolltest 的「日期列不對」。",
+    "expect": ["日期列不對"],
+    "file": "js/views/trip.js",
+    "find": "    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: false });",
+    "replace": "    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: true });",
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
+  },
+  {
+    "name": "任務頁日期列又出現總覽格（collapsetest）",
+    "why": "（事前寫 2026-11-13）同上一條的改壞法，證明 collapsetest 改過的那條（要 1,2、原本要 0,1,2）會紅。預期只紅「日期列：兩天都看得到」。",
+    "expect": ["日期列：兩天都看得到"],
+    "file": "js/views/trip.js",
+    "find": "    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: false });",
+    "replace": "    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: true });",
+    "cmd": "node scripts/collapsetest.mjs"
+  },
+  {
+    "name": "任務頁日期列又出現總覽格（itinviewtest）",
+    "why": "（事前寫 2026-11-13）同上一條的改壞法，證明 itinviewtest 改過的兩條（三天 1,2,3、十五天 15 格；原本 0,1,2,3、16 格）會紅。預期紅 S1 日期列與 S4 十五天格數兩條。",
+    "expect": ["S1 日期列：三天各一格", "S4 十五天：日期列 15 格都在"],
+    "file": "js/views/trip.js",
+    "find": "    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: false });",
+    "replace": "    const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: (d) => pick(d), overview: true });",
+    "cmd": "node scripts/itinviewtest.mjs"
+  }
+]

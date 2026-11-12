@@ -67,6 +67,10 @@ async function newPage(tileMode) {
     return tid;
   }, SPOTS);
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+  // 2026-11-13 總覽地圖搬到「行程」分頁：從任務頁點底部分頁「行程」進去（使用者的路）
+  await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
+  for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+  await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
   await page.waitForSelector('.daystrip .ds-day', { timeout: 10000 });
   return { page, tid };
 }

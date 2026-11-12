@@ -131,6 +131,18 @@ try {
   await page.evaluate(() => document.querySelector('.daycollapse.open .timeline').scrollIntoView({ block: 'start' }));
   await sleep(300);
 
+  // 二之二（2026-11-13）：「怎麼去」行程頁也顯示一份（Yolin 11-12）、當天地圖（查看路線）只在行程頁。
+  // 任務頁上沒有地圖（先確認任務頁的時間軸在，「沒有」才有母體）；點底部分頁「行程」進去，同一段路的設定照樣看得到。
+  const taskMap = await page.evaluate(() => ({ tl: !!document.querySelector('.daycollapse.open .timeline'), map: document.querySelectorAll('.daycollapse .daymap').length }));
+  yes(taskMap.tl && taskMap.map === 0, `任務頁沒有當天地圖（時間軸在：${taskMap.tl}；地圖 ${taskMap.map} 張）`);
+  for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+  await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.daycollapse.open .daymap'), { timeout: 10000 });
+  await stable('.daycollapse.open .timeline');
+  L = await legs();
+  const itinB = L.find((x) => x.spot === B), itinE = L.find((x) => x.spot === E);
+  yes(L.length === 4 && itinB?.mode === 'train' && itinB.text.includes('鐵路') && itinE?.mode === 'bus',
+    `行程頁也看得到同一份「怎麼去」：4 段、甲→乙 鐵路、丁→戊 公車（${L.map((x) => x.mode || '－').join('、')}）`);
+
   // 三、播放（×4）：移動中的游標——甲→乙 是電車圖示、乙→丁（中間夾著沒座標的丙）是圓點、丁→戊 是公車；到站一律圓點
   await page.evaluate(() => { const el = document.querySelector('.daycollapse.open .daymap'); window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'instant' }); });
   await sleep(400);

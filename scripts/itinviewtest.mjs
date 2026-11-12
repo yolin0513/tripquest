@@ -181,8 +181,8 @@ try {
   // ---- S1／S2／S5／T1 進行中（今天第 2 天）----
   yes(await openFromHome(page, '進行中'), 'S1 從首頁點「進行中」進行程頁');
   let cells = await stripCells(page);
-  // 2026-11-05 起最前面多一格「總覽」（data-day=0，Yolin 選 A）
-  yes(cells.map((c) => c.day).join() === '0,1,2,3', `S1 日期列：總覽＋三天各一格（實得 ${cells.map((c) => c.day).join() || '無'}）`);
+  // 2026-11-05 起最前面多一格「總覽」（data-day=0，Yolin 選 A）；2026-11-13 總覽跟地圖搬到「行程」分頁，任務頁只剩天數
+  yes(cells.map((c) => c.day).join() === '1,2,3', `S1 日期列：三天各一格、任務頁沒有總覽格（實得 ${cells.map((c) => c.day).join() || '無'}）`);
   yes(cells.filter((c) => c.on).map((c) => c.day).join() === '2', 'S1 預設選中今天（第 2 天）');
   yes((await shownDays(page)).join() === '2', `S1 只顯示第 2 天（實得 ${(await shownDays(page)).join() || '無'}）`);
   const head = await page.evaluate(() => {
@@ -288,7 +288,7 @@ try {
     return { n: cs.length, visible: vis.length, onDay: on && on.dataset.day, onInView: !!r && r.left >= tr.left - 1 && r.right <= tr.right + 1,
       scrollable: document.querySelector('.daystrip .ds-track').scrollWidth > document.querySelector('.daystrip .ds-track').clientWidth };
   });
-  yes(fit.n === 16, `S4 十五天：日期列 總覽＋15 格都在（實得 ${fit.n}）`);
+  yes(fit.n === 15, `S4 十五天：日期列 15 格都在、任務頁沒有總覽格（實得 ${fit.n}）`);
   yes(fit.onDay === '4' && fit.onInView, `S4 選中今天（第 4 天）那一格，而且捲進日期列看得到的範圍（${JSON.stringify(fit)}）`);
   yes(fit.scrollable, 'S4 塞不下時日期列可以橫向捲');
   console.log(`  （回報用、不設門檻）390px 寬的畫面一次看得到 ${fit.visible} 格／共 ${fit.n} 格`);

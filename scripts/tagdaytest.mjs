@@ -83,6 +83,9 @@ try {
     await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('.daycollapse.open .qcollapse');
     await stable('.daycollapse.open .timeline');
+    // 2026-11-13「調整每天的行程」搬到「行程」分頁：先點底部分頁「行程」（使用者的路）
+    for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+    await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-edit'), { timeout: 8000 });
     let planBtn = null;
     for (const b of await page.$$('button')) if ((await b.evaluate((e) => e.textContent)).includes('調整每天的行程')) { planBtn = b; break; }
     await planBtn.click();

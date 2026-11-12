@@ -1,4 +1,4 @@
-// 四個分頁的底部功能列位置一致（npm run tabbartest）
+// 五個分頁（任務／行程／照片／分帳／回顧；行程 2026-11-13 加）的底部功能列位置一致（npm run tabbartest）
 //
 // 使用者實機回報：分帳頁的底部功能列位置跟其他三頁不同、會上移。
 //
@@ -76,7 +76,7 @@ try {
   for (const [label, tid] of [['有內容的行程', ids.full], ['幾乎空的行程', ids.bare]]) {
     console.log(`\n— ${label} —`);
     const tabs = [
-      ['任務', `#/trip/${tid}`], ['照片', `#/trip/${tid}/people`],
+      ['任務', `#/trip/${tid}`], ['行程', `#/trip/${tid}/itinerary`], ['照片', `#/trip/${tid}/people`],
       ['分帳', `#/trip/${tid}/expenses`], ['回顧', `#/trip/${tid}/memories`],
     ];
     const got = [];
@@ -90,9 +90,9 @@ try {
     }
     const tops = got.map(([, m]) => m.top);
     const same = tops.every((x) => x === tops[0]);
-    yes(same, `四個分頁的底部列位置完全一致（top=${tops[0]}）`, JSON.stringify(got.map(([n, m]) => n + ':' + m.top)));
+    yes(same, `五個分頁的底部列位置完全一致（top=${tops[0]}）`, JSON.stringify(got.map(([n, m]) => n + ':' + m.top)));
     const bottoms = got.map(([, m]) => m.bottom);
-    yes(bottoms.every((x) => x === got[0][1].vh), `四個分頁的底部列都貼齊畫面底部（bottom=${bottoms[0]}）`);
+    yes(bottoms.every((x) => x === got[0][1].vh), `五個分頁的底部列都貼齊畫面底部（bottom=${bottoms[0]}）`);
   }
 
   // 換個機型高度也要一致
@@ -100,11 +100,11 @@ try {
   for (const [w, hgt] of [[360, 640], [430, 932]]) {
     await page.setViewport({ width: w, height: hgt });
     const tops = [];
-    for (const hash of [`#/trip/${ids.full}`, `#/trip/${ids.full}/people`, `#/trip/${ids.full}/expenses`, `#/trip/${ids.full}/memories`]) {
+    for (const hash of [`#/trip/${ids.full}`, `#/trip/${ids.full}/itinerary`, `#/trip/${ids.full}/people`, `#/trip/${ids.full}/expenses`, `#/trip/${ids.full}/memories`]) {
       const m = await measure(hash);
       tops.push(m.top);
     }
-    yes(tops.every((x) => x === tops[0]), `${w}×${hgt}：四個分頁仍然一致（top=${tops[0]}）`, JSON.stringify(tops));
+    yes(tops.every((x) => x === tops[0]), `${w}×${hgt}：五個分頁仍然一致（top=${tops[0]}）`, JSON.stringify(tops));
   }
 
   console.log('\n底部功能列測試結束');

@@ -59,6 +59,10 @@ try {
     return tid;
   }, SPOTS);
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+  // 2026-11-13 當天地圖（查看路線）搬到「行程」分頁：從任務頁點底部分頁「行程」進去（使用者的路）
+  await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
+  for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+  await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
   await page.waitForSelector('.daycollapse.open .dm-player', { timeout: 10000 });
   // 等背景重畫停下（地圖元素連續 2.5 秒沒被換掉）
   for (let k = 0; k < 6; k++) {
@@ -158,7 +162,7 @@ try {
   yes(picked === '×2' || picked === '×4', `前置：倍速換到 ×1 以外（${picked}）`);
   await page.evaluate(() => { window.__oldPlayer = document.querySelector('.daycollapse.open .dm-player'); location.hash = '#/'; });
   await page.waitForSelector('.hero', { timeout: 10000 });
-  await page.evaluate((t) => { location.hash = `#/trip/${t}`; }, tid);
+  await page.evaluate((t) => { location.hash = `#/trip/${t}/itinerary`; }, tid);
   await page.waitForSelector('.daycollapse.open .dm-player', { timeout: 10000 });
   const renewed = await page.evaluate(() => !!window.__oldPlayer && window.__oldPlayer !== document.querySelector('.daycollapse.open .dm-player') && !window.__oldPlayer.isConnected);
   yes(renewed, '前置：播放列真的換成新的一份（舊的已不在畫面上）');

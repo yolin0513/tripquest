@@ -169,11 +169,11 @@ try {
         inView: !!tr && r.left >= tr.left - 1 && r.right <= tr.right + 1 && r.top >= 0 };
     });
   });
-  // 2026-11-05 起日期列最前面多一格「總覽」（data-day=0，.ds-all，Yolin 看過總覽圖）：天數只數 day ≥ 1 的格子，
-  // 總覽那格要在、而且進行中不會被選中（2026-11-06 全套撞到：原本寫死 length === 3，多了總覽那格變 4 → 紅）
+  // 2026-11-05 起日期列最前面多一格「總覽」（data-day=0，.ds-all）；2026-11-13 總覽跟地圖一起搬到「行程」分頁，
+  // 任務頁的日期列只剩天數、不再有總覽格（總覽在行程分頁由 overviewtest 守）。天數只數 day ≥ 1 的格子。
   const daysA = stripA.filter((c) => c.day >= 1), allA = stripA.find((c) => c.day === 0);
-  if (daysA.length === 3 && allA && !allA.on && stripA.filter((c) => c.on).map((c) => c.day).join() === '2' && stripA.find((c) => c.day === 2).today && stripA.find((c) => c.day === 2).inView)
-    ok('進行中：日期列三天都在（另有總覽一格、沒被選中）、自動選中今天（第 2 天）那一格、標著今天、而且在日期列看得到的範圍裡');
+  if (daysA.length === 3 && !allA && stripA.filter((c) => c.on).map((c) => c.day).join() === '2' && stripA.find((c) => c.day === 2).today && stripA.find((c) => c.day === 2).inView)
+    ok('進行中：日期列三天都在（任務頁沒有總覽格，總覽在行程分頁）、自動選中今天（第 2 天）那一格、標著今天、而且在日期列看得到的範圍裡');
   else fail('日期列不對：' + JSON.stringify(stripA));
 
   // v1.42：只展開「現在這一站」（今天第一個未完成的），不再把當天全部未完成的打開 ——
@@ -499,7 +499,8 @@ try {
 
   const marker = () => N.page.evaluate(() => ({
     hash: location.hash,
-    what: document.querySelector('.qline') ? '任務清單'
+    what: document.querySelector('.itin-page') ? '行程頁'
+      : document.querySelector('.qline') ? '任務清單'
       : document.querySelector('.qrow') ? '景點頁'
       : document.querySelector('.quest-focus') ? '任務詳情'
       : document.querySelector('.wall-modes, .wall-bar') ? '照片牆'
@@ -522,9 +523,10 @@ try {
     return marker();
   };
 
-  // 旅程層：6 個起點 × 4 顆分頁
+  // 旅程層：7 個起點 × 5 顆分頁（2026-11-13 加「行程」，原本 6×4）
   const tripStarts = [
     ['任務清單', `#/trip/${tidN}`],
+    ['行程', `#/trip/${tidN}/itinerary`],   // 2026-11-13 新分頁
     ['照片牆', `#/trip/${tidN}/people`],
     ['分帳', `#/trip/${tidN}/expenses`],
     ['回顧', `#/trip/${tidN}/memories`],
@@ -534,20 +536,21 @@ try {
   // 網址才是「有沒有真的切過去」的鐵證；內容標記另外檢查（分帳頁沒資料時是空狀態，
   // 沒有可靠的標記，所以那一頁只驗網址）
   const wantHash = {
-    任務: `#/trip/${tidN}`, 照片: `#/trip/${tidN}/people`,
+    任務: `#/trip/${tidN}`, 行程: `#/trip/${tidN}/itinerary`, 照片: `#/trip/${tidN}/people`,
     分帳: `#/trip/${tidN}/expenses`, 回顧: `#/trip/${tidN}/memories`,
   };
-  const wantWhat = { 任務: '任務清單', 照片: '照片牆', 回顧: '回顧' };
+  const wantWhat = { 任務: '任務清單', 行程: '行程頁', 照片: '照片牆', 回顧: '回顧' };
+  const TRIP_TABS = ['任務', '行程', '照片', '分帳', '回顧'];
   let bad = [];
   for (const [from, hash] of tripStarts) {
-    for (const tab of ['任務', '照片', '分帳', '回顧']) {
+    for (const tab of TRIP_TABS) {
       await goHash(hash);
       const got = await tapTab(tab);
       if (got.hash !== wantHash[tab]) bad.push(`${from} →按「${tab}」→ 網址是 ${got.hash}`);
       else if (wantWhat[tab] && got.what !== wantWhat[tab]) bad.push(`${from} →按「${tab}」→ 畫面是 ${got.what}`);
     }
   }
-  if (!bad.length) ok(`旅程層分頁導覽完整矩陣 ${tripStarts.length}×4＝24 種組合都正確切換`);
+  if (!bad.length) ok(`旅程層分頁導覽完整矩陣 ${tripStarts.length}×${TRIP_TABS.length}＝${tripStarts.length * TRIP_TABS.length} 種組合都正確切換`);
   else fail(`分頁導覽壞了 ${bad.length} 種：` + bad.join(' ｜ '));
 
   // 首頁層：2 個起點 × 2 顆分頁

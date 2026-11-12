@@ -48,6 +48,7 @@
   --tag-fg: var(--muted);
   --label-fg: var(--muted);
   --now-bg: var(--bg-elev);
+  --today-bg: var(--bg-elev);
   --dot-fill: var(--bg);
   --dot-edge: var(--primary);
   --mode-walk: var(--bg);
@@ -83,6 +84,7 @@ html[data-theme="washi"] {
   --tag-fg: var(--text);
   --label-fg: var(--text);
   --now-bg: var(--blush);
+  --today-bg: var(--accent);
   --dot-fill: var(--accent);
   --dot-edge: var(--line);
   /* 交通方式一種一色（只照使用者選的方式上色，不猜）：火車若竹綠、步行薰衣草…… */
@@ -743,7 +745,41 @@ html[data-theme="washi"] .qcollapse { border: 2.5px solid var(--line); border-le
    只動框線與影子，不碰字色與底色（那些走 :root 的變數，palettetest 才算得到）。 */
 html[data-theme="washi"] .card,
 html[data-theme="washi"] .fl-card,
-html[data-theme="washi"] .stay-card { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+html[data-theme="washi"] .stay-card,
+html[data-theme="washi"] .info-card,
+html[data-theme="washi"] .today-card,
+html[data-theme="washi"] .itin-stop { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+html[data-theme="washi"] .info-row + .info-row { border-top: 2px dashed var(--line); }
+
+/* ---------- 2026-11-13 第二段：行程分頁＋四項排版（兩個主題都有；會換底色或字色的走 :root 變數） ---------- */
+/* 頁首右上有字的按鈕（第 11 項）：圖示＋短字。欄寬改成「至少 56px、需要就加寬」——左右不等寬時標題會略偏一點 */
+#topbar { grid-template-columns: minmax(var(--tap), max-content) 1fr minmax(var(--tap), max-content); }
+#topActionBtn { width: auto; min-width: var(--tap); padding: 0 12px; display: inline-flex; align-items: center; gap: 4px;
+  justify-self: end; font-size: 1.25rem; }
+#topActionBtn > span { pointer-events: none; }   /* 點到字也算點到按鈕（elementFromPoint 回按鈕本身） */
+.top-act-text { font-size: 0.9rem; font-weight: 800; }
+/* 「今天」主角卡（第 10 項）：和紙是山吹黃大卡；下一站的時間是大數字（有填才寫） */
+.today-card { margin-top: 8px; padding: 14px 14px 8px; border-radius: var(--radius); background: var(--today-bg); border: 1px solid var(--line); }
+.today-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0 2px; }
+.today-label { font-weight: 800; font-size: 0.95rem; }
+.today-time { font-size: 1.7rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.today-shot { margin-top: 10px; }
+/* 同類合成一張卡（第 9 項）：航班、住宿、待買三列 */
+.info-card { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.info-row { appearance: none; display: flex; align-items: center; gap: 6px; width: 100%; min-height: var(--tap); padding: 12px 16px;
+  background: transparent; border: 0; color: var(--text); font: inherit; font-weight: 800; text-align: left; cursor: pointer; }
+.info-row + .info-row { border-top: 1px solid var(--line); }
+.info-row:active { background: var(--bg-elev-2); }
+.info-name { flex: none; }
+.info-sub { flex: 1 1 auto; min-width: 0; color: var(--muted); font-weight: 700; overflow-wrap: anywhere; }
+.info-row::after { content: "›" / ""; margin-left: auto; padding-left: 6px; color: var(--muted); font-size: 1.2rem; }
+/* 行程分頁：每天的行程（時間、怎麼去、地圖） */
+.itin-page .daycollapse { margin-top: 12px; }
+.itin-stop { margin-top: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-elev);
+  font-weight: 800; overflow-wrap: anywhere; }
+/* 大數字（第 8 項）：航班的時間與機場；日期與「未填」維持一般字 */
+.fl-time { font-size: 1.6rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.fl-place { font-size: 1.15rem; font-weight: 800; }
 html[data-theme="washi"] .stay-card.is-out { border-style: dashed; }
 /* 按鈕：墨框＋硬影子＋內圈白色虛線「縫線」；按下去往右下沉、影子收掉。高度不變（框原本就是 2px）。 */
 html[data-theme="washi"] .btn { position: relative; border-color: var(--line); box-shadow: 3px 3px 0 var(--line); }
