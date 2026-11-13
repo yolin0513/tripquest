@@ -70,7 +70,7 @@ export function addPhotoButtons(tripId, questId, { compact = false, icons = fals
         try {
           const m = await import('./peeks.js');
           pk = m.peek(await m.completionPeekKind(q, store.get(q.spotId)), 0.6);
-          m.cheer(pk);   // 完成任務這一刻跳上來揮手（v1.83.0，只有這一處呼叫）；減少動態效果時不動
+          m.cheer(pk);   // 完成任務這一刻跳上來，再做那一張自己的動作（v1.83.0 起；v1.85.0 五張都會動）；減少動態效果時不動
         } catch (e) { console.error(e); }   // 圖或景點庫載不到：照舊放整隻小鳳，不擋住慶祝（照片已經存好了）
       }
       const res = await celebrate({
@@ -138,6 +138,8 @@ export async function showNewBadges(tripId, memberId) {
       await celebrate({
         title: '解鎖新徽章！',
         lines: [`${b.emoji}　${b.name}`, b.desc + (member ? `（${member.displayName}）` : '')],
+        // v1.85.0：打勾的圓換成小鳳、原地彈跳兩下（那張表的「解鎖新徽章」；v1.84.0 以前這裡是打勾，等於新的出場處）
+        withMascot: true, move: true,
         actions: [{ label: '太棒了', value: 'ok', primary: true }],
       });
     }

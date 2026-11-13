@@ -1,0 +1,137 @@
+[
+  {
+    "name": "動作：空白頁的白兔不揮手",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/home.js 拿掉 moveMascot：空白頁照舊是白兔、但不動。和紙那輪紅「白兔揮手兩下」「白兔揮完停回原位」（會動的層 0 個，母體空）與「只用 transform 和 opacity」（四個時刻裡空白頁那一格沒有屬性，母體空）；深色那輪本來就要不動，照樣綠；其餘三個時刻不受影響。",
+    "expect": ["［和紙］ M9 空白頁的白兔揮手兩下", "［和紙］ M9 白兔揮完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "file": "js/views/home.js",
+    "find": "if (fresh) moveMascot(page.querySelector('.empty-mascot svg.gl-mascot'));",
+    "replace": "/* 突變：空白頁的白兔不動 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：回顧的白熊不跳出來",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/recap.js 拿掉 moveMascot：回顧照舊是白熊、但不動。和紙那輪紅「白熊從下面淡入、跳出來」「白熊跳完停回原位」與「只用 transform 和 opacity」（回顧那一格母體空）；深色那輪照樣綠。",
+    "expect": ["［和紙］ M9 回顧的白熊從下面淡入、跳出來", "［和紙］ M9 白熊跳完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "file": "js/views/recap.js",
+    "find": "moveMascot(out.querySelector('.recap-mascot svg.gl-mascot'));",
+    "replace": "/* 突變：回顧的白熊不動 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：載入中的鷹不看",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/ui.js 的 spinnerBox 拿掉 moveMascot：整理中照舊是鷹、但不動。和紙那輪紅「載入中的鷹…一直重複」與「只用 transform 和 opacity」（載入中那一格母體空）；鷹沒有「停回原位」那一條（一直重複，不會停）；深色那輪照樣綠。",
+    "expect": ["［和紙］ M9 載入中的鷹拿望遠鏡左右慢慢看、一直重複", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "file": "js/ui.js",
+    "find": "moveMascot(box.firstChild);",
+    "replace": "/* 突變：載入中的鷹不動 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：解鎖新徽章的小鳳不彈跳",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/addphoto.js 的 showNewBadges 拿掉 move: true：標題上面照舊是玄鳳（withMascot 還在）、但不動。和紙那輪紅「小鳳、原地彈跳兩下」「小鳳彈完停回原位」與「只用 transform 和 opacity」（解鎖新徽章那一格母體空）；「是玄鳳不是打勾」的部分照樣成立，但同一條斷言還要求在跳，所以整條紅；深色那輪照樣綠。",
+    "expect": ["［和紙］ M9 解鎖新徽章是小鳳、原地彈跳兩下", "［和紙］ M9 小鳳彈完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "file": "js/addphoto.js",
+    "find": "withMascot: true, move: true,",
+    "replace": "withMascot: true,",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：白熊第 0 格就看得到（沒有淡入）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-popin 第一格 opacity 從 0 改成 1：白熊一開始就完整出現、只有往上跳。只紅「白熊從下面淡入、跳出來」（第 0 格透明度 1）；最後一格照樣 1、位置 0，停回原位不受影響；只用兩個屬性不變。",
+    "expect": ["［和紙］ M9 回顧的白熊從下面淡入、跳出來"],
+    "file": "css/style.css",
+    "find": "@keyframes mc-popin { 0% { opacity: 0; transform: translateY(36px); }",
+    "replace": "@keyframes mc-popin { 0% { opacity: 1; transform: translateY(36px); }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：白熊跳完停在半空",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-popin 最後一格從 translateY(0) 改成 translateY(-8px)：跳完停在比靜止圖高 8 個單位。只紅「白熊跳完停回原位」（整隻的位置矩陣差 8）；第 0 格照樣透明、在下面，淡入那條不受影響。",
+    "expect": ["［和紙］ M9 白熊跳完停回原位"],
+    "file": "css/style.css",
+    "find": "65% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }",
+    "replace": "65% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(-8px); } }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：小鳳只彈一下",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-bounce 改成只往上一次（40% 到 −18、頭尾 0）：表上寫的是「原地彈跳兩下」。只紅「小鳳、原地彈跳兩下」（到頂次數 1）；最後一格照樣 0，停回原位不受影響。",
+    "expect": ["［和紙］ M9 解鎖新徽章是小鳳、原地彈跳兩下"],
+    "file": "css/style.css",
+    "find": "@keyframes mc-bounce { 0%, 44%, 82%, 100% { transform: translateY(0); } 22% { transform: translateY(-18px); } 64% { transform: translateY(-9px); } }",
+    "replace": "@keyframes mc-bounce { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-18px); } }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：小鳳彈完停在半空",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-bounce 最後一格從 translateY(0) 改成 translateY(-4px)：彈完停在比靜止圖高 4 個單位。只紅「小鳳彈完停回原位」。選 −4 不選 −9：數「到頂幾次」的門檻是最高點的 35%（約 6.3），−4 不會被多數成第三下，「彈跳兩下」那條才不會一起紅。",
+    "expect": ["［和紙］ M9 小鳳彈完停回原位"],
+    "file": "css/style.css",
+    "find": "@keyframes mc-bounce { 0%, 44%, 82%, 100% { transform: translateY(0); }",
+    "replace": "@keyframes mc-bounce { 0%, 44%, 82% { transform: translateY(0); } 100% { transform: translateY(-4px); }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：小鳳彈跳多動一個 filter",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-bounce 兩個最高點多一個 filter: blur：違反「只動 transform 和 opacity」。只紅「吉祥物的動作只用 transform 和 opacity」；頭尾沒有 filter，停回原位、彈兩下都不受影響。",
+    "expect": ["［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "file": "css/style.css",
+    "find": "22% { transform: translateY(-18px); } 64% { transform: translateY(-9px); } }",
+    "replace": "22% { transform: translateY(-18px); filter: blur(1px); } 64% { transform: translateY(-9px); filter: blur(1px); } }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：鷹只看一輪就停",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）.mc-move-look 的動畫次數從 infinite 改成 1：表上寫的是「一直重複」。只紅「載入中的鷹…一直重複」（無限次的 0 段）；量的時候第一輪還在跑，有動、只用不受影響。",
+    "expect": ["［和紙］ M9 載入中的鷹拿望遠鏡左右慢慢看、一直重複"],
+    "file": "css/style.css",
+    "find": ".mc-move-look .mc-look { animation: mc-look 3.2s ease-in-out infinite; }",
+    "replace": ".mc-move-look .mc-look { animation: mc-look 3.2s ease-in-out 1; }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：白兔只揮一下",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-wave-r 改成只往外揮一次（40% 到 16 度、80% 回 −9 度）：表上寫的是「揮手兩下」。只紅「白兔揮手兩下」（往外揮到底 1 次）；最後一格照樣 0，停回原位不受影響。peektest 另有一條同樣的突變（遮陽帽）。",
+    "expect": ["［和紙］ M9 空白頁的白兔揮手兩下"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(16deg); } 40%, 80% { transform: rotate(-9deg); } }",
+    "replace": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(16deg); } 80% { transform: rotate(-9deg); } }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：白兔的手揮完沒回原位",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-wave-r 最後一格從 rotate(0deg) 改成 rotate(4deg)：手停在歪 4 度。只紅「白兔揮完停回原位」。選 4 度：數「揮到底幾次」的門檻是最大角度的 35%（約 5.6 度），4 度不會被多數成第三下。",
+    "expect": ["［和紙］ M9 白兔揮完停回原位"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); }",
+    "replace": "@keyframes pk-wave-r { 0% { transform: rotate(0deg); } 100% { transform: rotate(4deg); }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：白兔的揮動線最後停在半透明",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-lines 最後一格 opacity 改成 .25：揮完揮動線淡淡的。只紅「白兔揮完停回原位」的「完全看得到」那一半——跟上一條各打一個分支（矩陣／透明度）。",
+    "expect": ["［和紙］ M9 白兔揮完停回原位"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-lines { 0%, 100% { opacity: 1; }",
+    "replace": "@keyframes pk-lines { 0% { opacity: 1; } 100% { opacity: .25; }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：moveMascot 不看減少動態效果",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/glyphs.js 的 reducedMotion() 永遠回 false：深色那輪打開了減少動態效果，四個時刻照樣動。只紅深色那輪的「減少動態效果（設定頁的開關）」；前置（<html> 有 reduce-motion）照樣成立；和紙那輪本來就會動，照樣綠。peektest 那邊有同一個 find 的突變（cheer）。",
+    "expect": ["［深色］ M9 減少動態效果（設定頁的開關）"],
+    "file": "js/glyphs.js",
+    "find": "return document.documentElement.classList.contains('reduce-motion');",
+    "replace": "return false;   // 突變：不看減少動態效果",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "前置：設定頁的開關不再讓 <html> 加上 reduce-motion（mascottest 那輪）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/prefs.js 的 reducesMotion 只看系統設定：深色那輪按了開關，<html> 卻沒有 reduce-motion。證明這支新加的前置會紅（情境沒造出來時不會默默通過）；同一輪的 M9 也跟著紅（真的會動了）。和紙那輪沒按開關，照樣綠。",
+    "expect": ["［深色］ 前置：設定頁打開「減少動態效果」", "［深色］ M9 減少動態效果（設定頁的開關）"],
+    "file": "js/prefs.js",
+    "find": "export function reducesMotion() { return !!prefs.reduceMotion || systemReducesMotion(); }",
+    "replace": "export function reducesMotion() { return systemReducesMotion(); }",
+    "cmd": "node scripts/mascottest.mjs"
+  }
+]

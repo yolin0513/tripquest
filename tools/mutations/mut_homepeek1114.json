@@ -1,0 +1,38 @@
+[
+  {
+    "name": "主頁：「旅程結束了／任務全部完成了」那張卡沒掛上探頭圖",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/trip.js 拿掉 mountPeek(main, el)：圖做好了、也呼叫了 cheer，但沒放進卡片（v1.84.0 以前的樣子）。H9、H10 紅（沒有探頭圖）；H11 也紅（重畫之後一樣找不到圖——它要求圖在，才分得出「停在靜止圖」跟「根本沒有圖」）。H5、H6 只看字與按鈕，照樣綠。",
+    "expect": ["H9 結束後「旅程結束了」那張卡", "H10 全部拍完「任務全部完成了」那張卡", "H11 主頁自己重畫時探頭圖照樣在"],
+    "file": "js/views/trip.js",
+    "find": "mountPeek(main, el);",
+    "replace": "/* 突變：不掛上卡片 */",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：每重畫一次就再跳一次（cheer 不看 fresh）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/trip.js 的 cheer 拿掉 if (fresh)：主頁自己重畫（refreshPage：現在在哪一站變了、AI 文案回來）也加 pk-cheer、再探上來一次。只紅 H11；H9、H10 是真的導覽進來，本來就要動，照樣綠。",
+    "expect": ["H11 主頁自己重畫時探頭圖照樣在"],
+    "file": "js/views/trip.js",
+    "find": "if (fresh) pk.cheer(el, { soft: true });",
+    "replace": "pk.cheer(el, { soft: true });",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：那張卡上面沒有讓出探頭圖的高度",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）css/style.css 拿掉 .th-end.has-peek 的 margin-top：卡片照原本的間距排，探出卡片上緣的那截壓到上一個區塊（卡片是最上面一張時就是壓到頁首）。H9、H10 紅（不壓到上面那一項不成立）；H11 只看動畫，照樣綠。",
+    "expect": ["H9 結束後「旅程結束了」那張卡", "H10 全部拍完「任務全部完成了」那張卡"],
+    "file": "css/style.css",
+    "find": ".th-end.has-peek { margin-top: calc(var(--pk-rise) + 8px); }",
+    "replace": "/* 突變：沒有讓出探頭圖的高度 */",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：探頭圖的邊線沒補框線寬（小鳳疊在和紙的粗框線上）",
+    "why": "（事前寫 2026-11-14 00:5x，跑之前）css/style.css 的 .th-end > .gl-peek 拿掉 bottom 那一段：圖改回從框線內側算，和紙的框線 2.5px，邊線比卡片上緣低約 2px——第一次單跑 H9／H10 量到的就是這個（邊線差 2.01px，門檻 1.5）。H9、H10 紅（邊線對齊不成立）；H11 只看動畫，照樣綠。",
+    "expect": ["H9 結束後「旅程結束了」那張卡", "H10 全部拍完「任務全部完成了」那張卡"],
+    "file": "css/style.css",
+    "find": ".th-end > .gl-peek { right: 14px; bottom: calc(100% - var(--pk-sink) + var(--th-bd)); }",
+    "replace": ".th-end > .gl-peek { right: 14px; }",
+    "cmd": "node scripts/hometest.mjs"
+  }
+]

@@ -4,7 +4,7 @@ import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { isStandalone, shouldOfferInstall } from '../install.js';
 import { countdownText } from '../tripday.js';
-import { mascot, MASCOT_SPOT } from '../glyphs.js';
+import { mascot, MASCOT_SPOT, moveMascot } from '../glyphs.js';
 
 // 從邀請連結加入，剪貼簿優先
 async function joinFromLink() {
@@ -18,7 +18,7 @@ async function joinFromLink() {
   await joinByCode();
 }
 
-export default function home({ drawPage, setTop }) {
+export default function home({ fresh = false, drawPage, setTop }) {
   setTop({ title: 'TripQuest', back: false });
   const trips = store.trips();
   const std = isStandalone();
@@ -28,7 +28,7 @@ export default function home({ drawPage, setTop }) {
   // 這時候最該給的不是「建立新旅程」，是「把剛剛那個邀請貼進來」。
   const justInstalledEmpty = std && trips.length === 0;
 
-  drawPage(h('div', { class: 'page' },
+  const page = h('div', { class: 'page' },
     h('div', { class: 'hero' },
       h('h2', {}, '把旅行變成拍照任務'),
       h('p', { class: 'muted lg' }, '一起完成、一起回味'),
@@ -71,7 +71,10 @@ export default function home({ drawPage, setTop }) {
           },
         }, '📲 把 TripQuest 放到主畫面')
       : null,
-  ));
+  );
+  drawPage(page);
+  // 還沒有旅程：白兔揮手兩下（v1.85.0）。只有真的導覽到這一頁才動——這一頁自己重畫（refreshPage）時停在靜止圖，不會每重畫一次就再揮一次
+  if (fresh) moveMascot(page.querySelector('.empty-mascot svg.gl-mascot'));
 }
 
 function tripCard(trip) {

@@ -30,12 +30,18 @@
 //   主題：和紙不套白邊、動作線看得到；深色一輪白邊真的有套上、動作線不畫（跟 glyphs.js 的吉祥物同一條規矩）、
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
 //         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、主頁一樣沒有拍照鈕
-//   動畫（v1.83.0，js/peeks.js 的 cheer()、css/style.css 的 .pk-cheer）：完成任務那一刻小鳳打領結那張從照片後面跳上來、揮翅膀——
+//   動畫（v1.83.0 起；js/peeks.js 的 cheer()、css/style.css 的 .pk-cheer）：完成任務那一刻小鳳打領結那張從照片後面跳上來、揮翅膀——
 //     和紙那輪 P3 的「古蹟 → 小鳳打領結」：慶祝畫面一出來就量（隔 150ms 量兩次位置不一樣＝有動）；每一段動畫的 keyframes 只動 transform、opacity；
 //     等每一段都結束，身體、翅膀沒有殘留的位移（框跟撤掉動畫的靜止圖一樣）、扣在照片上的手與揮動線都完全看得到（不會卡在半空）
 //     減少動態效果那輪：設定頁的開關、系統設定（瀏覽器模擬 prefers-reduced-motion）各完成一個任務——照舊探頭（靜止圖）、0 段動畫
+//   動畫（v1.85.0 推廣；Yolin：「效果不錯，推廣到其他時刻」）：P3 的另外四張（捧麵蒸氣、烤串晃兩下、遮陽帽揮兩下、相機閃一下）、
+//     P2 天氣頁下雨（慢慢探上來、傘輕晃）、P4 下雪（慢慢探上來、雪板左右滑），每一張：有動且會動的層跟登記的一樣、
+//     跳之前整隻藏在卡片／照片後面（動畫倒回第 0 格量）、只用 transform／opacity、動完停在靜止圖的位置；「兩下」的那兩張數擺了幾次
+//     （小鳳打領結也補「跳之前藏在後面」——起跳點從寫死的 176 改成照每一張的高度算）
 // 沒涵蓋（寫明）：慶祝時縮圖讀不到（沒有照片）→ 照舊在標題上面放整隻小鳳——使用者的路造不出「照片存好了、縮圖讀不到」。
-//   「只有完成任務那一刻會動」沒有另外寫斷言：cheer() 只有 js/addphoto.js 一處呼叫、也只認登記過的那一張（CHEER），是程式的結構保證的。
+//   減少動態效果那輪只完成任務、沒有再開天氣頁：天氣頁、主頁卡片呼叫的是同一個 cheer()，第一行就是同一個判斷（glyphs.js 的 reducedMotion，
+//     全身吉祥物的 moveMascot 也用它；mascottest 深色那輪開著減少動態效果驗那四隻不動）。
+//   主頁「旅程結束了／任務全部完成了」那張卡的探頭圖由 hometest 驗；全身吉祥物（空白頁、載入中、回顧、解鎖新徽章）由 mascottest 驗。
 //   慶祝畫面自己那 0.2 秒淡入跟小鳳的動畫同時開始，前 0.2 秒小鳳是半透明的——那是 .celebrate 的動畫，不在這支量。
 //
 // 每一條斷言不管前面成不成都會印（等不到的畫面記成 ✗、不丟例外）：突變執行器要「項數跟原樣一樣」才算跑滿。
@@ -212,62 +218,138 @@ async function pickRow(page, spot, must) {
   }, spot, must);
 }
 
-// 動畫（v1.83.0）：慶祝畫面一出來就量。圖上每一段動畫的名字、狀態、keyframes 用到的屬性；
-// 隔 150ms 取兩次會動的那幾層（身體 .pk-hop、翅膀 .pk-wave、扣在照片上的手 .pk-grip、揮動線 .pk-wave-lines）的 transform／opacity，看有沒有變
+// 動畫（v1.83.0 只有小鳳打領結；v1.85.0 七張都會動）：畫面一出來就量。圖上每一段動畫的名字、狀態、keyframes 用到的屬性；
+// 隔 150ms 取兩次會動的那幾層的 transform／opacity，看有沒有變。會動的層（js/peeks.js 的 cheer() 包的）：
+//   身體 .pk-hop；轉／滑的零件 .pk-wave（翅膀）、.pk-wave-r（右手）、.pk-sway（烤串）、.pk-tilt（雨傘）、.pk-slide（雪板）；
+//   只動透明度的 .pk-grip（扣在卡片／照片上的手）、.pk-wave-lines（揮動線）、.pk-steam（蒸氣）、.pk-flash（閃光）
+// 跳之前：把每一段動畫倒回 0，量邊線以上那層的內容是不是整個在邊線下面（＝藏在卡片／照片後面）；量完照常往下播。
 const PEEK_SEL = '.celebrate .celebrate-shot svg.gl-peek';
 const KF_META = ['offset', 'computedOffset', 'easing', 'composite'];   // getKeyframes() 每一格都帶的欄位，不是被動畫的屬性
-const animNow = (page) => page.evaluate(async (ps, meta) => {
+const LAYER_CLS = ['pk-hop', 'pk-wave', 'pk-wave-r', 'pk-sway', 'pk-tilt', 'pk-slide', 'pk-grip', 'pk-wave-lines', 'pk-steam', 'pk-flash'];
+const PART_SEL = '.pk-wave, .pk-wave-r, .pk-sway, .pk-tilt, .pk-slide';
+const FADE_SEL = '.pk-grip, .pk-wave-lines, .pk-steam, .pk-flash';
+const animNow = (page, ps = PEEK_SEL) => page.evaluate(async (ps, meta, cls) => {
   const el = document.querySelector(ps);
   if (!el) return { found: false };
-  const layers = () => [...el.querySelectorAll('.pk-hop, .pk-wave, .pk-grip, .pk-wave-lines')]
+  const sel = cls.map((c) => '.' + c).join(', ');
+  const layers = () => [...el.querySelectorAll(sel)]
     .map((x) => { const s = getComputedStyle(x); return `${x.getAttribute('class')}:${s.transform}|${s.opacity}`; }).join(';');
   const anims = el.getAnimations({ subtree: true });
   const props = [...new Set(anims.flatMap((a) => (a.effect?.getKeyframes?.() || []).flatMap((k) => Object.keys(k).filter((p) => !meta.includes(p)))))];
   const s1 = layers();
   await new Promise((r) => setTimeout(r, 150));
   const s2 = layers();
-  const count = (sel) => el.querySelectorAll(sel).length;
+  const count = {};
+  for (const c of cls) count[c] = el.querySelectorAll('.' + c).length;
+  let hidden = null, topGap = null;
+  const hop = el.querySelector('.pk-hop');
+  if (hop && anims.length) {
+    const was = anims.map((a) => a.currentTime);   // 量完放回原本播到的那一格接著播（不是從頭重播）
+    for (const a of anims) { a.pause(); a.currentTime = 0; }
+    const edgeY = el.getBoundingClientRect().bottom - parseFloat(el.style.getPropertyValue('--pk-sink'));
+    const top = hop.getBoundingClientRect().top;
+    topGap = Math.round((top - edgeY) * 10) / 10;
+    hidden = Number.isFinite(topGap) && top >= edgeY - 0.5;
+    anims.forEach((a, i) => { a.currentTime = was[i]; a.play(); });
+  }
   return {
-    found: true, kind: el.getAttribute('data-peek'), cheer: el.classList.contains('pk-cheer'),
+    found: true, kind: el.getAttribute('data-peek'), cheer: el.classList.contains('pk-cheer'), soft: el.classList.contains('pk-soft'),
     n: anims.length, running: anims.filter((a) => a.playState === 'running').length, names: anims.map((a) => a.animationName || '?'),
-    props, moved: s1 !== '' && s1 !== s2,
-    layers: { hop: count('.pk-hop'), wave: count('.pk-wave'), grip: count('.pk-grip'), lines: count('.pk-wave-lines') },
+    props, moved: s1 !== '' && s1 !== s2, count, hidden, topGap,
+    layers: { hop: count['pk-hop'], wave: count['pk-wave'], grip: count['pk-grip'], lines: count['pk-wave-lines'] },
   };
-}, PEEK_SEL, KF_META);
-// 動完：等圖上每一段動畫都結束（最多 5 秒），量會動的那幾層停在哪；
+}, ps, KF_META, LAYER_CLS);
+// 動完：等圖上每一段動畫都結束（最多 6 秒），量會動的那幾層停在哪；
 // 再拿掉 pk-cheer（動畫整個撤掉＝靜止圖）量一次——兩次要一樣，才算停在靜止圖的位置、沒卡在半空。
 // 比的是位置矩陣（getScreenCTM），不是框：身體那層包著翅膀，比框的話翅膀沒轉回來身體的框也跟著變、身體沒落定翅膀的框也跟著移，
-// 一條突變會弄紅兩條、分不出是哪一層。所以身體比它自己的矩陣，翅膀比「相對於身體」的矩陣。
-const animEnd = (page) => page.evaluate(async (ps) => {
+// 一條突變會弄紅兩條、分不出是哪一層。所以身體比它自己的矩陣，零件（翅膀、手、烤串、傘、雪板）比「相對於身體」的矩陣。
+// swing：結束之後再把動畫一格一格倒回去（每 20ms）讀那個零件的角度或位移，數「往同一邊擺到底」幾次（揮兩下＝2），讀完放回結束的那一格。
+const animEnd = (page, ps = PEEK_SEL, swingSel = null) => page.evaluate(async (ps, partSel, fadeSel, swingSel) => {
   const el = document.querySelector(ps);
   if (!el) return { found: false };
   const anims = el.getAnimations({ subtree: true });
   const done = await Promise.race([
     Promise.all(anims.map((a) => a.finished)).then(() => anims.length > 0, () => false),
-    new Promise((r) => setTimeout(() => r(false), 5000)),
+    new Promise((r) => setTimeout(() => r(false), 6000)),
   ]);
   const ident = (t) => t === 'none' || t === 'matrix(1, 0, 0, 1, 0, 0)';
   const css = (sel, k) => [...el.querySelectorAll(sel)].map((x) => getComputedStyle(x)[k]);
-  const hopT = css('.pk-hop', 'transform'), waveT = css('.pk-wave', 'transform');
-  const gripO = css('.pk-grip', 'opacity'), linesO = css('.pk-wave-lines', 'opacity');
-  const hop = el.querySelector('.pk-hop'), waves = [...el.querySelectorAll('.pk-wave')];
+  const hopT = css('.pk-hop', 'transform'), waveT = css('.pk-wave', 'transform'), partT = css(partSel, 'transform');
+  const gripO = css('.pk-grip', 'opacity'), linesO = css('.pk-wave-lines', 'opacity'), fadeO = css(fadeSel, 'opacity');
+  const hop = el.querySelector('.pk-hop'), waves = [...el.querySelectorAll('.pk-wave')], parts = [...el.querySelectorAll(partSel)];
   const six = (m) => [m.a, m.b, m.c, m.d, m.e, m.f];
   const ctm = () => {
     const h = hop ? hop.getScreenCTM() : null;
-    return { hop: h ? six(h) : null, waves: h ? waves.map((w) => six(h.inverse().multiply(w.getScreenCTM()))) : [] };
+    const rel = (xs) => (h ? xs.map((w) => six(h.inverse().multiply(w.getScreenCTM()))) : []);
+    return { hop: h ? six(h) : null, waves: rel(waves), parts: rel(parts) };
   };
+  let swings = null, peak = null;
+  const sx = swingSel ? el.querySelector(swingSel) : null;
+  if (sx && done) {
+    const end = Math.max(...anims.map((a) => a.effect.getComputedTiming().endTime));
+    const vals = [];
+    for (let t = 0; t <= end; t += 20) {
+      for (const a of anims) { a.pause(); a.currentTime = t; }
+      const m = new DOMMatrixReadOnly(getComputedStyle(sx).transform);
+      vals.push(/pk-slide/.test(sx.getAttribute('class')) ? m.e : Math.atan2(m.b, m.a) * 180 / Math.PI);
+    }
+    for (const a of anims) a.currentTime = end;
+    const big = vals.reduce((p, v) => (Math.abs(v) > Math.abs(p) ? v : p), 0);
+    peak = +big.toFixed(1);
+    let inside = false;
+    swings = 0;
+    for (const v of vals) { const now = Math.sign(big) * v > Math.abs(big) * 0.35; if (now && !inside) swings++; inside = now; }
+  }
   const moving = ctm();
   el.classList.remove('pk-cheer');
   const still = ctm();
   const d = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
   const r3 = (x) => +x.toFixed(3);
+  const relDiff = (m, s) => (m.length && m.length === s.length ? r3(Math.max(...m.map((w, i) => d(w, s[i])))) : null);
   return {
-    found: true, done, n: anims.length, hopT, waveT, gripO, linesO,
-    hopIdent: hopT.length > 0 && hopT.every(ident), waveIdent: waveT.length > 0 && waveT.every(ident),
+    found: true, done, n: anims.length, hopT, waveT, partT, gripO, linesO, fadeO, swings, peak,
+    hopIdent: hopT.length > 0 && hopT.every(ident), waveIdent: waveT.length > 0 && waveT.every(ident), partIdent: partT.length > 0 && partT.every(ident),
     hopDiff: moving.hop && still.hop ? r3(d(moving.hop, still.hop)) : null,
-    waveDiff: moving.waves.length && moving.waves.length === still.waves.length ? r3(Math.max(...moving.waves.map((w, i) => d(w, still.waves[i])))) : null,
+    waveDiff: relDiff(moving.waves, still.waves), partDiff: relDiff(moving.parts, still.parts),
   };
-}, PEEK_SEL);
+}, ps, PART_SEL, FADE_SEL, swingSel);
+
+// v1.85.0 推廣的六張：每一張該有哪幾層會動（js/peeks.js 的 CHEER；零件分幾段是圖裡數的）、是不是慢慢探上來、
+// 「兩下」的那幾張數哪一個零件。小鳳打領結（v1.83.0）照舊用下面那五條原本的斷言。
+const ANIM_WANT = {
+  eat: { label: '捧麵', soft: false, layers: { 'pk-steam': 1, 'pk-grip': 1 }, parts: 0, fades: 2 },
+  grill: { label: '烤串', soft: false, layers: { 'pk-sway': 2, 'pk-grip': 1 }, parts: 2, fades: 1, swing: '.pk-sway', swingWord: '晃兩下' },
+  hat: { label: '遮陽帽', soft: false, layers: { 'pk-wave-r': 3, 'pk-wave-lines': 1, 'pk-grip': 1 }, parts: 3, fades: 2, swing: '.pk-wave-r', swingWord: '揮兩下' },
+  cam: { label: '相機', soft: false, layers: { 'pk-flash': 1, 'pk-grip': 1 }, parts: 0, fades: 2 },
+  rain: { label: '撐傘', soft: true, layers: { 'pk-tilt': 1, 'pk-grip': 1 }, parts: 1, fades: 1 },
+  snow: { label: '雪板', soft: true, layers: { 'pk-slide': 1 }, parts: 1, fades: 0 },
+};
+// 一張的四條（swing 有寫的再加一條「兩下」）：有動、跳之前藏在後面、只用 transform／opacity、動完停在正確位置
+function animChecks(kind, A, E) {
+  const w = ANIM_WANT[kind], L = `動畫・${w.label}`;
+  const cnt = A.count || {};
+  const layerBad = LAYER_CLS.filter((c) => c !== 'pk-hop' && (cnt[c] || 0) !== (w.layers[c] || 0));
+  const total = LAYER_CLS.reduce((s, c) => s + (cnt[c] || 0), 0);
+  yes(A.found && A.kind === kind && A.cheer === true && A.soft === w.soft && A.running >= 1 && A.moved === true
+    && cnt['pk-hop'] === 1 && layerBad.length === 0 && A.n === total,
+    `${L} 有動：一出來就有動畫在跑、隔 150ms 量兩次位置不一樣、${w.soft ? '慢慢探上來' : '跳上來'}、會動的層跟登記的一樣（${A.kind}；pk-cheer ${A.cheer}；慢慢探 ${A.soft}；動畫 ${A.n} 段、跑著的 ${A.running}、層數合計 ${total}；位置變了 ${A.moved}；`
+    + `層：${LAYER_CLS.filter((c) => cnt[c]).map((c) => `${c} ${cnt[c]}`).join('、') || '無'}；對不上：${layerBad.map((c) => `${c} ${cnt[c] || 0}≠${w.layers[c] || 0}`).join('、') || '無'}）`);
+  yes(A.found && A.hidden === true,
+    `${L} 跳之前整隻藏在後面：動畫倒回第 0 格，邊線以上那層的內容整個在邊線下面（內容頂離邊線 ${A.topGap}px）`);
+  const ONLY = ['transform', 'opacity'], props = A.props || [];
+  yes(A.found && A.n > 0 && props.length > 0 && props.every((x) => ONLY.includes(x)),
+    `${L} 只用 transform 和 opacity：圖上每一段動畫的 keyframes 只動這兩個屬性（${A.n} 段：${(A.names || []).join('、')}；用到的屬性 ${props.join('、') || '無'}）`);
+  const fadeO = E.fadeO || [], partT = E.partT || [];
+  const partsOk = w.parts === 0 ? partT.length === 0 : (partT.length === w.parts && E.partIdent === true && E.partDiff != null && E.partDiff <= 0.01);
+  yes(E.found && E.done === true && E.hopIdent === true && E.hopDiff != null && E.hopDiff <= 0.01 && partsOk
+    && fadeO.length === w.fades && fadeO.every((o) => o === '1'),
+    `${L} 動完停在正確位置：每一段動畫都結束後，身體與零件的位置矩陣跟撤掉動畫的靜止圖一樣、只動透明度的那幾層都完全看得到（結束了 ${E.done}；身體 ${(E.hopT || []).join('、')}、矩陣差 ${E.hopDiff}；`
+    + `零件 ${partT.length} 段 ${partT.join('、') || '無'}、相對於身體的矩陣差 ${E.partDiff}；透明度 ${fadeO.join('、') || '無'}）`);
+  if (w.swing) {
+    yes(E.found && E.done === true && E.swings === 2,
+      `${L} ${w.swingWord}：把動畫一格一格倒回去讀 ${w.swing} 的角度，往同一邊擺到底的次數是 2（數到 ${E.swings}；擺最大 ${E.peak} 度）`);
+  }
+}
 
 // 在那一列按「從相簿選」選一張照片，量慶祝畫面上的照片與探頭圖；量完把慶祝全部按掉
 //   anim＝true：慶祝畫面一出來先量動畫（animNow）——動畫只有 1.65 秒，等 900ms 再量就只剩翅膀在動
@@ -371,7 +453,10 @@ async function washiRound() {
     const nav1 = o1 && await openWeather(page);
 
     // ---- P2 天氣頁（下雨）----
+    // 動畫（v1.85.0）：卡片一出來就量（探上來＋傘輕晃大約 2.4 秒），量完再量位置
+    const rainA = nav1 ? await animNow(page, '.wx-advice svg.gl-peek') : { found: false };
     const p2 = nav1 ? await probe(page, '.wx-advice', '.wx-advice svg.gl-peek') : { found: false };
+    const rainE = nav1 ? await animEnd(page, '.wx-advice svg.gl-peek') : { found: false };
     const a2 = await page.evaluate(() => {
       const li = [...document.querySelectorAll('.wx-advice-list li')];
       const rain = li.find((x) => x.classList.contains('wx-rain'));
@@ -394,12 +479,14 @@ async function washiRound() {
       { label: '古蹟（沒有對得上的類別）→ 小鳳打領結', spot: '龍山寺', must: null, want: 'done' },
     ];
     let first = null, doneP = { found: false }, doneAnim = { found: false }, doneEnd = { found: false };
+    const anim3 = {};   // v1.85.0：另外四張的動畫（捧麵、烤串、遮陽帽、相機）
     for (const c of cases) {
-      const r = await complete(page, c.spot, c.must, c.want === 'done');
+      const r = await complete(page, c.spot, c.must, true);
       yes(/完成/.test(r.ttl) && r.p.found && r.p.kind === c.want && aligned(r.p) && r.p.inView && r.standalone === 0,
         `P3 ${c.label}：從照片上緣探頭、邊線對齊照片上緣、整張在畫面裡、標題上面沒有另一隻（${c.spot}「${r.row ? r.row.title : '找不到這一列'}」；慶祝「${r.ttl}」；${brief(r.p)}；在畫面裡 ${r.p.inView}；另外的吉祥物／打勾 ${r.standalone}）`);
       if (!first) first = r.p;
       if (c.want === 'done') { doneP = r.p; doneAnim = r.a; doneEnd = await animEnd(page); }
+      else anim3[c.want] = { a: r.a, e: await animEnd(page, PEEK_SEL, ANIM_WANT[c.want]?.swing || null) };
       await clearCelebrations(page);
       await sleep(500);
     }
@@ -424,6 +511,13 @@ async function washiRound() {
       `動畫 動完停在正確位置・翅膀：揮完回到原本的角度、相對於身體的位置矩陣跟靜止圖一樣（transform ${(E.waveT || []).join('、')}；矩陣最大差 ${E.waveDiff}）`);
     yes(E.found && E.done === true && (E.gripO || []).length === 1 && E.gripO.every((o) => o === '1') && (E.linesO || []).length === 1 && E.linesO.every((o) => o === '1'),
       `動畫 動完停在正確位置・扣在照片上的手與揮動線：都完全看得到（手 ${(E.gripO || []).join('、')}；揮動線 ${(E.linesO || []).join('、')}）`);
+    // v1.85.0：起跳點改成每一張照圖算（--pk-from），小鳳打領結也要照樣整隻藏在照片後面才開始跳
+    yes(A.found && A.hidden === true,
+      `動畫 跳之前整隻藏在照片後面（小鳳打領結）：動畫倒回第 0 格，邊線以上那層的內容整個在邊線下面（內容頂離邊線 ${A.topGap}px）`);
+    // ---- 動畫（v1.85.0）：完成任務的另外四張 ----
+    for (const k of ['eat', 'grill', 'hat', 'cam']) animChecks(k, anim3[k]?.a || { found: false }, anim3[k]?.e || { found: false });
+    // ---- 動畫（v1.85.0）：天氣頁下雨的那張（P2 量的）----
+    animChecks('rain', rainA, rainE);
 
     // ---- P4 今天會下雪 ----
     wet = { 0: 'snow' };
@@ -433,7 +527,10 @@ async function washiRound() {
     yes(o4 && s4.alert === 'snow' && s4.txt === '今天可能下雪（預估積雪 3.5 公分），穿防滑的鞋，路面可能結冰。' && s4.tipImgs === 0 && noPeek(s4),
       `P4 今天會下雪：天氣條是下雪那一句、提示那一行只有字、天氣條沒有探頭圖（提示 ${s4.alert}；探頭圖 ${s4.peeks}、has-peek ${s4.hostMark}；「${s4.txt}」）`);
     const w4 = await openWeather(page);
+    const snowA = w4 ? await animNow(page, '.wx-advice svg.gl-peek') : { found: false };
     const p4b = w4 ? await probe(page, '.wx-advice', '.wx-advice svg.gl-peek') : { found: false };
+    const snowE = w4 ? await animEnd(page, '.wx-advice svg.gl-peek') : { found: false };
+    animChecks('snow', snowA, snowE);
     const a4 = await page.evaluate(() => ({
       rain: document.querySelectorAll('.wx-advice-list li.wx-rain').length,
       snow: document.querySelectorAll('.wx-advice-list li.wx-snow').length,

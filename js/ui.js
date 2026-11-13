@@ -1,6 +1,6 @@
 // DOM / UI 小工具
 
-import { mascot, MASCOT_SPOT } from './glyphs.js';
+import { mascot, MASCOT_SPOT, moveMascot } from './glyphs.js';
 
 // 只允許的網址協定（擋 javascript: / data:text 等注入向量；blob:/data:image 用於本機照片）
 const SAFE_URL = /^(https?:|blob:|mailto:|tel:|geo:|#|\.?\/|data:image\/)/i;
@@ -177,12 +177,14 @@ export async function promptDialog(message, { value = '', placeholder = '', okLa
 // —— 而關掉的往往正是「本來再等三秒就好了」的那一次。
 // 2026-11-13 起轉圈上面站一隻吉祥物（載入中那一隻，見 js/glyphs.js 的 MASCOT_SPOT）；字照舊一定要有。
 export function spinnerBox(text, sub = '') {
-  return h('div', { class: 'center-fill wait-box', style: 'min-height:140px' },
+  const box = h('div', { class: 'center-fill wait-box', style: 'min-height:140px' },
     mascot(MASCOT_SPOT.loading, 84),
     h('div', { class: 'spinner' }),
     h('p', { class: 'wait-text' }, text),
     sub ? h('p', { class: 'muted sm', style: 'margin:6px 0 0;text-align:center' }, sub) : null,
   );
+  moveMascot(box.firstChild);   // 鷹拿望遠鏡左右慢慢看，等待時一直重複（v1.85.0）；減少動態效果時不動
+  return box;
 }
 
 export function ring(ratio, { size = 44, stroke = 5, label } = {}) {
@@ -242,11 +244,12 @@ export function mountPeek(host, el) {
 }
 
 // 成就慶祝畫面
-// withMascot：完成任務那一次（addphoto.js）把打勾的圓換成吉祥物（完成任務那一隻，見 js/glyphs.js 的 MASCOT_SPOT）；
-// 解鎖徽章等其他慶祝照舊是打勾。
+// withMascot：把打勾的圓換成吉祥物（完成任務那一隻，見 js/glyphs.js 的 MASCOT_SPOT）——完成任務、解鎖新徽章（addphoto.js）；
+// 其他慶祝照舊是打勾。
+// move：標題上面那一隻動一下（glyphs.js 的 moveMascot；解鎖新徽章＝原地彈跳兩下，v1.85.0）。
 // peek：完成任務時的探頭圖（js/peeks.js；呼叫的一方挑好哪一張）。有照片就掛在照片上緣、標題上面不再另外放一隻；
 // 沒拿到照片（縮圖讀不到）就照舊在標題上面放整隻（MASCOT_SPOT.done）。
-export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, peek = null }) {
+export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, move = false, peek = null }) {
   const root = document.getElementById('modalRoot');
   return new Promise((resolve) => {
     const close = (v) => { wrap.remove(); conf.remove(); resolve(v); };
@@ -267,6 +270,7 @@ export function celebrate({ title, lines = [], photoURL, actions = [], withMasco
       }, a.label)),
     );
     root.append(conf, wrap);
+    if (move) moveMascot(wrap.querySelector('.celebrate-mascot svg.gl-mascot'));
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch { /* noop */ } }
     if (!actions.length) setTimeout(() => close(null), 2200);
   });

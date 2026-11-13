@@ -8,6 +8,8 @@
 //     主頁不放任務的跳轉（沒有拍照解任務、沒有任務列、沒有任務的數字）；還沒出發：出發倒數；結束後：旅程結束了＋去看回顧、
 //     沒有下一站與天氣；全部拍完（還沒結束）：任務全部完成了＋去看回顧；沒有景點：去安排景點；
 //     主頁的子頁（找附近）底部亮「主頁」、返回回主頁
+//     H9–H11（v1.85.0）：「旅程結束了／任務全部完成了」那張卡上緣是小鳳打領結探頭（邊線對齊、不壓到上面）、
+//     一進主頁就慢慢探上來在動；主頁自己重畫（refreshPage）時圖照樣在、停在靜止圖，不會每重畫一次就再跳一次
 //   M 舊位置 → 新位置（STATUS 的對照表）：任務頁原本上面那幾塊，每一樣在主頁找得到、任務頁不再有
 //     （新旅伴橫幅在 jointest／livesynctest、位置分享在 postest、天氣條的內容在 peektest／photoicontest 驗，都改從主頁讀）
 //   R 回顧搬進「行程」分頁（示意圖 6）：底部分頁沒有「回顧」；出發前／旅程中回顧是最下面一列；結束日過了排到最上面、
@@ -132,6 +134,38 @@ const homeLayout = (page) => page.evaluate(() => {
     moneyAfterEnd: before(end, q('.th-money')), moneyBeforeTools: before(q('.th-money'), tools),
   };
 });
+// v1.85.0：「旅程結束了／任務全部完成了」那張卡上緣的探頭圖（小鳳打領結，js/peeks.js 的 done）。
+//   邊線對齊：圖底往上 --pk-sink 就是卡片上緣（差 ≤ 1.5px）；整張在畫面裡；不壓到上一個區塊（沒有上一個區塊就比頁首的底）；
+//   動畫：一進主頁就量——有 pk-cheer、慢慢探上來（pk-soft）、有動畫在跑、隔 150ms 量兩次位置不一樣
+const endPeek = (page) => page.evaluate(async () => {
+  // openTrip 等到的 #view .page 可能還是上一頁：先等主頁真的畫出來（探頭圖跟主頁同一次 drawPage 放上去）
+  for (let t0 = Date.now(); !document.querySelector('.trip-home') && Date.now() - t0 < 8000;) await new Promise((r) => setTimeout(r, 50));
+  const card = document.querySelector('.trip-home .th-end'), el = card && card.querySelector(':scope > svg.gl-peek');
+  if (!card || !el) return { found: false, card: !!card };
+  const snap = () => [...el.querySelectorAll('.pk-hop, .pk-wave, .pk-grip, .pk-wave-lines')].map((x) => { const s = getComputedStyle(x); return `${s.transform}|${s.opacity}`; }).join(';');
+  const anims = el.getAnimations({ subtree: true });
+  const s1 = snap();
+  await new Promise((r) => setTimeout(r, 150));
+  const s2 = snap();
+  const cr = card.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const sink = parseFloat(el.style.getPropertyValue('--pk-sink'));
+  // 上一個「看得到的」區塊：高度 0 的空格子（天氣抓不到時的 wx-slot）上下間距疊在一起、框落在別人的位置上，但畫面上什麼都沒有，壓不到——跳過、照實印出跳過了誰
+  const skipped = [];
+  let prev = card.previousElementSibling;
+  while (prev && prev.getBoundingClientRect().height === 0) { skipped.push(prev.className || prev.tagName); prev = prev.previousElementSibling; }
+  const prevBottom = prev ? prev.getBoundingClientRect().bottom : document.getElementById('topbar').getBoundingClientRect().bottom;
+  return {
+    found: true, kind: el.getAttribute('data-peek'), cheer: el.classList.contains('pk-cheer'), soft: el.classList.contains('pk-soft'),
+    n: anims.length, running: anims.filter((a) => a.playState === 'running').length, moved: s1 !== '' && s1 !== s2,
+    edgeGap: Number.isFinite(sink) ? +(r.bottom - sink - cr.top).toFixed(2) : null, above: Math.round(cr.top - r.top),
+    inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.width > 0,
+    clear: r.top >= prevBottom - 1, prevName: (prev ? (prev.className || prev.tagName) : '頁首') + (skipped.length ? `（跳過高度 0 的 ${skipped.join('、')}）` : ''),
+  };
+});
+const peekOk = (p) => p.found && p.kind === 'done' && p.edgeGap != null && Math.abs(p.edgeGap) <= 1.5 && p.above >= 20 && p.inView && p.clear;
+const peekMoving = (p) => p.found && p.cheer && p.soft && p.running >= 1 && p.moved;
+const peekBrief = (p) => (p.found ? `${p.kind}；邊線差 ${p.edgeGap}px、露出卡片上緣 ${p.above}px；在畫面裡 ${p.inView}；上一個區塊「${p.prevName}」沒壓到 ${p.clear}；pk-cheer ${p.cheer}、慢慢探 ${p.soft}；動畫 ${p.n} 段、跑著的 ${p.running}；位置變了 ${p.moved}` : `沒有探頭圖${p.card ? '' : '（卡也不在）'}`);
+
 // 結束後的「帳沒結清」是背景算的：等那一格算完（data-checked）再讀，才分得出「沒出現」與「還沒算完」
 async function homeAfterMoney(page) {
   await soft(page.waitForFunction(() => { const s = document.querySelector('.trip-home .th-money-slot'); return !!document.querySelector('.trip-home') && (!s || s.dataset.checked === '1'); }, { timeout: 15000 }));
@@ -271,6 +305,7 @@ try {
 
   // R已結束（10 天前出發、9 天前回來）
   hk = await openTrip(page, 'R已結束');
+  const pkEnd = hk ? await endPeek(page) : { found: false };   // 一進主頁就量（探上來＋揮翅膀大約 2 秒）
   H = hk ? await homeLayout(page) : null;
   yes(!!H && H.end === '🎁 旅程結束了' && /^完成 0 \/ \d+ 個任務$/.test(H.endStats || '') && H.endGo === '去看回顧與回憶影片'
     && !H.card && !H.wx && H.day === null && H.cd === null && H.photos && H.near && H.endBeforeTools,
@@ -282,9 +317,26 @@ try {
 
   // R全部拍完（還沒結束）：下一站卡換成「任務全部完成了」
   hk = await openTrip(page, 'R全部拍完');
+  const pkAll = hk ? await endPeek(page) : { found: false };
   H = hk ? await homeLayout(page) : null;
   yes(!!H && H.end === '🎉 任務全部完成了' && H.endGo === '去看回顧與回憶影片' && !H.card && H.day === '今天是第 2 天' && H.near,
     `H6 全部拍完但還沒結束：沒有下一站，換成「${H ? H.end : '沒讀到'}」＋「${H ? H.endGo : ''}」（${JSON.stringify(H && { card: H.card, day: H.day, near: H.near })}）`);
+  // H9／H10（v1.85.0）：那張卡上緣是小鳳打領結探頭、一進主頁就慢慢探上來在動
+  yes(peekOk(pkEnd) && peekMoving(pkEnd),
+    `H9 結束後「旅程結束了」那張卡：小鳳打領結從卡片上緣探頭（邊線對齊、整張在畫面裡、不壓到上面）、一進主頁就慢慢探上來在動（${peekBrief(pkEnd)}）`);
+  yes(peekOk(pkAll) && peekMoving(pkAll),
+    `H10 全部拍完「任務全部完成了」那張卡：小鳳打領結從卡片上緣探頭、一進主頁就慢慢探上來在動（${peekBrief(pkAll)}）`);
+  // H11：主頁自己重畫（router 對外的 refreshPage——現在在哪一站變了、AI 文案回來時走這條）不是導覽：圖照樣在、停在靜止圖，不會再跳一次
+  const again = hk ? await page.evaluate(async () => {
+    const old = document.querySelector('.trip-home');
+    (await import('./js/router.js')).refreshPage();
+    const t0 = Date.now();
+    while (document.querySelector('.trip-home') === old && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 50));
+    const el = document.querySelector('.trip-home .th-end > svg.gl-peek');
+    return { redrawn: document.querySelector('.trip-home') !== old, found: !!el, cheer: el ? el.classList.contains('pk-cheer') : null, n: el ? el.getAnimations({ subtree: true }).length : null };
+  }) : { redrawn: false, found: false };
+  yes(again.redrawn && again.found && again.cheer === false && again.n === 0,
+    `H11 主頁自己重畫時探頭圖照樣在、停在靜止圖（不會每重畫一次就再跳一次）（重畫了 ${again.redrawn}；圖 ${again.found}；pk-cheer ${again.cheer}；動畫 ${again.n} 段）`);
 
   // H沒有景點
   hk = await openTrip(page, 'H沒有景點');

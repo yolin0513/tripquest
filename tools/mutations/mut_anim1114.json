@@ -1,0 +1,66 @@
+[
+  {
+    "name": "動畫：天氣頁的提醒卡不呼叫 cheer（撐傘、雪板不動）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/weather.js 拿掉 pk.cheer：出門提醒卡照舊探頭、但完全不動。撐傘、雪板各自的四條（有動、跳之前藏在後面、只用 transform／opacity、動完停在正確位置）一起紅——後三條的母體是會動的那幾層，沒有動畫就是空的，它們要求母體非空，所以紅是預期。P2／P4 的位置、對齊照樣綠（探頭圖本身沒變）；完成任務那五張不走這裡，照樣綠。",
+    "expect": ["動畫・撐傘 有動", "動畫・撐傘 跳之前整隻藏在後面", "動畫・撐傘 只用 transform 和 opacity", "動畫・撐傘 動完停在正確位置",
+      "動畫・雪板 有動", "動畫・雪板 跳之前整隻藏在後面", "動畫・雪板 只用 transform 和 opacity", "動畫・雪板 動完停在正確位置"],
+    "file": "js/views/weather.js",
+    "find": "pk.cheer(el, { soft: true });   // 從卡片後面慢慢探上來",
+    "replace": "/* 突變：不呼叫 cheer */   // 從卡片後面慢慢探上來",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：起跳點算太淺（跳之前頭露在卡片／照片上面）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/peeks.js 的 --pk-from 從「邊線 − 畫布頂 + 8」改成「− 60」：第 0 格只往下推到邊線上面 60 個單位，圖的上半截還露在外面——v1.83.0 第一版寫死 56 就是這個樣子（頭先冒出來再跳）。七張的「跳之前整隻藏在後面」一起紅（小鳳打領結那條另外寫成「跳之前整隻藏在照片後面」）；動完照樣停在 0，有動、只用兩個屬性、動完都不受影響。",
+    "expect": ["動畫 跳之前整隻藏在照片後面（小鳳打領結）", "動畫・捧麵 跳之前整隻藏在後面", "動畫・烤串 跳之前整隻藏在後面", "動畫・遮陽帽 跳之前整隻藏在後面", "動畫・相機 跳之前整隻藏在後面", "動畫・撐傘 跳之前整隻藏在後面", "動畫・雪板 跳之前整隻藏在後面"],
+    "file": "js/peeks.js",
+    "find": "el.style.setProperty('--pk-from', `${p.edge - p.vb[1] + 8}px`);",
+    "replace": "el.style.setProperty('--pk-from', `${p.edge - p.vb[1] - 60}px`);",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：雪板左右滑多動一個 filter",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-slide 的 keyframes 中間兩格多一個 filter: blur：違反「只動 transform 和 opacity」。只紅雪板那一條「只用」；頭尾兩格沒有 filter，最後停的位置不受影響；別張沒有 pk-slide。",
+    "expect": ["動畫・雪板 只用 transform 和 opacity"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-slide { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-8px); } 70% { transform: translateX(8px); } }",
+    "replace": "@keyframes pk-slide { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-8px); filter: blur(1px); } 70% { transform: translateX(8px); filter: blur(1px); } }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：雪板滑完停在右邊（沒回原位）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-slide 最後一格從 translateX(0) 改成 translateX(8px)：滑完雪板（連整隻）停在比靜止圖右邊 8 個單位。只紅雪板的「動完停在正確位置」（零件那段的 transform 不是單位矩陣、相對於身體的矩陣也跟靜止圖差 8）；有動、只用、跳之前都不受影響。",
+    "expect": ["動畫・雪板 動完停在正確位置"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-slide { 0%, 100% { transform: translateX(0); }",
+    "replace": "@keyframes pk-slide { 0% { transform: translateX(0); } 100% { transform: translateX(8px); }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：遮陽帽只揮一下",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-wave-r 改成只往外揮一次（40% 到 16 度、80% 回 −9 度、頭尾 0）：表上寫的是「揮手兩下」。只紅「遮陽帽 揮兩下」（往外揮到底的次數 1）；最後一格照樣 0 度，動完、有動、只用都不受影響。空白頁的白兔也用 pk-wave-r，但不在這支測試（mascottest 另有一條同樣的突變）。",
+    "expect": ["動畫・遮陽帽 揮兩下"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(16deg); } 40%, 80% { transform: rotate(-9deg); } }",
+    "replace": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(16deg); } 80% { transform: rotate(-9deg); } }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：烤串只晃一下",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-sway 改成只左右各一次（30% 到 −8 度、70% 到 8 度、頭尾 0）：表上寫的是「左右晃兩下」。只紅「烤串 晃兩下」（擺到底的次數 1）；最後一格照樣 0 度，動完、有動、只用都不受影響。",
+    "expect": ["動畫・烤串 晃兩下"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-sway { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(-8deg); } 40%, 80% { transform: rotate(8deg); } }",
+    "replace": "@keyframes pk-sway { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-8deg); } 70% { transform: rotate(8deg); } }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：烤串那一串對不到（零件拆不到，只剩動作線在晃）",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/peeks.js 的 CHEER.grill 那一段 transform 寫錯一個數字（−28 → −29）：wrapPart 在圖裡找不到那一串，只包得到動作線那一層——表上「零件拆不出來就只做跳上來」的退路會照樣跳，但這張登記的是兩段在晃。紅「烤串 有動」（pk-sway 1≠2）與「烤串 動完停在正確位置」（零件 1 段≠2）；「晃兩下」數的是第一個 pk-sway，動作線那一層照樣晃兩下，照樣綠；跳之前、只用不受影響。",
+    "expect": ["動畫・烤串 有動", "動畫・烤串 動完停在正確位置"],
+    "file": "js/peeks.js",
+    "find": "tf: 'rotate(-28 49.82 134.24)'",
+    "replace": "tf: 'rotate(-29 49.82 134.24)'",
+    "cmd": "node scripts/peektest.mjs"
+  }
+]

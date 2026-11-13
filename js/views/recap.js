@@ -8,7 +8,7 @@ import { blobURL } from '../photos.js';
 import { downloadBlob, nativeShare } from '../share.js';
 import { buildRecap } from '../recap.js';
 import { loadThemes, themeForTrip, themeMeta } from '../theme.js';
-import { mascot, MASCOT_SPOT } from '../glyphs.js';
+import { mascot, MASCOT_SPOT, moveMascot } from '../glyphs.js';
 
 export default async function recap(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
@@ -122,6 +122,8 @@ export default async function recap(tripId, { drawPage, setTop }) {
   ));
 
   page.replaceChildren(out);
+  // 回顧整理好、換上畫面的這一刻：白熊從下面淡入、跳出來（v1.85.0）；減少動態效果時不動
+  moveMascot(out.querySelector('.recap-mascot svg.gl-mascot'));
 }
 
 function num(ic, n, label) {

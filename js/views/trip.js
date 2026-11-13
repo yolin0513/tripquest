@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty } from '../ui.js';
+import { h, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty, mountPeek } from '../ui.js';
 import { navigate, back, navRestoredScroll, refreshPage } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
@@ -426,7 +426,7 @@ function claimNudge(tripId, t, members) {
 // 主頁只講「現在」：通知（一次一張）→ 出發倒數／今天第幾天 → 天氣條 → 下一站（帶我去、換一站）→ 小工具。
 // 旅程結束後（結束日 23:59:59 過了）：旅程結束了＋去看回顧 → 小工具。沒有天氣、沒有下一站。
 // 任務的數字與拍照在「任務」分頁。舊位置 → 新位置的對照表在 STATUS。
-export async function tripHome(tripId, { drawPage, setTop } = {}) {
+export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({
@@ -464,6 +464,17 @@ export async function tripHome(tripId, { drawPage, setTop } = {}) {
     main = todayCard(tripId, t) || (allDone ? h('section', { class: 'th-end' },
       h('div', { class: 'th-end-t' }, '🎉 任務全部完成了'),
       h('button', { class: 'btn btn-primary btn-block btn-big th-end-go', onclick: goMem }, '去看回顧與回憶影片')) : null);
+  }
+  // 「旅程結束了」「任務全部完成了」那張卡：小鳳打領結從卡片上緣探頭、揮翅膀（v1.85.0 新的出場處；圖載不到：卡片照樣出）。
+  // 只有真的導覽到主頁（fresh）才動；主頁自己重畫（現在在哪一站變了、AI 文案回來）時停在靜止圖，不會每重畫一次就再跳一次。
+  // 0.3＝顯示縮放（畫布 1 單位畫成幾 px）：比天氣頁的提醒卡小一點，卡片上面空出來的高度少一些（主頁一打開就要看到這張卡）
+  if (main && main.classList.contains('th-end')) {
+    const pk = await import('../peeks.js').catch(() => null);
+    if (pk) {
+      const el = pk.peek(pk.DONE_PEEK, 0.3);
+      mountPeek(main, el);
+      if (fresh) pk.cheer(el, { soft: true });
+    }
   }
 
   const page = h('div', { class: 'page trip-home' },

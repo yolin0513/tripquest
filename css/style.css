@@ -208,21 +208,57 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
 .celebrate-shot { position: relative; margin: calc(var(--pk-rise) + 14px) 0 18px; }
 .celebrate .celebrate-shot > .celebrate-photo { display: block; margin: 0; }   /* 要蓋過下面 .celebrate .celebrate-photo 的上下 18：照片的上緣就是外框的上緣，吉祥物的邊線才對得上 */
 .celebrate-shot > .gl-peek { left: 50%; transform: translateX(-50%); }
-/* 完成任務那一刻，小鳳從照片後面跳上來、揮翅膀（v1.83.0；Yolin 看了錄影要先上線看實機，喜不喜歡還沒定）。
-   只動 transform 與 opacity；只在完成任務的慶祝畫面（js/addphoto.js 呼叫 js/peeks.js 的 cheer()，其他地方不加 .pk-cheer）；
-   減少動態效果：cheer() 根本不加 .pk-cheer（停在現在的靜止圖），下面的總開關也會把時間壓到 0、停在最後一格＝靜止圖。
-   各層的位置（照畫布座標，1 單位≈0.6px）：.pk-hop＝邊線以上那層的全部內容、.pk-grip＝邊線以下那層（扣在照片上的那隻手）、
-   .pk-wave＝舉起來的那隻翅膀（外層 g 已經平移到肩膀，所以轉的原點是 0 0）、.pk-wave-lines＝揮動線（和紙才畫）。
-   起跳點 176：邊線以上露出來的最高點（頭頂的毛）離邊線 172 個單位，往下 176 才整隻藏在照片後面——第一版只往下 56，
-   慶祝畫面一出來頭就已經露一半，看起來像「卡在那裡」不是「跳上來」（錄影第 0 格看到的）。 */
+/* 吉祥物的動畫：v1.83.0 只有完成任務那一刻（小鳳從照片後面跳上來、揮翅膀）；Yolin 看了實機：「效果不錯，推廣到其他時刻」，
+   v1.85.0 照他核過的那張表推廣（哪個時刻哪隻、什麼動作寫在 js/peeks.js 的 CHEER 與 js/glyphs.js 的 MOVES）。
+   規矩：只動 transform 與 opacity；除了載入中，都只動一次、動完停回靜止圖的位置；
+   減少動態效果：js 根本不加 .pk-cheer／.mc-move（停在靜止圖），下面的總開關也會把時間壓到 0、停在最後一格＝靜止圖。
+   探頭圖（js/peeks.js 的 cheer()；照畫布座標，完成任務 1 單位≈0.6px、卡片上≈0.34px）：
+     .pk-hop＝邊線以上那層的全部內容（跳上來；.pk-soft＝天氣頁與主頁卡片，慢慢探上來、不回彈）、
+     .pk-grip＝邊線以下那層（扣在卡片／照片上的手、碗腳；到頂才出現）、
+     .pk-wave／.pk-wave-r＝舉起來的翅膀／右手（角度鏡像）、.pk-sway＝烤串、.pk-tilt＝雨傘（繞握著的手晃）、.pk-slide＝雪板左右滑、
+     .pk-wave-lines＝揮動線、.pk-steam＝碗上的蒸氣、.pk-flash＝相機的閃光（這三種是 .mc-extra，只在和紙畫——深色下那幾張只看得到跳上來）。
+     零件的外層 g 已經平移到轉的原點（肩膀、手），所以轉的原點寫 0 0。
+     起跳點 --pk-from（cheer() 照每一張的高度算）：整隻藏在卡片／照片後面才開始跳——v1.83.0 第一版只往下 56，
+     慶祝畫面一出來頭就已經露一半，看起來像「卡在那裡」不是「跳上來」（錄影第 0 格看到的）。
+   全身吉祥物（js/glyphs.js 的 moveMascot()）：.mc-body＝身體連動作線包成的一層（<svg> 本身的框不動，排版不跳）、
+     .mc-look＝鷹繞腳底轉的那一層（只有它一直重複）。 */
 .pk-cheer .pk-hop { animation: pk-hop .6s cubic-bezier(.25, .8, .35, 1) both; }
+.pk-cheer.pk-soft .pk-hop { animation: pk-rise .8s cubic-bezier(.2, .7, .3, 1) both; }
 .pk-cheer .pk-grip { animation: pk-grip .6s linear both; }
-.pk-cheer .pk-wave { transform-box: view-box; transform-origin: 0 0; animation: pk-wave 1.1s ease-in-out .55s both; }
+.pk-cheer.pk-soft .pk-grip { animation-duration: .8s; }
+.pk-cheer :is(.pk-wave, .pk-wave-r, .pk-sway, .pk-tilt), .mc-move :is(.pk-wave-r, .mc-look) { transform-box: view-box; transform-origin: 0 0; }
+.pk-cheer .pk-wave { animation: pk-wave 1.1s ease-in-out .55s both; }
+.pk-cheer .pk-wave-r { animation: pk-wave-r 1.1s ease-in-out .55s both; }
+.pk-cheer .pk-sway { animation: pk-sway 1.2s ease-in-out .55s both; }
+.pk-cheer .pk-tilt { animation: pk-tilt 1.6s ease-in-out .55s both; }
+.pk-cheer .pk-slide { animation: pk-slide 1.3s ease-in-out .55s both; }
 .pk-cheer .pk-wave-lines { animation: pk-lines 1.1s ease-in-out .55s both; }
-@keyframes pk-hop { 0% { transform: translateY(176px); } 68% { transform: translateY(-6px); } 100% { transform: translateY(0); } }
+.pk-cheer .pk-steam { animation: pk-steam 1.8s ease-in-out .55s both; }
+.pk-cheer .pk-flash { animation: pk-flash 1.1s linear both; }
+.pk-cheer.pk-soft :is(.pk-wave, .pk-wave-r, .pk-sway, .pk-tilt, .pk-slide, .pk-wave-lines, .pk-steam) { animation-delay: .75s; }
+.mc-move-wave .pk-wave-r { animation: pk-wave-r 1.1s ease-in-out .3s both; }
+.mc-move-wave .pk-wave-lines { animation: pk-lines 1.1s ease-in-out .3s both; }
+.mc-move-popin .mc-body { animation: mc-popin .7s cubic-bezier(.25, .8, .35, 1) both; }
+.mc-move-look .mc-look { animation: mc-look 3.2s ease-in-out infinite; }
+.mc-move-bounce .mc-body { animation: mc-bounce .9s ease-in-out .45s both; }
+@keyframes pk-hop { 0% { transform: translateY(var(--pk-from, 180px)); } 68% { transform: translateY(-6px); } 100% { transform: translateY(0); } }
+@keyframes pk-rise { 0% { transform: translateY(var(--pk-from, 180px)); } 100% { transform: translateY(0); } }
 @keyframes pk-grip { 0%, 82% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes pk-wave { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(-16deg); } 40%, 80% { transform: rotate(9deg); } }
+@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(16deg); } 40%, 80% { transform: rotate(-9deg); } }
+@keyframes pk-sway { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(-8deg); } 40%, 80% { transform: rotate(8deg); } }
+@keyframes pk-tilt { 0%, 100% { transform: rotate(0deg); } 25%, 75% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes pk-slide { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-8px); } 70% { transform: translateX(8px); } }
 @keyframes pk-lines { 0%, 100% { opacity: 1; } 20%, 60% { opacity: .25; } 40%, 80% { opacity: 1; } }
+@keyframes pk-steam { 0%, 100% { opacity: 1; } 25%, 72% { opacity: .1; } 48% { opacity: 1; } }
+@keyframes pk-flash { 0%, 50% { opacity: 0; } 58% { opacity: 1; } 72% { opacity: .15; } 86%, 100% { opacity: 1; } }
+@keyframes mc-popin { 0% { opacity: 0; transform: translateY(36px); } 65% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes mc-look { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+@keyframes mc-bounce { 0%, 44%, 82%, 100% { transform: translateY(0); } 22% { transform: translateY(-18px); } 64% { transform: translateY(-9px); } }
+/* 主頁「旅程結束了」「任務全部完成了」那張卡：小鳳打領結從卡片上緣探頭（v1.85.0 新的出場處） */
+.th-end.has-peek { margin-top: calc(var(--pk-rise) + 8px); }
+/* 絕對定位從框線內側算：和紙的框線 2.5px，不補的話小鳳的身體會疊在框線上約 2px（hometest H9 量到邊線差 2.01px）——往上補一個框線寬，邊線對在框線外緣 */
+.th-end > .gl-peek { right: 14px; bottom: calc(100% - var(--pk-sink) + var(--th-bd)); }
 .icon-btn {
   appearance: none;
   border: 0;
@@ -811,13 +847,13 @@ html[data-theme="washi"] .info-row + .info-row { border-top: 2px dashed var(--li
 .th-day { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 6px 2px 2px; }
 .th-day-n { font-size: 1.2rem; font-weight: 900; }
 .th-day-d { color: var(--muted); font-weight: 700; }
-.th-end { margin-top: 8px; padding: 16px 14px 12px; border-radius: var(--radius); background: var(--today-bg); border: 1px solid var(--line); }
+.th-end { --th-bd: 1px; margin-top: 8px; padding: 16px 14px 12px; border-radius: var(--radius); background: var(--today-bg); border: var(--th-bd) solid var(--line); }
 .th-end-t { font-size: 1.25rem; font-weight: 900; }
 .th-end-s { margin-top: 4px; font-weight: 700; }   /* 底色是 --today-bg：灰字在和紙的山吹黃上對比不一定夠，用本文色 */
 .th-end-part { white-space: nowrap; }   /* 「完成 X / Y 個任務」「拍了 N 張照片」各自不拆開，要換行只換在「・」後面 */
 .th-end-go { margin-top: 12px; }
 .th-tools { margin-top: 12px; }
-html[data-theme="washi"] .th-end { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+html[data-theme="washi"] .th-end { --th-bd: 2.5px; border: var(--th-bd) solid var(--line); box-shadow: 4px 4px 0 var(--line); }
 /* v1.84.0 主頁新區塊：下一站卡裡的「今天接下來」（底是 --today-bg：字一律用本文色，不用灰字）、今晚住、待買、帳沒結清 */
 .today-next { margin: 4px 2px 0; padding-top: 10px; border-top: 1px dashed var(--line); }
 .tn-label { font-weight: 800; font-size: 0.95rem; }

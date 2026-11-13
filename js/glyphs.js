@@ -105,6 +105,72 @@ export function mascotHead(hgt = 26) {
   return figure(MASCOT_SPOT.header, HEAD_VB, false, Math.round(hgt * 128 / 116), hgt, 'gl-mascot gl-mascot-head');
 }
 
+// ---- 吉祥物的動作（v1.85.0；Yolin 看了 v1.83.0 完成任務那一刻的動畫：「效果不錯，推廣到其他時刻」，核過哪個時刻哪隻、什麼動作那張表）----
+// 規矩：只動 transform 與 opacity；減少動態效果就完全不動（停在靜止圖）；除了載入中，都只動一次、動完停回靜止圖的位置。
+// 這裡只負責把圖拆成會動的幾層、掛上 class；動作的時間與角度在 css/style.css（.mc-move、.pk-cheer 那一段）。
+// 探頭圖（js/peeks.js 的 cheer()）也用這裡的三個函式。
+
+// 減少動態效果：系統設定或設定頁的開關（js/prefs.js 兩個都看，結果放在 <html> 的 reduce-motion）。cheer() 與 moveMascot() 共用這一個判斷。
+export function reducedMotion() {
+  return document.documentElement.classList.contains('reduce-motion');
+}
+
+function gEl(attrs) {
+  const x = document.createElementNS(NS, 'g');
+  for (const [k, v] of Object.entries(attrs)) x.setAttribute(k, v);
+  return x;
+}
+// 一個元素包成繞 pivot 動的一層：g[translate(pivot)] > g.cls > g[translate(-pivot)] > 原元素。
+// 外層已經平移到 pivot，所以 CSS 轉的原點寫 0 0（transform-box: view-box）。回傳會動的那一層（g.cls）。
+export function pivotWrap(x, [px, py], cls) {
+  const outer = gEl({ transform: `translate(${px} ${py})` }), mid = gEl({ class: cls }), inner = gEl({ transform: `translate(${-px} ${-py})` });
+  x.replaceWith(outer);
+  inner.append(x); mid.append(inner); outer.append(mid);
+  return mid;
+}
+// 一個零件包成會動的一層：root 底下 transform 屬性正好是 tf 的每一個元素各包一次（同一個零件常分好幾段畫——外框、底色、亮面——
+// 中間夾著別的部位，不能整包成一個 g，只能一段一段包；每一段套同一個動畫，看起來就是整塊一起轉）。
+// 回傳包了幾段：0＝圖改過、對不上，那個零件就不動（不會動錯地方）。
+export function wrapPart(root, tf, pivot, cls) {
+  const hits = root ? [...root.querySelectorAll('[transform]')].filter((x) => x.getAttribute('transform') === tf) : [];
+  for (const x of hits) pivotWrap(x, pivot, cls);
+  return hits.length;
+}
+
+// 全身吉祥物（mascot()）每一隻的動作；在哪裡呼叫就是哪個時刻動：
+//   bunny 空白頁「還沒有旅程」：舉著的那隻手（肩膀 128,146）揮兩下，揮動線跟著一閃一閃（揮動線只在和紙畫）
+//   bear 最終回顧：從下面淡入、跳出來
+//   hawk 載入中：拿望遠鏡左右慢慢看（整隻繞腳底轉一點點），等待時一直重複——只有這一隻會重複
+//   cockatiel 解鎖新徽章：原地彈跳兩下（地面陰影留在地上、不跟著跳）
+// 頁首的頭（雪納瑞）、設定頁的山雀不動（那張表）；完成任務那一隻是探頭圖，見 js/peeks.js。
+// part＝要揮的那隻手（同 wrapPart）；body＝要整塊一起動的幾層（包成一個 g.mc-body；動畫放在圖裡面，<svg> 本身的框不動，排版不跳）；
+// pivot＝整塊轉的原點（鷹的腳底）。
+const MOVES = Object.freeze({
+  bunny: { move: 'wave', part: { tf: 'translate(128 146) rotate(-122)', pivot: [128, 146], cls: 'pk-wave-r' }, lines: true },
+  bear: { move: 'popin', body: ['.mc-shadow', '.mc-fig', '.mc-extra'] },
+  hawk: { move: 'look', body: ['.mc-fig', '.mc-extra'], pivot: [100, 228] },
+  cockatiel: { move: 'bounce', body: ['.mc-fig', '.mc-extra'] },
+});
+export const MOVE_KINDS = Object.freeze(Object.keys(MOVES));
+// 讓一張 mascot() 動起來；回傳有沒有動。減少動態效果、沒登記動作的那幾隻、圖對不上：不動，停在靜止圖。
+export function moveMascot(el) {
+  if (!el || reducedMotion()) return false;
+  const m = MOVES[el.getAttribute('data-mascot')];
+  if (!m) return false;
+  if (m.part && !wrapPart(el.querySelector('.mc-fig'), m.part.tf, m.part.pivot, m.part.cls)) return false;   // 揮的那隻手對不上：寧可不動
+  if (m.lines) el.querySelector('.mc-extra')?.classList.add('pk-wave-lines');
+  if (m.body) {
+    const kids = m.body.map((s) => el.querySelector(`:scope > ${s}`)).filter(Boolean);
+    if (!kids.length) return false;
+    const body = gEl({ class: 'mc-body' });
+    kids[0].before(body);
+    body.append(...kids);
+    if (m.pivot) pivotWrap(body, m.pivot, 'mc-look');
+  }
+  el.classList.add('mc-move', `mc-move-${m.move}`);
+  return true;
+}
+
 // ---- 拍照圖示（2026-11-13 第四段；Yolin：「甚至拍照那些圖示也可以一起換掉」）----
 // 「拍照」「從相簿選」兩顆按鈕：**功能的形狀當主體**（相機、一張相片），吉祥物只從邊上探出來——
 // 相機後面是雪納瑞的頭頂、折耳、眉毛，兩隻手扶著機身；相片後面冒出白兔的兩隻耳朵。

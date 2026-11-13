@@ -148,7 +148,7 @@ window.addEventListener('hashchange', renderTabs);
 
 // ---- 路由表 ----
 // 每個畫面最後一個參數是 { drawPage, setTop }：路由器給的、綁著這一次換頁的畫筆與頂列（見 router.js）
-route('/', async ({ drawPage, setTop }) => (await import('./views/home.js')).default({ drawPage, setTop }));
+route('/', async ({ fresh, drawPage, setTop }) => (await import('./views/home.js')).default({ fresh, drawPage, setTop }));
 route('/new', async ({ drawPage, setTop }) => (await import('./views/create.js')).default({ drawPage, setTop }));
 route('/join', async ({ query, drawPage, setTop }) => (await import('./views/join.js')).default(query, { drawPage, setTop }));
 // fresh 只有「真的導覽到這一頁」時才是 true —— 頁面內部自己重繪（補完景點圖、AI 文案

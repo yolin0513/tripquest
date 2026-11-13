@@ -15,6 +15,8 @@
 //
 // 這支檔用到時才載入（dynamic import）：圖不放進每一頁都要載的 glyphs.js。
 // 一律 aria-hidden、圖裡沒有字；意思由旁邊的字講（慶祝的標題、天氣提示的句子）。輸入全是本檔的常數字串。
+import { reducedMotion, pivotWrap, wrapPart } from './glyphs.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 let seq = 0;
 
@@ -80,37 +82,54 @@ export function peek(kind, k = 0.6) {
   return el;
 }
 
-// 完成任務那一刻跳上來、揮翅膀（v1.83.0；Yolin 2026-11-13 看了錄影：「圖片看不出來，可以先上線讓我看實際動畫」——先上線給他看實機，
-// 喜不喜歡、要不要推廣到別的時刻還沒定）。測試：scripts/peektest.mjs 的「動畫」那幾條（有動、減少動態效果時不動、只動 transform／opacity、停在靜止圖的位置）。
-// 只有登記在這裡的圖會動（現在只有小鳳打領結那一張）；wing＝舉起來那隻翅膀每一段共用的 transform 字串
-// （外框、底色、亮面、羽毛線四段分開畫、中間夾著別的部位，所以不能整包成一個 g，只能一段一段包），pivot＝肩膀。
-// 揮翅膀的角度與跳的高度在 css/style.css（.pk-cheer 那一段）；這裡只負責把圖拆成會動的幾層。
+// 探頭圖的動作：先從卡片／照片後面跳上來，再做這一張自己的動作。
+// v1.83.0 只有完成任務那一刻的小鳳打領結（Yolin 看了實機：「效果不錯，推廣到其他時刻」）；v1.85.0 推廣到每一張（核過的那張表）。
+// 在哪裡呼叫：完成任務的慶祝畫面（js/addphoto.js，五張之一）、天氣頁的出門提醒卡（js/views/weather.js，下雨／下雪）、
+// 主頁「旅程結束了」「任務全部完成了」那張卡（js/views/trip.js，小鳳打領結）。
+// 測試：scripts/peektest.mjs 的「動畫」那幾條（每一張有動、跳之前整隻藏在後面、只動 transform／opacity、停在靜止圖的位置、減少動態效果時不動）。
+//   parts＝會動的零件：tf＝那個零件每一段共用的 transform 字串（見 glyphs.js 的 wrapPart）；sel＝整個群組（沒有 transform 屬性的，例如煙那一層）；
+//          pivot＝轉的原點（肩膀、握著的那隻手）；cls＝哪一種動作（css/style.css）
+//   extra＝動作線那一層（.mc-extra：揮動線、蒸氣、閃光，只在和紙畫）加的動作；slide＝整隻左右滑一下
+// 零件對不上（圖改過）就只跳上來、那個零件不動——寧可少動，也不要動錯地方（那張表：「零件拆不出來就只做跳上來」）。
 const CHEER = Object.freeze({
-  done: { wing: 'translate(70 146) rotate(122)', pivot: [70, 146] },
+  // 小鳳打領結：揮翅膀（翅膀外框、底色、亮面、羽毛線四段分開畫）
+  done: { parts: [{ tf: 'translate(70 146) rotate(122)', pivot: [70, 146], cls: 'pk-wave' }], extra: 'pk-wave-lines' },
+  // 小鳳捧麵：碗上的蒸氣淡入淡出
+  eat: { extra: 'pk-steam' },
+  // 北北烤串：烤串繞握著它的那隻手左右晃兩下，串上冒的煙跟著晃（不然煙會跟串分開）
+  grill: { parts: [{ tf: 'rotate(-28 49.82 134.24)', pivot: [49.82, 134.24], cls: 'pk-sway' }, { sel: '.mc-extra', pivot: [49.82, 134.24], cls: 'pk-sway' }] },
+  // 北北戴帽：舉起來的那隻手（右手，角度跟小鳳的翅膀鏡像）揮兩下
+  hat: { parts: [{ tf: 'translate(134 146) rotate(-122)', pivot: [134, 146], cls: 'pk-wave-r' }], extra: 'pk-wave-lines' },
+  // 鬍鬍：相機閃一下
+  cam: { extra: 'pk-flash' },
+  // 鬍鬍撐傘：傘繞握著傘柄的那隻手（扣在卡片上緣，156,150）輕輕晃
+  rain: { parts: [{ tf: 'translate(148 30) rotate(-3.81)', pivot: [156, 150], cls: 'pk-tilt' }] },
+  // 山雀踩雪板：整隻連雪板左右滑一下
+  snow: { slide: true },
 });
 export const CHEER_KINDS = Object.freeze(Object.keys(CHEER));
-// 把 peek() 做好的圖變成會動的版本；回傳有沒有動。減少動態效果（系統或設定頁，js/prefs.js 加的 reduce-motion）就不動：
-// 停在現在的靜止圖。只在呼叫的那一刻（完成任務的慶祝畫面）用，別的地方不呼叫。
-export function cheer(el) {
-  if (document.documentElement.classList.contains('reduce-motion')) return false;
-  const c = CHEER[el.getAttribute('data-peek')];
-  if (!c) return false;
+// 把 peek() 做好的圖變成會動的版本；回傳有沒有動。減少動態效果（glyphs.js 的 reducedMotion）就不動，停在現在的靜止圖。
+// soft：慢慢探上來、不回彈（天氣頁、主頁的卡片——那張表寫「探上來」）；沒給就是跳上來（完成任務那一刻）。
+export function cheer(el, { soft = false } = {}) {
+  if (reducedMotion()) return false;
+  const kind = el.getAttribute('data-peek'), c = CHEER[kind], p = PEEK[kind];
+  if (!c || !p) return false;
   const [up, dn] = el.querySelectorAll(':scope > g[clip-path]');
   if (!up) return false;
-  const g = (attrs) => { const x = document.createElementNS(NS, 'g'); for (const [k, v] of Object.entries(attrs)) x.setAttribute(k, v); return x; };
-  const wrapKids = (host, cls) => { const w = g({ class: cls }); w.append(...host.childNodes); host.append(w); };
-  const wings = [...up.querySelectorAll('[transform]')].filter((x) => x.getAttribute('transform') === c.wing);
-  if (!wings.length) return false;   // 圖改過、對不上：寧可不動，也不要動錯地方
-  const [px, py] = c.pivot;
-  for (const w of wings) {
-    const outer = g({ transform: `translate(${px} ${py})` }), mid = g({ class: 'pk-wave' }), inner = g({ transform: `translate(${-px} ${-py})` });
-    w.replaceWith(outer);
-    inner.append(w); mid.append(inner); outer.append(mid);
+  const wrapKids = (host, cls) => { const w = document.createElementNS(NS, 'g'); w.setAttribute('class', cls); w.append(...host.childNodes); host.append(w); return w; };
+  for (const q of c.parts || []) {
+    if (q.sel) { const x = up.querySelector(q.sel); if (x) pivotWrap(x, q.pivot, q.cls); }
+    else wrapPart(up, q.tf, q.pivot, q.cls);
   }
-  up.querySelector('.mc-extra')?.classList.add('pk-wave-lines');
-  wrapKids(up, 'pk-hop');
+  if (c.extra) up.querySelector('.mc-extra')?.classList.add(c.extra);
+  const hop = wrapKids(up, 'pk-hop');
+  if (c.slide) wrapKids(hop, 'pk-slide');   // 跳（探）上來那一層裡面再包一層左右滑：兩個動作各自一層，互不覆蓋
   if (dn) wrapKids(dn, 'pk-grip');
+  // 起跳點：邊線以上的畫布有 (edge − 畫布頂) 個單位高，再往下多 8（外框線、深色的白邊），整隻藏在卡片／照片後面才開始跳。
+  // v1.83.0 只有一張，寫死在 CSS（176）；現在每一張高度不同（120～194），由這裡照圖算、CSS 的 keyframes 讀 --pk-from。
+  el.style.setProperty('--pk-from', `${p.edge - p.vb[1] + 8}px`);
   el.classList.add('pk-cheer');
+  if (soft) el.classList.add('pk-soft');
   return true;
 }
 
