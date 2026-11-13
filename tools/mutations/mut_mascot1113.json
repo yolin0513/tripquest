@@ -166,8 +166,9 @@
     "why": "（事前寫 2026-11-13）按「最終回顧」之前不扣天氣請求（照樣當場回 503、不打真網路）：回顧一下就整理完，量不到載入中。證明「天氣請求被攔住、回顧還在整理中」這條前置會紅。預期紅兩輪那條前置、M3、M7 載入中、M8 載入中、M8 六個出場處（載入中那格沒看到）。",
     "expect": ["［和紙］ 前置：天氣請求被攔住", "［和紙］ M3 ", "［和紙］ M7 載入中", "［和紙］ M8 載入中", "［和紙］ M8 六個出場處", "［深色］ 前置：天氣請求被攔住", "［深色］ M3 ", "［深色］ M7 載入中", "［深色］ M8 載入中", "［深色］ M8 六個出場處"],
     "file": "scripts/mascottest.mjs",
-    "find": "    hold = true;\n    await clickText(page, 'a.tab', '回顧');",
-    "replace": "    hold = false;\n    await clickText(page, 'a.tab', '回顧');",
+    "find": "    hold = true;\n    // v1.84.0：回顧搬進「行程」分頁",
+    "replace": "    hold = false;\n    // v1.84.0：回顧搬進「行程」分頁",
+    "note": "v1.84.0 回顧搬進行程分頁：測試改從「行程」分頁進最終回顧，find 跟著換到同一行 hold = true（意思不變、預期不變）",
     "cmd": "node scripts/mascottest.mjs"
   }
 ]

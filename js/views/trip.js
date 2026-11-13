@@ -3,7 +3,7 @@ import { h, ring, toast, mount, confirmDialog, promptDialog, modal, fmtDate, ava
 import { navigate, back, navRestoredScroll, refreshPage } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
-import { shooterOf } from '../badges.js';
+import { shooterOf, earnedBadges } from '../badges.js';
 import { shareURL, exportBundle, downloadBlob, nativeShare } from '../share.js';
 import * as pos from '../pos.js';
 import { askShare } from './posconsent.js';
@@ -1504,6 +1504,40 @@ async function doShare(tripId) {
 // 2026-11-13「行程」分頁（Yolin 11-11 提、11-13 守夜做；決定與替代方案見 STATUS）。
 // 放：航班／住宿／待買（合成一張卡）、調整每天的行程、每天的行程（時間、兩站之間怎麼去、當天地圖＝查看路線）。
 // 「怎麼去」在任務頁也有一份（Yolin 11-12：留在任務頁、行程頁也顯示）——兩邊是同一個 legRow，改哪一邊都存同一筆。
+// 回顧（v1.84.0 從底部分頁搬進「行程」分頁；Yolin 2026-11-13「都照建議做」＝規劃第 5.2 節、示意圖 6）。
+// 換位置只看結束日（結束日 23:59:59 過了，跟回顧頁開放影片同一條 tripEnded）——不看「全部拍完」：
+// 提早拍完、旅程還沒結束時，行程分頁還要看今天去哪，不能被回顧擠下去。沒設結束日 → 一直在最下面那一列。
+// 回顧頁本身（memories.js：成就、影片、海報、最終回顧）沒動，改的只是入口放哪。
+function myBadgeCount(tripId, t) {
+  const me = activeMemberId(tripId) || (store.membersOf(t.groupId)[0] || {}).id;
+  return me ? earnedBadges(tripId, me).length : null;
+}
+function memoriesCard(tripId, t, ended) {
+  const n = myBadgeCount(tripId, t);
+  const badgeTxt = n == null ? '成就徽章' : `成就 ${n} 個`;
+  if (!ended) {
+    // 出發前、旅程中：最下面一列，不搶位置。全部拍完時影片照樣開放（memories.js 的 ready），這一列照實寫
+    const prog = store.tripProgress(tripId);
+    const allDone = prog.total > 0 && prog.done === prog.total;
+    return h('button', { class: 'itin-mem-row', type: 'button', onclick: () => navigate(`/trip/${tripId}/memories`) },
+      h('span', { class: 'imr-title' }, '🎁 回顧與成就'),
+      h('span', { class: 'imr-sub' }, `${badgeTxt}・${allDone ? '回憶影片可以做了' : '影片與最終回顧旅程結束後開放'}`));
+  }
+  // 結束日過了：排到最上面，三個成品入口＋成就（卡片跟回顧頁同一個樣子）
+  const card = (emoji, title, sub, path) => h('button', { class: 'mem-card', type: 'button', onclick: () => navigate(`/trip/${tripId}/${path}`) },
+    h('span', { class: 'mem-card-emoji' }, emoji),
+    h('span', { class: 'mem-card-body' }, h('span', { class: 'mem-card-title' }, title), h('span', { class: 'mem-card-sub' }, sub)),
+    h('span', { class: 'mem-card-arrow' }, '›'));
+  return h('section', { class: 'itin-mem', 'aria-label': '這趟的回顧' },
+    h('div', { class: 'section-label' }, '🎁 這趟的回顧'),
+    card('🎬', '回憶影片與相簿', '做成短片，或產生一個給家人看的相簿網址', 'album'),
+    card('🎁', '最終回顧', '走了多遠、吃了哪些、每個人的貢獻…一份成果報告', 'recap'),
+    card('🎨', '行程海報', '把行程排成一張手繪水彩風的長圖，傳 LINE 或列印', 'poster'),
+    h('button', { class: 'itin-mem-row', type: 'button', onclick: () => navigate(`/trip/${tripId}/memories`) },
+      h('span', { class: 'imr-title' }, `🏅 ${badgeTxt}`),
+      h('span', { class: 'imr-sub' }, '大家的表現與全部回顧')));
+}
+
 export async function itinerary(tripId, { drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
@@ -1511,9 +1545,12 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
   const spots = store.spotsOf(tripId);
   const byDay = new Map();
   for (const s of spots) { const d = s.day || 1; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(s); }
-  const page = h('div', { class: 'page itin-page' },
-    h('div', { class: 'section-label' }, '旅途資訊'),
-    infoCard(tripId),
+  const ended = tripEnded(t);
+  // 結束日過了：回顧在最上面；航班、住宿、待買用不到了，收成一列放最下面（點開照樣是同一張卡）
+  const page = h('div', { class: 'page itin-page' + (ended ? ' is-ended' : '') },
+    ended ? memoriesCard(tripId, t, true) : null,
+    ended ? null : h('div', { class: 'section-label' }, '旅途資訊'),
+    ended ? null : infoCard(tripId),
     h('div', { class: 'section-label' }, '每天的行程'),
     h('button', { class: 'btn btn-soft btn-block itin-edit', onclick: () => navigate(`/trip/${tripId}/plan`) },
       spots.length ? '📅 調整每天的行程' : '＋ 去安排景點'),
@@ -1569,6 +1606,13 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
       secs.set(day, sec);
       page.append(sec);
     }
+  }
+  if (ended) {
+    page.append(h('details', { class: 'info-fold' },
+      h('summary', { class: 'info-fold-sum' }, '旅途資訊（航班・住宿・待買）'),
+      infoCard(tripId)));
+  } else {
+    page.append(h('div', { class: 'section-label' }, '回顧'), memoriesCard(tripId, t, false));
   }
   drawPage(page);
   // 旅伴同步進來（例：別人加了航班、改了行程）→ 整頁重畫（見 onTripPage）。簽章只放這一頁畫得到的東西：

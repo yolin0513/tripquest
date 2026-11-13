@@ -523,7 +523,7 @@ try {
     return marker();
   };
 
-  // 旅程層：7 個起點 × 5 顆分頁（2026-11-13 加「行程」，原本 6×4）
+  // 旅程層：7 個起點 × 4 顆分頁（2026-11-13 加「行程」；v1.84.0「回顧」搬進行程分頁、不再是分頁，回顧頁照樣當起點）
   const tripStarts = [
     ['任務清單', `#/trip/${tidN}`],
     ['行程', `#/trip/${tidN}/itinerary`],   // 2026-11-13 新分頁
@@ -537,10 +537,10 @@ try {
   // 沒有可靠的標記，所以那一頁只驗網址）
   const wantHash = {
     任務: `#/trip/${tidN}`, 行程: `#/trip/${tidN}/itinerary`, 照片: `#/trip/${tidN}/people`,
-    分帳: `#/trip/${tidN}/expenses`, 回顧: `#/trip/${tidN}/memories`,
+    分帳: `#/trip/${tidN}/expenses`,
   };
-  const wantWhat = { 任務: '任務清單', 行程: '行程頁', 照片: '照片牆', 回顧: '回顧' };
-  const TRIP_TABS = ['任務', '行程', '照片', '分帳', '回顧'];
+  const wantWhat = { 任務: '任務清單', 行程: '行程頁', 照片: '照片牆' };
+  const TRIP_TABS = ['任務', '行程', '照片', '分帳'];
   let bad = [];
   for (const [from, hash] of tripStarts) {
     for (const tab of TRIP_TABS) {

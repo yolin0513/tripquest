@@ -14,7 +14,7 @@ const topActionBtn = document.getElementById('topActionBtn');
 let _action = null;
 backBtn.addEventListener('click', () => {
   const r = currentRoute();
-  // 「主畫面」（旅程首頁、照片牆 / 分帳 / 回顧分頁、設定）按返回 → 一步跳回「我的旅程」；
+  // 「主畫面」（旅程首頁、行程 / 照片牆 / 分帳分頁、設定）按返回 → 一步跳回「我的旅程」；
   // 其他都是小功能頁（景點、任務、海報、天氣、回顧影片、求助…），返回 = 回上一個實際畫面。
   if (r && isMainScreen(r.path)) { resetHistory('/'); return; }
   back(fallbackFor(r));
@@ -23,7 +23,8 @@ backBtn.addEventListener('click', () => {
 function isMainScreen(p) {
   if (p === '/' || p === '/settings') return true;
   if (/^\/trip\/[^/]+$/.test(p)) return true;                       // 旅程首頁（任務清單）
-  if (/^\/trip\/[^/]+\/(itinerary|people|expenses|memories)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）
+  if (/^\/trip\/[^/]+\/(itinerary|people|expenses)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）
+  // 回顧（memories）v1.84.0 起不是底部分頁，是「行程」分頁裡的一頁：返回＝回上一個畫面（多半是行程分頁）
   return false;
 }
 topActionBtn.addEventListener('click', () => { if (_action) _action.onClick(); });
@@ -53,6 +54,8 @@ function fallbackFor(r) {
     return q ? `/trip/${q.tripId}` : '/';
   }
   const m = p.match(/^\/trip\/([^/]+)\//);
+  // 回顧頁的入口在「行程」分頁（v1.84.0）
+  if (m && /\/memories$/.test(p)) return `/trip/${m[1]}/itinerary`;
   if (m) return `/trip/${m[1]}`;
   return '/';
 }
@@ -119,17 +122,16 @@ function renderTabs() {
     const base = `/trip/${tid}`;
     // 2026-11-13「行程」分頁（Yolin 11-11 提、11-13 守夜做）：航班、住宿、待買、調整每天的行程、每天的行程與地圖都在這一格。
     // 任務頁留「帶我去下一站」「拍照解任務」與各站的任務。
-    const isTasks = p === base || /^\/trip\/[^/]+\/(poster|weather|spot)/.test(p) || p.startsWith('/quest/');
-    const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy)$/.test(p);
+    const isTasks = p === base || /^\/trip\/[^/]+\/(weather|spot)/.test(p) || p.startsWith('/quest/');
+    // 回顧（memories 與它底下的相簿、成就、最終回顧、海報）v1.84.0 搬進「行程」分頁：底部少了「回顧」一格
+    const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster)$/.test(p);
     const isPhotos = p === `${base}/people`;
     const isSplit = p === `${base}/expenses`;
-    const isMem = /^\/trip\/[^/]+\/(memories|album|badges|recap)$/.test(p);
     mount(tabbar,
       tabItem('📋', '任務', base, isTasks),
       tabItem('🗓️', '行程', `${base}/itinerary`, isItin),
       tabItem('📸', '照片', `${base}/people`, isPhotos),
       tabItem('💰', '分帳', `${base}/expenses`, isSplit),
-      tabItem('🎁', '回顧', `${base}/memories`, isMem),
     );
   } else {
     mount(tabbar,

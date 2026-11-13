@@ -248,9 +248,10 @@ async function round(theme) {
 
     // ---- M3 載入中、M4 行程回顧 ----
     hold = true;
-    await clickText(page, 'a.tab', '回顧');
-    await page.waitForSelector('.mem-card', { timeout: 15000 });
-    await clickText(page, '.mem-card', '最終回顧');
+    // v1.84.0：回顧搬進「行程」分頁，這一趟已經結束 → 回顧卡在行程分頁最上面
+    await clickText(page, 'a.tab', '行程');
+    await page.waitForSelector('.itin-mem .mem-card', { timeout: 15000 });
+    await clickText(page, '.itin-mem .mem-card', '最終回顧');
     const t0 = Date.now();
     while (!held.length && Date.now() - t0 < 10000) await sleep(100);
     const waiting = await page.evaluate(() => !!document.querySelector('.wait-box') && !document.querySelector('.recap-head'));

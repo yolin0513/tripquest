@@ -818,6 +818,18 @@ html[data-theme="washi"] .info-row + .info-row { border-top: 2px dashed var(--li
 .info-row::after { content: "›" / ""; margin-left: auto; padding-left: 6px; color: var(--muted); font-size: 1.2rem; }
 /* 行程分頁：每天的行程（時間、怎麼去、地圖） */
 .itin-page .daycollapse { margin-top: 12px; }
+/* v1.84.0 回顧搬進行程分頁：旅程中是最下面一列；結束日過了排到最上面（三張成品卡＋成就一列），旅途資訊收成一列放最下面 */
+.itin-mem-row { appearance: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  min-height: var(--tap); margin-top: 8px; padding: 12px 16px; background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius); color: var(--text); font: inherit; text-align: left; cursor: pointer; position: relative; padding-right: 34px; }
+.itin-mem-row::after { content: "›" / ""; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 1.3rem; }
+.itin-mem-row:active { background: var(--bg-elev-2); }
+.imr-title { font-weight: 800; }
+.imr-sub { color: var(--muted); font-weight: 700; font-size: 0.9rem; overflow-wrap: anywhere; }
+.itin-mem .itin-mem-row { margin-top: 12px; }
+.info-fold { margin-top: 18px; }
+.info-fold-sum { min-height: var(--tap); display: flex; align-items: center; padding: 0 4px; font-weight: 800; color: var(--muted); cursor: pointer; }
+.info-fold[open] .info-fold-sum { margin-bottom: 8px; }
 .itin-stop { margin-top: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-elev);
   font-weight: 800; overflow-wrap: anywhere; }
 /* 大數字（第 8 項）：航班的時間與機場；日期與「未填」維持一般字 */

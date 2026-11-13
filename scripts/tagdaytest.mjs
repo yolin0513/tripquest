@@ -88,6 +88,9 @@ try {
     await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-edit'), { timeout: 8000 });
     let planBtn = null;
     for (const b of await page.$$('button')) if ((await b.evaluate((e) => e.textContent)).includes('調整每天的行程')) { planBtn = b; break; }
+    // 2026-11-13 v1.84.0：旅程結束後回顧排到行程分頁最上面，這顆按鈕被擠到 755～817px、底部分頁列從 768px 起蓋著它；
+    // 整顆都在畫面範圍裡，puppeteer 不捲、直接點中心點 → 點到分頁列的「行程」。使用者會先把它捲上來再點，這裡照做。
+    await planBtn.evaluate((e) => e.scrollIntoView({ block: 'center' }));
     await planBtn.click();
     await page.waitForSelector(`.plan-row[data-id="${id}"]`, { timeout: 8000 });
     let setBtn = null;

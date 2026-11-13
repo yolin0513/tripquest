@@ -4,8 +4,9 @@
     "why": "（事前寫 2026-11-13）isMainScreen 不認行程分頁：在「行程」按左上返回，退回上一頁（任務頁），不是一步回「我的旅程」——第一版就是這樣，washitest 新加的路徑才抓到。預期只紅 W4 的「行程分頁按左上返回」（之後 toSettings 自己會再按一次返回，不連帶別條）。",
     "expect": ["W4 和紙 行程分頁按左上返回"],
     "file": "js/app.js",
-    "find": "  if (/^\\/trip\\/[^/]+\\/(itinerary|people|expenses|memories)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）",
-    "replace": "  if (/^\\/trip\\/[^/]+\\/(people|expenses|memories)$/.test(p)) return true;",
+    "find": "  if (/^\\/trip\\/[^/]+\\/(itinerary|people|expenses)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）",
+    "replace": "  if (/^\\/trip\\/[^/]+\\/(people|expenses)$/.test(p)) return true;",
+    "note": "v1.84.0 回顧搬進行程分頁：memories 不再是底部分頁，find 跟著拿掉 memories（意思不變、預期不變）",
     "cmd": "node scripts/washitest.mjs"
   },
   {
@@ -67,7 +68,8 @@
     "why": "（事前寫 2026-11-13）進了行程分頁，底部沒有任何一格亮著。預期只紅 recordstest 的「行程分頁：底部亮的是「行程」」。",
     "expect": ["行程分頁：底部亮的是「行程」"],
     "file": "js/app.js",
-    "find": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy)$/.test(p);",
+    "find": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster)$/.test(p);",
+    "note": "v1.84.0 回顧那幾頁也算行程分頁，find 跟著加長（意思不變、預期不變）",
     "replace": "    const isItin = false;",
     "cmd": "node scripts/recordstest.mjs"
   },

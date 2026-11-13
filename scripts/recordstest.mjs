@@ -167,11 +167,18 @@ const blankOk = async (page, label) => {
 };
 const clickModalBtn = (page, text) => page.evaluate((t) => [...document.querySelectorAll('.modal-card .btn')].find((b) => b.textContent === t)?.click(), text);
 // 2026-11-13 三樣入口搬到「行程」分頁（合成一張卡）：從任務頁點底部分頁「行程」進去（使用者的路），不直接 goto
+// v1.84.0 起，已結束的行程把「旅途資訊（航班・住宿・待買）」收進預設收著的摺疊區（回顧排最上面）：
+// 使用者要先點開那一列才點得到入口（待買、住宿這兩輪造的是 2024 年、已經結束的行程）。點開後等入口真的看得到才往下。
 const toItin = async (page, sel) => {
   await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
   await clickText(page, '#tabbar a.tab', '行程');
   await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
   await page.waitForSelector(sel, { timeout: 10000 });
+  const folded = await page.$eval(sel, (e) => { const d = e.closest('details.info-fold'); return !!d && !d.open; });
+  if (folded) {
+    await clickText(page, 'details.info-fold > summary', '旅途資訊');
+    await page.waitForFunction((s) => document.querySelector(s)?.checkVisibility(), { timeout: 5000 }, sel);
+  }
 };
 const backToTrip = async (page, tid, sel) => {
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
@@ -202,7 +209,7 @@ async function buy() {
   yes(it.cards === 1 && it.rows === 3, `航班／住宿／待買合成一張卡（${it.cards} 張卡、${it.rows} 列）`);
   let entry = await page.$eval('.buy-entry', (e) => e.textContent);
   yes(entry === '🛒 待買清單', `一項都沒有：入口只寫名字、不寫 0 項（${entry}）`);
-  await page.click('.buy-entry');
+  await clickText(page, '.buy-entry', '待買清單');   // 像使用者一樣點：已結束的行程摺疊區在頁尾，page.click 會點到蓋在上面的底部分頁列
   await page.waitForSelector('.buy-input', { timeout: 8000 });
   const sum0 = await page.$eval('.buy-sum', (e) => e.textContent);
   yes(sum0.startsWith('還沒有要買的東西'), `空的時候照實寫（${sum0}）`);
@@ -275,7 +282,7 @@ async function stays() {
   await toItin(page, '.stay-entry');
   let entry = await page.$eval('.stay-entry', (e) => e.textContent);
   yes(entry === '🏨 住宿', `一間都沒有：入口只寫名字（${entry}）`);
-  await page.click('.stay-entry');
+  await clickText(page, '.stay-entry', '住宿');
   await page.waitForSelector('.stay-addbtn', { timeout: 8000 });
   yes((await page.$eval('.stay-list', (e) => e.textContent)) === '還沒加住宿。', '空的時候照實寫「還沒加住宿」');
   await blankOk(page, '住宿（空的）');
@@ -347,7 +354,7 @@ async function flights() {
   await toItin(page, '.fl-entry');
   let entry = await page.$eval('.fl-entry', (e) => e.textContent);
   yes(entry === '✈️ 航班', `一班都沒有：入口只寫名字（${entry}）`);
-  await page.click('.fl-entry');
+  await clickText(page, '.fl-entry', '航班');
   await page.waitForSelector('.fl-addbtn', { timeout: 8000 });
   yes((await page.$eval('.fl-list', (e) => e.textContent)) === '還沒加航班。', '空的時候照實寫「還沒加航班」');
   await blankOk(page, '航班（空的）');
