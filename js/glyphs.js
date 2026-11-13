@@ -160,3 +160,8 @@ const ART = {
   },
 };
 /* MASCOT-ART-END */
+
+// 畫得出來的每一隻吉祥物、每一個拍照圖示（scripts/arttransparenttest.mjs 的母體從這裡讀：登記制，新加的自動被量到）。
+// 要放在 ART／ICON 宣告之後（放前面會在宣告前讀到、整個模組載不起來）。
+export const MASCOT_KINDS = Object.freeze(Object.keys(ART));
+export const ICON_KINDS = Object.freeze(Object.keys(ICON));

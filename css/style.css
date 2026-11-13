@@ -196,6 +196,18 @@ html[data-theme="washi"] .gl-mascot .mc-fig { filter: none; }
 .recap-mascot { margin-bottom: 6px; }
 .about-mascot { margin: 0 0 8px; }
 .celebrate-mascot { animation: pop 0.5s cubic-bezier(.17,.89,.32,1.28); }
+/* 探頭圖（js/peeks.js；2026-11-13 第四段之二）：吉祥物從卡片／照片的上緣探出來。圖的邊線對在父元素的上緣——
+   --pk-sink＝邊線離圖底幾 px（手掌、碗腳那一點壓在卡片上）；父元素（ui.js 的 mountPeek 掛 .has-peek）上面
+   留 --pk-rise 的空間，露出來的頭才不會壓到上一個區塊。白邊、動作線跟 .gl-mascot 同一條規矩。 */
+.has-peek { position: relative; }
+.gl-peek { display: block; position: absolute; bottom: calc(100% - var(--pk-sink)); }
+html:not([data-theme="washi"]) .gl-peek .mc-extra { display: none; }
+html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
+.wx-advice.has-peek { margin-top: calc(var(--pk-rise) + 2px); }   /* 任務頁的天氣條不掛探頭圖（Yolin 2026-11-13：任務會被擠到下面），只有天氣頁這張 */
+.wx-advice > .gl-peek { right: 14px; }
+.celebrate-shot { position: relative; margin: calc(var(--pk-rise) + 14px) 0 18px; }
+.celebrate .celebrate-shot > .celebrate-photo { display: block; margin: 0; }   /* 要蓋過下面 .celebrate .celebrate-photo 的上下 18：照片的上緣就是外框的上緣，吉祥物的邊線才對得上 */
+.celebrate-shot > .gl-peek { left: 50%; transform: translateX(-50%); }
 .icon-btn {
   appearance: none;
   border: 0;

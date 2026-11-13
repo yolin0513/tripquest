@@ -1,0 +1,47 @@
+[
+  {
+    "name": "探頭圖：相機那張加回一整塊底色",
+    "why": "（事前寫 11:15 草稿；12:25 跑之前只改 find 對字，預期沒改）cam 那張的身體層最前面插一塊滿版方塊（不動第一張：對照組都從第一張 rain 改出來）。方塊被上層的裁切框切在邊線，上、左、右三邊整條不透明，邊框推估約 7 成 ≥ 35% → 只有最後那條「沒有鋪滿畫布的底色」紅。",
+    "expect": ["吉祥物的圖沒有鋪滿畫布的底色"],
+    "file": "js/peeks.js",
+    "find": "    fig: '<rect x=\"128\" y=\"154\" width=\"13\" height=\"25\" rx=\"6.5\" transform=\"rotate(32 134 167)\"",
+    "replace": "    fig: '<rect x=\"26\" y=\"10\" width=\"194\" height=\"176\" fill=\"#f3f6f8\"/><rect x=\"128\" y=\"154\" width=\"13\" height=\"25\" rx=\"6.5\" transform=\"rotate(32 134 167)\"",
+    "cmd": "node scripts/arttransparenttest.mjs"
+  },
+  {
+    "name": "檢查器：門檻放寬到永遠不判鋪滿",
+    "why": "（事前寫 11:15 草稿預期 6 條；12:25 跑之前改成 5 條：拿掉面積量法之後只剩 FRAME_MAX 一個門檻，「內切的大圓」也不再是斷言、改成只印的說明行）FRAME_MAX 0.35 → 1.01：邊框最多 100%，永遠不判鋪滿 → 五個「判鋪滿」的對照組全紅。",
+    "expect": ["對照組：滿版方塊插在最前面", "對照組：滿版方塊插在最後面", "對照組：滿版的路徑（不是 rect）", "對照組：第四段第一版那種滿版圓角卡", "對照組：整條寬的地面（只碰到左右下三邊）"],
+    "file": "scripts/arttransparenttest.mjs",
+    "find": "const FRAME_MAX = 0.35;",
+    "replace": "const FRAME_MAX = 1.01;",
+    "cmd": "node scripts/arttransparenttest.mjs"
+  },
+  {
+    "name": "檢查器：沒有真的畫到畫布上",
+    "why": "（事前寫 11:15 草稿預期 7 條；12:25 跑之前改成 6 條，理由同上一條）拿掉 ctx.drawImage：每一張量到的都是 0——「不判鋪滿」的對照組與最後那條照樣過，所以靠「前置：每一張都真的畫出東西」擋；五個「判鋪滿」的對照組也紅。",
+    "expect": ["前置：每一張都真的畫出東西", "對照組：滿版方塊插在最前面", "對照組：滿版方塊插在最後面", "對照組：滿版的路徑（不是 rect）", "對照組：第四段第一版那種滿版圓角卡", "對照組：整條寬的地面（只碰到左右下三邊）"],
+    "file": "scripts/arttransparenttest.mjs",
+    "find": "      ctx.drawImage(img, 0, 0, W, H);",
+    "replace": "",
+    "cmd": "node scripts/arttransparenttest.mjs"
+  },
+  {
+    "name": "檢查器：母體漏掉探頭圖",
+    "why": "（事前寫 11:15，跑之前沒改）拿掉把 PEEK_KINDS 加進母體的那一行：清單相加（含探頭圖 7 張）≠ 數到的張數 → 只有「前置：母體」紅。對照組從 PEEK_KINDS[0] 直接產生、不受影響。",
+    "expect": ["前置：母體"],
+    "file": "scripts/arttransparenttest.mjs",
+    "find": "    for (const k of pk.PEEK_KINDS) list.push([`探頭圖 ${k}`, () => pk.peek(k, 0.6)]);",
+    "replace": "",
+    "cmd": "node scripts/arttransparenttest.mjs"
+  },
+  {
+    "name": "檢查器：邊框只量最上面那兩排",
+    "why": "（事前寫 2026-11-13 12:25，跑之前；取代草稿的 e、f——草稿那兩條是「只看邊框／只看面積」，面積量法已經拿掉）邊框只算 y < 2：碰到左右下三邊、上面那排是空的「整條寬的地面」量到 0 → 只有它紅。滿版的三種、圓角卡（上緣只有四角被裁掉）照樣判鋪滿。最後那條：真的圖頂端多半留空，推估不紅；頁首的頭耳朵碰到上緣，只量上緣時比例可能變高——若紅，會印成「另有非預期的紅」，到時候照實看。",
+    "expect": ["對照組：整條寬的地面（只碰到左右下三邊）"],
+    "file": "scripts/arttransparenttest.mjs",
+    "find": "        if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) { fAll++; if (o) fOn++; }",
+    "replace": "        if (y < 2) { fAll++; if (o) fOn++; }",
+    "cmd": "node scripts/arttransparenttest.mjs"
+  }
+]

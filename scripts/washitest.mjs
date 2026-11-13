@@ -231,7 +231,8 @@ try {
   });
   yes(tc.label === '下一站' && tc.time === '09:30' && tc.fs >= tc.root * 1.6 - 0.01,
     `W10 今天主角卡：「${tc.label} ${tc.time}」、時間是大字（${tc.fs}px＝字級的 ${(tc.fs / tc.root).toFixed(2)} 倍，要 ≥ 1.6）`);
-  yes(tc.nav && tc.shot.startsWith('📸 拍照解任務'), `W10 卡裡有帶路，還有「${tc.shot}」`);
+  // 2026-11-13 第四段之二：「拍照解任務」前面的 📸 換成相機圖示（svg，沒有字）——圖示本身由 peektest P7 驗
+  yes(tc.nav && tc.shot.startsWith('拍照解任務'), `W10 卡裡有帶路，還有「${tc.shot}」`);
   yes(tc.top === '⚙️設定' && tc.aria === '旅程設定' && tc.bw >= 56 && tc.bh >= 44,
     `W10 頁首右上是有字的按鈕「${tc.top}」（讀出「${tc.aria}」、${Math.round(tc.bw)}×${Math.round(tc.bh)}，觸控 ≥ 44 沒動）`);
   // 造情境：日期列換到第 2 天、甲一（第 1 天、下一站）收起來 → 點「拍照解任務」要換回第 1 天、展開甲一、捲到看得到

@@ -10,6 +10,8 @@
 //   M3 載入中：「回顧」分頁按「最終回顧」→ 整理回顧時（天氣請求被攔住、確定還在等）轉圈上面是鷹、在轉圈上方
 //   M4 行程回顧：放行天氣請求之後 → 回顧標題上面是白熊
 //   M5 完成任務：任務頁那一站「從相簿選」一張照片 → 慶祝畫面是玄鳳、沒有打勾的圓
+//      （2026-11-13 第四段之二起：有照片時玄鳳改成從照片上緣探頭——js/peeks.js 的 done；那一站用沒有對得上類別的龍山寺。
+//       各類別換哪一張、邊線對不對齊，由 scripts/peektest.mjs 驗；這裡只驗「出場的是玄鳳」與主題、無障礙）
 //   M6 設定頁：底部分頁「設定」→「關於」卡裡是山雀
 //   M7 主題：和紙下身體沒有白邊、地面陰影與動作線看得到；深色下身體套白邊濾鏡（濾鏡真的在那張圖裡）、陰影與動作線不畫
 //   M8 六個出場處六隻、各不相同（六隻平等、不重複）；每一張 aria-hidden、沒有 <text>／<title>（不寫名字）；
@@ -209,8 +211,8 @@ async function round(theme) {
       const g = uuid(), t = uuid(), m = uuid();
       await s.put({ id: g, type: 'group', name: 'g' });
       await s.put({ id: m, type: 'member', groupId: g, displayName: '小美' });
-      await s.put({ id: t, type: 'trip', groupId: g, title: '吉祥物測試', region: '宜蘭', allowWiki: false, startDate: start, endDate: end });
-      const { spots, quests } = await generateForTrip({ tripId: t, region: '宜蘭', items: [{ name: '羅東夜市', day: 1 }] });
+      await s.put({ id: t, type: 'trip', groupId: g, title: '吉祥物測試', region: '台北', allowWiki: false, startDate: start, endDate: end });
+      const { spots, quests } = await generateForTrip({ tripId: t, region: '台北', items: [{ name: '龍山寺', day: 1 }] });
       for (const x of spots) await s.put(x);
       for (const x of quests) await s.put(x);
     }, ago(10), ago(9));
@@ -222,7 +224,7 @@ async function round(theme) {
 
     // ---- M5 完成任務 ----
     const opened = await page.evaluate(() => !!document.querySelector('.qcollapse.open'));
-    if (!opened) await clickText(page, '.qc-toggle', '羅東夜市');
+    if (!opened) await clickText(page, '.qc-toggle', '龍山寺');
     await page.waitForSelector('.qcollapse.open .qline .addphoto-icons input[type=file]', { timeout: 10000 });
     const inputs = await page.$$('.qcollapse.open .qline .addphoto-icons input[type=file]');
     // 走不下去的前置：丟例外點名（記成 ✗ 例外、照樣印總結），不當成一條斷言
@@ -230,14 +232,17 @@ async function round(theme) {
     await inputs[1].uploadFile(photoPath);            // [0]=拍照 [1]=從相簿選
     await page.waitForSelector('.celebrate', { timeout: 30000 });
     await sleep(700);   // 彈出動畫跑完再量
-    const dn = await probe(page, '.celebrate .celebrate-mascot svg.gl-mascot');
+    // 探頭圖的 data-peek 是「哪一張」（done＝玄鳳打領結），換成「哪一隻」才能跟其他五個出場處比
+    const dn = await probe(page, '.celebrate .celebrate-shot svg.gl-peek');
+    const peekKind = await page.evaluate(() => document.querySelector('.celebrate .celebrate-shot svg.gl-peek')?.getAttribute('data-peek') || null);
+    dn.kind = { done: 'cockatiel' }[peekKind] || (peekKind ? `探頭圖 ${peekKind}` : dn.kind);
     seen.done = dn.kind;
     const badge = await page.evaluate(() => !!document.querySelector('.celebrate .celebrate-badge'));
     const ttl = await page.evaluate(() => document.querySelector('.celebrate h2')?.textContent || '');
     yes(/完成/.test(ttl), `${tag} 前置：跳出來的是完成任務的慶祝（標題「${ttl}」）`);
-    yes(dn.found && dn.kind === EXPECT.done && dn.h >= 120 && dn.inView && !badge,
-      `${tag} M5 完成任務的慶祝畫面是玄鳳、看得到、沒有打勾的圓（${brief(dn)}；在畫面裡 ${dn.inView}；打勾 ${badge}）`);
-    themeCheck(tag, '完成任務', dn, washi, true);
+    yes(dn.found && dn.kind === EXPECT.done && dn.h >= 100 && dn.inView && !badge,
+      `${tag} M5 完成任務的慶祝畫面是玄鳳（從照片上緣探頭）、看得到、沒有打勾的圓（${brief(dn)}；在畫面裡 ${dn.inView}；打勾 ${badge}）`);
+    themeCheck(tag, '完成任務', dn, washi, false);   // 探頭圖沒有地面陰影；動作線跟著主題的那一條在 peektest
     hygiene(tag, '完成任務（頁首的頭也在同一頁）', dn);
     await clearCelebrations(page);
 

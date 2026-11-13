@@ -63,8 +63,18 @@ export function addPhotoButtons(tripId, questId, { compact = false, icons = fals
     if (!wasDone) {
       const allDone = prog1.done === prog1.total;
       const url = lastSub ? await blobURL(lastSub.thumbHash) : null;
+      // 照片上緣探頭的那一隻（js/peeks.js；2026-11-13 第四段之二）：對得上景點庫類別的就換成那個動作，
+      // 對不上（自己打字的地點、古蹟、購物…）就是小鳳打領結。沒拿到照片就不用載——慶祝畫面照舊在標題上面放整隻。
+      let pk = null;
+      if (url) {
+        try {
+          const m = await import('./peeks.js');
+          pk = m.peek(await m.completionPeekKind(q, store.get(q.spotId)), 0.6);
+        } catch (e) { console.error(e); }   // 圖或景點庫載不到：照舊放整隻小鳳，不擋住慶祝（照片已經存好了）
+      }
       const res = await celebrate({
         withMascot: true,
+        peek: pk,
         title: allDone ? '全部完成啦！🎉' : '完成一個任務！',
         lines: allDone
           ? [`${prog1.total} 個任務全部達成`, '可以來做回憶影片了']

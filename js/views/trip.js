@@ -20,7 +20,7 @@ import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js'
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
-import { paperPlane } from '../glyphs.js';
+import { paperPlane, photoIcon } from '../glyphs.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
 import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
@@ -401,8 +401,9 @@ function nextStationButton(tripId, t, allDone) {
 }
 
 // 2026-11-13「今天」主角卡（風格提案第 10 項）：下一站的時間（有填才寫，大數字；沒填不補猜的）＋帶路＋拍照解任務。
-// 帶路那顆與「換一站」照舊是 nextStationButton（文字與行為都沒變）；這張卡把它們包起來、加上時間與「📸 拍照解任務」。
+// 帶路那顆與「換一站」照舊是 nextStationButton（文字與行為都沒變）；這張卡把它們包起來、加上時間與「拍照解任務」。
 // 拍照解任務＝換到那一站那一天、展開那一站、捲過去（任務頁的相機鈕就在那裡），不另開一頁。
+// 圖示是任務列那顆相機（雪納瑞扶著；2026-11-13 第四段之二，Dispatch 定：原本是 📸）。
 function todayCard(tripId, t, allDone, getJump) {
   const nav = nextStationButton(tripId, t, allDone);
   if (!nav) return null;
@@ -417,7 +418,7 @@ function todayCard(tripId, t, allDone, getJump) {
       time ? h('span', { class: 'today-time' }, time) : null),
     nav,
     left > 0 ? h('button', { class: 'btn btn-ok btn-block today-shot', type: 'button', onclick: () => getJump()?.(next) },
-      `📸 拍照解任務・還有 ${left} 個`) : null);
+      photoIcon('cam', 24), `拍照解任務・還有 ${left} 個`) : null);
 }
 
 // 選「現在在哪一站」。也提供「自動」把手動狀態關掉，不會被困住。
@@ -668,8 +669,14 @@ async function fillWeather(slot, container, tripId, trip) {
       if (pos) { hereTemp = await wx.hereTempNow(pos.lat, pos.lng); hereName = '你的位置'; }
     }
     const tips = wx.buildAdvice({ dest: { elevation: f.elevation }, destDays: days, hereTemp, hereName });
+    // 「那一天」會下雨／下雪（旅程中看今天、還沒出發看出發那天）：提示那一行換成那一天、有數字的一句（全部的提醒在天氣頁）。
+    // 2026-11-13 第四段，Dispatch 定 A：只用這裡本來就有的預報，不多送任何資料。
+    // 天氣條上不放探頭圖、也不加高（Yolin 2026-11-13：任務頁東西一多，任務就被擠到下面）；探頭圖只在天氣頁的出門提醒卡。
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const alert = wx.dayAlert(trip, days, today);
 
-    slot.replaceChildren(h('button', {
+    const btn = h('button', {
       class: 'wx-strip', onclick: () => navigate(`/trip/${tripId}/weather`),
     },
       h('div', { class: 'wx-strip-days' }, ...days.slice(0, 5).map((d) => h('span', { class: 'wx-strip-day' },
@@ -677,10 +684,13 @@ async function fillWeather(slot, container, tripId, trip) {
         h('span', { class: 'wx-strip-ic' }, wx.wxIcon(d.code)),
         h('span', { class: 'wx-strip-t' }, `${d.tmax}°`),
       ))),
-      tips.length
-        ? h('div', { class: 'wx-strip-tip' }, '🧳 ' + tips[0].text)
-        : h('div', { class: 'wx-strip-tip muted' }, '天氣還算舒服，點看每天預報'),
-    ));
+      alert
+        ? h('div', { class: 'wx-strip-tip', 'data-wx': alert.kind }, alert.text)
+        : tips.length
+          ? h('div', { class: 'wx-strip-tip' }, '🧳 ' + tips[0].text)
+          : h('div', { class: 'wx-strip-tip muted' }, '天氣還算舒服，點看每天預報'),
+    );
+    slot.replaceChildren(btn);
   } catch { /* 靜默：天氣是加分項 */ }
 }
 

@@ -231,21 +231,36 @@ export function fmtDate(iso) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+// 把吉祥物的探頭圖（js/peeks.js 的 peek）掛到卡片或照片外框上（2026-11-13 第四段之二）：
+// 圖是卡片的子元素（點吉祥物＝點卡片）；卡片掛 .has-peek、帶 --pk-rise，CSS 照這個高度在卡片上面留空間，
+// 吉祥物露出來的那一塊才不會壓到上一個區塊。放在這裡而不是 peeks.js：呼叫的一方都已經有 ui.js，peeks.js 才能用到時才載。
+export function mountPeek(host, el) {
+  host.classList.add('has-peek');
+  host.style.setProperty('--pk-rise', el.style.getPropertyValue('--pk-rise'));
+  host.append(el);
+  return host;
+}
+
 // 成就慶祝畫面
 // withMascot：完成任務那一次（addphoto.js）把打勾的圓換成吉祥物（完成任務那一隻，見 js/glyphs.js 的 MASCOT_SPOT）；
 // 解鎖徽章等其他慶祝照舊是打勾。
-export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false }) {
+// peek：完成任務時的探頭圖（js/peeks.js；呼叫的一方挑好哪一張）。有照片就掛在照片上緣、標題上面不再另外放一隻；
+// 沒拿到照片（縮圖讀不到）就照舊在標題上面放整隻（MASCOT_SPOT.done）。
+export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, peek = null }) {
   const root = document.getElementById('modalRoot');
   return new Promise((resolve) => {
     const close = (v) => { wrap.remove(); conf.remove(); resolve(v); };
     const conf = confetti();
+    const onPhoto = !!(withMascot && peek && photoURL);
+    const photo = photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null;
     const wrap = h('div', { class: 'celebrate' },
-      withMascot
-        ? h('div', { class: 'celebrate-mascot' }, mascot(MASCOT_SPOT.done, 132))
-        : h('div', { class: 'celebrate-badge' }, '✓'),
+      onPhoto ? null
+        : withMascot
+          ? h('div', { class: 'celebrate-mascot' }, mascot(MASCOT_SPOT.done, 132))
+          : h('div', { class: 'celebrate-badge' }, '✓'),
       h('h2', {}, title || '完成了！'),
       ...lines.map((l) => h('p', {}, l)),
-      photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null,
+      onPhoto ? mountPeek(h('div', { class: 'celebrate-shot' }, photo), peek) : photo,
       ...actions.map((a) => h('button', {
         class: 'btn ' + (a.primary ? 'btn-primary' : 'btn-soft') + ' btn-block btn-big',
         onclick: () => close(a.value),

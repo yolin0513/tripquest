@@ -1,0 +1,146 @@
+[
+  {
+    "name": "探頭圖：放回流裡（不再對在卡片上緣）",
+    "why": "（事前寫 2026-11-13 11:15 草稿；12:20 補［深色］ 慶祝畫面；12:50 跑之前改：Yolin 拿掉任務頁天氣條的探頭圖，量天氣條對齊的四條改成量「天氣條沒有圖」、不受這條影響，改量天氣頁提醒卡）.gl-peek 改 position: static：圖回到文件流，跟在卡片／照片後面。所有量「邊線對齊」與「露出卡片上緣」的都紅：P2 提醒卡上緣、P3 五種、P4 天氣頁的卡片、深色提醒卡、深色慶祝。不紅：天氣條（沒有圖）、提示行只有字、P8、深色的範圍與接縫（那兩條在固定的容器裡量）。",
+    "expect": ["P2 天氣頁的出門提醒卡上緣", "P3 必吃 → 捧麵", "P3 夜市的其他任務 → 烤串", "P3 自然 → 遮陽帽", "P3 城市 → 相機", "P3 古蹟（沒有對得上的類別）→ 小鳳打領結", "P4 天氣頁的卡片是踩雪板", "［深色］ 天氣條一樣沒有探頭圖", "［深色］ 慶祝畫面的探頭圖"],
+    "file": "css/style.css",
+    "find": ".gl-peek { display: block; position: absolute; bottom: calc(100% - var(--pk-sink)); }",
+    "replace": ".gl-peek { display: block; position: static; bottom: calc(100% - var(--pk-sink)); }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "天氣條：探頭圖掛回去（Yolin 拿掉之前的做法）",
+    "why": "（事前寫 2026-11-13 12:50，跑之前；取代草稿的「探頭圖放進提示那一行」——那一行程式已經拿掉）那一天會下雨／下雪時，照拿掉之前的寫法把探頭圖掛回天氣條（CSS 的加高那條已經拿掉，所以只多了圖、沒有加高）。紅：P1 任務頁的天氣條不掛探頭圖、P4 今天會下雪、P6 還沒出發、［深色］ 天氣條一樣沒有探頭圖——四條都量「天氣條沒有圖」。不紅：P5 晴天（沒有提示就不掛）、P5 沒有加高（只有圖、間距沒變）、天氣頁與慶祝。「探頭圖的數量」與「has-peek 標記」是同一件事的兩道偵測、互為備援：單獨拿掉其中一道是等價突變，不另配突變。",
+    "expect": ["P1 任務頁的天氣條不掛探頭圖", "P4 今天會下雪", "P6 還沒出發", "［深色］ 天氣條一樣沒有探頭圖"],
+    "file": "js/views/trip.js",
+    "find": "    slot.replaceChildren(btn);",
+    "replace": "    if (alert) { const pk = await import('../peeks.js'); (await import('../ui.js')).mountPeek(btn, pk.peek(pk.WEATHER_PEEK[alert.kind], 0.34)); }\n    slot.replaceChildren(btn);",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "天氣條：下雨那天上面多留圖的高度",
+    "why": "（事前寫 2026-11-13 12:50，跑之前）不掛圖、只把拿掉之前的那 60px 加回來：提示行是下雨／下雪那一句的天氣條上面多 62px。紅：只有 P5 下雨那天的天氣條沒有加高（下雨 76、晴天 14）。不紅：P1／P4／P6／深色的「沒有探頭圖」（真的沒有圖，也沒有 has-peek）——這一條證明「不加高」跟「沒有圖」是兩道各自的擋。",
+    "expect": ["P5 下雨那天的天氣條沒有加高"],
+    "file": "css/style.css",
+    "find": ".wx-advice.has-peek { margin-top: calc(var(--pk-rise) + 2px); }",
+    "replace": ".wx-strip:has(.wx-strip-tip[data-wx]) { margin-top: 62px; } .wx-advice.has-peek { margin-top: calc(var(--pk-rise) + 2px); }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "慶祝：照片上探頭了，標題上面又另外放一隻",
+    "why": "（事前寫 11:15，跑之前沒改）onPhoto ? null → false ? null：有照片時標題上面照樣放整隻小鳳。和紙 P3 五種都量「標題上面沒有另一隻」→ 紅 5 條。深色慶祝那條不量這一項 → 不紅。",
+    "expect": ["P3 必吃 → 捧麵", "P3 夜市的其他任務 → 烤串", "P3 自然 → 遮陽帽", "P3 城市 → 相機", "P3 古蹟（沒有對得上的類別）→ 小鳳打領結"],
+    "file": "js/ui.js",
+    "find": "      onPhoto ? null",
+    "replace": "      false ? null",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "天氣：下雪那天也算下雨",
+    "why": "（事前寫 11:15；12:50 跑之前只改預期的字：斷言改名成「天氣頁的卡片是踩雪板」，少了「也」）isRainDay 拿掉 && !isSnowDay(d)：天氣頁的提醒同時出現下雪與下雨兩條 → P4 天氣頁那條紅。天氣條走 dayAlert（先判下雪）、天氣頁的探頭圖也是先看下雪 → 其餘不紅。",
+    "expect": ["P4 天氣頁的卡片是踩雪板"],
+    "file": "js/weather.js",
+    "find": "export function isRainDay(d) { return (d.rainProb >= 55 || d.rainMm >= 4) && !isSnowDay(d); }",
+    "replace": "export function isRainDay(d) { return (d.rainProb >= 55 || d.rainMm >= 4); }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "完成任務：自然對成相機",
+    "why": "（事前寫 11:15，跑之前沒改）THEME_PEEK 的 nature 從 hat 改成 cam：太平山那張變成相機 → 只有 P3 自然紅。",
+    "expect": ["P3 自然 → 遮陽帽"],
+    "file": "js/peeks.js",
+    "find": "  nature: 'hat',",
+    "replace": "  nature: 'cam',",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "探頭圖：深色的白邊沒套上",
+    "why": "（事前寫 11:15 草稿預期 1 條；12:20 改成 3 條；12:50 跑之前改第一條的字：深色那條改量天氣頁的提醒卡）const flt 改成空字串：每一層都沒有 filter。紅：［深色］ 提醒卡（濾鏡不是 url）、［深色］ 白邊範圍（每一層都「沒有白邊濾鏡」，對照組那張也是，所以上層也被抓到——同一條斷言）、［深色］ 慶祝畫面。不紅：和紙兩條（和紙本來就由 CSS 關掉，量到的照樣是 none）。",
+    "expect": ["［深色］ 天氣條一樣沒有探頭圖", "［深色］ 白邊濾鏡的範圍", "［深色］ 慶祝畫面的探頭圖"],
+    "file": "js/peeks.js",
+    "find": "  const flt = ` filter=\"url(#${id}-rim)\"`;",
+    "replace": "  const flt = '';",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "探頭圖：和紙也套上白邊",
+    "why": "（事前寫 11:15 草稿預期 1 條；12:20 改成 2 條；12:50 跑之前沒改預期：「和紙不套白邊」那條改量天氣頁的提醒卡，名稱開頭沒變）拿掉 html[data-theme=washi] 那一行：和紙下濾鏡變成 url(...)。紅：［和紙］ 探頭圖不套深色的白邊、［和紙］ 慶祝畫面的探頭圖。",
+    "expect": ["［和紙］ 探頭圖不套深色的白邊", "［和紙］ 慶祝畫面的探頭圖"],
+    "file": "css/style.css",
+    "find": "html[data-theme=\"washi\"] .gl-peek .mc-fig { filter: none; }",
+    "replace": "",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "拍照解任務：換回表情符號",
+    "why": "（事前寫 11:15，跑之前沒改）今天主角卡的拍照鈕拿掉相機圖示、字前面放回 📸：兩輪的 P7 都紅（沒有圖示、字也不是「拍照解任務・還有 N 個」開頭）。",
+    "expect": ["［和紙］ P7", "［深色］ P7"],
+    "file": "js/views/trip.js",
+    "find": "      photoIcon('cam', 24), `拍照解任務・還有 ${left} 個`) : null);",
+    "replace": "      `📸 拍照解任務・還有 ${left} 個`) : null);",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "提醒卡：上面沒留空間",
+    "why": "（事前寫 2026-11-13 12:50，跑之前；取代草稿的「天氣條：上面沒留空間」——天氣條不再掛圖）拿掉提醒卡上面留給吉祥物的高度：露出來的頭推估壓到頁首（量到上一個區塊是 HEADER）→ P2 提醒卡上緣、P4 天氣頁的卡片紅（兩條都量「不壓到上一個區塊」）。推論：頁首與提醒卡之間原本的間距小於圖露出來的 55／65px；若沒紅，就是這一條量法沒力，照實報。",
+    "expect": ["P2 天氣頁的出門提醒卡上緣", "P4 天氣頁的卡片是踩雪板"],
+    "file": "css/style.css",
+    "find": ".wx-advice.has-peek { margin-top: calc(var(--pk-rise) + 2px); }",
+    "replace": "",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "白邊濾鏡：範圍改回那一塊的外框 ±15%",
+    "why": "（事前寫 2026-11-13 12:20，跑之前；12:50 只改不紅那句的字：天氣條換成提醒卡）回到截圖抓到的那個 bug：邊線以下那層只有手掌、碗腳，±15% 不到白邊的 5 個單位 → ［深色］ 白邊範圍紅（根據：同一條斷言的對照組把小鳳那張改回 ±15%，抓到邊線以下 1 層、上層 0 層；沒有拿舊程式整支跑過，這一條才是第一次）。其餘不紅：提醒卡與慶祝畫面只驗有沒有套 url 濾鏡。",
+    "expect": ["［深色］ 白邊濾鏡的範圍"],
+    "file": "js/peeks.js",
+    "find": "filterUnits=\"userSpaceOnUse\" x=\"${x - 30}\" y=\"${y - 30}\" width=\"${w + 60}\" height=\"${h + 60}\"",
+    "replace": "x=\"-15%\" y=\"-15%\" width=\"130%\" height=\"130%\"",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "接縫：邊線以下那層的框改回從邊線剛好開始",
+    "why": "（事前寫 2026-11-13 12:20，跑之前；12:50 預期沒改。斷言第一次跑時母體算錯——雪那張沒有前景、裁切框沒人用也被量進去，改成只量真的用了下層框的那幾張，測試那一側的修正）回到放大截圖看到的接縫（量到：深色那一列比上下暗 41、和紙暗 3）：下層裁切框的 y 從 e-1 改回 e → ［深色］ 接縫那條紅。白邊範圍那條不紅（範圍 ±30，框挪 1 照樣罩得住）。",
+    "expect": ["［深色］ 邊線以下那層的裁切框"],
+    "file": "js/peeks.js",
+    "find": "y=\"${e - 1}\" width=\"${w + 40}\" height=\"${y + h - e + 21}\"",
+    "replace": "y=\"${e}\" width=\"${w + 40}\" height=\"${y + h - e + 20}\"",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "深色：動作線、閃光也畫",
+    "why": "（事前寫 2026-11-13 12:20，跑之前；12:50 只改不紅那句的字）拿掉 html:not([data-theme=washi]) .gl-peek .mc-extra 那一行：深色下閃光那層看得到 → ［深色］ 慶祝畫面紅（它量動作線不畫）。深色提醒卡不量這一項（撐傘那張也沒有動作線）→ 不紅。",
+    "expect": ["［深色］ 慶祝畫面的探頭圖"],
+    "file": "css/style.css",
+    "find": "html:not([data-theme=\"washi\"]) .gl-peek .mc-extra { display: none; }",
+    "replace": "",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "慶祝照片：被 .celebrate .celebrate-photo 的上下 18 推開",
+    "why": "（事前寫 2026-11-13 12:20，跑之前沒改）整條拿掉 .celebrate .celebrate-shot > .celebrate-photo：照片回到行內圖片、套上 margin 18px 0，照片上緣離外框上緣 18 → 照片上的探頭圖都沒對齊：P3 五種＋［深色］ 慶祝畫面。只拿掉 margin: 0、留 display: block 推論是等價突變（區塊照片的上外距跟沒有 padding／border 的外框合併，照片上緣照樣在外框上緣），只拿掉 display: block 也一樣（行內照片外距 0 照樣貼齊）——兩個宣告互為備援，所以整條拿掉；這是推論，這一條跑完才算實測。",
+    "expect": ["P3 必吃 → 捧麵", "P3 夜市的其他任務 → 烤串", "P3 自然 → 遮陽帽", "P3 城市 → 相機", "P3 古蹟（沒有對得上的類別）→ 小鳳打領結", "［深色］ 慶祝畫面的探頭圖"],
+    "file": "css/style.css",
+    "find": ".celebrate .celebrate-shot > .celebrate-photo { display: block; margin: 0; }",
+    "replace": "",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "天氣條：還沒出發時不看出發那天",
+    "why": "（事前寫 2026-11-13 12:20，跑之前；12:50 預期沒改，P6 改量「那一句＋沒有圖」）dayAlert 的「還沒出發、預報第一天就是出發日」那一支關掉：P6 的天氣條沒有提示 → 只有 P6 紅。P1／P4 是旅程中（看今天）→ 不紅。",
+    "expect": ["P6 還沒出發"],
+    "file": "js/weather.js",
+    "find": "  if (!d && trip && trip.startDate && trip.startDate > today && days[0].date === trip.startDate) {",
+    "replace": "  if (false) {",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "探頭圖：每一張的 id 都一樣",
+    "why": "（事前寫 2026-11-13 12:50，跑之前）流水號固定成 1：每一張的裁切框、濾鏡都叫 pk1-…。天氣條不再掛圖之後，使用者的畫面上一頁只有一張，只有「P8 同一頁放好幾張」（七張放進同一頁）會撞 → 只有它紅。其餘不紅：一頁一張時 id 照樣唯一；深色那輪七張同頁的時候，白邊範圍與接縫都在各自那張裡找框、不受撞名影響。",
+    "expect": ["P8 同一頁放好幾張探頭圖"],
+    "file": "js/peeks.js",
+    "find": "  const n = ++seq, id = `pk${n}`;",
+    "replace": "  const n = 1, id = `pk${n}`;",
+    "cmd": "node scripts/peektest.mjs"
+  }
+]

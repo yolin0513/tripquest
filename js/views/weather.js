@@ -1,7 +1,7 @@
 // 目的地天氣 —— 每天預報 + 「跟出發地差多少、要帶什麼」的提醒。
 
 import * as store from '../store.js';
-import { h, toast, spinnerBox } from '../ui.js';
+import { h, toast, spinnerBox, mountPeek } from '../ui.js';
 import { navigate, refreshPage } from '../router.js';
 import { forecast, buildAdvice, wxIcon, wxText, hereTempNow, getHome } from '../weather.js';
 import { currentPosition } from '../geo.js';
@@ -75,14 +75,20 @@ export default async function weather(tripId, { drawPage, setTop }) {
 
   // ---- 提醒卡 ----
   if (tips.length) {
-    out.append(h('div', { class: 'wx-advice' },
+    const card = h('div', { class: 'wx-advice' },
       h('div', { class: 'wx-advice-head' }, '🧳 出門提醒'),
       h('ul', { class: 'wx-advice-list' }, ...tips.map((t) =>
         h('li', { class: 'wx-tip wx-' + t.level }, t.text))),
       hereTemp != null
         ? h('p', { class: 'form-hint' }, `對照基準：${hereName}目前約 ${hereTemp} 度。可在「設定 → 居住地」調整。`)
         : h('p', { class: 'form-hint' }, '打開定位或設定居住地，就能算出「比家裡冷幾度」。'),
-    ));
+    );
+    // 提醒裡有下雪或下雨：吉祥物從提醒卡上緣探頭（下雪優先，跟 weather.js 的規則同一條；2026-11-13 第四段之二）。
+    // 每一條提醒照舊是字＋前面的小圖，不另外放圖。
+    const wxKind = tips.some((t) => t.level === 'snow') ? 'snow' : tips.some((t) => t.level === 'rain') ? 'rain' : null;
+    const pk = wxKind ? await import('../peeks.js').catch(() => null) : null;   // 圖載不到：提醒卡照樣出
+    if (pk) mountPeek(card, pk.peek(pk.WEATHER_PEEK[wxKind], 0.34));
+    out.append(card);
   } else {
     out.append(h('div', { class: 'wx-advice wx-ok' },
       h('div', { class: 'wx-advice-head' }, '🙂 天氣還算舒服'),

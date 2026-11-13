@@ -40,6 +40,7 @@ const SHELL_ASSETS = [
   './js/realmap.js',
   './js/overmap.js',
   './js/glyphs.js',
+  './js/peeks.js',
   './js/daterange.js',
   './js/ai.js',
   './js/aikeys.js',
