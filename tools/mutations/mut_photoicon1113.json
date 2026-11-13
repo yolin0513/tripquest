@@ -1,0 +1,38 @@
+[
+  {
+    "name": "拍照圖示：任務列換回表情符號",
+    "why": "（事前寫 2026-11-13；第四段拆批時從 mut_scene1113 搬過來，斷言換成 photoicontest 的 I1）任務列的拍照鈕換回 📷：和紙、深色兩輪的 I1 任務列那條紅。",
+    "expect": ["［和紙］ I1 任務列兩顆", "［深色］ I1 任務列兩顆"],
+    "file": "js/addphoto.js",
+    "find": "      }, photoIcon('cam', 32)),",
+    "replace": "      }, '📷'),",
+    "cmd": "node scripts/photoicontest.mjs"
+  },
+  {
+    "name": "拍照圖示：有字那顆的圖示太大",
+    "why": "（預期事前寫 2026-11-13；數值改過，依據見後）展開後「從相簿選」的圖示太大：390 寬時字被擠成兩行（第一版截圖量到高 87）。和紙、深色兩輪的 I1 展開後那條紅。原本寫 28（第一版的大小），10:36 在 scenetest 實測沒紅、10:42 探查再確認：只改 28 不會擠（CSS 的圖字間距 -4 補著；第一版會擠是 28＋沒收間距兩個一起），只拿掉間距也不會擠；34、40 都擠成兩行、高 87。改用 34。",
+    "expect": ["［和紙］ I1 展開後兩顆", "［深色］ I1 展開後兩顆"],
+    "file": "js/addphoto.js",
+    "find": "    }, photoIcon('lib', 24), compact ? '從相簿選' : '從相簿選（可多張）'),",
+    "replace": "    }, photoIcon('lib', 34), compact ? '從相簿選' : '從相簿選（可多張）'),",
+    "cmd": "node scripts/photoicontest.mjs"
+  },
+  {
+    "name": "天氣：出發地座標沒降精度（A2）",
+    "why": "（事前寫 2026-11-13；同上搬過來）hereTempNow 直接送定位給的座標（geo.js 小數 5 位）。預期只紅 A2 送出去的座標那條（前置照樣過：比較基準還是手機的定位）。",
+    "expect": ["A2 送給 Open-Meteo"],
+    "file": "js/weather.js",
+    "find": "  const f = await forecast(coarse(lat), coarse(lng));",
+    "replace": "  const f = await forecast(lat, lng);",
+    "cmd": "node scripts/photoicontest.mjs"
+  },
+  {
+    "name": "拍照圖示測試：前置——沒給定位權限",
+    "why": "（事前寫 2026-11-13；同上搬過來）測試不給定位權限：天氣頁的比較基準不是「你的位置」、沒有任何出發地請求。A2 前置紅；A2 那條也要紅（0 個請求不能算「全部是小數 2 位」）。",
+    "expect": ["A2 前置", "A2 送給 Open-Meteo"],
+    "file": "scripts/photoicontest.mjs",
+    "find": "  await ctx.overridePermissions(ORIGIN, ['geolocation']);",
+    "replace": "  // 突變：不給定位權限",
+    "cmd": "node scripts/photoicontest.mjs"
+  }
+]

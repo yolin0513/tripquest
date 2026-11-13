@@ -12,6 +12,7 @@ import { navigate } from './router.js';
 import { importPhoto, blobURL } from './photos.js';
 import { ensureMember } from './claim.js';
 import { newlyEarned } from './badges.js';
+import { photoIcon } from './glyphs.js';
 
 // ensureQuest：選了照片之後、開始匯入之前呼叫一次，用來「照片任務還不存在就先建起來」
 // （v1.74：沒有任務的地點也要能直接放照片 —— 照片仍然掛在任務底下，不動資料結構）。
@@ -92,26 +93,29 @@ export function addPhotoButtons(tripId, questId, { compact = false, icons = fals
   if (icons) {
     return h('div', { class: 'addphoto-icons' },
       camInput, libInput,
+      // 圖示（2026-11-13 第四段）：相機／相片是主體，吉祥物從邊上探出來；按鈕大小不變，意思由 aria-label 講
       h('button', {
         class: 'apx apx-cam', onclick: (e) => { e.stopPropagation(); camInput.click(); },
         'aria-label': done ? '再拍一張' : '拍照', title: done ? '再拍一張' : '拍照',
-      }, '📷'),
+      }, photoIcon('cam', 32)),
       h('button', {
         class: 'apx apx-lib', onclick: (e) => { e.stopPropagation(); libInput.click(); },
         'aria-label': '從相簿選', title: '從相簿選',
-      }, '🖼️'),
+      }, photoIcon('lib', 32)),
     );
   }
 
+  // 有字的兩顆：圖示 24（原本的表情符號約 20 寬＋一個空格）；圖與字的間距在 CSS 收到 4。
+  // 第一版（圖示 28、間距沒收）「從相簿選」在 390 寬的手機上被擠成兩行、按鈕從 56 長到 87（2026-11-13 截圖量到），所以縮回來。
   const cls = compact ? 'btn' : 'btn btn-block btn-big';
   return h('div', { class: compact ? 'addphoto-row' : 'big-shot-btn' },
     camInput, libInput,
     h('button', { class: `${cls} btn-primary`, onclick: () => camInput.click() },
-      done ? '📷 再拍一張' : '📷 拍照'),
+      photoIcon('cam', 24), done ? '再拍一張' : '拍照'),
     h('button', {
       class: `${cls} btn-soft`, style: compact ? '' : 'margin-top:10px',
       onclick: () => libInput.click(),
-    }, compact ? '🖼️ 從相簿選' : '🖼️ 從相簿選（可多張）'),
+    }, photoIcon('lib', 24), compact ? '從相簿選' : '從相簿選（可多張）'),
   );
 }
 

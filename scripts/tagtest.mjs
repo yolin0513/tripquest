@@ -166,7 +166,7 @@ try {
     const r = btn.getBoundingClientRect();
     return (r.width > 0 && r.height > 0 && btn.offsetParent) ? 1 : -1;
   });
-  if (taps === 1) ok('從打開行程到開始加照片：1 下（按「📷 拍照」就叫出相機）');
+  if (taps === 1) ok('從打開行程到開始加照片：1 下（按「拍照」就叫出相機）');
   else fail('點擊層級不對：' + taps);
 
   // 真的按下去會不會叫出檔案選擇（＝真的能開始加照片）

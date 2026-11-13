@@ -150,7 +150,10 @@ function dayLabels(days) {
 }
 
 // 取現在位置的當前氣溫（比較基準用），失敗回 null
+// 出發地的座標先降到小數 2 位（約 1 公里）才送給 Open-Meteo（2026-11-13，Dispatch 定 A2）：沒設居住地時這裡是
+// 手機現在的 GPS（geo.js 給到小數 5 位、約 1 公尺，可能就是家裡）；查「現在幾度」用不到那麼準，結果不變。
+export function coarse(v) { return Math.round(v * 100) / 100; }
 export async function hereTempNow(lat, lng) {
-  const f = await forecast(lat, lng);
+  const f = await forecast(coarse(lat), coarse(lng));
   return f && f.current ? f.current.temp : null;
 }

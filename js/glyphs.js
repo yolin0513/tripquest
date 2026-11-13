@@ -105,6 +105,26 @@ export function mascotHead(hgt = 26) {
   return figure(MASCOT_SPOT.header, HEAD_VB, false, Math.round(hgt * 128 / 116), hgt, 'gl-mascot gl-mascot-head');
 }
 
+// ---- 拍照圖示（2026-11-13 第四段；Yolin：「甚至拍照那些圖示也可以一起換掉」）----
+// 「拍照」「從相簿選」兩顆按鈕：**功能的形狀當主體**（相機、一張相片），吉祥物只從邊上探出來——
+// 相機後面是雪納瑞的頭頂、折耳、眉毛，兩隻手扶著機身；相片後面冒出白兔的兩隻耳朵。
+// 按鈕大小不變（任務列 46×46、展開後的大按鈕照舊），圖示是裝飾、aria-hidden：意思由按鈕自己的 aria-label／字講。
+// 圖裡沒有 id：每一列任務都有一組，同一頁幾十個也不會互相指錯。畫布 64×64。
+export function photoIcon(kind, size = 30) {
+  const a = ICON[kind];
+  if (!a) throw new Error('沒有這個圖示：' + kind);
+  const el = svg('0 0 64 64', `gl-icon gl-icon-${kind}`, a, size, size);
+  el.setAttribute('data-icon', kind);
+  return el;
+}
+
+/* PHOTO-ICON-BEGIN */
+const ICON = {
+  cam: '<rect x="12" y="4" width="40" height="30" rx="14" fill="#fbf9f5" stroke="#2f2c2a" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/><path d="M13 14 C11 6 19 1 27 3 C27 9 22 15 17 19 C14 21 12 18 13 14 Z" fill="#ece6de" stroke="#2f2c2a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><path d="M51 14 C53 6 45 1 37 3 C37 9 42 15 47 19 C50 21 52 18 51 14 Z" fill="#ece6de" stroke="#2f2c2a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><path d="M21 17 q5 -4.5 10 -0.5 M43 17 q-5 -4.5 -10 -0.5" fill="none" stroke="#9a948f" stroke-width="4" stroke-linecap="round"/><rect x="5" y="23" width="54" height="34" rx="9" fill="#c3bdb7" stroke="#2f2c2a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><rect x="41" y="18" width="11" height="7" rx="3" fill="#6f6965" stroke="#2f2c2a" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="32" cy="40" rx="13" ry="13" fill="#2f2c2a" stroke="#2f2c2a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="32" cy="40" r="8.5" fill="#aad3e7"/><circle cx="35" cy="36.5" r="3" fill="#fff"/><rect x="10" y="28" width="8" height="5" rx="2" fill="#f6d27a" stroke="#2f2c2a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="7" cy="47" rx="5" ry="6" fill="#fbf9f5" stroke="#2f2c2a" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="57" cy="47" rx="5" ry="6" fill="#fbf9f5" stroke="#2f2c2a" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>',
+  lib: '<ellipse cx="24" cy="14" rx="6" ry="13" transform="rotate(-12 24 24)" fill="#fffdf9" stroke="#2f2c2a" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="24" cy="15" rx="2.6" ry="8" fill="#f5b3bf" transform="rotate(-12 24 24)"/><ellipse cx="40" cy="14" rx="6" ry="13" transform="rotate(12 40 24)" fill="#fffdf9" stroke="#2f2c2a" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/><ellipse cx="40" cy="15" rx="2.6" ry="8" fill="#f5b3bf" transform="rotate(12 40 24)"/><rect x="6" y="22" width="52" height="36" rx="7" fill="#fff" stroke="#2f2c2a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><rect x="11" y="27" width="42" height="26" rx="3" fill="#aad3e7"/><circle cx="44" cy="34" r="4" fill="#f6d27a"/><path d="M11 53 L24 38 L33 47 L40 40 L53 53 Z" fill="#b9daa5" stroke="#2f2c2a" stroke-width="2.4" stroke-linejoin="round"/><rect x="11" y="27" width="42" height="26" rx="3" fill="none" stroke="#2f2c2a" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>',
+};
+/* PHOTO-ICON-END */
+
 // 圖：每隻三段——shadow（地面陰影）、pose（身體）、extra（動作線、尾巴旁的擺動線）。
 /* MASCOT-ART-BEGIN */
 const ART = {

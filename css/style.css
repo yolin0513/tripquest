@@ -189,6 +189,9 @@ html:not([data-theme="washi"]) .gl-mascot .mc-shadow,
 html:not([data-theme="washi"]) .gl-mascot .mc-extra { display: none; }
 html[data-theme="washi"] .gl-mascot .mc-fig { filter: none; }
 .empty-mascot, .recap-mascot, .about-mascot { display: flex; justify-content: center; }
+/* 拍照圖示（2026-11-13 第四段）：一樣不掛 .gl（那會把線改成字色） */
+.gl-icon { display: block; flex: none; }
+.btn > .gl-icon { margin-inline-end: -4px; }   /* 按鈕的 gap 8 → 圖與字實際隔 4，總寬跟原本「表情符號＋空格」差不多，字不會被擠成兩行 */
 .empty-mascot { margin-bottom: 6px; }
 .recap-mascot { margin-bottom: 6px; }
 .about-mascot { margin: 0 0 8px; }

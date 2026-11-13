@@ -47,7 +47,7 @@ const ALL_THEMES = {
   '.switch-row input[type="checkbox"]:checked::after': NO_TEXT,
   '.poster-frame': NO_TEXT + '（海報畫布的外框，裡面是 canvas）',
   '.rm-cursor': NO_TEXT + '（當日地圖回放的游標圓點）',
-  '.apx-cam': EMOJI + '（📷）',
+  '.apx-cam': NO_TEXT + '（任務列的拍照鈕：2026-11-13 第四段起是相機圖示、顏色寫在圖裡；原本是 📷）',
   '#sosFab': EMOJI + '（🆘，index.html；2026-11-05 以前誤列在「深色既有的對比不足」）',
   '.qbig-photo.has-img .qbig-emoji': EMOJI,
   '.quest-focus-photo.has-img .qf-emoji': EMOJI,
