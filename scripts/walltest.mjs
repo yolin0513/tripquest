@@ -8,6 +8,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { rm } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { makeMargin } from './margin.mjs';   // 2026-11-12：門檻斷言印「實際／門檻／餘裕」（見 margin.mjs 檔頭）
+import { clickText } from './userclick.mjs';
 const M = makeMargin();
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -85,8 +86,10 @@ try {
   ok('建立測試行程（3 景點：第 1 個完成、第 2 個一半、第 3 個沒開始）');
 
   // ================= 「現在這一站」 =================
-  await go(`/#/trip/${setup.tid}`);
-  await page.waitForSelector('.qline');
+  // v1.84.0：「帶我去下一站」與「換一站」在主頁（點旅程卡先到主頁）；選完之後那一站展開、標示「現在這一站」、
+  // 日期列換到那一天，照舊在任務頁看（點底部分頁「任務」過去）
+  await go(`/#/trip/${setup.tid}/home`);
+  await page.waitForSelector('.trip-home .nextstn');
   await sleep(500);
   const auto = await page.evaluate(() => ({
     name: document.querySelector('.nextstn-name')?.textContent || '',
@@ -141,15 +144,18 @@ try {
   const afterPickScroll = await page.evaluate(() => Math.round(window.scrollY));
   if (afterPickScroll === 0) ok('選完下一站的當下不會自動捲走（接著要點導航）');
   else fail('選完就自己捲走了：' + afterPickScroll);
+  const manualName = await page.evaluate(() => document.querySelector('.trip-home .nextstn-name')?.textContent || '');
+  await clickText(page, '#tabbar a.tab', '任務');
+  await page.waitForSelector('.qline');
+  await sleep(600);
   const manual = await page.evaluate(() => ({
-    name: document.querySelector('.nextstn-name')?.textContent || '',
     hereTag: !!document.querySelector('.qcollapse.is-here .qc-here'),
     openSpots: [...document.querySelectorAll('.qcollapse')].filter((e) => e.classList.contains('open'))
       .map((e) => e.querySelector('.qc-name')?.firstChild?.textContent),
     openDays: [...document.querySelectorAll('.daycollapse')].filter((e) => e.classList.contains('open')).map((e) => e.dataset.day),
   }));
-  if (manual.name.includes('太平山')) ok(`指定之後「帶我去」改指向使用者選的那一站（${manual.name.trim()}）`);
-  else fail('指定後沒有改變：' + JSON.stringify(manual));
+  if (manualName.includes('太平山')) ok(`指定之後主頁的「帶我去」改指向使用者選的那一站（${manualName.trim()}）`);
+  else fail('指定後沒有改變：' + JSON.stringify({ name: manualName, ...manual }));
   if (manual.hereTag) ok('那個景點標示「📍 現在這一站」');
   else fail('沒有標示現在這一站');
   if (manual.openSpots.length === 1 && manual.openSpots[0] === '太平山') ok('只展開指定的那個景點，其他收合');
@@ -157,17 +163,16 @@ try {
   if (manual.openDays.length === 1 && manual.openDays[0] === '2') ok('只顯示它所在的那一天（第 2 天）');
   else fail('展開的天數不對：' + JSON.stringify(manual.openDays));
 
-  // 重開行程頁，狀態要留著
+  // 重開任務頁，狀態要留著（帶我去指向哪一站在主頁，上面驗過；這裡看任務頁展開哪一站）
   await go(`/#/trip/${setup.tid}`);
   await page.waitForSelector('.qline');
   await sleep(1500);
   const again = await page.evaluate(() => ({
-    name: document.querySelector('.nextstn-name')?.textContent || '',
     openSpots: [...document.querySelectorAll('.qcollapse.open')].map((e) => e.querySelector('.qc-name')?.firstChild?.textContent),
     scrollY: Math.round(window.scrollY),
   }));
-  if (again.name.includes('太平山') && again.openSpots.length === 1 && again.openSpots[0] === '太平山') {
-    ok('下次打開這趟行程：仍然預設展開指定的那一站');
+  if (again.openSpots.length === 1 && again.openSpots[0] === '太平山') {
+    ok('下次打開這趟行程的任務頁：仍然預設展開指定的那一站');
   } else fail('重開後沒維持：' + JSON.stringify(again));
   // v1.74.11 起一次只顯示一天：日期列選中那一站所在的那一天；那一站本來就在第一個畫面裡就不捲（長輩最怕畫面自己跳），
   // 在畫面外才捲。所以「有沒有捲」要看前置——那一站在文件裡的位置——兩種結果都有對錯，不是只有「捲了才對」。
@@ -210,12 +215,12 @@ try {
         { tripId: s.tid, questId: q.id, memberId: mem.id, allowGeo: false });
     }
   }, setup);
-  await go(`/#/trip/${setup.tid}`);
-  await page.waitForSelector('.qline');
+  await go(`/#/trip/${setup.tid}/home`);
+  await page.waitForSelector('.trip-home .nextstn');
   await sleep(500);
   const advanced = await page.evaluate(async (tid) => {
     const st = await import('./js/store.js');
-    return { here: st.getHereSpot(tid), name: document.querySelector('.nextstn-name')?.textContent || '' };
+    return { here: st.getHereSpot(tid), name: document.querySelector('.trip-home .nextstn-name')?.textContent || '' };
   }, setup.tid);
   if (!advanced.here) ok('指定的景點完成後，手動狀態自動失效（不會被困住）');
   else fail('完成後仍卡在手動狀態：' + JSON.stringify(advanced));
@@ -296,12 +301,18 @@ try {
     }, offset);
 
     await E.goto('about:blank');
-    await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}`, { waitUntil: 'networkidle0' });
-    await E.waitForSelector('.qline');
+    await E.goto(`http://localhost:${WEB}/#/trip/${ez.tid}/home`, { waitUntil: 'networkidle0' });
+    await E.waitForSelector('.trip-home .th-tools');
     await sleep(1200);
-    const hasSwitch = await E.evaluate(() => !!document.querySelector('.nextstn-switch'));
-    if (hasSwitch) ok(`${label}：仍然有「帶我去下一站」與「換一站」`);
-    else fail(`${label}：按鈕整個不見了，根本沒辦法指定`);
+    const hs = await E.evaluate(() => ({ sw: !!document.querySelector('.trip-home .nextstn-switch'), end: !!document.querySelector('.trip-home .th-end') }));
+    // 還沒出發：主頁照樣有帶我去／換一站。已結束：v1.84.0 照規劃示意圖 5（Yolin「都照建議做」）主頁換成「旅程結束了」、不放下一站——
+    // 這是行為改變（舊規則：結束日過了照樣有「換一站」，照片沒補完、人可能還在路上）；STATUS 列為待 Yolin 確認。
+    // 任務頁照舊捲到指定的那一站（下面那條）。
+    if (offset > 0) {
+      if (hs.sw && !hs.end) ok(`${label}：主頁仍然有「帶我去下一站」與「換一站」`);
+      else fail(`${label}：主頁按鈕整個不見了，根本沒辦法指定（${JSON.stringify(hs)}）`);
+    } else if (!hs.sw && hs.end) ok(`${label}：主頁換成「旅程結束了」、不放下一站（規劃示意圖 5）`);
+    else fail(`${label}：主頁不是結束後那一版（${JSON.stringify(hs)}）`);
 
     await E.evaluate(async (z) => {
       const s = await import('./js/store.js');
@@ -501,8 +512,8 @@ try {
 
   // 是誰改的仍然存在記錄裡（之後要用得到），但畫面上不顯示
   await B.goto('about:blank');
-  await B.goto(`http://localhost:${WEB}/#/trip/${shared.tid}`, { waitUntil: 'networkidle0' });
-  await B.waitForSelector('.nextstn');
+  await B.goto(`http://localhost:${WEB}/#/trip/${shared.tid}/home`, { waitUntil: 'networkidle0' });
+  await B.waitForSelector('.trip-home .nextstn');
   await sleep(600);
   const byLine = await B.evaluate(() => document.body.textContent.includes('把大家帶到這裡'));
   if (!byLine) ok('畫面上不再顯示「○○ 把大家帶到這裡」');

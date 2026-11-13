@@ -1,6 +1,6 @@
 // 兩台裝置的即時同步（npm run livesynctest，v1.63）——照使用者實測的情境走一遍，量實際秒數：
 // ⏱ 受機器狀態影響（2026-10-29 標）：每一步都要在 BUDGET（預設 45 秒）內看到對方——機器忙或網路慢時可能誤紅；紅在逾時那一類先看當時負載。
-//   A 用建立流程開行程 → 分享 → B 加入 → A 停在任務頁不動，多久看到 B？
+//   A 用建立流程開行程 → 分享 → B 加入 → A 停在主頁不動（v1.84.0 前是任務頁），多久看到 B？
 //   兩台都開位置分享 → 多久互相看得到？
 // 這支刻意「不手動戳同步」：全部靠背景排程與開頁觸發，量的就是使用者會感受到的時間。
 
@@ -77,9 +77,9 @@ try {
   await A.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
   await sleep(600);
 
-  // A 停在任務頁（就像使用者那樣）
-  await A.evaluate((o) => { location.hash = '#/trip/' + o.tid; }, setup);
-  await A.waitForSelector('.hero', { timeout: 10000 });
+  // A 停在主頁（就像使用者那樣；v1.84.0 起點旅程卡先到主頁，旅伴列與「有人加入了」的橫幅都在主頁）
+  await A.evaluate((o) => { location.hash = '#/trip/' + o.tid + '/home'; }, setup);
+  await A.waitForSelector('.trip-home', { timeout: 10000 });
   await sleep(500);
 
   // ---------- 建立者要自動算「已加入」 ----------
@@ -96,7 +96,7 @@ try {
     `建立者一開始就有身分與 claim（active=${!!creator.active}、claims=${creator.claims}）—— 不然旅伴會看到「建立者未加入」，而且他的位置永遠傳不出去`);
 
   // ---------- B 加入 → A 停在前景不動，多久看到？ ----------
-  console.log('\n— B 加入，A 停在任務頁不動 —');
+  console.log('\n— B 加入，A 停在主頁不動 —');
   await B.evaluate(async (o) => {
     const { joinInvite } = await import('./js/share.js');
     const { getConfig } = await import('./js/sync.js');

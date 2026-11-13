@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, ring, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty } from '../ui.js';
+import { h, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty } from '../ui.js';
 import { navigate, back, navRestoredScroll, refreshPage } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
@@ -20,7 +20,7 @@ import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js'
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
-import { paperPlane, photoIcon } from '../glyphs.js';
+import { paperPlane } from '../glyphs.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
 import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
@@ -94,7 +94,6 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
 
   const prog = store.tripProgress(tripId);
   const spots = store.spotsOf(tripId);
-  const members = store.membersOf(t.groupId);
   const allDone = prog.total > 0 && prog.done === prog.total;
 
   const byDay = new Map();
@@ -104,65 +103,17 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     byDay.get(d).push(s);
   }
 
-  // 出發倒數：只在「還沒出發」時出現；沒設出發日就不出現（不顯示 0、不猜）
-  const cd = countdownText(t.startDate, t.endDate);
-
+  // v1.84.0 主頁上線：任務頁只做任務——一行進度、日期列、各站的任務。
+  // 原本在上面的出發倒數、進度卡、新旅伴橫幅、旅伴列、「旅伴還看不到你」、位置分享、回顧大按鈕、今天主角卡、找附近、天氣條
+  // 搬到主頁（tripHome）或行程分頁；「拍照解任務」不搬（Yolin：主頁不放任務的跳轉；拍照就在每一列）。對照表在 STATUS。
+  // 歡迎卡與同步列留在這裡：加入後落在這一頁（join.js），歡迎卡教的就是這一頁；拍完上傳的進度也在拍照的這一頁看。
   const container = h('div', { class: 'page' },
     welcomeCard(tripId),
     syncBanner(tripId, t),
-    cd ? h('div', { class: 'countdown', role: 'status' },
-      h('span', { class: 'cd-big' }, cd),
-      h('span', { class: 'cd-sub' }, rangeLabel(t.startDate, t.endDate))) : null,
-    h('div', { class: 'progress-banner' },
-      h('div', { class: 'pb-text' },
-        h('div', { class: 'pb-title' }, allDone ? '全部完成了！🎉' : `已完成 ${prog.done} / ${prog.total}`),
-        h('div', { class: 'pb-sub' }, allDone ? '可以做回憶影片了' : (prog.done === 0 ? '開始拍第一張吧' : '繼續加油！')),
-        h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round(prog.ratio * 100)}%` })),
-      ),
-      ring(prog.ratio, { size: 64, label: `${prog.done}/${prog.total}` }),
-    ),
-
-    joinBanner(tripId, members),
-    members.length ? crewButton(tripId, t, members) : null,
-
-    // 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
-    // 還沒說「這是誰的手機」→ 旅伴那邊會看到你「還沒加入」，而且你開了位置分享也
-    // 傳不出去（v1.63/v1.64 實機踩過：建立者從來沒走過這一步）。原本是一顆軟性按鈕，
-    // 實機回報「被忽略了」；改成講清楚後果的提示卡。**不用彈窗**——彈窗會蓋住別的
-    // 對話框，900 毫秒後突然跳出來對長輩也不友善。
-    (store.getRaw(t.groupId)?.syncSecret && !activeMemberId(tripId) && members.length > 1)
-      ? h('div', { class: 'claim-nudge' },
-          h('div', { class: 'claim-nudge-t' }, '👋 旅伴還看不到你'),
-          h('p', { class: 'claim-nudge-p' }, '先告訴大家「這是誰的手機」，你拍的照片才會算在你名下，旅伴也才看得到你已經加入。'),
-          h('button', {
-            class: 'btn btn-primary btn-block',
-            onclick: async () => { const got = await ensureMember(tripId, { force: true }); if (got) toast('好了，旅伴現在看得到你了'); refreshPage(); },
-          }, '選擇我是誰'))
-      : null,
-
-    posBanner(tripId),
-
-    // 全部完成 / 旅程結束 → 直接把「回顧」拉到最上面
-    // 旅程結束／全部完成時給回顧入口，但「帶我去下一站」還是要留著 ——
-    // 回程日過了照片還沒補完的情況很常見，那時候一樣需要導航與「換一站」。
-    (allDone || tripEnded(t)) && spots.length
-      ? h('div', {},
-          h('button', { class: 'btn btn-primary btn-block btn-big', style: 'margin-top:8px', onclick: () => navigate(`/trip/${tripId}/memories`) },
-            allDone ? '🎉 全部完成！去看回顧與回憶影片' : '🎁 旅程結束了，來看回顧'),
-          todayCard(tripId, t, allDone, () => jumpToSpot))
-      : todayCard(tripId, t, allDone, () => jumpToSpot),
-
-    h('div', { class: 'stack', style: 'margin-top:6px' },
-      // 找附近（v1.59）：自駕最常用——獨立入口、不塞 SOS（緊急頁不放生活設施）
-      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
-      // 航班、待買清單、住宿、調整每天的行程 2026-11-13 搬到「行程」分頁（itinerary()）。
-      // 「把任務分享給旅伴」移到旅程設定（v1.59.1）——分享＝邀請旅伴加入，
-      // 語意屬於「旅伴與電話」那一區；行程頁保持「出遊當下」的操作。
-      // 不另留快速入口：⚙️ 一步就到，而且旅伴清單（頭像列點開）裡也有「分享邀請連結」。
-    ),
+    prog.total > 0 ? h('div', { class: 'task-prog', role: 'status' },
+      h('span', { class: 'tp-title' }, allDone ? '全部完成了！🎉' : `已完成 ${prog.done} / ${prog.total}`),
+      h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round(prog.ratio * 100)}%` }))) : null,
   );
-  // 「📸 拍照解任務」：換到那一站那一天、展開那一站、捲過去（下面排好天之後才接得上）
-  let jumpToSpot = null;
 
   if (spots.length === 0) {
     container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'),
@@ -245,19 +196,7 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
         if (r.top < stripH || r.top > window.innerHeight * 0.6) smoothScrollTo(Math.max(0, window.scrollY + r.top - stripH - 8));
       }
     }
-    jumpToSpot = (spot) => {
-      // 換天但不讓 pick 自己捲（兩個平滑捲動同時跑會互相蓋掉，2026-11-13 實測）
-      pick(spot.day || 1, { scroll: false });
-      const el = container.querySelector(`.qcollapse[data-spot="${spot.id}"]`);
-      if (!el) return;
-      if (!el.classList.contains('open')) el.querySelector('.qc-toggle')?.click();
-      // 日期列是 sticky：點的當下它多半還沒黏到頂、位置在下面，不能拿它「現在的底」當偏移，
-      // 要用「黏住之後」的底＝sticky 的 top＋日期列自己的高（只有一天時沒有日期列，用頂列的高）
-      const stuck = strip.el.isConnected
-        ? (parseFloat(getComputedStyle(strip.el).top) || 0) + strip.el.offsetHeight
-        : (document.getElementById('topbar')?.offsetHeight || 70);
-      smoothScrollTo(Math.max(0, window.scrollY + el.getBoundingClientRect().top - stuck - 8));
-    };
+    // 「📷 拍照解任務」跳到那一站（jumpToSpot）v1.84.0 拿掉：它在今天主角卡上，主角卡搬到主頁、主頁不放任務的跳轉（Yolin）。
     // 只有一天就不需要日期列（只有一格，沒東西可以切）
     // 日期列放在「全部展開／收合」上面：它是這一區的目錄
     if (dayNums.length > 1) container.insertBefore(strip.el, container.querySelector('.day-tools'));
@@ -270,12 +209,10 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     // 新增景點在「調整每天的行程」裡；這裡不再重複放
   }
 
-  // 天氣提醒條 + 每天的天氣摘要（有座標景點、旅程還沒結束才有；背景載入）
+  // 每天的天氣摘要（有座標景點、旅程還沒結束才有；背景載入）。天氣條 v1.84.0 搬到主頁，這裡只填「天」標題列那一小段。
   let wxReady = Promise.resolve();
   if (spots.some((s) => s.lat != null) && !tripEnded(t)) {
-    const wxSlot = h('div', { class: 'wx-slot' });
-    container.insertBefore(wxSlot, container.querySelector('.stack')?.nextSibling || null);
-    wxReady = fillWeather(wxSlot, container, tripId, t);
+    wxReady = fillWeather(null, container, tripId, t);
   }
 
   drawPage(container);
@@ -400,25 +337,111 @@ function nextStationButton(tripId, t, allDone) {
   );
 }
 
-// 2026-11-13「今天」主角卡（風格提案第 10 項）：下一站的時間（有填才寫，大數字；沒填不補猜的）＋帶路＋拍照解任務。
-// 帶路那顆與「換一站」照舊是 nextStationButton（文字與行為都沒變）；這張卡把它們包起來、加上時間與「拍照解任務」。
-// 拍照解任務＝換到那一站那一天、展開那一站、捲過去（任務頁的相機鈕就在那裡），不另開一頁。
-// 圖示是任務列那顆相機（雪納瑞扶著；2026-11-13 第四段之二，Dispatch 定：原本是 📸）。
-function todayCard(tripId, t, allDone, getJump) {
-  const nav = nextStationButton(tripId, t, allDone);
+// 2026-11-13「今天」主角卡（風格提案第 10 項）：下一站的時間（有填才寫，大數字；沒填不補猜的）＋帶路＋換一站。
+// 帶路那顆與「換一站」照舊是 nextStationButton（文字與行為都沒變）；這張卡把它們包起來、加上時間。
+// v1.84.0 從任務頁搬到主頁，「📷 拍照解任務・還有 N 個」拿掉（Yolin：主頁不放任務的跳轉，任務維持在自己的頁籤）。
+function todayCard(tripId, t) {
+  const nav = nextStationButton(tripId, t, false);
   if (!nav) return null;
   const next = currentSpot(tripId);
   const label = store.getHereSpot(tripId) ? '現在這一站' : '下一站';
   const time = spotTimes(next).startTime || '';
-  const p = store.spotProgress(next.id);
-  const left = p.total - p.done;
   return h('section', { class: 'today-card', 'aria-label': label },
     h('div', { class: 'today-head' },
       h('span', { class: 'today-label' }, label),
       time ? h('span', { class: 'today-time' }, time) : null),
-    nav,
-    left > 0 ? h('button', { class: 'btn btn-ok btn-block today-shot', type: 'button', onclick: () => getJump()?.(next) },
-      photoIcon('cam', 24), `拍照解任務・還有 ${left} 個`) : null);
+    nav);
+}
+
+// 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
+// 還沒說「這是誰的手機」→ 旅伴那邊會看到你「還沒加入」，而且你開了位置分享也
+// 傳不出去（v1.63/v1.64 實機踩過：建立者從來沒走過這一步）。原本是一顆軟性按鈕，
+// 實機回報「被忽略了」；改成講清楚後果的提示卡。**不用彈窗**——彈窗會蓋住別的
+// 對話框，900 毫秒後突然跳出來對長輩也不友善。v1.84.0 從任務頁搬到主頁（通知那一格）。
+function claimNudge(tripId, t, members) {
+  if (!(store.getRaw(t.groupId)?.syncSecret && !activeMemberId(tripId) && members.length > 1)) return null;
+  return h('div', { class: 'claim-nudge' },
+    h('div', { class: 'claim-nudge-t' }, '👋 旅伴還看不到你'),
+    h('p', { class: 'claim-nudge-p' }, '先告訴大家「這是誰的手機」，你拍的照片才會算在你名下，旅伴也才看得到你已經加入。'),
+    h('button', {
+      class: 'btn btn-primary btn-block',
+      onclick: async () => { const got = await ensureMember(tripId, { force: true }); if (got) toast('好了，旅伴現在看得到你了'); refreshPage(); },
+    }, '選擇我是誰'));
+}
+
+// ---------- 主頁（v1.84.0）----------
+// Yolin 2026-11-13：「會有一個主頁，可以很直覺的看到這些提示以及導航到下一站」→ 選方案二、改兩處
+// （主頁不放任務的跳轉；回顧搬去行程分頁），之後「可以 都照建議做」＝docs/DESIGN_主頁規劃.md 第 5 節（示意圖 4、5）。
+// 主頁只講「現在」：通知（一次一張）→ 出發倒數／今天第幾天 → 天氣條 → 下一站（帶我去、換一站）→ 小工具。
+// 旅程結束後（結束日 23:59:59 過了）：旅程結束了＋去看回顧 → 小工具。沒有天氣、沒有下一站。
+// 任務的數字與拍照在「任務」分頁。舊位置 → 新位置的對照表在 STATUS。
+export async function tripHome(tripId, { drawPage, setTop } = {}) {
+  const t = store.get(tripId);
+  if (!t) { navigate('/', { replace: true }); return; }
+  setTop({
+    title: t.title,
+    action: { icon: '⚙️', label: '旅程設定', short: '設定', onClick: () => navigate(`/trip/${tripId}/settings`) },
+  });
+  const spots = store.spotsOf(tripId);
+  const members = store.membersOf(t.groupId);
+  const prog = store.tripProgress(tripId);
+  const allDone = prog.total > 0 && prog.done === prog.total;
+  const ended = tripEnded(t);
+  const todayDay = dayForToday(t);
+  // 出發倒數：只在「還沒出發」時出現；沒設出發日就不出現（不顯示 0、不猜）
+  const cd = countdownText(t.startDate, t.endDate);
+
+  // 通知一次只放一張、放最上面：有人新加入 > 旅伴還看不到你（規劃「會讓主頁太長的東西」那一節）
+  const note = joinBanner(tripId, members) || claimNudge(tripId, t, members);
+
+  const goMem = () => navigate(`/trip/${tripId}/memories`);
+  let main = null;
+  if (!spots.length) {
+    main = h('div', { class: 'empty th-empty' }, h('p', {}, '這個旅程還沒有景點'),
+      h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}/plan`) }, '＋ 去安排景點'));
+  } else if (ended) {
+    // 旅程結束後：合成一張（原本進度卡「全部完成了」跟回顧大按鈕同一句話講兩次）
+    const photos = store.submissionsOfTrip(tripId).filter((x) => x.photoHash || x.thumbHash).length;
+    const stats = [prog.total ? `完成 ${prog.done} / ${prog.total} 個任務` : null, photos ? `拍了 ${photos} 張照片` : null].filter(Boolean);
+    main = h('section', { class: 'th-end' },
+      h('div', { class: 'th-end-t' }, '🎁 旅程結束了'),
+      // 每一段自己不換行（layouttest 抓到：320／360px 寬時「拍了 51」換行「張照片」，數字和量詞被拆開）；要換行只換在「・」後面
+      stats.length ? h('div', { class: 'th-end-s' }, ...stats.flatMap((s, i) => [i ? '・' : null, h('span', { class: 'th-end-part' }, s)])) : null,
+      h('button', { class: 'btn btn-primary btn-block btn-big th-end-go', onclick: goMem }, '去看回顧與回憶影片'));
+  } else {
+    // 下一站卡；全部拍完了（又沒指定現在這一站）就沒有下一站——換成「全部完成」那一張，回顧影片這時已經開放
+    main = todayCard(tripId, t) || (allDone ? h('section', { class: 'th-end' },
+      h('div', { class: 'th-end-t' }, '🎉 任務全部完成了'),
+      h('button', { class: 'btn btn-primary btn-block btn-big th-end-go', onclick: goMem }, '去看回顧與回憶影片')) : null);
+  }
+
+  const page = h('div', { class: 'page trip-home' },
+    note,
+    cd ? h('div', { class: 'countdown', role: 'status' },
+      h('span', { class: 'cd-big' }, cd),
+      h('span', { class: 'cd-sub' }, rangeLabel(t.startDate, t.endDate))) : null,
+    todayDay > 0 ? h('div', { class: 'th-day' },
+      h('span', { class: 'th-day-n' }, `今天是第 ${todayDay} 天`),
+      t.startDate ? h('span', { class: 'th-day-d' }, `${dayDate(t, todayDay)} ${weekdayLabel(t.startDate, todayDay)}`.trim()) : null) : null,
+    main,
+    // 小工具：找附近、旅伴、（結束後）照片、位置分享（分享中才有；分享期過了自己不顯示，見 posBanner）
+    h('div', { class: 'stack th-tools' },
+      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
+      members.length ? crewButton(tripId, t, members) : null,
+      ended ? h('button', { class: 'btn btn-soft btn-block th-photos', onclick: () => navigate(`/trip/${tripId}/people`) }, '📸 看大家的照片') : null,
+      posBanner(tripId)),
+  );
+
+  // 天氣條（有座標景點、旅程還沒結束才有；背景載入）：放在下一站卡上面（第幾天那一行下面）
+  if (spots.some((s) => s.lat != null) && !ended) {
+    const wxSlot = h('div', { class: 'wx-slot' });
+    page.insertBefore(wxSlot, main && main.parentNode === page ? main : page.querySelector('.th-tools'));
+    fillWeather(wxSlot, page, tripId, t);
+  }
+
+  drawPage(page);
+  watchHere(tripId);
+  import('../outbox.js').then((o) => o.refreshNow()).catch(() => {});
 }
 
 // 選「現在在哪一站」。也提供「自動」把手動狀態關掉，不會被困住。
@@ -660,6 +683,8 @@ async function fillWeather(slot, container, tripId, trip) {
         if (span) span.textContent = `${wx.wxIcon(d.code)} ${d.tmax}° / ${d.tmin}°`;
       }
     }
+    // 任務頁（v1.84.0 起）只填上面那一小段、不畫天氣條：沒有天氣條就不用比出發地的氣溫，也就不問定位
+    if (!slot) return;
 
     let hereTemp = null, hereName = '出發地';
     const home = wx.getHome();
@@ -943,9 +968,10 @@ function tripSignature(tripId) {
 // **網址是不是正好就是行程頁本身**（後面沒有東西）。新增子頁不必再回來改。
 // 2026-11-13 白名單多一頁：「行程」分頁（itinerary()）。它也畫整趟的資料（航班、住宿、待買、每天的行程），
 // 旅伴同步進來要跟著更新；兩頁共用同一個訂閱（watchHere），在兩頁之間切換不退訂，重畫的是當下那一頁。
+// v1.84.0 再多一頁：主頁（tripHome）。新旅伴、換了現在這一站、新照片都要跟著更新。
 function onTripPage(tripId) {
   const path = (location.hash.replace(/^#/, '') || '/').split('?')[0].replace(/\/+$/, '');
-  return path === `/trip/${tripId}` || path === `/trip/${tripId}/itinerary`;
+  return path === `/trip/${tripId}` || path === `/trip/${tripId}/itinerary` || path === `/trip/${tripId}/home`;
 }
 
 // 使用者正打開「怎麼去」的選項時，背景來的變動先不整頁重畫（2026-11-11 守夜）。

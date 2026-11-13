@@ -807,6 +807,21 @@ html[data-theme="washi"] .info-row + .info-row { border-top: 2px dashed var(--li
 .today-label { font-weight: 800; font-size: 0.95rem; }
 .today-time { font-size: 1.7rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .today-shot { margin-top: 10px; }
+/* v1.84.0 主頁：今天第幾天一行、旅程結束後（或全部拍完）那一張、小工具一排 */
+.th-day { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 6px 2px 2px; }
+.th-day-n { font-size: 1.2rem; font-weight: 900; }
+.th-day-d { color: var(--muted); font-weight: 700; }
+.th-end { margin-top: 8px; padding: 16px 14px 12px; border-radius: var(--radius); background: var(--today-bg); border: 1px solid var(--line); }
+.th-end-t { font-size: 1.25rem; font-weight: 900; }
+.th-end-s { margin-top: 4px; font-weight: 700; }   /* 底色是 --today-bg：灰字在和紙的山吹黃上對比不一定夠，用本文色 */
+.th-end-part { white-space: nowrap; }   /* 「完成 X / Y 個任務」「拍了 N 張照片」各自不拆開，要換行只換在「・」後面 */
+.th-end-go { margin-top: 12px; }
+.th-tools { margin-top: 12px; }
+html[data-theme="washi"] .th-end { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+/* 任務頁最上面一行進度（v1.84.0 進度卡縮成一行；圓環與鼓勵的話拿掉） */
+.task-prog { display: flex; align-items: center; gap: 12px; margin: 6px 2px 10px; }
+.tp-title { flex: none; font-weight: 800; }
+.task-prog .progress-track { flex: 1; margin-top: 0; }
 /* 同類合成一張卡（第 9 項）：航班、住宿、待買三列 */
 .info-card { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .info-row { appearance: none; display: flex; align-items: center; gap: 6px; width: 100%; min-height: var(--tap); padding: 12px 16px;

@@ -155,10 +155,30 @@
   },
   {
     "name": "scrolltest 前置：現在這一站改回最後一站",
-    "why": "最後一站會被文件底卡住，停的位置由頁面長度決定，上面那條突變就驗不到。預期只紅 scrolltest A 的「前置：捲動沒有被文件底卡住」。〔事後補，2026-11-06：131 條重跑時照樣全綠——現在的頁面比 10-28 長（最大捲動 1270 → 1919），最後一站也捲得到日期列下面（scrollY 1899 < 1919），選最後一站不再被文件底卡住：在目前的頁面上是等價突變（§5.12），不補斷言。前置那條留著守將來頁面又變矮。〕",
+    "why": "最後一站會被文件底卡住，停的位置由頁面長度決定，上面那條突變就驗不到。預期只紅 scrolltest A 的「前置：捲動沒有被文件底卡住」。〔事後補，2026-11-06：131 條重跑時照樣全綠——現在的頁面比 10-28 長（最大捲動 1270 → 1919），最後一站也捲得到日期列下面（scrollY 1899 < 1919），選最後一站不再被文件底卡住：在目前的頁面上是等價突變（§5.12），不補斷言。前置那條留著守將來頁面又變矮。〕〔2026-11-13 v1.84.0：任務頁變矮、一天改 18 站之後第 931 次照樣全綠（最大捲動 3055），一樣是等價突變；守新情境的是下面兩條。〕",
     "file": "scripts/scrolltest.mjs",
-    "find": "    const pick = secs.find((x) => x.getBoundingClientRect().top + window.scrollY > window.innerHeight + 40) || secs[secs.length - 1];",
+    "find": "    const pick = secs.find((x, k) => docTop(secs[0]) + k * pitch > window.innerHeight + 40) || secs[secs.length - 1];",
     "replace": "    const pick = secs[secs.length - 1];",
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
+  },
+  {
+    "name": "scrolltest 前置：照現在的位置挑（v1.84.0 之前的挑法）",
+    "why": "（事前寫 2026-11-13 21:4x，跑之前）挑的時候第一站展開著；照「現在」的位置挑第一個在畫面外的站，重開之後前面幾站都收合，挑到的站往上移、回到第一個畫面裡——v1.84.0 第一場全套撞到的就是這個（當時一天 6 站）。預期紅：前置不成立（那一站本來就在第一個畫面裡）。可能另紅「沒有自動捲動」（要看那一站重開後在哪、App 捲不捲），不確定、不寫進 expect。",
+    "expect": ["前置不成立：現在這一站本來就在第一個畫面裡"],
+    "file": "scripts/scrolltest.mjs",
+    "find": "    const pick = secs.find((x, k) => docTop(secs[0]) + k * pitch > window.innerHeight + 40) || secs[secs.length - 1];",
+    "replace": "    const pick = secs.find((x) => x.getBoundingClientRect().top + window.scrollY > window.innerHeight + 40) || secs[secs.length - 1];",
+    "cmd": "node scripts/scrolltest.mjs",
+    "done": "^折疊與自動捲動測試結束"
+  },
+  {
+    "name": "scrolltest 前置：一天改回 6 站",
+    "why": "（事前寫 2026-11-13 21:4x，跑之前）6 站時任務頁太矮，沒有一站排得到第一個畫面以下，退回最後一站（第一場全套：文件位置 665 < 畫面 780）。預期紅：總數斷言（寫 54）、前置不成立。【事後，帳本第 940 次實跑】只紅總數斷言、前置沒紅：6 站時新挑法照樣挑到 823 > 780、捲動 653 < 1160——第一場撞到的 665 是舊挑法造成的，事前的預期把兩個修法混在一起。expect 改成只有總數斷言（事後寫，不算預測得準）；這一條守的是「站數別被悄悄改掉」，18 站是餘裕（見 scrolltest 的「②」註解）。",
+    "expect": ["景點展開狀態不對"],
+    "file": "scripts/scrolltest.mjs",
+    "find": "spotsPerDay: 18 });   // 18：理由見下面「②」",
+    "replace": "spotsPerDay: 6 });   // 18：理由見下面「②」",
     "cmd": "node scripts/scrolltest.mjs",
     "done": "^折疊與自動捲動測試結束"
   },

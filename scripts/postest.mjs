@@ -268,12 +268,13 @@ try {
   console.log('\n— 旅程結束後 —');
   const dayStr = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const setDates = (start, end) => A.evaluate(async (o) => { await (await import('./js/store.js')).patch(o.tid, { startDate: o.start, endDate: o.end }); }, { ...setup, start, end });
-  // 回到行程頁：先回首頁（旅程裡的頁面沒有首頁那排分頁，用網址回去），再像使用者一樣點那張旅程卡（行程頁是進頁面時畫的）
+  // 回到主頁（v1.84.0 前是任務頁）：先回首頁（旅程裡的頁面沒有首頁那排分頁，用網址回去），再像使用者一樣點那張旅程卡（主頁是進頁面時畫的）
   const tripPageBanner = async () => {
     await A.evaluate(() => { location.hash = '#/'; });
     await A.waitForFunction(() => (location.hash === '#/' || location.hash === '') && document.querySelector('.trip-card'), { timeout: 10000 });
     await clickText(A, '.trip-card', '台北行');
-    await A.waitForSelector('.progress-banner', { timeout: 15000 });
+    // v1.84.0 起點旅程卡先到主頁，位置分享的橫幅在主頁的小工具那一區（.th-tools 畫出來＝主頁畫好了）
+    await A.waitForSelector('.trip-home .th-tools', { timeout: 15000 });
     return A.evaluate(() => { const b = document.querySelector('.pos-banner'); return b ? b.textContent : null; });
   };
   const coordsMine = () => A.evaluate(async () => (await import('./js/store.js')).exportRecords({ all: true }).filter((r) => r.type === 'memberPos' && !r.deleted && r.lat != null).length);
@@ -304,7 +305,7 @@ try {
   const inTripCoords = await coordsMine();
   const inTripBanner = await tripPageBanner();
   yes(inTripCoords >= 1 && inTripBanner && inTripBanner.includes('正在跟旅伴分享'),
-    `旅程中：開關打開、送出 ${inTripCoords} 筆有座標的位置，行程頁有「正在分享」橫幅（${inTripBanner}）`);
+    `旅程中：開關打開、送出 ${inTripCoords} 筆有座標的位置，主頁有「正在分享」橫幅（${inTripBanner}）`);
 
   // 結束日的隔天（緩衝日）：還在分享期——進緊急求助頁還會送有座標的位置，所以橫幅照顯示才誠實
   await setDates(dayStr(-3), dayStr(-1));
@@ -312,7 +313,7 @@ try {
   const bufPush = await visitSOS();
   const bufSent = bufPush.filter((r) => r.lat != null).length;
   yes(bufBanner && bufBanner.includes('正在跟旅伴分享') && bufSent >= 1,
-    `結束日的隔天：還在分享期，緊急求助頁送出 ${bufSent} 筆有座標的位置，行程頁照樣有橫幅（${bufBanner}）`);
+    `結束日的隔天：還在分享期，緊急求助頁送出 ${bufSent} 筆有座標的位置，主頁照樣有橫幅（${bufBanner}）`);
 
   // 結束日的隔天也過完：開關還開著，但已經不送、也不再顯示「正在分享」。
   // 這一段自己造情境、不靠上一段留下的那筆（2026-11-13 突變「拿掉緩衝」時，上一段就把那筆清掉了，這一段的母體變成 0、多紅一行）：
@@ -326,7 +327,7 @@ try {
   const stillOn = await A.evaluate(async (t) => (await import('./js/pos.js')).sharing(t), setup.tid);
   const endBanner = await tripPageBanner();
   yes(stillOn === true && endBanner === null,
-    `旅程結束後：開關還開著（${stillOn}），行程頁不顯示「正在分享」橫幅（${endBanner === null ? '沒有' : endBanner}）`);
+    `旅程結束後：開關還開著（${stillOn}），主頁不顯示「正在分享」橫幅（${endBanner === null ? '沒有' : endBanner}）`);
   const endPush = await visitSOS();
   const endCoordsLeft = await coordsMine();
   yes(endPush.length >= 1 && endPush.every((r) => r.lat == null && r.deleted) && endCoordsLeft === 0,

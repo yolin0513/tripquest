@@ -128,7 +128,8 @@ try {
   await B.waitForFunction(() => [...document.querySelectorAll('.modal-card button')].some((x) => x.textContent.includes('爸爸')), { timeout: 30000 });
   await B.evaluate(() => { const b = [...document.querySelectorAll('.modal-card button')].find((x) => x.textContent.includes('爸爸')); b && b.click(); });
   await B.waitForFunction(() => location.hash.includes('/trip/') && !location.hash.includes('/join'), { timeout: 15000 });
-  await B.waitForSelector('.progress-banner', { timeout: 15000 });
+  // 加入後落在任務頁（歡迎卡在這一頁）；v1.84.0 起任務頁沒有進度卡了，等那一站畫出來
+  await B.waitForSelector('.qcollapse', { timeout: 15000 });
   const t1 = Date.now();
   const landed = await B.evaluate(() => ({
     welcome: !!document.querySelector('.welcome-card'),
@@ -168,9 +169,9 @@ try {
 
   // ---------- 旅伴清單與加入橫幅（v1.57.3）----------
   console.log('\n— 旅伴與加入提示 —');
-  // A 先看一次行程頁（把目前的 claim 記為已看），B 已在剛剛 ensureMember 認領了「爸爸」
+  // A 先看一次主頁（把目前的 claim 記為已看；v1.84.0 起旅伴列與加入橫幅在主頁），B 已在剛剛 ensureMember 認領了「爸爸」
   await A.goto('about:blank');
-  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/home`, { waitUntil: 'networkidle0' });
   await A.waitForSelector('.crew-btn', { timeout: 15000 });
   const crew0 = await A.evaluate(() => document.querySelector('.crew-btn .crew-label').textContent);
   await A.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
@@ -178,7 +179,7 @@ try {
   // 確定性重現「看頁之後才同步到新 claim」：把已看清單清空再重載 → 爸爸的 claim 是新的
   await A.evaluate((tid) => localStorage.setItem('tripquest.claimseen.' + tid, '[]'), setup.tid);
   await A.goto('about:blank');
-  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/home`, { waitUntil: 'networkidle0' });
   await A.waitForSelector('.crew-btn', { timeout: 15000 });
   const after = await A.evaluate(() => ({
     banner: document.querySelector('.join-banner')?.textContent || '',
@@ -203,7 +204,7 @@ try {
   await A.evaluate(() => document.querySelector('.join-banner .jb-x')?.click());
   await sleep(200);
   await A.goto('about:blank');
-  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}`, { waitUntil: 'networkidle0' });
+  await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/home`, { waitUntil: 'networkidle0' });
   await A.waitForSelector('.crew-btn', { timeout: 15000 });
   await sleep(400);
   yes(await A.evaluate(() => !document.querySelector('.join-banner')), '加入橫幅看過一次就不再出現');

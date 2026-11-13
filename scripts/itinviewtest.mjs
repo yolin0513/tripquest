@@ -116,12 +116,21 @@ async function openFromHome(page, title) {
       const k = await userClick(page, c, `「${title}」旅程卡`);
       yes(k.ok, `點得到首頁「${title}」那張旅程卡（${k.why}）`);
       if (!k.ok) return false;
-      await page.waitForSelector('.qcollapse', { timeout: 15000 });
-      await sleep(900);
+      // v1.84.0：點旅程卡先到主頁（出發倒數在主頁）；任務頁要再按底部「任務」（toTasks）
+      await page.waitForSelector('.trip-home', { timeout: 15000 });
+      await sleep(600);
       return true;
     }
   }
   return false;
+}
+async function toTasks(page) {
+  const tab = await page.evaluateHandle(() => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes('任務')) || null);
+  const k = tab.asElement() ? await userClick(page, tab.asElement(), '底部「任務」分頁') : { ok: false, why: '找不到「任務」分頁' };
+  if (!k.ok) { console.log('  [點不到]', k.why); return false; }
+  await page.waitForSelector('.qcollapse', { timeout: 15000 });
+  await sleep(900);
+  return true;
 }
 const cardCountdown = (page, title) => page.evaluate((t) => {
   const c = [...document.querySelectorAll('.trip-card')].find((x) => x.querySelector('.trip-card-title')?.textContent === t);
@@ -168,18 +177,20 @@ try {
   }
 
   // ---- C1／C2 行程頁 ----
-  yes(await openFromHome(page, '五天後出發'), 'C1 從首頁點「五天後出發」進行程頁');
-  yes((await pageCountdown(page)) === '還有 5 天出發', `C1 行程頁頂端：「還有 5 天出發」（實得 ${await pageCountdown(page)}）`);
+  yes(await openFromHome(page, '五天後出發'), 'C1 從首頁點「五天後出發」進主頁');
+  yes((await pageCountdown(page)) === '還有 5 天出發', `C1 主頁頂端（v1.84.0 從任務頁搬來）：「還有 5 天出發」（實得 ${await pageCountdown(page)}）`);
+  yes(await toTasks(page), 'C1 按底部「任務」進任務頁');
+  yes((await pageCountdown(page)) === null, `C1 任務頁已經沒有倒數（搬到主頁；實得 ${await pageCountdown(page)}）`);
   const stB = await page.evaluate(() => [document.querySelectorAll('.tl-item').length, document.querySelectorAll('.tl-past, .tl-now, .tl-next').length]);
   yes(stB[0] > 0 && stB[1] === 0, `B5 還沒出發（${stB[0]} 站）→ 不分已到／未到（實得 ${stB[1]} 站有狀態）`);
   yes(!(await page.$('.tl-crew')), 'B3 沒有旅伴的旅程 → 不放「同行夥伴」那一列（不放一個空的標題）');
   for (const t of ['沒設日期', '進行中', '已結束']) {
-    yes(await openFromHome(page, t), `C2 從首頁點「${t}」進行程頁`);
-    yes((await pageCountdown(page)) === null, `C2 行程頁：${t} → 沒有倒數（實得 ${await pageCountdown(page)}）`);
+    yes(await openFromHome(page, t), `C2 從首頁點「${t}」進主頁`);
+    yes((await pageCountdown(page)) === null, `C2 主頁：${t} → 沒有倒數（實得 ${await pageCountdown(page)}）`);
   }
 
   // ---- S1／S2／S5／T1 進行中（今天第 2 天）----
-  yes(await openFromHome(page, '進行中'), 'S1 從首頁點「進行中」進行程頁');
+  yes(await openFromHome(page, '進行中') && await toTasks(page), 'S1 從首頁點「進行中」、按「任務」進任務頁');
   let cells = await stripCells(page);
   // 2026-11-05 起最前面多一格「總覽」（data-day=0，Yolin 選 A）；2026-11-13 總覽跟地圖搬到「行程」分頁，任務頁只剩天數
   yes(cells.map((c) => c.day).join() === '1,2,3', `S1 日期列：三天各一格、任務頁沒有總覽格（實得 ${cells.map((c) => c.day).join() || '無'}）`);
@@ -273,12 +284,12 @@ try {
   yes(stick.y > 0 && stick.top >= stick.topbar - 2 && stick.top <= stick.topbar + 2, `S1 捲到最下面（scrollY ${stick.y}）日期列還黏在標題列下面（top ${stick.top}、標題列高 ${stick.topbar}）`);
 
   // ---- S3 一天 ----
-  yes(await openFromHome(page, '一天'), 'S3 從首頁點「一天」進行程頁');
+  yes(await openFromHome(page, '一天') && await toTasks(page), 'S3 從首頁點「一天」、按「任務」進任務頁');
   yes((await stripCells(page)).length === 0 && !(await page.$('.daystrip')), 'S3 只有一天 → 沒有日期列');
   yes((await shownDays(page)).join() === '1', 'S3 那一天照樣顯示');
 
   // ---- S4 十五天（今天第 4 天）----
-  yes(await openFromHome(page, '十五天'), 'S4 從首頁點「十五天」進行程頁');
+  yes(await openFromHome(page, '十五天') && await toTasks(page), 'S4 從首頁點「十五天」、按「任務」進任務頁');
   await sleep(600);
   const fit = await page.evaluate(() => {
     const tr = document.querySelector('.daystrip .ds-track').getBoundingClientRect();

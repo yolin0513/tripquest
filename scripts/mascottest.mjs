@@ -218,6 +218,9 @@ async function round(theme) {
     }, ago(10), ago(9));
     await toHome(page, '.trip-card');
     await clickText(page, '.trip-card', '吉祥物測試');
+    // v1.84.0：點旅程卡先到主頁，任務在底部第二格
+    await page.waitForSelector('.trip-home', { timeout: 15000 });
+    await clickText(page, '#tabbar .tab', '任務');
     await page.waitForSelector('.qcollapse', { timeout: 15000 });
     await sleep(600);
     await header(page, tag, '旅程頁');

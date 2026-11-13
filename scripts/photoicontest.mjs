@@ -81,6 +81,12 @@ async function toHome(page) {
 }
 
 // S7 的同一組量法：任務列兩顆圖示鈕＋展開後兩顆有字的按鈕
+// v1.84.0 起點旅程卡先到主頁：任務列在底部分頁「任務」（使用者的路：點那一格）
+async function toTasks(page) {
+  if (!await tap(page, '#tabbar a.tab', '任務')) return false;
+  return soft(page.waitForSelector('.qline .addphoto-icons .apx-cam', { timeout: 15000 }));
+}
+
 async function photoButtons(page, tag) {
   const ic = await page.evaluate(() => {
     const row = [...document.querySelectorAll('.qline')].find((r) => r.getBoundingClientRect().height > 0 && r.querySelector('.addphoto-icons .apx-cam'));
@@ -181,11 +187,13 @@ async function washiRound() {
     if (!opened) console.log('  [等不到天氣條]');
     await sleep(500);
 
-    // ---- I1 拍照圖示（和紙）----
+    // ---- I1 拍照圖示（和紙）：v1.84.0 起天氣條在主頁、任務在「任務」分頁——點過去看任務列 ----
+    await toTasks(page);
     await photoButtons(page, '［和紙］');
 
-    // ---- A2 點天氣條進天氣頁 ----
-    const w = opened && await tap(page, '.wx-strip', '') && await soft(page.waitForSelector('.wx-advice', { timeout: 20000 }));
+    // ---- A2 回主頁、點天氣條進天氣頁 ----
+    const back = opened && await tap(page, '#tabbar a.tab', '主頁') && await soft(page.waitForSelector('.trip-home .wx-strip', { timeout: 20000 }));
+    const w = back && await tap(page, '.wx-strip', '') && await soft(page.waitForSelector('.wx-advice', { timeout: 20000 }));
     const base = await page.evaluate(() => document.querySelector('.wx-advice .form-hint')?.textContent || '');
     yes(w && /你的位置/.test(base), `A2 前置：天氣頁的比較基準是手機的定位（「${base}」）`);
     // 座標在合成定位附近的請求，全部只能是小數 2 位；至少要有一個（前置證明定位真的用上了，不然 0 個也會「全部是小數 2 位」）
@@ -222,7 +230,8 @@ async function darkRound() {
     await makeTrip(page, '深色圖示測試', plus(0), plus(1), '宜蘭', ['頭城老街']);
     await toHome(page);
     await tap(page, '.trip-card', '深色圖示測試');
-    await soft(page.waitForSelector('.qline .addphoto-icons .apx-cam', { timeout: 15000 }));
+    await soft(page.waitForSelector('.trip-home', { timeout: 15000 }));
+    await toTasks(page);
     await sleep(500);
     await photoButtons(page, '［深色］');
   } catch (e) {

@@ -193,11 +193,12 @@ async function buy() {
   const page = await newPage();
   const { tid, mid } = await seedTrip(page, '2024-03-10', '2024-03-11', '小美');
   await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
-  // 搬家前置：任務頁看得到「找附近」（頁面真的畫好了），但已經沒有三樣入口
-  await page.waitForFunction(() => [...document.querySelectorAll('.page button')].some((b) => b.textContent.includes('找附近')), { timeout: 10000 }).catch(() => {});
-  const onTask = await page.evaluate(() => ({ near: [...document.querySelectorAll('.page button')].some((b) => b.textContent.includes('找附近')),
+  // 搬家前置：任務頁真的畫好了（看得到那一站），但已經沒有三樣入口
+  // （v1.84.0 起「找附近」也搬去主頁，前置從「看得到找附近」改成「看得到那一站」）
+  await page.waitForSelector('.page .qcollapse', { timeout: 10000 }).catch(() => {});
+  const onTask = await page.evaluate(() => ({ spots: document.querySelectorAll('.page .qcollapse').length,
     n: document.querySelectorAll('.page .fl-entry, .page .stay-entry, .page .buy-entry').length }));
-  yes(onTask.near && onTask.n === 0, `任務頁已經沒有航班／住宿／待買入口（找附近在：${onTask.near}；入口 ${onTask.n} 個）`);
+  yes(onTask.spots > 0 && onTask.n === 0, `任務頁已經沒有航班／住宿／待買入口（那一站畫出來了：${onTask.spots} 站；入口 ${onTask.n} 個）`);
   await toItin(page, '.buy-entry');
   // 進了行程分頁：底部「行程」亮著、「任務」不亮；三樣入口在同一張卡裡（同類合成一張卡）
   const it = await page.evaluate(() => {

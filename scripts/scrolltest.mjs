@@ -154,7 +154,7 @@ try {
   //   ① 日期列自動選中今天那一格（不必捲，日期列一直看得到）
   //   ② 那一天的時間軸裡，「現在這一站」在畫面外 → 捲到看得到它
   const A = await device();
-  const tidA = await seed(A.page, { startOffset: -1, dayCount: 3, spotsPerDay: 6 });
+  const tidA = await seed(A.page, { startOffset: -1, dayCount: 3, spotsPerDay: 18 });   // 18：理由見下面「②」
   await openTrip(A.page, tidA);
   const a = await snapshot(A.page);
 
@@ -179,18 +179,25 @@ try {
   // v1.42：只展開「現在這一站」（今天第一個未完成的），不再把當天全部未完成的打開 ——
   // 使用者實機回報「第二天的全部任務都是展開的」就是舊行為造成的
   const openNames = a.spots.filter((x) => x.open).map((x) => x.name);
-  if (a.spots.length === 18 && openNames.length === 1 && openNames[0] === '第2天景點1') {
+  if (a.spots.length === 54 && openNames.length === 1 && openNames[0] === '第2天景點1') {
     ok(`只展開今天第一個未完成的景點（${openNames[0]}），其他收合`);
   } else fail('景點展開狀態不對：' + JSON.stringify(a.spots));
 
   // ②：現在這一站指定成今天「第一個在畫面外的站」→ 要捲到看得到它。
   // 不用最後一站：2026-10-28 時間軸改窄、頁面變矮之後，最後一站捲不到日期列下面（被文件底卡住，
   // scrollY 停在最大值），停的位置剛好跟正確答案一樣，「沒把日期列算進去」那條突變就紅不起來了。
+  // 2026-11-13 v1.84.0：任務頁上面那幾塊搬到主頁、頁面又變矮，全套撞到「前置不成立」——照「現在」的位置挑，
+  // 重開之後只有挑到的那一站展開、前面幾站（含原本展開的第一站）都收合，挑到的站往上移、回到第一個畫面裡。
+  // 改成照「重開之後」的位置推：第一站的位置＋前面幾站×收合時一站的間距（第 2、3 站一開始就收合著，量它們的間距）；
+  // 一天的站數也從 6 加到 18——這是留餘裕，不是非要不可：突變「一天改回 6 站」（帳本第 940 次）實測 6 站時新挑法照樣
+  // 挑得到第一個畫面以下（823 > 780）、也沒被文件底卡住（653 < 1160），只紅總數斷言。18 站讓頁面再變矮時前置不會馬上失效。
   await A.page.evaluate(async (t) => {
     const s = await import('./js/store.js');
     const ids = new Set(s.spotsOf(t).filter((x) => x.day === 2).map((x) => x.id));
     const secs = [...document.querySelectorAll('.daycollapse.open .qcollapse')].filter((x) => ids.has(x.dataset.spot));
-    const pick = secs.find((x) => x.getBoundingClientRect().top + window.scrollY > window.innerHeight + 40) || secs[secs.length - 1];
+    const docTop = (x) => x.getBoundingClientRect().top + window.scrollY;
+    const pitch = docTop(secs[2]) - docTop(secs[1]);
+    const pick = secs.find((x, k) => docTop(secs[0]) + k * pitch > window.innerHeight + 40) || secs[secs.length - 1];
     await s.setHereSpot(t, pick.dataset.spot, null);
   }, tidA);
   await openTrip(A.page, tidA);
@@ -500,6 +507,7 @@ try {
   const marker = () => N.page.evaluate(() => ({
     hash: location.hash,
     what: document.querySelector('.itin-page') ? '行程頁'
+      : document.querySelector('.trip-home') ? '主頁'
       : document.querySelector('.qline') ? '任務清單'
       : document.querySelector('.qrow') ? '景點頁'
       : document.querySelector('.quest-focus') ? '任務詳情'
@@ -523,8 +531,10 @@ try {
     return marker();
   };
 
-  // 旅程層：7 個起點 × 4 顆分頁（2026-11-13 加「行程」；v1.84.0「回顧」搬進行程分頁、不再是分頁，回顧頁照樣當起點）
+  // 旅程層：8 個起點 × 5 顆分頁（2026-11-13 加「行程」；v1.84.0「回顧」搬進行程分頁、不再是分頁，回顧頁照樣當起點；
+  // v1.84.0 最前面加「主頁」）
   const tripStarts = [
+    ['主頁', `#/trip/${tidN}/home`],   // v1.84.0 新分頁
     ['任務清單', `#/trip/${tidN}`],
     ['行程', `#/trip/${tidN}/itinerary`],   // 2026-11-13 新分頁
     ['照片牆', `#/trip/${tidN}/people`],
@@ -536,11 +546,12 @@ try {
   // 網址才是「有沒有真的切過去」的鐵證；內容標記另外檢查（分帳頁沒資料時是空狀態，
   // 沒有可靠的標記，所以那一頁只驗網址）
   const wantHash = {
+    主頁: `#/trip/${tidN}/home`,
     任務: `#/trip/${tidN}`, 行程: `#/trip/${tidN}/itinerary`, 照片: `#/trip/${tidN}/people`,
     分帳: `#/trip/${tidN}/expenses`,
   };
-  const wantWhat = { 任務: '任務清單', 行程: '行程頁', 照片: '照片牆' };
-  const TRIP_TABS = ['任務', '行程', '照片', '分帳'];
+  const wantWhat = { 主頁: '主頁', 任務: '任務清單', 行程: '行程頁', 照片: '照片牆' };
+  const TRIP_TABS = ['主頁', '任務', '行程', '照片', '分帳'];
   let bad = [];
   for (const [from, hash] of tripStarts) {
     for (const tab of TRIP_TABS) {

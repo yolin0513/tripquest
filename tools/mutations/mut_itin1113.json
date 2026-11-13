@@ -4,27 +4,9 @@
     "why": "（事前寫 2026-11-13）isMainScreen 不認行程分頁：在「行程」按左上返回，退回上一頁（任務頁），不是一步回「我的旅程」——第一版就是這樣，washitest 新加的路徑才抓到。預期只紅 W4 的「行程分頁按左上返回」（之後 toSettings 自己會再按一次返回，不連帶別條）。",
     "expect": ["W4 和紙 行程分頁按左上返回"],
     "file": "js/app.js",
-    "find": "  if (/^\\/trip\\/[^/]+\\/(itinerary|people|expenses)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）",
-    "replace": "  if (/^\\/trip\\/[^/]+\\/(people|expenses)$/.test(p)) return true;",
-    "note": "v1.84.0 回顧搬進行程分頁：memories 不再是底部分頁，find 跟著拿掉 memories（意思不變、預期不變）",
-    "cmd": "node scripts/washitest.mjs"
-  },
-  {
-    "name": "拍照解任務：拿日期列現在的底當偏移",
-    "why": "（事前寫 2026-11-13）第一版的算法：日期列是 sticky，點的當下還沒黏到頂、位置在下面，偏移算太大、捲不到那一站（實測停在離頂 600 多 px）。預期只紅 W10「點拍照解任務」。",
-    "expect": ["W10 點「拍照解任務」"],
-    "file": "js/views/trip.js",
-    "find": "      smoothScrollTo(Math.max(0, window.scrollY + el.getBoundingClientRect().top - stuck - 8));",
-    "replace": "      smoothScrollTo(Math.max(0, window.scrollY + el.getBoundingClientRect().top - Math.max(strip.el.getBoundingClientRect().bottom, 70) - 8));",
-    "cmd": "node scripts/washitest.mjs"
-  },
-  {
-    "name": "拍照解任務：不換天",
-    "why": "（事前寫 2026-11-13）日期列停在第 2 天時點「拍照解任務」，不換回那一站的那一天：那一站在藏起來的那一天裡，展開了也看不到。預期只紅 W10「點拍照解任務」。",
-    "expect": ["W10 點「拍照解任務」"],
-    "file": "js/views/trip.js",
-    "find": "      pick(spot.day || 1, { scroll: false });",
-    "replace": "      void 0;",
+    "find": "  if (/^\\/trip\\/[^/]+\\/(home|itinerary|people|expenses)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加、主頁 v1.84.0 加）",
+    "replace": "  if (/^\\/trip\\/[^/]+\\/(home|people|expenses)$/.test(p)) return true;",
+    "note": "v1.84.0：memories 不再是底部分頁、主頁加進來，find 跟著改（意思不變、預期不變）",
     "cmd": "node scripts/washitest.mjs"
   },
   {
@@ -41,8 +23,9 @@
     "why": "（事前寫 2026-11-13）主角卡裡少了「用地圖帶我去」那顆（帶路按鈕仍要留在任務頁）。預期只紅 W10「卡裡有帶路」。",
     "expect": ["W10 卡裡有帶路"],
     "file": "js/views/trip.js",
-    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav,",
-    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    null,",
+    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav);",
+    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    null);",
+    "note": "v1.84.0 主角卡搬到主頁、拿掉拍照解任務，nav 變成最後一個參數，find 跟著改（意思不變、預期不變）",
     "cmd": "node scripts/washitest.mjs"
   },
   {
@@ -59,8 +42,9 @@
     "why": "（事前寫 2026-11-13）三樣入口搬到行程分頁之後，任務頁也還放一份。預期只紅 recordstest 的「任務頁已經沒有航班／住宿／待買入口」。",
     "expect": ["任務頁已經沒有航班／住宿／待買入口"],
     "file": "js/views/trip.js",
-    "find": "      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),",
-    "replace": "      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'), infoCard(tripId),",
+    "find": "    syncBanner(tripId, t),\n    prog.total > 0 ? h('div', { class: 'task-prog', role: 'status' },",
+    "replace": "    syncBanner(tripId, t), infoCard(tripId),\n    prog.total > 0 ? h('div', { class: 'task-prog', role: 'status' },",
+    "note": "v1.84.0「找附近」搬到主頁：原本的 find 還對得到、但那一行已經在主頁，改它不再是「任務頁還留著」——find 換到任務頁的容器（意思不變、預期不變）",
     "cmd": "node scripts/recordstest.mjs"
   },
   {
@@ -114,8 +98,9 @@
     "why": "（事前寫 2026-11-13）onTripPage 不認行程分頁：別人改了行程，停在行程頁看不到（要離開再進來）。第一版就是這樣，overviewtest 改走行程分頁後抓到。預期只紅 overviewtest 的「前置：整頁真的重畫了」。",
     "expect": ["前置：整頁真的重畫了"],
     "file": "js/views/trip.js",
-    "find": "  return path === `/trip/${tripId}` || path === `/trip/${tripId}/itinerary`;",
-    "replace": "  return path === `/trip/${tripId}`;",
+    "find": "  return path === `/trip/${tripId}` || path === `/trip/${tripId}/itinerary` || path === `/trip/${tripId}/home`;",
+    "replace": "  return path === `/trip/${tripId}` || path === `/trip/${tripId}/home`;",
+    "note": "v1.84.0 onTripPage 多認主頁，find 跟著改；replace 只拿掉行程分頁（意思不變、預期不變）",
     "cmd": "node scripts/overviewtest.mjs", "done": "^總覽地圖：\\d+ 項通過"
   },
   {

@@ -100,6 +100,20 @@ try {
     el.click(); return true;
   }, '宜蘭家族旅行');
   yes(entered, '真實入口：從「我的旅程」點進這一趟');
+  // v1.84.0：點旅程卡先到主頁；「帶我去下一站」在主頁（T7a 在主頁驗），任務在「任務」分頁
+  await page.waitForSelector('.trip-home', { timeout: 8000 });
+
+  // ---------- T7a「帶我去下一站」跳過沒有任務的地點 ----------
+  // 這一條要在「新增任務」之前驗：等下面替白雲山鹿加了一個任務，它就**應該**變成下一站了。
+  {
+    const next = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.trip-home .here-card, .trip-home .btn, .trip-home .card')].find((x) => x.textContent.includes('帶我去下一站'));
+      return el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
+    });
+    yes(next && next.includes('羅東夜市') && !next.includes('白雲山鹿'),
+      `主頁的「帶我去下一站」指向有任務的羅東夜市，不是排在最前面、沒有任務的白雲山鹿（${next}）`);
+  }
+  await page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')].find((x) => x.textContent.includes('任務'))?.click());
   await page.waitForSelector('.qcollapse', { timeout: 8000 });
 
   // ---------- T1 白雲山鹿：0 任務、沒有猜出來的字 ----------
@@ -123,17 +137,6 @@ try {
   yes(blank.addBtn.includes('＋ 新增任務'), `有「＋ 新增任務」（${blank.addBtn.join('、')}）`);
   yes(blank.addBtn.some((b) => b.includes('拍照')) && blank.addBtn.some((b) => b.includes('相簿')), '有加照片的兩顆（拍照／從相簿選）');
   yes(curated.addBtn.includes('＋ 新增任務'), '有任務的地點在任務列最後也有同一顆「＋ 新增任務」（兩種地點一致）');
-
-  // ---------- T7a「帶我去下一站」跳過沒有任務的地點 ----------
-  // 這一條要在「新增任務」之前驗：等下面替白雲山鹿加了一個任務，它就**應該**變成下一站了。
-  {
-    const next = await page.evaluate(() => {
-      const el = [...document.querySelectorAll('.here-card, .btn, .card')].find((x) => x.textContent.includes('帶我去下一站'));
-      return el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
-    });
-    yes(next && next.includes('羅東夜市') && !next.includes('白雲山鹿'),
-      `「帶我去下一站」指向有任務的羅東夜市，不是排在最前面、沒有任務的白雲山鹿（${next}）`);
-  }
 
   // ---------- T5a 一步新增任務 ----------
   yes(await clickIn('白雲山鹿', '＋ 新增任務'), '按下白雲山鹿卡片上的「＋ 新增任務」');
@@ -188,10 +191,13 @@ try {
   const allBlankUI = await page.evaluate(() => ({
     cards: document.querySelectorAll('.qcollapse').length,
     adds: document.querySelectorAll('.qline-add').length,
-    text: document.body.textContent.includes('帶我去下一站'),
   }));
   yes(allBlankUI.cards === 3 && allBlankUI.adds === 3, `全部 0 任務的行程：三張卡都在、三組入口都在（${allBlankUI.cards}／${allBlankUI.adds}）`);
-  yes(!allBlankUI.text, '沒有任何任務時不顯示「帶我去下一站」（沒有東西可以帶）');
+  // 「帶我去下一站」v1.84.0 在主頁：到主頁看（前置：主頁真的畫好了——小工具那一排在；不然「沒有」永遠成立）
+  await page.goto(`http://localhost:${WEB}/#/trip/${allBlank}/home`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.trip-home .th-tools', { timeout: 8000 }).catch(() => {});
+  const homeUI = await page.evaluate(() => ({ drawn: !!document.querySelector('.trip-home .th-tools'), text: document.body.textContent.includes('帶我去下一站') }));
+  yes(homeUI.drawn && !homeUI.text, `沒有任何任務時主頁不顯示「帶我去下一站」（沒有東西可以帶；主頁畫好了 ${homeUI.drawn}）`);
 
   // ---------- T9「補齊任務」只補策展地點 ----------
   await page.goto(`http://localhost:${WEB}/#/trip/${ids.tid}/settings`, { waitUntil: 'networkidle0' });

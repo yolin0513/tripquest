@@ -23,7 +23,7 @@ backBtn.addEventListener('click', () => {
 function isMainScreen(p) {
   if (p === '/' || p === '/settings') return true;
   if (/^\/trip\/[^/]+$/.test(p)) return true;                       // 旅程首頁（任務清單）
-  if (/^\/trip\/[^/]+\/(itinerary|people|expenses)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加）
+  if (/^\/trip\/[^/]+\/(home|itinerary|people|expenses)$/.test(p)) return true;  // 底部分頁（行程分頁 2026-11-13 加、主頁 v1.84.0 加）
   // 回顧（memories）v1.84.0 起不是底部分頁，是「行程」分頁裡的一頁：返回＝回上一個畫面（多半是行程分頁）
   return false;
 }
@@ -54,8 +54,9 @@ function fallbackFor(r) {
     return q ? `/trip/${q.tripId}` : '/';
   }
   const m = p.match(/^\/trip\/([^/]+)\//);
-  // 回顧頁的入口在「行程」分頁（v1.84.0）
+  // 回顧頁的入口在「行程」分頁、天氣頁與找附近的入口在主頁（v1.84.0）
   if (m && /\/memories$/.test(p)) return `/trip/${m[1]}/itinerary`;
+  if (m && /\/(weather|nearby)$/.test(p)) return `/trip/${m[1]}/home`;
   if (m) return `/trip/${m[1]}`;
   return '/';
 }
@@ -121,13 +122,16 @@ function renderTabs() {
   if (tid && store.get(tid)) {
     const base = `/trip/${tid}`;
     // 2026-11-13「行程」分頁（Yolin 11-11 提、11-13 守夜做）：航班、住宿、待買、調整每天的行程、每天的行程與地圖都在這一格。
-    // 任務頁留「帶我去下一站」「拍照解任務」與各站的任務。
-    const isTasks = p === base || /^\/trip\/[^/]+\/(weather|spot)/.test(p) || p.startsWith('/quest/');
+    // 任務頁只留一行進度、日期列與各站的任務（v1.84.0；帶我去下一站在主頁，拍照解任務拿掉）。
+    // v1.84.0 主頁（Yolin 2026-11-13 方案二）：第一格。天氣頁、找附近從主頁進，算主頁。
+    const isHome = /^\/trip\/[^/]+\/(home|weather|nearby)$/.test(p);
+    const isTasks = p === base || /^\/trip\/[^/]+\/spot\//.test(p) || p.startsWith('/quest/');
     // 回顧（memories 與它底下的相簿、成就、最終回顧、海報）v1.84.0 搬進「行程」分頁：底部少了「回顧」一格
     const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster)$/.test(p);
     const isPhotos = p === `${base}/people`;
     const isSplit = p === `${base}/expenses`;
     mount(tabbar,
+      tabItem('🏠', '主頁', `${base}/home`, isHome),
       tabItem('📋', '任務', base, isTasks),
       tabItem('🗓️', '行程', `${base}/itinerary`, isItin),
       tabItem('📸', '照片', `${base}/people`, isPhotos),
@@ -150,6 +154,7 @@ route('/join', async ({ query, drawPage, setTop }) => (await import('./views/joi
 // fresh 只有「真的導覽到這一頁」時才是 true —— 頁面內部自己重繪（補完景點圖、AI 文案
 // 回來，走 refreshPage）不算，不然畫面會在使用者看到一半時又自己捲一次。
 route('/trip/:id', async ({ params, fresh, drawPage, setTop }) => (await import('./views/trip.js')).default(params.id, { fresh, drawPage, setTop }));
+route('/trip/:id/home', async ({ params, fresh, drawPage, setTop }) => (await import('./views/trip.js')).tripHome(params.id, { fresh, drawPage, setTop }));
 route('/trip/:id/itinerary', async ({ params, drawPage, setTop }) => (await import('./views/trip.js')).itinerary(params.id, { drawPage, setTop }));
 route('/trip/:id/settings', async ({ params, drawPage, setTop }) => (await import('./views/trip.js')).settings(params.id, { drawPage, setTop }));
 route('/trip/:id/people', async ({ params, drawPage, setTop }) => (await import('./views/people.js')).default(params.id, { drawPage, setTop }));

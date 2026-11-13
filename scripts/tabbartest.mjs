@@ -1,4 +1,4 @@
-// 旅程層的底部分頁（任務／行程／照片／分帳；行程 2026-11-13 加；回顧 v1.84.0 搬進行程分頁）的底部功能列位置一致（npm run tabbartest）
+// 旅程層的底部分頁（主頁／任務／行程／照片／分帳；行程 2026-11-13 加；主頁 v1.84.0 加、回顧 v1.84.0 搬進行程分頁）的底部功能列位置一致（npm run tabbartest）
 //
 // 使用者實機回報：分帳頁的底部功能列位置跟其他三頁不同、會上移。
 //
@@ -75,8 +75,9 @@ try {
 
   for (const [label, tid] of [['有內容的行程', ids.full], ['幾乎空的行程', ids.bare]]) {
     console.log(`\n— ${label} —`);
-    // v1.84.0：「回顧」不再是底部分頁（搬進行程分頁）
+    // v1.84.0：「回顧」不再是底部分頁（搬進行程分頁）；最前面多一格「主頁」
     const tabs = [
+      ['主頁', `#/trip/${tid}/home`],
       ['任務', `#/trip/${tid}`], ['行程', `#/trip/${tid}/itinerary`], ['照片', `#/trip/${tid}/people`],
       ['分帳', `#/trip/${tid}/expenses`],
     ];
@@ -101,7 +102,7 @@ try {
   for (const [w, hgt] of [[360, 640], [430, 932]]) {
     await page.setViewport({ width: w, height: hgt });
     const tops = [];
-    const hashes = [`#/trip/${ids.full}`, `#/trip/${ids.full}/itinerary`, `#/trip/${ids.full}/people`, `#/trip/${ids.full}/expenses`];
+    const hashes = [`#/trip/${ids.full}/home`, `#/trip/${ids.full}`, `#/trip/${ids.full}/itinerary`, `#/trip/${ids.full}/people`, `#/trip/${ids.full}/expenses`];
     for (const hash of hashes) {
       const m = await measure(hash);
       tops.push(m.top);

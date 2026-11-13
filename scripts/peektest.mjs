@@ -1,7 +1,7 @@
 // 吉祥物融進介面：從卡片／照片的上緣探頭（2026-11-13 第四段之二）從使用者的入口驗（npm run peektest；會開瀏覽器）
 //
 // 涵蓋的程式：js/peeks.js、js/addphoto.js（完成任務挑哪一張）、js/ui.js（celebrate 的照片＋探頭圖）、
-//   js/weather.js（isSnowDay／isRainDay／dayAlert）、js/views/trip.js（天氣條的提示句、今天主角卡的拍照鈕）、
+//   js/weather.js（isSnowDay／isRainDay／dayAlert）、js/views/trip.js（天氣條的提示句、主頁下一站卡沒有拍照鈕）、
 //   js/views/weather.js（出門提醒卡）、css/style.css（.gl-peek、.wx-strip、.wx-advice、.celebrate-shot）
 // 圖本身有沒有鋪滿畫布的底色，另一支量（scripts/arttransparenttest.mjs）。
 //
@@ -10,8 +10,9 @@
 //   - 邊線對齊：探頭圖的邊線（畫布裡的 y，CSS 的 --pk-sink）落在那張卡片／照片的上緣（差 ≤ 1.5px）
 //   - 是那個元素的一部分：探頭圖是出門提醒卡／照片外框的子元素
 //   - 不站在字旁邊：提示那一行只有字（沒有圖）；慶祝畫面標題上面不再另外放一隻吉祥物
-// Yolin 看了截圖（2026-11-13）：任務頁東西一多，任務就被擠到下面——**任務頁的天氣條不掛探頭圖、也不加高**，
+// Yolin 看了截圖（2026-11-13）：任務頁東西一多，任務就被擠到下面——**天氣條不掛探頭圖、也不加高**，
 //   只換成有數字的那一句；探頭圖只在天氣頁的出門提醒卡與完成任務的照片上。所以天氣條驗的是「沒有圖、上面的間距跟晴天一樣」。
+//   v1.84.0 起天氣條在主頁（點旅程卡先到主頁）；完成任務要先點底部分頁「任務」（pickRow 自己會過去）。
 //
 // 不打真網路（共用慣例 §5.6）：Open-Meteo 的請求由本測試回一份自己造的預報（16 天、從今天起，哪天下雨／下雪由各情境指定）；
 // 其餘外站一律當場回 503。定位：瀏覽器給一個合成的座標。每個情境前清掉天氣快取（localStorage 'tripquest.wx'，3 小時），
@@ -24,11 +25,11 @@
 //   P4 今天會下雪：天氣條是下雪那一句、沒有探頭圖；天氣頁的卡片是湯圓踩雪板；會下雪的那天不再算下雨
 //   P5 晴天（反向）：天氣條、天氣頁都沒有探頭圖，照舊那一句；下雨那天的天氣條上面的間距跟晴天一樣（沒有加高）
 //   P6 還沒出發、出發那天會下雨：「出發那天（M/D）可能下雨…」、天氣條沒有探頭圖
-//   P7 今天主角卡的「拍照解任務」：相機圖示（不是表情符號）在字左邊、字一行、高 ≥ 44
+//   P7 主頁的下一站卡沒有「拍照解任務」（v1.84.0；原本驗那顆鈕的相機圖示，鈕拿掉後改驗它不在）
 //   P8 每一張探頭圖：aria-hidden、沒有 <text>／<title>、id 整頁唯一、引用都指到自己那張；同一頁放好幾張時 id 也不撞
 //   主題：和紙不套白邊、動作線看得到；深色一輪白邊真的有套上、動作線不畫（跟 glyphs.js 的吉祥物同一條規矩）、
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
-//         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、拍照鈕一樣是圖示
+//         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、主頁一樣沒有拍照鈕
 //   動畫（v1.83.0，js/peeks.js 的 cheer()、css/style.css 的 .pk-cheer）：完成任務那一刻小鳳打領結那張從照片後面跳上來、揮翅膀——
 //     和紙那輪 P3 的「古蹟 → 小鳳打領結」：慶祝畫面一出來就量（隔 150ms 量兩次位置不一樣＝有動）；每一段動畫的 keyframes 只動 transform、opacity；
 //     等每一段都結束，身體、翅膀沒有殘留的位移（框跟撤掉動畫的靜止圖一樣）、扣在照片上的手與揮動線都完全看得到（不會卡在半空）
@@ -192,7 +193,12 @@ async function clearCelebrations(page, max = 10) {
 }
 
 // 那一站展開，挑一列還沒完成的任務：must＝true 挑「必吃」那列、false 挑不是必吃的、null 任一列
+// v1.84.0 起點旅程卡先到主頁：不在任務頁就點底部分頁「任務」過去（使用者的路）
 async function pickRow(page, spot, must) {
+  if (!await page.$('.qcollapse')) {
+    if (!await tap(page, '#tabbar a.tab', '任務')) return null;
+    if (!await soft(page.waitForSelector('.qcollapse', { timeout: 15000 }))) return null;
+  }
   const isOpen = (n) => [...document.querySelectorAll('.qcollapse.open .qc-toggle')].some((b) => b.textContent.includes(n));
   if (!await page.evaluate(isOpen, spot)) await tap(page, '.qc-toggle', spot);
   if (!await soft(page.waitForFunction(isOpen, { timeout: 8000 }, spot))) return null;
@@ -282,21 +288,18 @@ async function complete(page, spot, must, anim = false) {
   return { row, p, ttl, standalone, a };
 }
 
-// P7：今天主角卡的「拍照解任務」
+// P7（v1.84.0 改）：主頁的下一站卡不放「拍照解任務」——Yolin：主頁不放任務的跳轉，拍照就在每一列任務上（相機圖示在 photoicontest 驗）。
+// 卡片在、卡裡有「帶我去」才算數（不然「沒有那顆」是因為整張卡沒畫出來）。
 async function todayShot(page, tag) {
   const b = await page.evaluate(() => {
-    const btn = document.querySelector('.today-card .today-shot');
-    if (!btn) return null;
-    btn.scrollIntoView({ block: 'center' });
-    const r = btn.getBoundingClientRect(), s = btn.querySelector('svg.gl-icon'), sr = s && s.getBoundingClientRect();
-    const tn = [...btn.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
-    let textLeft = null, lines = 0;
-    if (tn) { const range = document.createRange(); range.selectNodeContents(tn); textLeft = range.getBoundingClientRect().left; lines = range.getClientRects().length; }
-    return { icon: s ? s.getAttribute('data-icon') : null, words: tn ? tn.textContent.trim() : '', h: Math.round(r.height),
-      iw: sr ? Math.round(sr.width) : 0, before: !!sr && textLeft != null && sr.right <= textLeft + 1, lines, aria: s ? s.getAttribute('aria-hidden') : null };
+    const card = document.querySelector('.trip-home .today-card');
+    if (!card) return null;
+    const btns = [...card.querySelectorAll('button, a')].map((x) => x.textContent.trim());
+    return { btns, shot: card.querySelectorAll('.today-shot').length, words: btns.filter((x) => x.includes('拍照解任務')).length,
+      go: btns.some((x) => x.includes('帶我去')) };
   });
-  yes(!!b && b.icon === 'cam' && b.aria === 'true' && /^拍照解任務・還有 \d+ 個$/.test(b.words) && b.before && b.lines === 1 && b.h >= 44 && b.iw >= 20,
-    `${tag} P7 今天主角卡的「拍照解任務」：相機圖示（不是表情符號）在字左邊、字一行、高 ≥ 44（${b ? `${b.icon || '沒有圖示'}＋「${b.words}」、高 ${b.h}、圖 ${b.iw}、圖在左 ${b.before}、${b.lines} 行` : '沒找到這顆'}）`);
+  yes(!!b && b.go && b.shot === 0 && b.words === 0,
+    `${tag} P7 主頁的下一站卡沒有「拍照解任務」（主頁不放任務的跳轉；卡在、有帶我去才算數）（${b ? `卡裡的按鈕：${b.btns.join('、')}` : '主頁沒有下一站卡'}）`);
 }
 
 async function newPage(ctx) {
@@ -361,9 +364,9 @@ async function washiRound() {
     const s1 = await strip(page);
     yes(o1 && s1.alert === 'rain' && s1.txt === '今天可能下雨（降雨機率 80%），記得帶傘。' && s1.tipImgs === 0 && s1.scenes === 0,
       `P1 今天會下雨：提示那一行只有字、句子有預報的數字（提示 ${s1.alert}、行內的圖 ${s1.tipImgs}、舊的情境圖 ${s1.scenes}；「${s1.txt}」）`);
-    // Yolin 2026-11-13：任務頁的天氣條不探頭（任務會被擠到下面）。「不加高」在 P5 跟晴天比上面的間距。
+    // Yolin 2026-11-13：天氣條不探頭（當時在任務頁，任務會被擠到下面；v1.84.0 天氣條搬到主頁，規矩照舊）。「不加高」在 P5 跟晴天比上面的間距。
     yes(o1 && noPeek(s1),
-      `P1 任務頁的天氣條不掛探頭圖：天氣條裡沒有探頭圖、沒有掛探頭圖的標記（探頭圖 ${s1.peeks}、has-peek ${s1.hostMark}；上面的間距 ${s1.gap}px、上一個區塊「${s1.prevName}」）`);
+      `P1 主頁的天氣條不掛探頭圖：天氣條裡沒有探頭圖、沒有掛探頭圖的標記（探頭圖 ${s1.peeks}、has-peek ${s1.hostMark}；上面的間距 ${s1.gap}px、上一個區塊「${s1.prevName}」）`);
     // 點天氣條 → 天氣頁（使用者的路；P2 的兩條都靠它，進不去就一起紅）
     const nav1 = o1 && await openWeather(page);
 
@@ -463,7 +466,7 @@ async function washiRound() {
     yes(o6 && s6.alert === 'rain' && s6.txt === want6 && noPeek(s6),
       `P6 還沒出發：出發那天會下雨 → 「出發那天（M/D）…」、天氣條沒有探頭圖（提示 ${s6.alert}；探頭圖 ${s6.peeks}、has-peek ${s6.hostMark}；「${s6.txt}」）`);
 
-    // ---- P7 今天主角卡的拍照鈕（和紙）＋天氣頁那張不套白邊 ----
+    // ---- P7 主頁的下一站卡沒有拍照鈕（和紙）＋天氣頁那張不套白邊 ----
     wet = { 0: 'rain' };
     await openTrip(page, '探頭圖測試');
     await sleep(500);

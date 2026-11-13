@@ -411,6 +411,7 @@ try {
   const ROUTES = [
     ['首頁', '/'],
     ['行程頁', `/trip/${ids.tid}`],
+    ['主頁', `/trip/${ids.tid}/home`],   // v1.84.0 新分頁（倒數／今天第幾天、天氣條、下一站、小工具）
     ['行程分頁', `/trip/${ids.tid}/itinerary`],   // 2026-11-13 新分頁（航班／住宿／待買、每天的地圖與時間軸）
     ['旅程設定', `/trip/${ids.tid}/settings`],
     ['調整行程', `/trip/${ids.tid}/plan`],

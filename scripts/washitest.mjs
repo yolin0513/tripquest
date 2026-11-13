@@ -13,7 +13,7 @@
 //   W7 第一個畫面就是和紙，不先閃一下深色：<body> 剛被插進來的那一刻，<html> 就已經有 data-theme=washi
 //      （prefs.js 的 apply() 在 app.js 這個 module 裡，要等整頁解析完才跑；靠的是 head 裡同步執行的 boot-theme.js）。
 //      對照組：W9 那次載入（選了深色）同一個時刻記到的是「沒有 data-theme」
-//   W4 和紙下逐頁掃字的對比（首頁、旅程頁、設定頁、建立頁）：掃到的字 > 0、全部 ≥ 4.5；
+//   W4 和紙下逐頁掃字的對比（首頁、主頁〔v1.84.0〕、旅程頁＝任務分頁、行程分頁、設定頁、建立頁）：掃到的字 > 0、全部 ≥ 4.5；
 //      底是圖片的跳過、印出跳過幾個（不是 0 也不算錯，但要看得到）
 //   W5 舊版存的偏好（2026-11-12 拿掉高對比與特大字之後）：設定頁沒有「高對比模式」、字體大小只剩「標準／大」；
 //      手機裡存著舊版的 contrast=high＋fs=xl＋和紙，重開 App：照樣是和紙（底不是純白）、沒有 data-contrast、
@@ -105,6 +105,10 @@ async function scanPages(page, tag) {
   yes(await toHome(page), `${tag} 從底部分頁回「我的旅程」`);
   let s = await scan(page); yes(s.n > 0 && s.bad.length === 0, report(`${tag} 首頁`, s));
   await clickText(page, '.trip-card', '和紙測試');
+  // v1.84.0 起點旅程卡先到主頁：主頁也掃（下一站卡、今天第幾天、小工具），再點底部分頁「任務」去任務頁
+  await page.waitForSelector('.trip-home .today-card', { timeout: 15000 }); await sleep(700);
+  s = await scan(page); yes(s.n > 0 && s.bad.length === 0, report(`${tag} 主頁`, s));
+  await clickText(page, '#tabbar a.tab', '任務');
   await page.waitForSelector('.qcollapse', { timeout: 15000 }); await sleep(700);
   // 打開第一個景點，裡面的任務字也要掃到
   await clickText(page, '.qc-toggle', '甲一'); await sleep(400);
@@ -218,12 +222,12 @@ try {
   // ---- W4 逐頁掃 ----
   await scanPages(page, 'W4 和紙');
 
-  // ---- W10（2026-11-13 第二段）今天主角卡、拍照解任務、頁首有字的按鈕：從首頁點進行程（使用者的路） ----
+  // ---- W10（2026-11-13 第二段）今天主角卡、頁首有字的按鈕：從首頁點進旅程（使用者的路；v1.84.0 起主角卡在主頁） ----
   yes(await toHome(page), 'W10 回「我的旅程」');
   await clickText(page, '.trip-card', '和紙測試');
-  await page.waitForSelector('.today-card', { timeout: 15000 }); await sleep(700);
+  await page.waitForSelector('.trip-home .today-card', { timeout: 15000 }); await sleep(700);
   const tc = await page.evaluate(() => {
-    const c = document.querySelector('.today-card'); const tm = c.querySelector('.today-time');
+    const c = document.querySelector('.trip-home .today-card'); const tm = c.querySelector('.today-time');
     const b = document.getElementById('topActionBtn'); const br = b.getBoundingClientRect();
     return { label: c.querySelector('.today-label')?.textContent, time: tm?.textContent || '', fs: tm ? parseFloat(getComputedStyle(tm).fontSize) : 0,
       root: parseFloat(getComputedStyle(document.documentElement).fontSize), nav: !!c.querySelector('.nextstn-btn, .nextstn-plain'),
@@ -231,29 +235,11 @@ try {
   });
   yes(tc.label === '下一站' && tc.time === '09:30' && tc.fs >= tc.root * 1.6 - 0.01,
     `W10 今天主角卡：「${tc.label} ${tc.time}」、時間是大字（${tc.fs}px＝字級的 ${(tc.fs / tc.root).toFixed(2)} 倍，要 ≥ 1.6）`);
-  // 2026-11-13 第四段之二：「拍照解任務」前面的 📸 換成相機圖示（svg，沒有字）——圖示本身由 peektest P7 驗
-  yes(tc.nav && tc.shot.startsWith('拍照解任務'), `W10 卡裡有帶路，還有「${tc.shot}」`);
+  // v1.84.0：「拍照解任務」拿掉（Yolin：主頁不放任務的跳轉，拍照就在每一列任務上）——卡裡只剩帶路與換一站。
+  // 原本這裡還驗「點拍照解任務 → 換回那一天、展開、捲到那一站」，那顆鈕與它的捲動一起拿掉，兩條突變跟著退場（STATUS v1.84.0）
+  yes(tc.nav && tc.shot === '', `W10 卡裡有帶路，沒有「拍照解任務」（${tc.shot || '沒有'}）`);
   yes(tc.top === '⚙️設定' && tc.aria === '旅程設定' && tc.bw >= 56 && tc.bh >= 44,
     `W10 頁首右上是有字的按鈕「${tc.top}」（讀出「${tc.aria}」、${Math.round(tc.bw)}×${Math.round(tc.bh)}，觸控 ≥ 44 沒動）`);
-  // 造情境：日期列換到第 2 天、甲一（第 1 天、下一站）收起來 → 點「拍照解任務」要換回第 1 天、展開甲一、捲到看得到
-  const spotState = () => page.evaluate(() => {
-    const q = [...document.querySelectorAll('.qcollapse')].find((x) => x.textContent.includes('甲一'));
-    const r = q?.getBoundingClientRect();
-    const se = document.scrollingElement;
-    return { day: document.querySelector('.daycollapse.open')?.dataset.day, open: !!q?.classList.contains('open'), top: r ? Math.round(r.top) : null, h: r ? Math.round(r.height) : 0,
-      y: Math.round(se.scrollTop), maxY: Math.round(se.scrollHeight - window.innerHeight) };
-  });
-  await page.evaluate(() => { const q = [...document.querySelectorAll('.qcollapse')].find((x) => x.textContent.includes('甲一')); if (q?.classList.contains('open')) q.querySelector('.qc-toggle').click(); });
-  await clickText(page, '.daystrip .ds-day', '第 2 天');
-  await sleep(600);
-  const pre10 = await spotState();
-  yes(pre10.day === '2' && pre10.open === false, `W10 前置：日期列在第 2 天、甲一收起來（第 ${pre10.day} 天、展開＝${pre10.open}）`);
-  await clickText(page, '.today-shot', '拍照解任務');
-  await sleep(1200);
-  const post10 = await spotState();
-  // 「捲到」＝那一站的頂在日期列下方附近（≤ 260px），或頁面已經捲到底、不能再往下
-  yes(post10.day === '1' && post10.open && post10.h > 0 && post10.top >= 0 && (post10.top <= 260 || post10.y >= post10.maxY - 2),
-    `W10 點「拍照解任務」→ 換回第 1 天、甲一展開、捲到那一站（第 ${post10.day} 天、展開＝${post10.open}、離頂 ${post10.top}px、捲動 ${post10.y}／最多 ${post10.maxY}）`);
 
   // ---- W5 舊版存的偏好（2026-11-12 拿掉高對比與特大字之後；原本的「和紙＋高對比」隨模式拿掉） ----
   yes(await toSettings(page), 'W5 進設定頁');

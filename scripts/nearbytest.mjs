@@ -141,14 +141,15 @@ try {
   });
 
   // ---------- 入口 ----------
-  await page.evaluate((t) => { location.hash = '#/trip/' + t; }, tid);
+  // v1.84.0 起「找附近」在主頁的小工具那一區（旅程中、出發前、結束後都在）
+  await page.evaluate((t) => { location.hash = '#/trip/' + t + '/home'; }, tid);
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some((x) => x.textContent.includes('找附近')), { timeout: 10000 });
   const entry = await page.evaluate(() => {
     const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('找附近'));
     return b ? { txt: b.textContent, h: b.getBoundingClientRect().height } : null;
   });
   const rEntry = M.within(entry ? entry.h : null, '>=', 40, 'px', '「找附近」入口');
-  yes(entry && entry.txt.includes('停車場') && rEntry.ok, `行程頁有「找附近」入口（${entry && Math.round(entry.h)}px）${rEntry.tail}`);
+  yes(entry && entry.txt.includes('停車場') && rEntry.ok, `主頁有「找附近」入口（${entry && Math.round(entry.h)}px）${rEntry.tail}`);
   await page.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('找附近')).click());
   await page.waitForSelector('.nl-cats', { timeout: 10000 });
   const arrived = await page.evaluate(() => ({ hash: location.hash, cats: !!document.querySelector('.nl-cats') }));
@@ -367,7 +368,8 @@ try {
   ok('對不上的 /trip/<id>/* 路由退回行程頁，不會被踢回主畫面（SW 換版空窗的保險絲）');
 
   // ---------- 分享按鈕搬到旅程設定 ----------
-  await page.waitForFunction(() => [...document.querySelectorAll('button')].some((x) => x.textContent.includes('找附近')), { timeout: 10000 });
+  // 前置：任務頁真的畫好了（看得到那一站；v1.84.0 前等的是「找附近」，那顆搬去主頁了）
+  await page.waitForFunction(() => [...document.querySelectorAll('.qcollapse')].some((x) => x.textContent.includes('羅東夜市')), { timeout: 10000 });
   const tripBtns = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent).join('|'));
   yes(!tripBtns.includes('把任務分享給旅伴'), '行程頁不再有「把任務分享給旅伴」');
   await page.evaluate((t) => { location.hash = '#/trip/' + t + '/settings'; }, tid);

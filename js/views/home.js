@@ -79,7 +79,8 @@ function tripCard(trip) {
   const members = store.membersOf(trip.groupId);
   const spots = store.spotsOf(trip.id);
   return h('button', {
-    class: 'card trip-card', onclick: () => navigate(`/trip/${trip.id}`),
+    // v1.84.0：點旅程卡先到主頁（打開這一趟的第一眼＝現在該做什麼）；任務在第二格
+    class: 'card trip-card', onclick: () => navigate(`/trip/${trip.id}/home`),
   },
     h('div', { class: 'trip-card-main' },
       h('div', { class: 'trip-card-title' }, trip.title || '未命名旅程'),

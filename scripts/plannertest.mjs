@@ -366,7 +366,7 @@ try {
   yes(flowSpot && flowSpot.finite && flowSpot.day >= 1, `加入的景點 day=${flowSpot && flowSpot.day}（不是 NaN）`);
   // ④ 回到各頁：零/一個景點的每一頁都要有可用的下一步
   for (const [name, path] of [
-    ['行程頁', ''], ['調整行程', '/plan'], ['照片', '/people'],
+    ['行程頁', ''], ['主頁', '/home'], ['調整行程', '/plan'], ['照片', '/people'],
     ['分帳', '/expenses'], ['回顧', '/memories'],
   ]) {
     await page.goto('about:blank');
