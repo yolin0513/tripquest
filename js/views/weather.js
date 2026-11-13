@@ -87,6 +87,7 @@ export default async function weather(tripId, { drawPage, setTop }) {
     // 每一條提醒照舊是字＋前面的小圖，不另外放圖。
     const wxKind = tips.some((t) => t.level === 'snow') ? 'snow' : tips.some((t) => t.level === 'rain') ? 'rain' : null;
     const pk = wxKind ? await import('../peeks.js').catch(() => null) : null;   // 圖載不到：提醒卡照樣出
+    // 0.34＝顯示縮放（畫布 1 單位畫成幾 px），照提醒卡的大小挑的；參考數字掃描撞到它是巧合，理由見 peeks.js 的 peek() 上方
     if (pk) mountPeek(card, pk.peek(pk.WEATHER_PEEK[wxKind], 0.34));
     out.append(card);
   } else {

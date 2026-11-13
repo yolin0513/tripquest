@@ -42,6 +42,9 @@ function rimDefs(id, [x, y, w, h]) {
 }
 
 // 一張探頭圖。k＝每一個畫布單位畫成幾 px（天氣卡約 0.34、照片約 0.6）。
+//   k 是顯示縮放、不是身體比例：看那張卡／照片多大挑的畫面大小（當時沒留算式），跟參考圖的量測無關。
+//   推送前的參考數字掃描會撞到天氣卡那個值（還有畫布座標裡湊出來的同一串數字），是巧合；
+//   2026-11-13 Dispatch 看過、判定照用，不必為了掃描改值。
 // 回傳 <svg class="gl-peek">；CSS 用 --pk-sink（邊線離圖底幾 px）把邊線對在父元素的上緣：
 //   父元素 position: relative；.gl-peek { position: absolute; bottom: calc(100% - var(--pk-sink)); }
 // 圖分三層：
