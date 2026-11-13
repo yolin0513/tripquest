@@ -544,8 +544,6 @@ button.card { appearance: none; font: inherit; }
 }
 .dc-route { font-size: 0.95rem; font-weight: 800; line-height: 1.35; color: var(--text); overflow-wrap: anywhere; }
 .dc-meta { font-size: 0.85rem; color: var(--muted); font-weight: 600; line-height: 1.4; display: flex; flex-wrap: wrap; gap: 2px 8px; }
-.dc-wx { color: var(--text); font-weight: 700; }
-.dc-wx:not(:empty)::before { content: ""; }
 .dc-inner { min-height: 0; padding-top: 2px; }
 .daycollapse.open .dc-inner { animation: dayin 0.22s ease; }
 @keyframes dayin { from { opacity: 0; transform: translateY(6px); } }
@@ -805,13 +803,7 @@ button.card { appearance: none; font: inherit; }
 .dm-missing-label { display: block; font-weight: 800; }
 .dm-missing-list { display: block; }
 .daymap.is-empty { margin-top: 12px; }
-.tl-crew { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 4px; }
-.tl-crew-label { font-size: 0.85rem; font-weight: 800; color: var(--muted); }
-.tl-crew-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.tl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px;
-  background: var(--bg-elev); border: 1px solid var(--line); font-size: 0.85rem; font-weight: 700; max-width: 100%; }
-.tl-chip .avatar { width: 26px; height: 26px; font-size: 0.8rem; }
-.tl-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
+/* 「同行夥伴」那一列（.tl-crew／.tl-chip）v1.86.0 跟著任務頁的那一列拿掉；旅伴在主頁的旅伴列 */
 
 /* 和紙主題的繪本感裝飾（只在和紙；深色主題不加）：墨色粗框圓角、虛線分隔、行程頁最底下一道波浪。
    都是框線與底色，不碰字色；波浪是純裝飾（偽元素，讀螢幕的軟體讀不到）。 */
@@ -873,6 +865,33 @@ html[data-theme="washi"] .th-end { --th-bd: 2.5px; border: var(--th-bd) solid va
 .th-stay-s { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
 .th-buy, .th-money { margin-top: 12px; }
 html[data-theme="washi"] .th-stay { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+/* v1.86.0 主頁補內容：這趟的數字（結束後）、照片列、每天的行程預覽與航班（出發前）。沒有動畫。 */
+.th-sec-t { display: block; font-weight: 900; font-size: 1rem; }
+.th-nums { margin-top: 12px; padding: 12px 14px; background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); }
+.thn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 8px; }
+.thn-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.thn-v { font-size: 1.4rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.thn-k { color: var(--muted); font-weight: 700; font-size: 0.9rem; }
+/* 花費自己佔一整列：金額長（NT$3,600.00），擠在 96px 的格子裡會從數字中間斷開（v1.86.0 截圖抓到）；overflow-wrap 留著當極端金額的退路 */
+.thn-cell.thn-money { grid-column: 1 / -1; }
+.th-shots-slot:empty { display: none; }
+.th-shots, .th-plan {
+  appearance: none; display: block; width: 100%; margin-top: 12px; padding: 12px 14px; min-height: var(--tap); text-align: left;
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); font: inherit; cursor: pointer;
+}
+.th-shots-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 8px; }
+.th-shot { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--bg-elev-2); }
+.thp-day { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.th-sec-t + .thp-day { margin-top: 6px; }
+.thp-n { font-weight: 900; white-space: nowrap; }
+.thp-d { color: var(--muted); font-weight: 700; white-space: nowrap; }
+.thp-r { flex: 1 1 12em; font-weight: 700; overflow-wrap: anywhere; }
+.thp-more { display: block; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font-weight: 800; text-align: right; }
+.th-flight { margin-top: 12px; }
+html[data-theme="washi"] .th-nums, html[data-theme="washi"] .th-shots, html[data-theme="washi"] .th-plan { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+/* v1.86.0 行程分頁最上面「行程｜回顧」：沿用設定頁的 .seg（兩顆一樣寬、選中的那顆主色底），不加動畫 */
+.itin-seg { margin: 4px 0 6px; }
+.itin-pane > .section-label:first-child { margin-top: 14px; }
 /* 任務頁最上面一行進度（v1.84.0 進度卡縮成一行；圓環與鼓勵的話拿掉） */
 .task-prog { display: flex; align-items: center; gap: 12px; margin: 6px 2px 10px; }
 .tp-title { flex: none; font-weight: 800; }
@@ -916,7 +935,6 @@ html[data-theme="washi"] .tag { border-width: 1.5px; }
 /* 區塊標題放大、區塊之間拉開（字色走 --label-fg） */
 html[data-theme="washi"] .section-label { font-size: 1.1rem; margin: 40px 2px 12px; }
 html[data-theme="washi"] .tl-next > .qcollapse { border-style: dashed; }
-html[data-theme="washi"] .tl-crew { padding-bottom: 10px; border-bottom: 2px dashed var(--line); }
 html[data-theme="washi"] .page:has(.daystrip)::after {
   content: ""; display: block; height: 28px; margin: 28px -16px 0;
   background: var(--accent);

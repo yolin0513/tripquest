@@ -63,6 +63,10 @@ try {
   await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
   for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
   await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
+  // v1.86.0：這趟是 2024 年（已結束），行程分頁預設亮「回顧」——點最上面那一排的「行程」（使用者的路）。
+  // 後面回首頁再回來（location.hash）時不再點：同一個分頁階段記得剛剛看的是「行程」（sessionStorage）
+  await page.waitForSelector('.itin-seg button', { timeout: 10000 });
+  for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
   await page.waitForSelector('.daycollapse.open .dm-player', { timeout: 10000 });
   // 等背景重畫停下（地圖元素連續 2.5 秒沒被換掉）
   for (let k = 0; k < 6; k++) {

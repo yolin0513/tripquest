@@ -413,6 +413,9 @@ try {
     ['行程頁', `/trip/${ids.tid}`],
     ['主頁', `/trip/${ids.tid}/home`],   // v1.84.0 新分頁（倒數／今天第幾天、天氣條、下一站、小工具）
     ['行程分頁', `/trip/${ids.tid}/itinerary`],   // 2026-11-13 新分頁（航班／住宿／待買、每天的地圖與時間軸）
+    // v1.86.0 行程分頁最上面一排「行程｜回顧」：這趟 2026-10（已結束）預設亮「回顧」，上一頁掃的是回顧那一格；
+    // 這一頁點「行程」（使用者的路）再掃——每天的地圖、時間軸、收起來的旅途資訊在這一格
+    ['行程分頁（行程那一格）', `/trip/${ids.tid}/itinerary`, { seg: 'plan' }],
     ['旅程設定', `/trip/${ids.tid}/settings`],
     ['調整行程', `/trip/${ids.tid}/plan`],
     ['搜尋景點', `/trip/${ids.tid}/findspot`],
@@ -495,7 +498,9 @@ try {
 
   let combos = 0;
   console.log(`— 逐頁掃描（${ROUTES.length} 頁 × ${FONTS.length} 字級 × ${WIDTHS.length} 寬度 = ${ROUTES.length * FONTS.length * WIDTHS.length} 種組合）—`);
-  for (const [name, route] of ROUTES) {
+  const segMiss = [];   // 要切到某一格卻沒切到的組合（前置；沒切到的話那一格根本沒被掃）
+  let segAsked = 0;
+  for (const [name, route, opt] of ROUTES) {
     for (const w of WIDTHS) {
       for (const fs2 of FONTS) {
         await page.setViewport({ width: w, height: 844, deviceScaleFactor: 1 });
@@ -504,6 +509,18 @@ try {
         await page.evaluate((v) => { document.documentElement.dataset.fs = v; }, fs2);
         await page.waitForSelector('.page, .hero', { timeout: 15000 }).catch(() => {});
         await sleep(650);
+        if (opt && opt.seg) {
+          segAsked++;
+          const okSeg = await page.evaluate((k) => {
+            const b = document.querySelector(`.itin-seg button[data-tab="${k}"]`);
+            if (!b) return false;
+            b.click();
+            const p = document.getElementById(b.getAttribute('aria-controls'));
+            return !!p && !p.hidden && p.childElementCount > 0 && b.getAttribute('aria-selected') === 'true';
+          }, opt.seg).catch(() => false);
+          if (!okSeg) segMiss.push(`${name}/${w}px/${fs2}`);
+          await sleep(450);
+        }
         // 先把折疊的都展開 —— 使用者看到的是展開狀態。
         // 收合時 .qc-body 是 grid-template-rows: 0fr（高度 0 但還在 DOM 裡），
         // 所以任務列一直只被掃到「收起來」的樣子 —— 使用者實機回報的
@@ -539,6 +556,8 @@ try {
   console.log('');
   yes(combos === ROUTES.length * FONTS.length * WIDTHS.length,
     `掃了 ${combos} 種「頁面 × 字級 × 寬度」組合`);
+  yes(segAsked === ROUTES.filter((r) => r[2] && r[2].seg).length * FONTS.length * WIDTHS.length && segAsked > 0 && segMiss.length === 0,
+    `前置：要切到行程分頁某一格的 ${segAsked} 種組合都切到了（沒切到的話那一格沒被掃）`, segMiss.join('、') || '');
 
   // ---------- 對話框 ----------
   console.log('\n— 對話框（最壞情況：320px × 大字級）—');

@@ -12,9 +12,15 @@
 //     一進主頁就慢慢探上來在動；主頁自己重畫（refreshPage）時圖照樣在、停在靜止圖，不會每重畫一次就再跳一次
 //   M 舊位置 → 新位置（STATUS 的對照表）：任務頁原本上面那幾塊，每一樣在主頁找得到、任務頁不再有
 //     （新旅伴橫幅在 jointest／livesynctest、位置分享在 postest、天氣條的內容在 peektest／photoicontest 驗，都改從主頁讀）
-//   R 回顧搬進「行程」分頁（示意圖 6）：底部分頁沒有「回顧」；出發前／旅程中回顧是最下面一列；結束日過了排到最上面、
-//     旅途資訊收成一列放最下面；只看結束日（全部拍完但還沒結束不換、沒設結束日不換）；
-//     點了進回顧頁、底部亮「行程」、返回鍵回行程分頁
+//   R 回顧在「行程」分頁（示意圖 6；v1.86.0 改成最上面一排「行程｜回顧」切換）：底部分頁沒有「回顧」；
+//     預設只看結束日——結束日過了亮「回顧」（三張成品卡）、其餘亮「行程」（全部拍完但還沒結束、沒設結束日都是「行程」）；
+//     「行程」那一格：沒結束＝旅途資訊在每天的行程前面，結束後＝旅途資訊收成一列放最下面；回顧那一列不在「行程」那一格；
+//     點「回顧」看得到那一列（影片什麼時候開放照實寫）；點進回顧頁、底部亮「行程」、返回鍵回行程分頁而且還停在「回顧」；
+//     R11：兩格裡沒有多出來的字（原生 append(null) 會寫出「null」，v1.86.0 截圖抓到）
+//   N 主頁補內容（v1.86.0）：結束後「這趟的數字」（天數・景點・照片・花費，有才放、不顯示 0；查不到匯率不放花費）、
+//     結束卡上不再寫「拍了 N 張照片」；照片列（有照片就有：讚多的先、同讚數新的先，載不到的那張不放，一張都沒有整段不放，
+//     點了到照片分頁）；出發前「每天的行程」預覽（最多 5 天、多的寫還有幾天，點了到行程分頁）＋下一班航班（有才放）；
+//     N12：數字不從中間斷開（花費自己佔一整列，v1.86.0 截圖抓到 NT$3,6／00.00）
 //   C 主頁的新區塊（規劃 5.1，第三個 commit）：下一站卡裡的「今天接下來」（今天、下一站後面還沒拍完的兩站＋整天的行程）、
 //     今晚住（今天落在入住～退房之間；地圖帶到地址，沒地址用名稱）、出發前的待買還剩幾項、結束後還有幾筆帳沒結清；
 //     每一樣都驗「該出現時出現」與「不該出現時不出現」（帳是背景算的，等算完才判）
@@ -76,24 +82,75 @@ async function tabTo(page, name, sel) {
 const tabState = (page) => page.evaluate(() => [...document.querySelectorAll('#tabbar .tab')]
   .map((a) => ({ name: a.textContent.replace(/[^一-龥]/g, ''), on: a.classList.contains('active') })));
 
-// 行程分頁上回顧的位置：回顧卡／那一列在每天的行程前面還是後面、旅途資訊在哪
+// 行程分頁（v1.86.0 起最上面一排「行程｜回顧」）：亮的是哪一格、哪一格看得到、各格裡有什麼、旅途資訊在每天的行程前面還是後面
+// 看不看得到用 checkVisibility()（藏起來的那一格是 hidden；收起來的 <details> 內容也算看不到）
 const itinLayout = (page) => page.evaluate(() => {
   const pg = document.querySelector('.itin-page');
   if (!pg) return null;
-  const days = [...pg.querySelectorAll('.daycollapse')];
-  const first = days[0], last = days[days.length - 1];
+  const vis = (el) => !!el && el.checkVisibility();
   const before = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
-  const top = pg.querySelector('.itin-mem');
-  const rows = [...pg.querySelectorAll('.itin-mem-row')].filter((r) => !r.closest('.itin-mem'));
-  const info = pg.querySelector('.info-card');
+  const seg = pg.querySelector('.itin-seg');
+  const on = seg ? [...seg.querySelectorAll('button')].filter((b) => b.getAttribute('aria-selected') === 'true').map((b) => b.textContent) : [];
+  const plan = pg.querySelector('#itin-pane-plan'), mem = pg.querySelector('#itin-pane-mem');
+  const days = plan ? [...plan.querySelectorAll('.daycollapse')] : [];
+  const first = days[0], last = days[days.length - 1];
+  const top = mem && mem.querySelector('.itin-mem');
+  const memRow = mem ? [...mem.querySelectorAll('.itin-mem-row')].find((r) => !r.closest('.itin-mem')) || null : null;
+  const info = plan && plan.querySelector('.info-card');
   const fold = info && info.closest('details.info-fold');
   return {
-    days: days.length,
-    top: !!top, topBeforeDays: before(top, first),
-    topCards: top ? [...top.querySelectorAll('.mem-card .mem-card-title')].map((x) => x.textContent) : [],
-    rows: rows.length, rowAfterDays: rows.length === 1 && before(last, rows[0]), rowText: rows[0] ? rows[0].textContent : '',
+    seg: !!seg, segFirst: !!seg && pg.firstElementChild === seg, on: on.join(), planShown: vis(plan), memShown: vis(mem),
+    days: days.length, dayShown: days.some(vis), planRows: plan ? plan.querySelectorAll('.itin-mem, .itin-mem-row').length : 0,
+    top: !!top, topShown: vis(top), topCards: top ? [...top.querySelectorAll('.mem-card .mem-card-title')].map((x) => x.textContent) : [],
+    memRow: !!memRow, memRowShown: vis(memRow), rowText: memRow ? memRow.textContent : '',
     infoFold: !!fold, infoBeforeDays: before(info, first), infoAfterDays: before(last, info),
+    editBeforeDays: before(plan && plan.querySelector('.itin-edit'), first),
     infoRows: info ? info.querySelectorAll('.info-row').length : 0,
+    // 兩格底下直接掛著的字（不在任何元素裡）：原生 append(null) 會把 null 寫成「null」兩個字（v1.86.0 截圖抓到，測試原本沒抓到）
+    stray: [plan, mem].flatMap((p) => (p ? [...p.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim()).map((n) => n.textContent) : [])),
+  };
+});
+// 點「行程｜回顧」那一排的某一顆（使用者的路），等那一格看得到、有東西
+async function segTo(page, label) {
+  if (!await tap(page, '.itin-seg button', label)) return false;
+  return soft(page.waitForFunction((l) => {
+    const b = [...document.querySelectorAll('.itin-seg button')].find((x) => x.textContent === l);
+    const p = b && document.getElementById(b.getAttribute('aria-controls'));
+    return !!p && p.checkVisibility() && p.childElementCount > 0 && b.getAttribute('aria-selected') === 'true';
+  }, { timeout: 15000 }, label));
+}
+// v1.86.0 主頁補內容：這趟的數字、照片列、每天的行程預覽、航班。背景算的（花費、照片）等算完（data-checked）再讀
+const homeExtra = (page) => page.evaluate(async () => {
+  for (let t0 = Date.now(); Date.now() - t0 < 15000; await new Promise((r) => setTimeout(r, 50))) {
+    const pg = document.querySelector('.trip-home');
+    if (!pg) continue;
+    const n = pg.querySelector('.th-nums'), s = pg.querySelector('.th-shots-slot');
+    if ((!n || n.dataset.checked === '1') && (!s || s.dataset.checked === '1')) break;
+  }
+  const pg = document.querySelector('.trip-home');
+  if (!pg) return null;
+  const before = (a, b) => !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
+  const nums = pg.querySelector('.th-nums'), slot = pg.querySelector('.th-shots-slot'), shots = pg.querySelector('.th-shots');
+  const imgs = shots ? [...shots.querySelectorAll('img.th-shot')] : [];
+  // 圖要真的解開了才算放上去：等每一張 complete，量它的原始寬度（合成圖的寬度各不相同，用來認是哪一張）
+  for (let t0 = Date.now(); imgs.some((i) => !i.complete) && Date.now() - t0 < 5000;) await new Promise((r) => setTimeout(r, 50));
+  const plan = pg.querySelector('.th-plan'), fl = pg.querySelector('.th-flight');
+  const end = pg.querySelector('.th-end'), tools = pg.querySelector('.th-tools'), card = pg.querySelector('.today-card');
+  return {
+    nums: nums ? { title: nums.querySelector('.th-sec-t')?.textContent || '', checked: nums.dataset.checked === '1',
+      cells: [...nums.querySelectorAll('.thn-cell')].map((c) => `${c.querySelector('.thn-v')?.textContent}｜${c.querySelector('.thn-k')?.textContent}`),
+      // 每一格的數字排成幾行（用文字的範圍量：斷成兩行就有兩個框）。v1.86.0 截圖抓到花費從數字中間斷開（NT$3,6／00.00）
+      lines: [...nums.querySelectorAll('.thn-v')].map((v) => { const r = document.createRange(); r.selectNodeContents(v); return r.getClientRects().length; }) } : null,
+    endStats: end ? end.querySelector('.th-end-s')?.textContent ?? '' : null,
+    slot: !!slot, slotChecked: slot ? slot.dataset.checked === '1' : null, slotEmpty: slot ? slot.childElementCount === 0 : null,
+    shots: shots ? { title: shots.querySelector('.th-sec-t')?.textContent || '', aria: shots.getAttribute('aria-label') || '',
+      widths: imgs.map((i) => i.naturalWidth), visible: shots.checkVisibility() } : null,
+    plan: plan ? { title: plan.querySelector('.th-sec-t')?.textContent || '',
+      days: [...plan.querySelectorAll('.thp-day')].map((d) => ({ n: d.querySelector('.thp-n')?.textContent || '', d: d.querySelector('.thp-d')?.textContent ?? null, r: d.querySelector('.thp-r')?.textContent || '' })),
+      more: plan.querySelector('.thp-more')?.textContent ?? null } : null,
+    flight: fl ? fl.textContent : null,
+    numsAfterEnd: before(end, nums), numsBeforeTools: before(nums, tools), shotsBeforeTools: before(shots, tools), numsBeforeShots: before(nums, shots),
+    planAfterCard: before(card, plan), planBeforeTools: before(plan, tools), flightAfterPlan: before(plan, fl), flightBeforeTools: before(fl, tools),
   };
 });
 
@@ -262,7 +319,38 @@ try {
     await mk('R全部拍完', D.m1, D.p1, [{ name: '中正紀念堂', day: 1 }, { name: '永康街', day: 2 }], true);
     await mk('R已結束', D.m10, D.m9, [{ name: '象山', day: 1 }, { name: '龍山寺', day: 2 }], false);
     await mk('R沒結束日', D.m1, null, [{ name: '台北101', day: 1 }, { name: '士林夜市', day: 2 }], false);
-  }, { m1: plus(-1), p1: plus(1), m10: plus(-10), m9: plus(-9), p3: plus(3), p5: plus(5) });
+
+    // ---- N 主頁補內容（v1.86.0；合成的名字與照片，不是真的行程）----
+    // 照片是當場畫的小方塊（寬度各不相同，用寬度認是哪一張），存進本機的圖庫；'n缺' 那張沒有存圖（＝還沒同步下來、載不到）
+    const db = await import('./js/db.js');
+    const png = (w) => new Promise((res) => { const c = document.createElement('canvas'); c.width = w; c.height = 8; const x = c.getContext('2d'); x.fillStyle = '#c96'; x.fillRect(0, 0, w, 8); c.toBlob(res, 'image/png'); });
+    const photo = async (hash, w) => { const b = await png(w); await db.putBlob({ hash, blob: b, w, h: 8, bytes: b.size, kind: 'photo' }); };
+    const gN = uuid(), n1 = uuid(), n2 = uuid();
+    await s.put({ id: gN, type: 'group', name: 'gN' });
+    await s.put({ id: n1, type: 'member', groupId: gN, displayName: '小N' });
+    await s.put({ id: n2, type: 'member', groupId: gN, displayName: '小M' });
+    const shot = async (r, hash, at) => { const id = uuid(); await s.put({ id, type: 'submission', tripId: r.t, questId: r.quests[0].id, memberId: n1, photoHash: hash, thumbHash: hash, createdAt: at }); return id; };
+    // N結束有照片：兩天、兩站、一筆 1200 元的花費；四張照片——讚數 2（載不到）、1（最舊）、0（較新）、0（最舊的那張 0 讚）
+    const nEnd = await mk('N結束有照片', D.m10, D.m9, [{ name: '象山', day: 1 }, { name: '龍山寺', day: 2 }], false, gN, { baseCurrency: 'TWD' });
+    await photo('n甲', 8); await photo('n乙', 9); await photo('n丙', 10);
+    const T0 = Date.now() - 86400000;
+    await shot(nEnd, 'n甲', T0 + 1000);
+    await shot(nEnd, 'n乙', T0 + 2000);
+    const sC = await shot(nEnd, 'n丙', T0);
+    const sD = await shot(nEnd, 'n缺', T0 + 3000);
+    await s.toggleReaction(sC, n1, '❤️');
+    await s.toggleReaction(sD, n1, '❤️'); await s.toggleReaction(sD, n2, '❤️');
+    await spend(nEnd.t, gN, n1, 1200, 'TWD', [n1, n2]);
+    // N旅程中有照片：旅程中、一張照片（寬 11）
+    const nRun = await mk('N旅程中有照片', D.m1, D.p1, [{ name: '象山', day: 1 }], false, gN);
+    await photo('n丁', 11); await shot(nRun, 'n丁', T0);
+    // N七天：還沒出發、七天各一站（站名自己造的，不用景點庫）
+    const t7 = uuid();
+    await s.put({ id: t7, type: 'trip', groupId: g, title: 'N七天', allowWiki: false, startDate: D.p3, endDate: D.p9 });
+    for (let d = 1; d <= 7; d++) await s.put({ id: uuid(), type: 'spot', tripId: t7, name: `N站${d}`, emoji: '📍', day: d, order: d });
+    // C都買好了（還沒出發）加一班航班
+    await s.put({ id: uuid(), type: 'flight', tripId: cBuy.t, flightNo: 'ZZ123', depDate: D.p3, createdAt: Date.now() });
+  }, { m1: plus(-1), p1: plus(1), m10: plus(-10), m9: plus(-9), p3: plus(3), p5: plus(5), p9: plus(9) });
 
   // ================= H 主頁 =================
   console.log('\n— H 主頁 —');
@@ -363,10 +451,14 @@ try {
     `R1 旅程層的底部分頁是「${TRIP_TABS.join('、')}」、沒有「回顧」（讀到：${tabs.map((x) => x.name).join('、') || '沒讀到'}）`);
   ok = ok && await tabTo(page, '行程', '.itin-page');
   let L = ok ? await itinLayout(page) : null;
-  yes(!!L && L.days >= 1 && !L.top && L.rows === 1 && L.rowAfterDays && L.infoBeforeDays && !L.infoFold,
-    `R2 旅程中：回顧是最下面一列（在每天的行程後面）、上面沒有回顧卡、旅途資訊照舊在最上面（${JSON.stringify(L)}）`);
-  yes(!!L && /回顧與成就/.test(L.rowText) && /影片與最終回顧旅程結束後開放/.test(L.rowText),
-    `R3 旅程中那一列寫「回顧與成就」與「影片與最終回顧旅程結束後開放」（「${L ? L.rowText : '沒讀到'}」）`);
+  yes(!!L && L.segFirst && L.on === '行程' && L.planShown && !L.memShown && L.days >= 1 && L.dayShown && L.planRows === 0
+    && L.infoBeforeDays && !L.infoFold && L.editBeforeDays,
+    `R2 旅程中：最上面一排「行程｜回顧」、預設亮「行程」；「行程」那一格是旅途資訊 → 調整每天的行程 → 每天的行程，裡面沒有回顧；「回顧」那一格藏著（${JSON.stringify(L)}）`);
+  ok = ok && await segTo(page, '回顧');
+  L = ok ? await itinLayout(page) : null;
+  yes(!!L && L.on === '回顧' && L.memShown && !L.planShown && L.memRowShown && !L.top
+    && /回顧與成就/.test(L.rowText) && /影片與最終回顧旅程結束後開放/.test(L.rowText),
+    `R3 點「回顧」：看得到那一列「回顧與成就」與「影片與最終回顧旅程結束後開放」、「行程」那一格藏起來（「${L ? L.rowText : '沒讀到'}」；${JSON.stringify(L && { on: L.on, memShown: L.memShown, planShown: L.planShown, top: L.top })}）`);
   ok = ok && await tap(page, '.itin-mem-row', '回顧與成就');
   ok = ok && await soft(page.waitForFunction(() => /\/memories$/.test(location.hash) && document.querySelector('.mem-card'), { timeout: 15000 }));
   const memTabs = ok ? await tabState(page) : [];
@@ -375,41 +467,55 @@ try {
     `R8 點那一列進到回顧頁（卡片：${memCards.join('、') || '沒讀到'}）、底部亮的是「行程」（${memTabs.filter((x) => x.on).map((x) => x.name).join('、') || '沒有'}）`);
   const hb = ok ? await userClick(page, await page.$('#backBtn'), '頁首的返回鍵') : { ok: false };
   const backTo = hb.ok && await soft(page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-page'), { timeout: 15000 }));
-  yes(backTo, `R9 回顧頁按返回 → 回到行程分頁（${await page.evaluate(() => location.hash.replace(/[A-Za-z0-9-]{20,}/, '…'))}）`);
+  L = backTo ? await itinLayout(page) : null;
+  yes(backTo && !!L && L.on === '回顧' && L.memRowShown,
+    `R9 回顧頁按返回 → 回到行程分頁、還停在「回顧」那一格（${await page.evaluate(() => location.hash.replace(/[A-Za-z0-9-]{20,}/, '…'))}；${JSON.stringify(L && { on: L.on, memRowShown: L.memRowShown })}）`);
 
-  // R全部拍完：還沒結束就不換位置
+  // R全部拍完：還沒結束就照舊預設「行程」
   ok = await openTrip(page, 'R全部拍完');
   ok = ok && await tabTo(page, '行程', '.itin-page');
   L = ok ? await itinLayout(page) : null;
-  yes(!!L && !L.top && L.rows === 1 && L.rowAfterDays && /回憶影片可以做了/.test(L.rowText),
-    `R4 全部拍完但旅程還沒結束：回顧照樣在最下面一列（不排到最上面）、寫「回憶影片可以做了」（${JSON.stringify(L)}）`);
+  const allDoneDefault = !!L && L.on === '行程' && L.planShown && L.planRows === 0;
+  ok = ok && await segTo(page, '回顧');
+  const L4 = ok ? await itinLayout(page) : null;
+  yes(allDoneDefault && !!L4 && L4.memRowShown && !L4.top && /回憶影片可以做了/.test(L4.rowText),
+    `R4 全部拍完但旅程還沒結束：預設照舊亮「行程」（${JSON.stringify(L && { on: L.on, planShown: L.planShown, planRows: L.planRows })}）；點「回顧」是那一列、寫「回憶影片可以做了」（「${L4 ? L4.rowText : '沒讀到'}」）`);
 
-  // R已結束：排到最上面、旅途資訊收成一列放最下面
+  // R已結束：預設亮「回顧」（三張成品卡）、「行程」那一格藏著；點「行程」→ 每天的行程、旅途資訊收成一列放最下面
   ok = await openTrip(page, 'R已結束');
   ok = ok && await tabTo(page, '行程', '.itin-page');
   L = ok ? await itinLayout(page) : null;
   const want = ['回憶影片與相簿', '最終回顧', '行程海報'];
-  yes(!!L && L.top && L.topBeforeDays && want.every((w) => L.topCards.includes(w)) && L.rows === 0,
-    `R5 結束日過了：回顧卡排在最上面（在每天的行程前面）、三張成品卡（${JSON.stringify(L && { top: L.top, topBeforeDays: L.topBeforeDays, topCards: L.topCards, rows: L.rows })}）`);
+  yes(!!L && L.segFirst && L.on === '回顧' && L.memShown && L.topShown && want.every((w) => L.topCards.includes(w)) && !L.memRow && !L.planShown && !L.dayShown,
+    `R5 結束日過了：預設亮「回顧」、三張成品卡看得到；每天的行程藏著（${JSON.stringify(L && { on: L.on, memShown: L.memShown, topShown: L.topShown, topCards: L.topCards, memRow: L.memRow, planShown: L.planShown, dayShown: L.dayShown })}）`);
+  ok = ok && await segTo(page, '行程');
+  L = ok ? await itinLayout(page) : null;
   // 收起來時看不到三列；點那一列打開才看得到（使用者的路）。
   // 看不看得到用 checkVisibility()：新版 Chrome 收起來的 <details> 內容是 content-visibility:hidden，getClientRects 照樣有框（第一次跑撞到）
   const shut = ok ? await page.evaluate(() => { const i = document.querySelector('.info-fold .info-row'); return !!i && !i.closest('details').open && !i.checkVisibility(); }) : false;
   const opened = ok && await tap(page, '.info-fold-sum', '旅途資訊');
   const vis = opened ? await page.evaluate(() => [...document.querySelectorAll('.info-fold .info-row')].filter((r) => r.checkVisibility()).map((r) => r.textContent)) : [];
-  yes(!!L && L.infoFold && L.infoAfterDays && !L.infoBeforeDays && shut && vis.length === 3,
-    `R6 結束日過了：旅途資訊收成一列放最下面（在每天的行程後面、預設收著 ${shut}）、點開看得到三列（${vis.join('／') || '沒有'}）`);
-  const toAlbum = ok && await tap(page, '.itin-mem .mem-card', '回憶影片與相簿')
+  yes(!!L && L.on === '行程' && L.planShown && !L.memShown && L.dayShown && L.planRows === 0 && L.editBeforeDays
+    && L.infoFold && L.infoAfterDays && !L.infoBeforeDays && shut && vis.length === 3,
+    `R6 點「行程」：調整每天的行程 → 每天的行程、裡面沒有回顧；旅途資訊收成一列放最下面（在每天的行程後面、預設收著 ${shut}）、點開看得到三列（${vis.join('／') || '沒有'}；${JSON.stringify(L && { on: L.on, planShown: L.planShown, dayShown: L.dayShown, planRows: L.planRows, editBeforeDays: L.editBeforeDays })}）`);
+  // 兩格都建過了（R5 預設回顧、R6 點了行程）才算數
+  yes(!!L && L.planShown && L.days >= 1 && L.top && L.stray.length === 0,
+    `R11 結束後兩格裡沒有多出來的字（例：null）（多出來的：${L ? JSON.stringify(L.stray) : '沒讀到'}；行程那一格 ${L ? L.days : 0} 天、回顧那一格有成品卡 ${L ? L.top : '?'}）`);
+  const toAlbum = ok && await segTo(page, '回顧') && await tap(page, '.itin-mem .mem-card', '回憶影片與相簿')
     && await soft(page.waitForFunction(() => /\/album$/.test(location.hash), { timeout: 15000 }));
   const albumTabs = toAlbum ? await tabState(page) : [];
   yes(toAlbum && albumTabs.find((x) => x.on)?.name === '行程',
-    `R10 結束後點「回憶影片與相簿」到相簿頁、底部亮的是「行程」（${albumTabs.filter((x) => x.on).map((x) => x.name).join('、') || '沒到或沒有'}）`);
+    `R10 結束後切回「回顧」點「回憶影片與相簿」到相簿頁、底部亮的是「行程」（${albumTabs.filter((x) => x.on).map((x) => x.name).join('、') || '沒到或沒有'}）`);
 
-  // R沒結束日：不換位置
+  // R沒結束日：預設「行程」
   ok = await openTrip(page, 'R沒結束日');
   ok = ok && await tabTo(page, '行程', '.itin-page');
   L = ok ? await itinLayout(page) : null;
-  yes(!!L && !L.top && L.rows === 1 && L.rowAfterDays && L.infoBeforeDays,
-    `R7 沒設結束日：回顧一直在最下面一列（${JSON.stringify(L && { top: L.top, rows: L.rows, rowAfterDays: L.rowAfterDays })}）`);
+  const noEndPlan = !!L && L.on === '行程' && L.planShown && L.planRows === 0 && L.infoBeforeDays;
+  ok = ok && await segTo(page, '回顧');
+  const L7 = ok ? await itinLayout(page) : null;
+  yes(noEndPlan && !!L7 && L7.memRowShown && !L7.top,
+    `R7 沒設結束日：預設亮「行程」（${JSON.stringify(L && { on: L.on, planShown: L.planShown, planRows: L.planRows, infoBeforeDays: L.infoBeforeDays })}）；「回顧」那一格是那一列、不是三張成品卡（${JSON.stringify(L7 && { memRowShown: L7.memRowShown, top: L7.top })}）`);
 
   // ================= C 主頁的新區塊（今天接下來、今晚住、待買、帳沒結清）=================
   console.log('\n— C 主頁的新區塊 —');
@@ -481,6 +587,86 @@ try {
   const cRun = hk ? await homeLayout(page) : null;
   yes(!!cRun && cRun.card && !cRun.moneySlot && cRun.money === null,
     `C12 旅程還沒結束：主頁不放帳（C今天六站有一筆只算自己的花費；帳那一格 ${cRun ? cRun.moneySlot : '沒讀到'}）`);
+
+  // ================= N 主頁補內容（v1.86.0）=================
+  console.log('\n— N 主頁補內容 —');
+  const money = await page.evaluate(async () => { const fx = await import('./js/fx.js'); await fx.loadCurrencies(); return [fx.fmtMoney(1200, 'TWD'), fx.fmtMoney(400, 'TWD')]; });
+  // N結束有照片：這趟的數字、照片列
+  let nk = await openTrip(page, 'N結束有照片');
+  let N = nk ? await homeExtra(page) : null;
+  const wantCells = ['2｜天', '2｜個景點', '4｜張照片', `${money[0]}｜花費`];
+  yes(!!N && !!N.nums && N.nums.checked && N.nums.title === '這趟的數字' && JSON.stringify(N.nums.cells) === JSON.stringify(wantCells) && money[0].includes('1,200')
+    && N.numsAfterEnd && N.numsBeforeTools,
+    `N1 結束後「這趟的數字」：兩天、兩站、四張照片、花費 ${money[0]}（實得 ${N && N.nums ? N.nums.cells.join('／') : '沒有'}）；在旅程結束卡後面、小工具前面（${JSON.stringify(N && { numsAfterEnd: N.numsAfterEnd, numsBeforeTools: N.numsBeforeTools })}）`);
+  yes(!!N && !!N.nums && N.nums.lines.length === 4 && N.nums.lines.every((n) => n === 1),
+    `N12 這趟的數字每一格的數字都在同一行、不從中間斷開（390px 寬；各格幾行 ${N && N.nums ? JSON.stringify(N.nums.lines) : '沒讀到'}）`);
+  yes(!!N && typeof N.endStats === 'string' && /^完成 \d+ \/ \d+ 個任務$/.test(N.endStats) && !N.endStats.includes('照片'),
+    `N1 結束卡上只留任務數、不再寫「拍了 N 張照片」（同一個數字不講兩次；「${N ? N.endStats : '沒讀到'}」）`);
+  yes(!!N && !!N.shots && N.shots.visible && N.shots.title === '📸 這趟的照片' && JSON.stringify(N.shots.widths) === '[10,9,8]'
+    && N.shots.aria.includes('共 4 張') && N.numsBeforeShots && N.shotsBeforeTools,
+    `N2 照片列：讚多的先（1 讚那張）、同讚數新的先；2 讚但載不到的那張不放（寬度順序 ${N && N.shots ? JSON.stringify(N.shots.widths) : '沒有'}，要 [10,9,8]；標題「${N && N.shots ? N.shots.title : ''}」；在這趟的數字後面、小工具前面）`);
+  nk = nk && await tap(page, '.trip-home .th-shots', '這趟的照片')
+    && await soft(page.waitForFunction(() => /\/people$/.test(location.hash), { timeout: 15000 }));
+  const shotOn = nk ? (await tabState(page)).filter((x) => x.on).map((x) => x.name) : [];
+  yes(nk && shotOn.join() === '照片', `N3 點照片列到照片分頁、底部亮「照片」（${shotOn.join('、') || '沒到'}）`);
+
+  // 有才放：沒照片沒花費（R已結束）、查不到匯率（C匯率查不到）對照全部台幣（C帳結清）
+  nk = await openTrip(page, 'R已結束');
+  N = nk ? await homeExtra(page) : null;
+  yes(!!N && !!N.nums && N.nums.checked && JSON.stringify(N.nums.cells) === JSON.stringify(['2｜天', '2｜個景點']) && N.slotChecked && N.slotEmpty && !N.shots,
+    `N4 結束後沒照片、沒花費：數字只有天數與景點（${N && N.nums ? N.nums.cells.join('／') : '沒有'}）、不放 0 張照片與 0 元；照片列不放（算完了 ${N ? N.slotChecked : '?'}、空的 ${N ? N.slotEmpty : '?'}）`);
+  nk = await openTrip(page, 'C匯率查不到');
+  const nFx = nk ? await homeExtra(page) : null;
+  nk = await openTrip(page, 'C帳結清');
+  const nEven = nk ? await homeExtra(page) : null;
+  yes(!!nFx && !!nFx.nums && nFx.nums.checked && JSON.stringify(nFx.nums.cells) === JSON.stringify(['2｜天', '1｜個景點'])
+    && !!nEven && !!nEven.nums && nEven.nums.checked && JSON.stringify(nEven.nums.cells) === JSON.stringify(['2｜天', '1｜個景點', `${money[1]}｜花費`]),
+    `N5 有一筆查不到匯率（日圓）→ 不放花費（${nFx && nFx.nums ? nFx.nums.cells.join('／') : '沒有'}）；對照：全部台幣的那一趟放（${nEven && nEven.nums ? nEven.nums.cells.join('／') : '沒有'}）`);
+
+  // 照片列：載不到就不放（R全部拍完的照片都沒有存圖）；旅程中有照片就有（N旅程中有照片）；旅程中沒照片不放、沒有數字與預覽（R旅程中）
+  nk = await openTrip(page, 'R全部拍完');
+  N = nk ? await homeExtra(page) : null;
+  yes(!!N && N.slot && N.slotChecked && N.slotEmpty && !N.shots && !N.nums && !N.plan,
+    `N6 全部拍完但照片都載不到：照片列整段不放（算完了 ${N ? N.slotChecked : '?'}、空的 ${N ? N.slotEmpty : '?'}）；還沒結束、沒有這趟的數字（${N ? !!N.nums : '?'}）`);
+  nk = await openTrip(page, 'N旅程中有照片');
+  N = nk ? await homeExtra(page) : null;
+  yes(!!N && !!N.shots && JSON.stringify(N.shots.widths) === '[11]' && !N.nums && !N.plan && !N.flight,
+    `N7 旅程中有照片：照片列在（寬度 ${N && N.shots ? JSON.stringify(N.shots.widths) : '沒有'}）；旅程中不放這趟的數字、行程預覽、航班（${JSON.stringify(N && { nums: !!N.nums, plan: !!N.plan, flight: N.flight })}）`);
+  nk = await openTrip(page, 'R旅程中');
+  N = nk ? await homeExtra(page) : null;
+  yes(!!N && N.slotChecked && N.slotEmpty && !N.nums && !N.plan && !N.flight,
+    `N11 旅程中沒照片：照片列不放、沒有數字、預覽、航班（${JSON.stringify(N && { slotChecked: N.slotChecked, slotEmpty: N.slotEmpty, nums: !!N.nums, plan: !!N.plan, flight: N.flight })}）`);
+
+  // 出發前：每天的行程預覽＋航班
+  const md = (k) => { const d = new Date(); d.setDate(d.getDate() + k); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  // 要的路線從資料讀（第 1 天排第一與最後的站名），不從畫面的函式算
+  const preNames = await page.evaluate(async () => {
+    const s = await import('./js/store.js');
+    const rec = s.exportRecords().find((r) => r.type === 'trip' && r.title === 'H還沒出發');
+    return rec ? s.spotsOf(rec.id).filter((x) => (x.day || 1) === 1).map((x) => x.name) : [];
+  });
+  nk = await openTrip(page, 'H還沒出發');
+  N = nk ? await homeExtra(page) : null;
+  const wantRoute = preNames.length > 1 ? `${preNames[0]} → ${preNames[preNames.length - 1]}` : null;
+  yes(preNames.length === 3 && !!N && !!N.plan && N.plan.title === '🗺️ 每天的行程' && N.plan.days.length === 1
+    && N.plan.days[0].n === '第 1 天' && N.plan.days[0].d === md(3) && N.plan.days[0].r === wantRoute && N.plan.more === null
+    && N.planAfterCard && N.planBeforeTools && N.flight === null && !N.nums,
+    `N8 出發前：「每天的行程」預覽一列「${N && N.plan ? N.plan.days.map((d) => `${d.n} ${d.d} ${d.r}`).join('／') : '沒有'}」（要「第 1 天 ${md(3)} ${wantRoute}」）、在下一站卡後面、小工具前面；沒有航班就不放航班（${N ? N.flight : '?'}）`);
+  nk = nk && await tap(page, '.trip-home .th-plan', '每天的行程')
+    && await soft(page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-page'), { timeout: 15000 }));
+  const planOn = nk ? (await tabState(page)).filter((x) => x.on).map((x) => x.name) : [];
+  L = nk ? await itinLayout(page) : null;
+  yes(nk && planOn.join() === '行程' && !!L && L.on === '行程' && L.dayShown,
+    `N8 點預覽到行程分頁、底部亮「行程」、那一排亮「行程」、看得到每天的行程（${planOn.join('、') || '沒到'}；${JSON.stringify(L && { on: L.on, dayShown: L.dayShown })}）`);
+  nk = await openTrip(page, 'N七天');
+  N = nk ? await homeExtra(page) : null;
+  yes(!!N && !!N.plan && N.plan.days.map((d) => d.n).join() === '第 1 天,第 2 天,第 3 天,第 4 天,第 5 天' && N.plan.days.map((d) => d.r).join() === 'N站1,N站2,N站3,N站4,N站5'
+    && N.plan.days[4].d === md(7) && N.plan.more === '還有 2 天 ›',
+    `N9 七天的旅程：預覽只列前 5 天、多的寫「還有 2 天」（${N && N.plan ? N.plan.days.map((d) => `${d.n}｜${d.d}｜${d.r}`).join('／') : '沒有'}；${N && N.plan ? N.plan.more : ''}）`);
+  nk = await openTrip(page, 'C都買好了');
+  N = nk ? await homeExtra(page) : null;
+  yes(!!N && N.flight === '✈️ 航班・ZZ123 還有 3 天起飛' && N.flightAfterPlan && N.flightBeforeTools,
+    `N10 出發前有航班：「${N ? N.flight || '沒有' : '沒讀到'}」、在行程預覽後面、小工具前面（${JSON.stringify(N && { flightAfterPlan: N.flightAfterPlan, flightBeforeTools: N.flightBeforeTools })}）`);
 
   console.log('\n主頁與回顧測試結束');
 } catch (e) {

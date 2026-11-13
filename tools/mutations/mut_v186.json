@@ -1,0 +1,194 @@
+[
+  {
+    "name": "任務頁：天的標題卡又回來",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）dayCollapse 又在時間軸上面放一張天的標題卡（第 N 天＋第一站 → 最後一站）。預期只紅 itinviewtest 的 D1「任務頁沒有天的標題卡」。",
+    "expect": ["D1 任務頁沒有天的標題卡"],
+    "file": "js/views/trip.js",
+    "find": "  return h('section', { class: 'daycollapse' + (open ? ' open' : ''), dataset: { day: String(day) } },\n    h('div', { class: 'dc-body' },",
+    "replace": "  return h('section', { class: 'daycollapse' + (open ? ' open' : ''), dataset: { day: String(day) } },\n    h('div', { class: 'dc-head' }, h('span', { class: 'dc-daynum' }, `第 ${day} 天`), h('span', { class: 'dc-route' }, dayRoute(daySpots))),\n    h('div', { class: 'dc-body' },",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "任務頁：同行夥伴那一列又回來",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）時間軸上面又放一列「同行夥伴」。預期只紅 itinviewtest 的 B3「任務頁沒有「同行夥伴」那一列」（主頁那邊的 B3 前置不受影響）。",
+    "expect": ["B3 任務頁沒有「同行夥伴」那一列"],
+    "file": "js/views/trip.js",
+    "find": "      h('div', { class: 'dc-inner' },\n        // 當日地圖（查看路線）2026-11-13 搬到",
+    "replace": "      h('div', { class: 'dc-inner' },\n        h('div', { class: 'tl-crew' }, h('span', { class: 'tl-crew-label' }, '同行夥伴')),\n        // 當日地圖（查看路線）2026-11-13 搬到",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "行程分頁：預設不看結束了沒",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）預設一律亮「行程」。R已結束第一次進行程分頁就落在「行程」。紅：R5（結束了要預設回顧）。不紅：R6（點「行程」本來就在行程照樣過）、R10（自己點回顧）、R2／R4／R7（本來就預設行程）。",
+    "expect": ["R5 結束日過了", "R11 結束後兩格裡沒有多出來的字"],
+    "note": "R11 是事後補的（11-14 04:3x）：R11 在這條預期寫完之後才加；它的前置要「回顧」那一格建過，這條改壞後那一格從頭到尾沒建，照設計判不了、算紅。第一次跑（帳本第 989 次）只多紅這一行。",
+    "file": "js/views/trip.js",
+    "find": "  let tab = ended ? 'mem' : 'plan';",
+    "replace": "  let tab = 'plan';",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "行程分頁：不記剛剛看哪一格",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）切格時不寫 sessionStorage。R旅程中點回顧 → 進回顧頁 → 返回，行程分頁重畫回到預設「行程」。紅：R9。不紅：R3、R8（同一次畫面裡切格，不靠記住）。",
+    "expect": ["R9 回顧頁按返回"],
+    "file": "js/views/trip.js",
+    "find": "    try { sessionStorage.setItem(tabKey, `${phase}:${key}`); } catch { /* noop */ }",
+    "replace": "    void tabKey;",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "行程分頁：「行程」那一格還留著回顧那一列",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）還沒結束時，「行程」那一格最下面照舊放回顧那一列（v1.85.0 的樣子）。紅：R2、R4、R7（行程那一格裡有回顧，planRows 不是 0）；R8、R9 也會紅——點那一列用的 clickText 挑文件裡第一個，第一個是藏起來的「行程」那一格裡那列，沒有大小點不到，R8 沒進回顧頁、R9 跟著沒得返回。不紅：R3（只讀「回顧」那一格）、R5／R6／R10（結束了不加）。",
+    "expect": ["R2 旅程中", "R4 全部拍完但旅程還沒結束", "R7 沒設結束日", "R8 點那一列進到回顧頁", "R9 回顧頁按返回"],
+    "file": "js/views/trip.js",
+    "find": "    if (spots.length) planDays();\n    if (ended) {",
+    "replace": "    if (spots.length) planDays();\n    if (!ended) planPane.append(memoriesCard(tripId, t, ended));\n    if (ended) {",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "這趟的數字：天數少算一天",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）天數不含頭尾其中一天。N結束有照片、R已結束、C匯率查不到、C帳結清都是兩天的旅程，變成 1 天。紅：N1 第一條、N4、N5。不紅：N1 第二條（結束卡）、N2、N3、N6～N11。",
+    "expect": ["N1 結束後「這趟的數字」", "N4 結束後沒照片", "N5 有一筆查不到匯率"],
+    "file": "js/views/trip.js",
+    "find": "  const n = Math.round((b - a) / 86400000) + 1;",
+    "replace": "  const n = Math.round((b - a) / 86400000);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "這趟的數字：沒照片也放「0 張照片」",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）照片那一格不管有沒有都放。R已結束、C匯率查不到、C帳結清都沒有照片，多出「0｜張照片」。紅：N4、N5。不紅：N1（有 4 張，本來就放）。",
+    "expect": ["N4 結束後沒照片", "N5 有一筆查不到匯率"],
+    "file": "js/views/trip.js",
+    "find": "    photos ? numCell(String(photos), '張照片') : null);",
+    "replace": "    numCell(String(photos), '張照片'));",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "這趟的數字：查不到匯率照樣放花費",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）missingRate 那一道拿掉。C匯率查不到有一筆台幣 300（算得到）＋一筆日圓（查不到），合計只算到 300、大於 0，於是放出一個算不準的花費。紅：N5。不紅：N1、N4（沒有查不到的）。",
+    "expect": ["N5 有一筆查不到匯率"],
+    "file": "js/views/trip.js",
+    "find": "    if (s.missingRate || !(s.totals.grand > 0) || !grid.isConnected) return;",
+    "replace": "    if (!(s.totals.grand > 0) || !grid.isConnected) return;",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "結束卡：照樣寫「拍了 N 張照片」",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）結束卡又加回照片數（跟下面「這趟的數字」講兩次）。N結束有照片有 4 張。紅：N1 第二條（結束卡只留任務數）。不紅：H5（R已結束沒有照片，卡上照舊只有任務數）、N1 第一條。",
+    "expect": ["N1 結束卡上只留任務數"],
+    "file": "js/views/trip.js",
+    "find": "    const stats = [prog.total ? `完成 ${prog.done} / ${prog.total} 個任務` : null].filter(Boolean);",
+    "replace": "    const shotN = store.submissionsOfTrip(tripId).filter((x) => x.photoHash || x.thumbHash).length;\n    const stats = [prog.total ? `完成 ${prog.done} / ${prog.total} 個任務` : null, shotN ? `拍了 ${shotN} 張照片` : null].filter(Boolean);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "照片列：不看讚數",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）只照時間排（新的先）。N結束有照片：寬 9（較新 0 讚）、8、10（最舊但 1 讚）→ 順序變 [9,8,10]，要 [10,9,8]。紅：N2。不紅：N1、N3（點得到照樣到照片分頁）、N7（只有一張）。",
+    "expect": ["N2 照片列"],
+    "file": "js/views/trip.js",
+    "find": "    const ranked = subs.slice().sort((a, b) => (likes.get(b.id) - likes.get(a.id)) || (when(b) - when(a)));",
+    "replace": "    const ranked = subs.slice().sort((a, b) => (when(b) - when(a)));",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "照片列：只在結束後才有",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）照片列那一格只在結束後放（規劃原本寫的樣子；守夜模式改成「有照片就有」）。紅：N7（旅程中有一張照片卻沒有照片列）；N6、N11 也紅——它們要先看到那一格「算完了、是空的」才判「沒放」，那一格整個不在就判不出來。不紅：N1～N5（結束了照舊）、N8～N10。",
+    "expect": ["N6 全部拍完但照片都載不到", "N7 旅程中有照片", "N11 旅程中沒照片"],
+    "file": "js/views/trip.js",
+    "find": "  const shotsSlot = spots.length ? h('div', { class: 'th-shots-slot' }) : null;",
+    "replace": "  const shotsSlot = ended && spots.length ? h('div', { class: 'th-shots-slot' }) : null;",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "這趟的數字：旅程中、出發前也放",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）ended 那一道拿掉。紅：N6、N7、N11（旅程中不該有數字）、N8 第一條（出發前不該有數字）。不紅：N1、N4、N5（結束了本來就放）、N9、N10（不看數字）。",
+    "expect": ["N6 全部拍完但照片都載不到", "N7 旅程中有照片", "N11 旅程中沒照片", "N8 出發前"],
+    "file": "js/views/trip.js",
+    "find": "    ended && spots.length ? endNums(tripId, t, spots) : null,",
+    "replace": "    spots.length ? endNums(tripId, t, spots) : null,",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "每天的行程預覽：不限出發前",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）todayDay === 0 那一道拿掉，旅程中、結束後也放預覽。紅：N6、N7、N11（旅程中不該有預覽）。不紅：N1～N5（不看預覽）、N8～N10（出發前本來就放）。跟「照片列只在結束後」紅同一組斷言（那三條把照片列、數字、預覽寫在同一行），從斷言名稱分不出是哪一個條件紅的，要看訊息裡的 JSON——已知限制，記在 STATUS。",
+    "expect": ["N6 全部拍完但照片都載不到", "N7 旅程中有照片", "N11 旅程中沒照片"],
+    "file": "js/views/trip.js",
+    "find": "    todayDay === 0 && spots.length ? planPreview(tripId, t, spots) : null,",
+    "replace": "    spots.length ? planPreview(tripId, t, spots) : null,",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "每天的行程預覽：不限 5 天",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）七天全列、沒有「還有 N 天」。紅：N9。不紅：N8（只有一天）。",
+    "expect": ["N9 七天的旅程"],
+    "file": "js/views/trip.js",
+    "find": "  const shown = dayNums.slice(0, 5);",
+    "replace": "  const shown = dayNums;",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "每天的行程預覽：點了到任務頁",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）預覽點下去到任務頁、不是行程分頁。紅：N8 第二條（點預覽到行程分頁）。不紅：N8 第一條、N9、N10（下一趟 openTrip 自己回旅程列表）。",
+    "expect": ["N8 點預覽到行程分頁"],
+    "file": "js/views/trip.js",
+    "find": "  return h('button', { class: 'th-plan', type: 'button', onclick: () => navigate(`/trip/${tripId}/itinerary`) },",
+    "replace": "  return h('button', { class: 'th-plan', type: 'button', onclick: () => navigate(`/trip/${tripId}`) },",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "照片列：點了到任務頁",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）照片列點下去到任務頁、不是照片分頁。紅：N3。不紅：N1、N2、N4 之後（下一趟 openTrip 自己回旅程列表）。",
+    "expect": ["N3 點照片列到照片分頁"],
+    "file": "js/views/trip.js",
+    "find": "      onclick: () => navigate(`/trip/${tripId}/people`) },\n      h('span', { class: 'th-sec-t' }, '📸 這趟的照片'), row));",
+    "replace": "      onclick: () => navigate(`/trip/${tripId}`) },\n      h('span', { class: 'th-sec-t' }, '📸 這趟的照片'), row));",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "航班那一列：不寫班號",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）只寫「航班・還有 N 天起飛」，沒有班號。紅：N10。不紅：N8（沒有航班，本來就不放）。",
+    "expect": ["N10 出發前有航班"],
+    "file": "js/views/trip.js",
+    "find": "    `✈️ 航班・${nf.flightNo ? nf.flightNo + ' ' : ''}${flightCountdown(nf)}`);",
+    "replace": "    `✈️ 航班・${flightCountdown(nf)}`);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "行程分頁：append 不濾 null",
+    "why": "（事前寫 2026-11-14 03:55，跑之前）buildPlan 的原生 append 不先濾掉 null。結束後「行程」那一格最上面多出「null」兩個字（v1.86.0 截圖抓到的第一版就是這樣；修正前實跑 R11 紅、多出 [\"null\",\"null\"]）。紅：R11。不紅：R6（只看結構、不看字）、其餘。",
+    "expect": ["R11 結束後兩格裡沒有多出來的字"],
+    "file": "js/views/trip.js",
+    "find": "        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點')].filter(Boolean));",
+    "replace": "        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點')]);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "這趟的數字：花費擠在窄格子裡",
+    "why": "（事前寫 2026-11-14 03:55，跑之前）花費不自己佔一整列。390px 寬時 NT$1,200.00 擠在約 96px 的格子裡、從數字中間斷成兩行（修正前實跑 N12 紅、各格幾行 [1,1,1,2]）。紅：N12。不紅：N1（字一樣、只是排版）、其餘。",
+    "expect": ["N12 這趟的數字每一格的數字都在同一行"],
+    "file": "css/style.css",
+    "find": ".thn-cell.thn-money { grid-column: 1 / -1; }",
+    "replace": ".thn-cell.thn-money { }",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "任務頁：「全部展開」沒有展開",
+    "why": "（事前寫 2026-11-14 03:40，跑之前）「全部展開」按下去其實是全部收合。itinviewtest S1 先按它把頁面拉長；沒拉長，第 1 天兩站收著只捲得動一點點、日期列還在原位。紅：S1 前置「捲過了日期列原本的位置」、S1「捲到最下面日期列還黏在標題列下面」（日期列沒黏住、停在原位，top 不等於標題列高）。不紅：S1「點得到全部展開」（按鈕照樣在）、其餘。",
+    "expect": ["S1 前置：捲過了日期列原本的位置", "S1 捲到最下面"],
+    "file": "js/views/trip.js",
+    "find": "        h('button', { class: 'day-tool-btn', onclick: () => setAll(true) }, '全部展開'),",
+    "replace": "        h('button', { class: 'day-tool-btn', onclick: () => setAll(false) }, '全部展開'),",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "行程分頁：「行程｜回顧」的按鈕認不出是哪一格",
+    "why": "（事前寫 2026-11-14 03:15，跑之前）那一排按鈕的 data-tab 換了名字（layouttest 用它切格）。layouttest 每一種組合都切不到「行程」那一格。紅：layouttest 的「前置：要切到行程分頁某一格」。其餘版面斷言照樣掃（沒切到就掃預設那一格），預期不紅。",
+    "expect": ["前置：要切到行程分頁某一格"],
+    "file": "js/views/trip.js",
+    "find": "'aria-controls': pane.id, dataset: { tab: key }, onclick: () => show(key) }, label);",
+    "replace": "'aria-controls': pane.id, dataset: { t: key }, onclick: () => show(key) }, label);",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 1400000,
+    "timeoutBasis": "第一次跑原樣在預設 400 秒被殺（帳本第 986 次，11-14 03:59 記下）。原樣實測 477 秒（tools/test-times.json，2026-11-13），v1.86.0 多掃一頁（「行程分頁（行程那一格）」，每種字級 × 寬度各掃一次），會比 477 秒再長；照 mut_narrowcol 的同一個數（改壞後實測 673.4 秒 × 2、進位）"
+  }
+]

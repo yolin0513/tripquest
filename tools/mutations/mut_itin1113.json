@@ -77,11 +77,11 @@
   },
   {
     "name": "任務頁還有當天地圖",
-    "why": "（事前寫 2026-11-13）當天地圖（查看路線）搬到行程分頁之後，任務頁每天也還畫一張。預期只紅 legviewtest 的「任務頁沒有當天地圖」。",
+    "why": "（事前寫 2026-11-13）當天地圖（查看路線）搬到行程分頁之後，任務頁每天也還畫一張。預期只紅 legviewtest 的「任務頁沒有當天地圖」。v1.86.0 同行夥伴那一列（原本的 find）拿掉了，find 改指任務頁時間軸那一行、地圖插在它前面（事前寫 2026-11-14，預期不變）。",
     "expect": ["任務頁沒有當天地圖"],
     "file": "js/views/trip.js",
-    "find": "        crewStrip(t),",
-    "replace": "        dayMap(daySpots, tripId, day), crewStrip(t),",
+    "find": "        legTimeline(daySpots, (s) => h('li', { class: 'tl-item' + (states",
+    "replace": "        dayMap(daySpots, tripId, day), legTimeline(daySpots, (s) => h('li', { class: 'tl-item' + (states",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
   },
   {

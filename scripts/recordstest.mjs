@@ -173,6 +173,9 @@ const toItin = async (page, sel) => {
   await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
   await clickText(page, '#tabbar a.tab', '行程');
   await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
+  // v1.86.0：行程分頁最上面一排「行程｜回顧」，已結束的行程預設亮「回顧」——點「行程」（使用者的路；本來就亮著的話點了也一樣）
+  await page.waitForSelector('.itin-seg button', { timeout: 10000 });
+  await clickText(page, '.itin-seg button', '行程');
   await page.waitForSelector(sel, { timeout: 10000 });
   const folded = await page.$eval(sel, (e) => { const d = e.closest('details.info-fold'); return !!d && !d.open; });
   if (folded) {

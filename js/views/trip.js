@@ -81,6 +81,9 @@ async function pickCountry(tripId) {
   if (pick) { await store.patch(tripId, { country: pick }); toast('已設定'); refreshPage(); }
 }
 
+// 這次打開 App 以來看過任務頁的旅程（只在記憶體裡；關掉 App 再開就清空）。用來分「回來」與「新打開」，見 trip() 的 selKey。
+const taskSeen = new Set();
+
 export default async function trip(tripId, { fresh = false, drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
@@ -155,6 +158,8 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     // 新的預設才生效。不清的話，之前按過一次「全部展開」就等於永遠全部展開 ——
     // 使用者實機看到的「第二天的全部任務都是展開的」就是這樣來的。
     const selKey = 'tripquest.daySel.' + tripId;
+    const seen = taskSeen.has(tripId);
+    taskSeen.add(tripId);
     try {
       const fk = 'tripquest.focus.' + tripId;
       if (localStorage.getItem(fk) !== String(focusId)) {
@@ -164,8 +169,11 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       }
       // 新打開這趟行程＝「帶我到今天」：一律回到預設的那一天，不沿用上次看到哪一天。
       // 返回、底部分頁切回來才沿用——他剛剛在看第 3 天，回來還是第 3 天。
-      // 不能只看 fresh：router 每一次導覽（包括返回）都給 fresh；分得出「返回」的是 navRestoredScroll()。
-      if (fresh && !navRestoredScroll()) localStorage.removeItem(selKey);
+      // 不能只看 fresh：router 每一次導覽（包括返回）都給 fresh。
+      // 分「回來」原本看 navRestoredScroll()，但 router 只在捲動事件時記位置：整頁沒捲過，回來也算第一次進來。
+      // v1.86.0 任務頁拿掉天的標題卡之後常常不用捲，collapsetest 撞到（選第 2 天 → 切到照片再切回來 → 變回第 1 天）。
+      // 改看 taskSeen（這次打開 App 以來看過這一趟的任務頁沒有）；不改 router——它一改，測試範圍會放大成全套。
+      if (fresh && !seen) localStorage.removeItem(selKey);
     } catch { /* noop */ }
 
     // 選中哪一天：手動選的（還在這趟的天數裡）> 現在這一站那天 > 今天 > 第一天
@@ -189,7 +197,8 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
       strip.select(d);
       try { localStorage.setItem(selKey, String(d)); } catch { /* noop */ }
       // 換天之後把那一天的開頭帶到日期列下面；本來就看得到就不動
-      const head = scroll ? daySecs.get(d)?.querySelector('.dc-head') : null;
+      // v1.86.0 起任務頁沒有天的標題卡了，「開頭」是第一站（dayStart：有時間就是那一行時間，沒有就是第一站的標題列）
+      const head = scroll && daySecs.get(d) ? dayStart(daySecs.get(d)) : null;
       if (head) {
         const stripH = strip.el.getBoundingClientRect().bottom;
         const r = head.getBoundingClientRect();
@@ -209,18 +218,13 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     // 新增景點在「調整每天的行程」裡；這裡不再重複放
   }
 
-  // 每天的天氣摘要（有座標景點、旅程還沒結束才有；背景載入）。天氣條 v1.84.0 搬到主頁，這裡只填「天」標題列那一小段。
-  let wxReady = Promise.resolve();
-  if (spots.some((s) => s.lat != null) && !tripEnded(t)) {
-    wxReady = fillWeather(null, container, tripId, t);
-  }
-
+  // 每天的天氣摘要原本填在「天」的標題卡上；v1.86.0 標題卡拿掉了（天氣在主頁的天氣條與天氣頁），任務頁不再抓天氣。
   drawPage(container);
 
-  // 進來時把「今天」帶到眼前。天氣條是後來才填的、會把下面的內容往下推，
-  // 所以等它填完（或最多等 700ms）再捲，不然捲到一半畫面又被推走。
+  // 進來時把「今天」帶到眼前。原本要等天氣摘要填完（最多 700ms）再捲；任務頁不抓天氣之後，畫完就捲
+  // （跟以前沒有座標的旅程同一個時機）。
   if (fresh) {
-    Promise.race([wxReady, new Promise((r) => setTimeout(r, 700))])
+    Promise.resolve()
       .then(() => scrollToToday(container, dayForToday(t), store.getHereSpot(tripId)))
       .catch(() => {});
   }
@@ -260,13 +264,21 @@ function tripEnded(t) {
 //   1. 只有旅程「進行中」才動（還沒出發、已結束都不動）
 //   2. 回到看過的畫面不動（返回、底部分頁切回來）—— router 已經還原他原本捲到哪裡
 //   3. 今天那一列本來就看得到就不動
-//   4. 只捲到「第 N 天」的標題列，不捲進任務深處，他才知道自己在哪一天
+//   4. 只捲到那一天的開頭，不捲進任務深處，他才知道自己在哪一天（第幾天看上面的日期列，選中的就是那一天）
 //   5. 設定可以整個關掉
-// 捲動目標一律是「那一天的標題列」——使用者要先知道自己在第幾天，再看到那一站。
+// 捲動目標是「那一天的開頭」（v1.86.0 之前是天的標題卡；標題卡拿掉之後是第一站，見 dayStart）。
 // 有指定「現在這一站」就用它所屬的那一天（那天會展開、而且只有那一站是展開的，
-// 所以捲到天的標題列就看得到它）；沒指定就用今天。
-// 例外：如果捲到天的標題列之後，那一站仍然落在畫面外（那天景點很多時會這樣），
+// 所以捲到那一天的開頭就看得到它）；沒指定就用今天。
+// 例外：如果捲到那一天的開頭之後，那一站仍然落在畫面外（那天景點很多時會這樣），
 // 就改捲到那一站，因為「看到我要去的那一站」才是真正的目的。
+// 那一天的開頭（v1.86.0）：第一站有填時間 → 那一行時間（它在第一站卡片上方）；沒填 → 第一站的標題列；連站都沒有 → 整個區塊。
+// 不用整個第一站（.tl-item）：展開的那一站很高，「本來就看得到就不動」看的是下緣，會變成永遠不成立、每次都捲。
+function dayStart(daySec) {
+  const li = daySec.querySelector('.tl-item');
+  if (!li) return daySec;
+  const tm = li.querySelector('.tl-time');
+  return (tm && tm.textContent) ? tm : (li.querySelector('.qc-head') || li);
+}
 function scrollToToday(container, todayDay, hereId) {
   if (!hereId && !(todayDay > 0)) return;
   if (navRestoredScroll()) return;
@@ -276,7 +288,7 @@ function scrollToToday(container, todayDay, hereId) {
   // 不能照日期去找：沒顯示的那幾天量出來位置是 0，會把畫面捲到不對的地方。
   const daySec = container.querySelector('.daycollapse.open');
   const spotSec = hereId && daySec ? daySec.querySelector(`.qcollapse[data-spot="${CSS.escape(hereId)}"]`) : null;
-  const dayHead = daySec && (daySec.querySelector('.dc-head') || daySec);
+  const dayHead = daySec && dayStart(daySec);
   const spotHead = spotSec && (spotSec.querySelector('.qc-head') || spotSec);
   const head = dayHead || spotHead;
   if (!head) return;
@@ -404,6 +416,98 @@ async function fillUnsettled(slot, tripId, t) {
   finally { slot.dataset.checked = '1'; }   // 算完了（不管有沒有放東西）：測試等這個，才分得出「沒出現」與「還沒算完」
 }
 
+// ---- v1.86.0 主頁補內容（守夜模式照建議做；決定與替代方案見 STATUS）----
+// 這趟的數字（結束後）：天數、景點、照片、花費總額。每一格都是「有才放」：
+//   天數＝出發～結束日（含頭尾；兩個日期都有、而且結束不早於出發才放）；照片＝有照片的投稿張數（0 不放）；
+//   花費＝跟分帳頁同一套算法的合計（背景算；沒有花費、有任何一筆查不到匯率〔合計算不準〕、合計是 0 都不放）。
+const numCell = (v, k, cls = '') => h('div', { class: 'thn-cell' + (cls ? ' ' + cls : '') }, h('span', { class: 'thn-v' }, v), h('span', { class: 'thn-k' }, k));
+function tripDays(t) {
+  if (!t.startDate || !t.endDate) return 0;
+  const a = new Date(t.startDate + 'T00:00:00'), b = new Date(t.endDate + 'T00:00:00');
+  const n = Math.round((b - a) / 86400000) + 1;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+function endNums(tripId, t, spots) {
+  const photos = store.submissionsOfTrip(tripId).filter((x) => x.photoHash || x.thumbHash).length;
+  const days = tripDays(t);
+  const grid = h('div', { class: 'thn-grid' },
+    days ? numCell(String(days), '天') : null,
+    spots.length ? numCell(String(spots.length), '個景點') : null,
+    photos ? numCell(String(photos), '張照片') : null);
+  const el = h('section', { class: 'th-nums', 'aria-label': '這趟的數字' }, h('div', { class: 'th-sec-t' }, '這趟的數字'), grid);
+  fillSpent(el, grid, tripId, t);
+  return el;
+}
+async function fillSpent(el, grid, tripId, t) {
+  try {
+    const [ex, fx] = await Promise.all([import('../expenses.js'), import('../fx.js')]);
+    const list = ex.tripExpenses(tripId);
+    if (!list.length) return;
+    await fx.loadCurrencies();
+    const base = t.baseCurrency || fx.currencyForCountry(t.country) || 'TWD';
+    const rates = list.every((e) => e.currency === base) ? null : await fx.getRates();
+    const s = ex.settleTrip(tripId, base, rates);
+    if (s.missingRate || !(s.totals.grand > 0) || !grid.isConnected) return;
+    grid.append(numCell(fx.fmtMoney(s.totals.grand, base), '花費', 'thn-money'));   // 金額長，自己佔一整列（不然在窄格子裡從數字中間斷開）
+  } catch { /* 算不出來就不放那一格 */ }
+  finally { el.dataset.checked = '1'; }   // 算完了：測試等這個，才分得出「沒放」與「還沒算完」
+}
+
+// 照片列：最多 6 張縮圖，讚多的先、同讚數新的先。圖載不到的那張不放（還沒同步下來、壞掉的檔）；一張都沒有就整段不放。
+// 標題寫「這趟的照片」不寫「精選」——沒有人真的挑過。整段是一顆按鈕，點了到照片分頁。
+// 最多試 12 張：前面幾張載不到就往後補，但不為了湊滿一直往後抓（每一張載不到的都可能要上網問一次）。
+async function fillShots(slot, tripId) {
+  try {
+    const subs = store.submissionsOfTrip(tripId).filter((x) => x.thumbHash || x.photoHash);
+    if (!subs.length) return;
+    const likes = new Map(subs.map((x) => [x.id, store.likesOf(x.id).count]));
+    const when = (x) => x.takenAt || x.createdAt || 0;
+    const ranked = subs.slice().sort((a, b) => (likes.get(b.id) - likes.get(a.id)) || (when(b) - when(a)));
+    const urls = [];
+    for (const x of ranked.slice(0, 12)) {
+      const u = (await blobURL(x.thumbHash).catch(() => '')) || (await blobURL(x.photoHash).catch(() => ''));
+      if (u) urls.push(u);
+      if (urls.length === 6) break;
+    }
+    if (!urls.length || !slot.isConnected) return;
+    const row = h('span', { class: 'th-shots-row', 'aria-hidden': 'true' });
+    for (const u of urls) {
+      const img = h('img', { class: 'th-shot', src: u, alt: '' });
+      // 有網址但解不開（壞掉的檔）：那一張拿掉；全部拿掉了整段收起來
+      img.addEventListener('error', () => { img.remove(); if (!row.querySelector('img')) slot.replaceChildren(); });
+      row.append(img);
+    }
+    slot.replaceChildren(h('button', { class: 'th-shots', type: 'button', 'aria-label': `這趟的照片，共 ${subs.length} 張，看全部照片`,
+      onclick: () => navigate(`/trip/${tripId}/people`) },
+      h('span', { class: 'th-sec-t' }, '📸 這趟的照片'), row));
+  } catch { /* 載不到就不放 */ }
+  finally { slot.dataset.checked = '1'; }
+}
+
+// 出發前：每天的行程預覽。一天一列「第 N 天 日期 · 第一站 → 最後一站」（使用者排的站名，不另外編），最多 5 天、多的寫「還有 N 天」。
+// 整張是一顆按鈕，點了到行程分頁。
+function planPreview(tripId, t, spots) {
+  const byDay = new Map();
+  for (const s of spots) { const d = s.day || 1; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(s); }
+  const dayNums = [...byDay.keys()].sort((a, b) => a - b);
+  const shown = dayNums.slice(0, 5);
+  return h('button', { class: 'th-plan', type: 'button', onclick: () => navigate(`/trip/${tripId}/itinerary`) },
+    h('span', { class: 'th-sec-t' }, '🗺️ 每天的行程'),
+    ...shown.map((d) => h('span', { class: 'thp-day' },
+      h('span', { class: 'thp-n' }, `第 ${d} 天`),
+      dayDate(t, d) ? h('span', { class: 'thp-d' }, dayDate(t, d)) : null,
+      h('span', { class: 'thp-r' }, dayRoute(byDay.get(d))))),
+    dayNums.length > shown.length ? h('span', { class: 'thp-more' }, `還有 ${dayNums.length - shown.length} 天 ›`) : null);
+}
+
+// 出發前：下一班航班（有才放；字跟行程分頁旅途資訊卡那一列一樣），點了到航班頁
+function flightRow(tripId) {
+  const nf = nextFlight(tripId);
+  if (!nf) return null;
+  return h('button', { class: 'btn btn-soft btn-block th-flight', onclick: () => navigate(`/trip/${tripId}/flights`) },
+    `✈️ 航班・${nf.flightNo ? nf.flightNo + ' ' : ''}${flightCountdown(nf)}`);
+}
+
 // 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
 // 還沒說「這是誰的手機」→ 旅伴那邊會看到你「還沒加入」，而且你開了位置分享也
 // 傳不出去（v1.63/v1.64 實機踩過：建立者從來沒走過這一步）。原本是一顆軟性按鈕，
@@ -452,8 +556,8 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
       h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}/plan`) }, '＋ 去安排景點'));
   } else if (ended) {
     // 旅程結束後：合成一張（原本進度卡「全部完成了」跟回顧大按鈕同一句話講兩次）
-    const photos = store.submissionsOfTrip(tripId).filter((x) => x.photoHash || x.thumbHash).length;
-    const stats = [prog.total ? `完成 ${prog.done} / ${prog.total} 個任務` : null, photos ? `拍了 ${photos} 張照片` : null].filter(Boolean);
+    // v1.86.0「拍了 N 張照片」搬到下面「這趟的數字」（同一個數字不講兩次）；卡上只留任務數
+    const stats = [prog.total ? `完成 ${prog.done} / ${prog.total} 個任務` : null].filter(Boolean);
     main = h('section', { class: 'th-end' },
       h('div', { class: 'th-end-t' }, '🎁 旅程結束了'),
       // 每一段自己不換行（layouttest 抓到：320／360px 寬時「拍了 51」換行「張照片」，數字和量詞被拆開）；要換行只換在「・」後面
@@ -477,6 +581,9 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
     }
   }
 
+  // v1.86.0 主頁補內容（守夜模式照建議做；決定與替代方案見 STATUS）。都是「有才放」，沒有的不放、不顯示 0、不猜；不放任務的跳轉。
+  //   結束後：這趟的數字（天數・景點・照片・花費）；出發前：每天的行程預覽＋下一班航班；照片列：有照片就有（不分哪個階段）
+  const shotsSlot = spots.length ? h('div', { class: 'th-shots-slot' }) : null;
   const page = h('div', { class: 'page trip-home' },
     note,
     cd ? h('div', { class: 'countdown', role: 'status' },
@@ -486,6 +593,9 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
       h('span', { class: 'th-day-n' }, `今天是第 ${todayDay} 天`),
       t.startDate ? h('span', { class: 'th-day-d' }, `${dayDate(t, todayDay)} ${weekdayLabel(t.startDate, todayDay)}`.trim()) : null) : null,
     main,
+    ended && spots.length ? endNums(tripId, t, spots) : null,
+    todayDay === 0 && spots.length ? planPreview(tripId, t, spots) : null,
+    todayDay === 0 ? flightRow(tripId) : null,
     // 今晚住（旅程沒結束才有；今天落在某一間住宿的日期裡才有）
     ...(ended ? [] : tonightStays(tripId).map((s) => h('a', {
       class: 'th-stay', href: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address || s.name)}`,
@@ -496,6 +606,8 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
     // 出發前：待買還剩幾項（規劃 5.1「出發前」；0 項或沒有清單就不出現），點了到待買清單（行程分頁裡）
     cd && buyCounts(tripId).left > 0 ? h('button', { class: 'btn btn-soft btn-block th-buy', onclick: () => navigate(`/trip/${tripId}/buy`) },
       `🛒 待買還有 ${buyCounts(tripId).left} 項沒買`) : null,
+    // 照片列（背景載縮圖，fillShots 填進來；一張都載不到就是空的）
+    shotsSlot,
     // 結束後：還有幾筆帳沒結清（背景算，fillUnsettled 填進來；結清了就是空的）
     ended ? h('div', { class: 'th-money-slot' }) : null,
     // 小工具：找附近、旅伴、（結束後）照片、位置分享（分享中才有；分享期過了自己不顯示，見 posBanner）
@@ -515,6 +627,7 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
 
   const moneySlot = page.querySelector('.th-money-slot');
   if (moneySlot) fillUnsettled(moneySlot, tripId, t);
+  if (shotsSlot) fillShots(shotsSlot, tripId);
 
   drawPage(page);
   watchHere(tripId);
@@ -664,18 +777,7 @@ function dayStrip(dayNums, byDay, t, { todayDay, sel, onPick, overview = false }
   return { el, select };
 }
 
-// 同行夥伴：放在每一天時間軸的開頭，回答「誰跟我去」。
-// 寫「同行夥伴」不寫「今日同行夥伴」——TripQuest 沒有「哪一天誰同行」的資料，寫「今日」就是猜。
-// 頭像用旅伴自己的（不另外畫角色；日期軸與頁首的原創圖形回答的是另一件事，兩者不混用）。
-function crewStrip(t) {
-  const members = store.membersOf(t.groupId);
-  if (!members.length) return null;
-  return h('div', { class: 'tl-crew' },
-    h('span', { class: 'tl-crew-label' }, '同行夥伴'),
-    h('div', { class: 'tl-crew-list' }, ...members.map((m) => h('span', { class: 'tl-chip' },
-      avatar(m.displayName, hashHue(m.id)),
-      h('span', { class: 'tl-chip-name' }, m.displayName || '旅伴')))));
-}
+// 「同行夥伴」那一列（每一天時間軸的開頭）v1.86.0 拿掉：旅伴在主頁的旅伴列（crewButton）就看得到、點了有完整清單。
 
 // 當日地圖的照片圖釘：這一站所有任務裡最新的一張投稿（沒照片的投稿不算）
 function latestSpotSub(s) {
@@ -686,41 +788,19 @@ function latestSpotSub(s) {
 }
 
 // 「天」這一層：v1.74.11 起是日期列選中的那一天（class open ＝ 正在顯示），景點排成時間軸
+// v1.86.0 拿掉天的標題卡（第 N 天／今天／第一站 → 最後一站／日期・N 個景點・完成 x/y／天氣摘要），各東西的新位置：
+//   第 N 天與日期 → 上面的日期列（選中的那一格；只有一天的旅程沒有日期列，也就沒有天的字——只有一天不用分）；
+//   第一站 → 最後一站、景點數 → 行程分頁每天的標題（本來就有）；天氣摘要 → 主頁的天氣條＋天氣頁；
+//   完成 x/y → 任務頁最上面那一行（整趟的）；日期列那一格全部完成照舊打勾、讀屏念「全部完成」。對照表在 STATUS。
 function dayCollapse(day, daySpots, tripId, t, ctx) {
-  const dp = dayProgress(daySpots);
-  const dayDone = dp.total > 0 && dp.done === dp.total;
-  const dstr = dayDate(t, day);
   const open = !!ctx.open;
   const isToday = ctx.todayDay === day && ctx.todayDay > 0;
-
-  const wk = weekdayLabel(t.startDate, day);
-  const route = dayRoute(daySpots);
-  const meta = [
-    dstr ? `${dstr} ${wk}`.trim() : null,
-    `${daySpots.length} 個景點`,
-    dp.total ? (dayDone ? '✓ 全部完成' : `完成 ${dp.done}/${dp.total}`) : null,
-  ].filter(Boolean).join(' · ');
-
-  const wxSpan = h('span', { class: 'dc-wx' });   // 天氣摘要背景填（另起一行）
   const states = timelineStates(daySpots.map((s) => s.id), { live: isToday, nowId: ctx.focusId });
 
-  const sec = h('section', { class: 'daycollapse' + (open ? ' open' : ''), dataset: { day: String(day) } },
-    // 標題不再能點：天不收合了（收起來是空白）。換天用上面的日期列。
-    h('div', { class: 'dc-head' + (isToday ? ' is-today' : '') },
-      h('span', { class: 'dc-main' },
-        h('span', { class: 'dc-row1' },
-          h('span', { class: 'dc-daynum' }, `第 ${day} 天`),
-          isToday ? h('span', { class: 'dc-todaytag' }, '今天') : null,
-        ),
-        // 當日標題卡的第二行：第一站 → 最後一站（使用者排的，不另外編一個當日標題）
-        route ? h('span', { class: 'dc-route' }, route) : null,
-        h('span', { class: 'dc-meta' }, h('span', {}, meta), wxSpan),
-      ),
-    ),
+  return h('section', { class: 'daycollapse' + (open ? ' open' : ''), dataset: { day: String(day) } },
     h('div', { class: 'dc-body' },
       h('div', { class: 'dc-inner' },
         // 當日地圖（查看路線）2026-11-13 搬到「行程」分頁（itinerary() 的 dayMap()）：它畫的是計畫中的景點，屬於行程。
-        crewStrip(t),
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
         // 兩站之間一列「怎麼去」（js/legs.js）：就放在兩張卡中間，看行程時一眼就看到、點了就能設——不藏在編輯頁。
@@ -729,8 +809,6 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
             spotSection(s, tripId, ctx.focusId, ctx.hereId))))),
   );
-  sec._wxSpan = wxSpan;
-  return sec;
 }
 
 
@@ -745,23 +823,7 @@ async function fillWeather(slot, container, tripId, trip) {
     if (!f) return;
     const days = tripForecastDays(trip, f.days);
     if (!days.length) return;
-
-    // 每天的天氣摘要塞進「天」折疊的標題列（只填日期真的對得上的那幾天）
-    if (trip.startDate) {
-      const p2 = (n) => String(n).padStart(2, '0');
-      for (const d of days) {
-        if (!d._tripDay) continue;
-        const ex = new Date(trip.startDate + 'T00:00:00');
-        ex.setDate(ex.getDate() + (d._tripDay - 1));
-        const expected = `${ex.getFullYear()}-${p2(ex.getMonth() + 1)}-${p2(ex.getDate())}`;
-        if (d.date !== expected) continue;
-        const sec = container.querySelector(`.daycollapse[data-day="${d._tripDay}"]`);
-        const span = sec && sec._wxSpan;
-        if (span) span.textContent = `${wx.wxIcon(d.code)} ${d.tmax}° / ${d.tmin}°`;
-      }
-    }
-    // 任務頁（v1.84.0 起）只填上面那一小段、不畫天氣條：沒有天氣條就不用比出發地的氣溫，也就不問定位
-    if (!slot) return;
+    // v1.86.0 之前這裡還把每天的天氣摘要塞進任務頁「天」的標題卡；標題卡拿掉了，現在只有主頁呼叫（畫天氣條）
 
     let hereTemp = null, hereName = '出發地';
     const home = wx.getHome();
@@ -1649,16 +1711,62 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
   const byDay = new Map();
   for (const s of spots) { const d = s.day || 1; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(s); }
   const ended = tripEnded(t);
-  // 結束日過了：回顧在最上面；航班、住宿、待買用不到了，收成一列放最下面（點開照樣是同一張卡）
-  const page = h('div', { class: 'page itin-page' + (ended ? ' is-ended' : '') },
-    ended ? memoriesCard(tripId, t, true) : null,
-    ended ? null : h('div', { class: 'section-label' }, '旅途資訊'),
-    ended ? null : infoCard(tripId),
-    h('div', { class: 'section-label' }, '每天的行程'),
-    h('button', { class: 'btn btn-soft btn-block itin-edit', onclick: () => navigate(`/trip/${tripId}/plan`) },
-      spots.length ? '📅 調整每天的行程' : '＋ 去安排景點'),
-  );
-  if (spots.length) {
+  // v1.86.0 最上面一排「行程｜回顧」（守夜模式照建議做；決定與替代方案見 STATUS）。
+  // 預設：結束日過了 → 回顧；其餘（出發前、旅程中、沒設結束日、全部拍完但還沒結束）→ 行程。只看結束日，跟原本回顧排到最上面同一條。
+  // 記住剛剛看哪一格：sessionStorage（重畫、返回、切分頁回來都停在那一格；關掉 App 再開回到預設）。
+  // 存的時候連「當時結束了沒」一起存：旅程中切去看回顧，結束日一過，下一次照新的預設（回顧），不沿用舊的。
+  // 不用 localStorage：旅程中點過一次回顧，之後每次打開都落在回顧，會找不到今天的行程。
+  const tabKey = 'tripquest.itinTab.' + tripId;
+  const phase = ended ? '1' : '0';
+  let tab = ended ? 'mem' : 'plan';
+  try {
+    const raw = sessionStorage.getItem(tabKey) || '';
+    const [p, v] = raw.split(':');
+    if (p === phase && (v === 'plan' || v === 'mem')) tab = v;
+  } catch { /* noop */ }
+  const planPane = h('div', { class: 'itin-pane', id: 'itin-pane-plan', role: 'tabpanel', 'aria-label': '行程' });
+  const memPane = h('div', { class: 'itin-pane', id: 'itin-pane-mem', role: 'tabpanel', 'aria-label': '回顧' });
+  const segBtn = (key, label, pane) => h('button', { type: 'button', role: 'tab', 'aria-controls': pane.id, dataset: { tab: key }, onclick: () => show(key) }, label);
+  const seg = h('div', { class: 'seg itin-seg', role: 'tablist', 'aria-label': '行程或回顧' },
+    segBtn('plan', '行程', planPane), segBtn('mem', '回顧', memPane));
+  const page = h('div', { class: 'page itin-page' + (ended ? ' is-ended' : '') }, seg, planPane, memPane);
+  // 兩格各自第一次顯示時才建：地圖、日期列的紙飛機要量尺寸，藏著（display:none）的時候量不到
+  const built = new Set();
+  function show(key) {
+    for (const b of seg.querySelectorAll('button')) {
+      const on = b.dataset.tab === key;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    }
+    planPane.hidden = key !== 'plan';
+    memPane.hidden = key !== 'mem';
+    try { sessionStorage.setItem(tabKey, `${phase}:${key}`); } catch { /* noop */ }
+    if (built.has(key)) return;
+    built.add(key);
+    if (key === 'plan') buildPlan(); else buildMem();
+  }
+  // 回顧那一格：結束日過了＝三個成品入口＋成就（memoriesCard 的卡片）；還沒結束＝那一列（影片什麼時候開放照實寫）
+  function buildMem() {
+    memPane.append(memoriesCard(tripId, t, ended));
+  }
+  // 行程那一格：沒結束＝旅途資訊卡 → 每天的行程；結束後＝每天的行程 → 旅途資訊收成一列放最下面（點開照樣是同一張卡）。
+  // 原本最下面那一列回顧（還沒結束時）搬進「回顧」那一格，這裡不再放。
+  function buildPlan() {
+    // 原生 append 不會略過 null（會寫成「null」兩個字，v1.86.0 截圖抓到）——先濾掉；h() 才會自己略過
+    planPane.append(...[
+      ended ? null : h('div', { class: 'section-label' }, '旅途資訊'),
+      ended ? null : infoCard(tripId),
+      h('div', { class: 'section-label' }, '每天的行程'),
+      h('button', { class: 'btn btn-soft btn-block itin-edit', onclick: () => navigate(`/trip/${tripId}/plan`) },
+        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點')].filter(Boolean));
+    if (spots.length) planDays();
+    if (ended) {
+      planPane.append(h('details', { class: 'info-fold' },
+        h('summary', { class: 'info-fold-sum' }, '旅途資訊（航班・住宿・待買）'),
+        infoCard(tripId)));
+    }
+  }
+  function planDays() {
     const dayNums = [...byDay.keys()].sort((a, b) => a - b);
     const todayDay = dayForToday(t);
     const key = 'tripquest.itinDay.' + tripId;
@@ -1677,7 +1785,7 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
     // 日期列最前面一格是「總覽」（整趟所有天畫在同一張地圖；Yolin 2026-11-05 選 A；2026-11-13 從任務頁搬來）
     const strip = dayStrip(dayNums, byDay, t, { todayDay, sel, onPick: pickDay, overview: many });
     if (many) {
-      page.append(strip.el);
+      planPane.append(strip.el);
       const ov = h('section', { class: 'daycollapse dc-overview' + (sel === 0 ? ' open' : ''), dataset: { day: '0' } },
         h('div', { class: 'dc-head' }, h('span', { class: 'dc-main' },
           h('span', { class: 'dc-row1' }, h('span', { class: 'dc-daynum' }, '總覽')),
@@ -1685,7 +1793,7 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
         h('div', { class: 'dc-body' }, h('div', { class: 'dc-inner' },
           tripOverviewMap(byDay, dayNums, { onPickDay: pickDay }))));
       secs.set(0, ov);
-      page.append(ov);
+      planPane.append(ov);
     }
     for (const day of dayNums) {
       const ds = byDay.get(day);
@@ -1707,17 +1815,11 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
             h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))))));
       secs.set(day, sec);
-      page.append(sec);
+      planPane.append(sec);
     }
   }
-  if (ended) {
-    page.append(h('details', { class: 'info-fold' },
-      h('summary', { class: 'info-fold-sum' }, '旅途資訊（航班・住宿・待買）'),
-      infoCard(tripId)));
-  } else {
-    page.append(h('div', { class: 'section-label' }, '回顧'), memoriesCard(tripId, t, false));
-  }
   drawPage(page);
+  show(tab);   // 掛上之後才建（量得到尺寸）
   // 旅伴同步進來（例：別人加了航班、改了行程）→ 整頁重畫（見 onTripPage）。簽章只放這一頁畫得到的東西：
   // 背景補維基圖片（heroHash）、AI 文案這些這一頁不顯示的欄位改了不重畫——不然點到一半，按鈕被換掉（overviewtest 實測）。
   watchHere(tripId, itinSignature);

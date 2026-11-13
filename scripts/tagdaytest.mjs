@@ -85,6 +85,9 @@ try {
     await stable('.daycollapse.open .timeline');
     // 2026-11-13「調整每天的行程」搬到「行程」分頁：先點底部分頁「行程」（使用者的路）
     for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+    // v1.86.0：這趟是 2024 年（已結束），行程分頁預設亮「回顧」——點最上面那一排的「行程」（使用者的路）
+    await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-seg'), { timeout: 8000 });
+    for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
     await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-edit'), { timeout: 8000 });
     let planBtn = null;
     for (const b of await page.$$('button')) if ((await b.evaluate((e) => e.textContent)).includes('調整每天的行程')) { planBtn = b; break; }

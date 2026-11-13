@@ -136,6 +136,9 @@ try {
   const taskMap = await page.evaluate(() => ({ tl: !!document.querySelector('.daycollapse.open .timeline'), map: document.querySelectorAll('.daycollapse .daymap').length }));
   yes(taskMap.tl && taskMap.map === 0, `任務頁沒有當天地圖（時間軸在：${taskMap.tl}；地圖 ${taskMap.map} 張）`);
   for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+  // v1.86.0：這趟是 2024 年（已結束），行程分頁預設亮「回顧」——點最上面那一排的「行程」（使用者的路）
+  await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-seg'), { timeout: 10000 });
+  for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
   await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.daycollapse.open .daymap'), { timeout: 10000 });
   await stable('.daycollapse.open .timeline');
   L = await legs();

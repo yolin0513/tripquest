@@ -71,6 +71,9 @@ async function newPage(tileMode) {
   await page.waitForSelector('#tabbar a.tab', { timeout: 10000 });
   for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
   await page.waitForFunction(() => /\/itinerary$/.test(location.hash), { timeout: 10000 });
+  // v1.86.0：這趟是 2024 年（已結束），行程分頁預設亮「回顧」——點最上面那一排的「行程」（使用者的路）
+  await page.waitForSelector('.itin-seg button', { timeout: 10000 });
+  for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
   await page.waitForSelector('.daystrip .ds-day', { timeout: 10000 });
   return { page, tid };
 }

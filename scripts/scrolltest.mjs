@@ -207,7 +207,10 @@ try {
     const stripB = document.querySelector('.daystrip').getBoundingClientRect().bottom;
     const tabH = document.getElementById('tabbar').offsetHeight;
     const r = head ? head.getBoundingClientRect() : null;
-    const dh = document.querySelector('.daycollapse.open .dc-head');
+    // v1.86.0 任務頁沒有天的標題卡了：「那一天的開頭」＝第一站有時間就是那一行時間，沒有就是第一站的標題列（同 trip.js 的 dayStart）
+    const li = document.querySelector('.daycollapse.open .tl-item');
+    const tm = li && li.querySelector('.tl-time');
+    const dh = li ? ((tm && tm.textContent) ? tm : li.querySelector('.qc-head')) : null;
     const d = dh ? dh.getBoundingClientRect() : null;
     return { has: !!head, top: r ? Math.round(r.top) : null, bottom: r ? Math.round(r.bottom) : null,
       dayTop: d ? Math.round(d.top) : null, dayBottom: d ? Math.round(d.bottom) : null,
@@ -226,10 +229,10 @@ try {
   else fail('沒有自動捲動：scrollY=' + pos.y);
   if (pos.top >= pos.stripB - 4 && pos.bottom <= pos.limit) ok(`停的位置看得到那一站：在日期列下面、底部分頁上面（top ${pos.top}、日期列底 ${pos.stripB}、可見下緣 ${pos.limit}）`);
   else fail(`停的位置不對（被日期列蓋住或在畫面外）：${JSON.stringify(pos)}`);
-  // App 捲的目標有兩種：天的標題（那一站跟著看得到時）或那一站本身。上一條只驗那一站，
-  // 捲到天的標題時被日期列蓋住的是天的標題——要嘛完整露出在日期列下面，要嘛整個捲過標題列上面。
-  if (pos.dayTop !== null && (pos.dayTop >= pos.stripB - 4 || pos.dayBottom <= pos.topbarH + 2)) ok(`天的標題列沒被日期列蓋住（top ${pos.dayTop}、日期列底 ${pos.stripB}）`);
-  else fail(`天的標題列被日期列蓋住：${JSON.stringify(pos)}`);  // 判準是「App 呼叫了 window.scrollTo 幾次、跨了多久」，不是 scroll 事件的取樣數
+  // App 捲的目標有兩種：那一天的開頭（那一站跟著看得到時）或那一站本身。上一條只驗那一站，
+  // 捲到那一天的開頭時被日期列蓋住的是開頭——要嘛完整露出在日期列下面，要嘛整個捲過標題列上面。
+  if (pos.dayTop !== null && (pos.dayTop >= pos.stripB - 4 || pos.dayBottom <= pos.topbarH + 2)) ok(`那一天的開頭（第一站的時間或標題列）沒被日期列蓋住（top ${pos.dayTop}、日期列底 ${pos.stripB}）`);
+  else fail(`那一天的開頭被日期列蓋住：${JSON.stringify(pos)}`);  // 判準是「App 呼叫了 window.scrollTo 幾次、跨了多久」，不是 scroll 事件的取樣數
   //（後者會被瀏覽器合併，負載一高就只剩 1 次 —— 那是 v1.73.2 之前的偽失敗來源）。
   // smoothScrollTo 是 320ms 的 rAF 動畫，一定不只一次呼叫、一定跨得過 0 毫秒。
   // 「捲動是平滑的」要在頁面靜下來之後量：開頁當下 smoothScrollTo 的第一個 rAF

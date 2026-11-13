@@ -9,12 +9,13 @@
 //   S2 點日期列的某一天：只顯示那一天，其他天 display:none；那一格標成選中、aria-pressed
 //   S3 只有一天的旅程：沒有日期列（只有一格沒東西可切）
 //   S4 天數很多（15 天）：每一格都在、選中那格捲進日期列看得到的範圍；記下一個畫面看得到幾格（回報用，不設門檻）
-//   S5 天的標題不再是按鈕（天不收合；收起來就是空白）
+//   S5 天的標題不是按鈕（天不收合；收起來就是空白）——v1.86.0 起任務頁沒有天的標題卡，改在「行程」分頁量
+//   D1 任務頁沒有天的標題卡（v1.86.0 拿掉；第幾天看日期列）——前置：那一天有站、日期列在
 //   T1 時間軸：有填時間的那一站在軸上寫幾點；沒填的那一站時間欄是空的（不補猜的時間）
 //   第 1 批（2026-10-27）——每一條都用 seen()：捲到畫面中間、沒被蓋住、對比 ≥ 4.5，才算「看得到」：
 //   B1 日期列每格看得到日期（不寫星期），今天那格寫「今天」，不寫當天第一站（2026-11-05 Yolin 改）
-//   B2 當日標題卡看得到「第一站 → 最後一站」
-//   B3 時間軸開頭看得到「同行夥伴」（不是「今日」）和旅伴名字；沒有旅伴就不放這一列
+//   B2 當日標題卡看得到「第一站 → 最後一站」——v1.86.0 起在「行程」分頁那一天的標題
+//   B3 v1.86.0 起任務頁沒有「同行夥伴」那一列（前置：這趟有兩位旅伴、那一天的時間軸在）；旅伴在主頁的旅伴列看得到
 //   B4 進行中、看今天：現在這一站之後的換虛線框、字淡一點但對比照樣 ≥ 4.5
 //   B5 看的不是今天、還沒出發：什麼都不淡化
 //   G1 紙飛機（原創圖形，js/glyphs.js）停在選中那天的正上方、不蓋到那格的字；點別天就跟過去
@@ -132,6 +133,13 @@ async function toTasks(page) {
   await sleep(900);
   return true;
 }
+// 底部分頁（使用者的路）：點那一格，等 sel 出現
+async function toTab(page, name, sel) {
+  const tab = await page.evaluateHandle((n) => [...document.querySelectorAll('#tabbar .tab')].find((a) => a.textContent.includes(n)) || null, name);
+  const k = tab.asElement() ? await userClick(page, tab.asElement(), `底部「${name}」分頁`) : { ok: false, why: `找不到「${name}」分頁` };
+  if (!k.ok) { console.log('  [點不到]', k.why); return false; }
+  return page.waitForSelector(sel, { timeout: 15000 }).then(() => sleep(500)).then(() => true, () => false);
+}
 const cardCountdown = (page, title) => page.evaluate((t) => {
   const c = [...document.querySelectorAll('.trip-card')].find((x) => x.querySelector('.trip-card-title')?.textContent === t);
   return c ? (c.querySelector('.trip-card-cd')?.textContent ?? null) : '找不到卡片';
@@ -183,7 +191,6 @@ try {
   yes((await pageCountdown(page)) === null, `C1 任務頁已經沒有倒數（搬到主頁；實得 ${await pageCountdown(page)}）`);
   const stB = await page.evaluate(() => [document.querySelectorAll('.tl-item').length, document.querySelectorAll('.tl-past, .tl-now, .tl-next').length]);
   yes(stB[0] > 0 && stB[1] === 0, `B5 還沒出發（${stB[0]} 站）→ 不分已到／未到（實得 ${stB[1]} 站有狀態）`);
-  yes(!(await page.$('.tl-crew')), 'B3 沒有旅伴的旅程 → 不放「同行夥伴」那一列（不放一個空的標題）');
   for (const t of ['沒設日期', '進行中', '已結束']) {
     yes(await openFromHome(page, t), `C2 從首頁點「${t}」進主頁`);
     yes((await pageCountdown(page)) === null, `C2 主頁：${t} → 沒有倒數（實得 ${await pageCountdown(page)}）`);
@@ -196,11 +203,13 @@ try {
   yes(cells.map((c) => c.day).join() === '1,2,3', `S1 日期列：三天各一格、任務頁沒有總覽格（實得 ${cells.map((c) => c.day).join() || '無'}）`);
   yes(cells.filter((c) => c.on).map((c) => c.day).join() === '2', 'S1 預設選中今天（第 2 天）');
   yes((await shownDays(page)).join() === '2', `S1 只顯示第 2 天（實得 ${(await shownDays(page)).join() || '無'}）`);
-  const head = await page.evaluate(() => {
-    const hd = document.querySelector('.daycollapse.open .dc-head');
-    return hd ? { tag: hd.tagName, hasChev: !!hd.querySelector('.dc-chev') } : null;
-  });
-  yes(!!head && head.tag !== 'BUTTON' && !head.hasChev, `S5 天的標題不是按鈕、沒有展開箭頭（${JSON.stringify(head)}）`);
+  // D1（v1.86.0）：任務頁沒有天的標題卡——先確認那一天真的畫出來了（有站、日期列在），再數標題卡
+  const noHead = await page.evaluate(() => ({
+    items: document.querySelectorAll('.daycollapse.open .tl-item').length, strip: !!document.querySelector('#view .daystrip'),
+    head: document.querySelectorAll('#view .dc-head').length, route: document.querySelectorAll('#view .dc-route').length,
+  }));
+  yes(noHead.items > 0 && noHead.strip && noHead.head === 0 && noHead.route === 0,
+    `D1 任務頁沒有天的標題卡（那一天 ${noHead.items} 站、日期列 ${noHead.strip}；標題卡 ${noHead.head} 個、路線 ${noHead.route} 個）`);
 
   // ---- 第 1 批：B1–B5（今天是「進行中」的第 2 天；現在這一站＝今天第一個沒拍完的「乙一」）----
   const WK = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
@@ -214,13 +223,13 @@ try {
   // 2026-11-05 Yolin：日期列不列站名（刻意改的）。先確認那一格在、而且有字，再驗站名不在格子裡
   const cell2 = await page.evaluate(() => { const c = document.querySelector('.daystrip .ds-day[data-day="2"]'); return c ? { text: c.textContent, first: !!c.querySelector('.ds-first') } : null; });
   yes(!!cell2 && cell2.text.includes('第 2 天') && !cell2.text.includes('乙一') && !cell2.first, `B1 第 2 天那格在、但不寫當天第一站「乙一」（字「${cell2 && cell2.text}」）`);
-  v = await seen(page, '.daycollapse.open .dc-route');
-  yes(v.ok && v.text === '乙一 → 乙二', `B2 當日標題卡看得到「乙一 → 乙二」（${v.why}；字「${v.text}」）`);
-  v = await seen(page, '.daycollapse.open .tl-crew-label');
-  yes(v.ok && v.text === '同行夥伴', `B3 時間軸開頭看得到「同行夥伴」——不是「今日同行夥伴」（${v.why}；字「${v.text}」）`);
-  const chips = await page.evaluate(() => [...document.querySelectorAll('.daycollapse.open .tl-chip-name')].map((x) => x.textContent));
-  v = await seen(page, '.daycollapse.open .tl-chip-name');
-  yes(v.ok && chips.join() === '小藍,小綠', `B3 兩位旅伴的名字看得到（${v.why}；實得 ${chips.join() || '無'}）`);
+  // B3（v1.86.0）：任務頁沒有「同行夥伴」那一列——前置：這趟有兩位旅伴（主頁的旅伴列在後面驗）、那一天的時間軸在
+  const crewT = await page.evaluate(() => ({
+    items: document.querySelectorAll('.daycollapse.open .tl-item').length,
+    crew: document.querySelectorAll('#view .tl-crew').length, word: document.querySelector('#view .page')?.textContent.includes('同行夥伴') ?? null,
+  }));
+  yes(crewT.items > 0 && crewT.crew === 0 && crewT.word === false,
+    `B3 任務頁沒有「同行夥伴」那一列（那一天 ${crewT.items} 站；那一列 ${crewT.crew} 個；頁面上有「同行夥伴」這幾個字 ${crewT.word}）`);
   const st = await page.evaluate(() => [...document.querySelectorAll('.daycollapse.open .tl-item')].map((li) => ({
     name: li.querySelector('.qc-name')?.firstChild?.textContent || '',
     s: ['tl-past', 'tl-now', 'tl-next'].find((c) => li.classList.contains(c)) || '',
@@ -275,13 +284,38 @@ try {
   yes(tl.length > 0 && tl.every((x) => x.dot), 'T1 每一站在軸上都有一個點');
 
   // S1 黏住：捲到最下面，日期列還在畫面上、在標題列底下
+  // v1.86.0 任務頁拿掉天的標題卡與同行夥伴之後，第 1 天兩站收著時整頁只比畫面高一點點，捲不到日期列會黏住的位置
+  // （第一次跑撞到：只捲得動 27px，日期列還在原位，驗不到黏不黏）。先按「全部展開」（使用者的路）把頁面拉長，
+  // 再用前置確認真的捲過了日期列原本的位置——沒捲過，「黏在標題列下面」跟「本來就在那裡」分不出來。
+  const expandBtn = (await page.evaluateHandle(() => [...document.querySelectorAll('.day-tools .day-tool-btn')].find((b) => b.textContent === '全部展開') || null)).asElement();
+  const ex = await userClick(page, expandBtn, '全部展開');
+  yes(ex.ok, `S1 前置：點得到「全部展開」（${ex.why}）`);
+  await sleep(400);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await sleep(200);
+  const natural = await page.evaluate(() => Math.round(document.querySelector('.daystrip').getBoundingClientRect().top + window.scrollY - document.getElementById('topbar').offsetHeight));
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await sleep(300);
   const stick = await page.evaluate(() => {
     const r = document.querySelector('.daystrip').getBoundingClientRect();
     return { top: Math.round(r.top), bottom: Math.round(r.bottom), topbar: document.getElementById('topbar').offsetHeight, y: Math.round(window.scrollY) };
   });
+  yes(stick.y > natural + 20, `S1 前置：捲過了日期列原本的位置（scrollY ${stick.y}；日期列原本在標題列下面 ${natural}px）`);
   yes(stick.y > 0 && stick.top >= stick.topbar - 2 && stick.top <= stick.topbar + 2, `S1 捲到最下面（scrollY ${stick.y}）日期列還黏在標題列下面（top ${stick.top}、標題列高 ${stick.topbar}）`);
+
+  // ---- v1.86.0 搬走的兩樣：旅伴在主頁的旅伴列；天的標題（不是按鈕、第一站 → 最後一站）在「行程」分頁 ----
+  yes(await toTab(page, '主頁', '.trip-home'), 'B3 按底部「主頁」進主頁');
+  const crewH = await page.evaluate(() => { const b = document.querySelector('.trip-home .crew-btn'); return b ? b.querySelectorAll('.avatars .avatar').length : null; });
+  v = await seen(page, '.trip-home .crew-btn .crew-label');
+  yes(crewH === 2 && v.ok, `B3 前置：這趟有兩位旅伴——主頁的旅伴列在、兩個頭像、字看得到（頭像 ${crewH}；${v.why}；字「${v.text}」）`);
+  yes(await toTab(page, '行程', '.itin-page .itin-day.open'), 'S5 按底部「行程」進行程分頁（旅程中預設是「行程」那一格）');
+  const head = await page.evaluate(() => {
+    const hd = document.querySelector('.itin-page .itin-day.open .dc-head');
+    return hd ? { tag: hd.tagName, hasChev: !!hd.querySelector('.dc-chev') } : null;
+  });
+  yes(!!head && head.tag !== 'BUTTON' && !head.hasChev, `S5 行程分頁天的標題不是按鈕、沒有展開箭頭（${JSON.stringify(head)}）`);
+  v = await seen(page, '.itin-page .itin-day.open .dc-route');
+  yes(v.ok && v.text === '乙一 → 乙二', `B2 行程分頁今天（第 2 天）的標題看得到「乙一 → 乙二」（${v.why}；字「${v.text}」）`);
 
   // ---- S3 一天 ----
   yes(await openFromHome(page, '一天') && await toTasks(page), 'S3 從首頁點「一天」、按「任務」進任務頁');

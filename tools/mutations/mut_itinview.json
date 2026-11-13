@@ -4,7 +4,9 @@
     "why": "捲到長長的時間軸下面，日期列跟著捲走，「其他天」就看不到了。預期只紅 itinviewtest 的 S1 黏住那一條。",
     "file": "css/style.css",
     "find": "  position: sticky; top: var(--topbar-h); z-index: 5;",
-    "replace": "  position: relative; top: var(--topbar-h); z-index: 5;",
+    "replace": "  position: static; top: var(--topbar-h); z-index: 5;",
+    "expect": ["S1 捲到最下面"],
+    "note": "v1.86.0 改（11-14 04:3x，重跑之前寫）：原本換成 relative，top 會把日期列往下推 60px、蓋住「全部展開」——S1 的前置點不到、頁面沒拉長，主斷言紅了但情境沒成立（帳本第 1012 次：S1 三行全紅）。換成 static（top 不作用、不位移），只剩「不黏住」這一個差別；預期只紅 S1 主斷言、兩條前置照過。",
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {
@@ -59,16 +61,18 @@
     "name": "選天：新打開也沿用上次點的那天",
     "why": "「自動捲到今天」對應的「自動選中今天」失效。預期紅 collapsetest「新打開回到現在這一站所在的第 1 天」。",
     "file": "js/views/trip.js",
-    "find": "      if (fresh && !navRestoredScroll()) localStorage.removeItem(selKey);",
+    "find": "      if (fresh && !seen) localStorage.removeItem(selKey);",
     "replace": "      if (false) localStorage.removeItem(selKey);",
+    "note": "v1.86.0「回來」改看 taskSeen（原本看 navRestoredScroll()），find 跟著改（意思不變、預期不變）",
     "cmd": "node scripts/collapsetest.mjs"
   },
   {
     "name": "選天：返回也回到預設那天",
     "why": "router 每次導覽都給 fresh，只看 fresh 的話返回也會被重設。預期紅 collapsetest「切回任務還是第 2 天」與「按返回鍵還是第 2 天」。",
     "file": "js/views/trip.js",
-    "find": "      if (fresh && !navRestoredScroll()) localStorage.removeItem(selKey);",
+    "find": "      if (fresh && !seen) localStorage.removeItem(selKey);",
     "replace": "      if (fresh) localStorage.removeItem(selKey);",
+    "note": "v1.86.0「回來」改看 taskSeen（原本看 navRestoredScroll()，整頁沒捲過時分不出回來），find 跟著改；拿掉的仍是「分出回來」那一道（意思不變、預期不變）",
     "cmd": "node scripts/collapsetest.mjs"
   },
   {
@@ -98,26 +102,11 @@
   },
   {
     "name": "第 1 批：當日標題卡沒有第一站 → 最後一站",
-    "why": "預期只紅 itinviewtest 的 B2。",
+    "why": "預期只紅 itinviewtest 的 B2。v1.86.0 任務頁的天標題卡拿掉了，find 改指行程分頁那一天標題的那一行（12 格縮排），B2 也改在行程分頁量（事前寫 2026-11-14）。",
+    "expect": ["B2 行程分頁今天"],
     "file": "js/views/trip.js",
-    "find": "\n        route ? h('span', { class: 'dc-route' }, route) : null,",
-    "replace": "\n        null,",
-    "cmd": "node scripts/itinviewtest.mjs"
-  },
-  {
-    "name": "第 1 批：照抄參考寫「今日同行夥伴」",
-    "why": "我們沒有「哪一天誰同行」的資料，寫「今日」就是猜。預期只紅 itinviewtest 的 B3 標題那一條。",
-    "file": "js/views/trip.js",
-    "find": "    h('span', { class: 'tl-crew-label' }, '同行夥伴'),",
-    "replace": "    h('span', { class: 'tl-crew-label' }, '今日同行夥伴'),",
-    "cmd": "node scripts/itinviewtest.mjs"
-  },
-  {
-    "name": "第 1 批：沒有旅伴也放一個空的標題",
-    "why": "預期只紅 itinviewtest 的 B3「沒有旅伴就不放」。",
-    "file": "js/views/trip.js",
-    "find": "  if (!members.length) return null;",
-    "replace": "  if (false) return null;",
+    "find": "\n            route ? h('span', { class: 'dc-route' }, route) : null,",
+    "replace": "\n            null,",
     "cmd": "node scripts/itinviewtest.mjs"
   },
   {
