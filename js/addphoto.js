@@ -70,6 +70,7 @@ export function addPhotoButtons(tripId, questId, { compact = false, icons = fals
         try {
           const m = await import('./peeks.js');
           pk = m.peek(await m.completionPeekKind(q, store.get(q.spotId)), 0.6);
+          m.cheer(pk);   // 完成任務這一刻跳上來揮手（v1.83.0，只有這一處呼叫）；減少動態效果時不動
         } catch (e) { console.error(e); }   // 圖或景點庫載不到：照舊放整隻小鳳，不擋住慶祝（照片已經存好了）
       }
       const res = await celebrate({

@@ -208,6 +208,21 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
 .celebrate-shot { position: relative; margin: calc(var(--pk-rise) + 14px) 0 18px; }
 .celebrate .celebrate-shot > .celebrate-photo { display: block; margin: 0; }   /* 要蓋過下面 .celebrate .celebrate-photo 的上下 18：照片的上緣就是外框的上緣，吉祥物的邊線才對得上 */
 .celebrate-shot > .gl-peek { left: 50%; transform: translateX(-50%); }
+/* 完成任務那一刻，小鳳從照片後面跳上來、揮翅膀（v1.83.0；Yolin 看了錄影要先上線看實機，喜不喜歡還沒定）。
+   只動 transform 與 opacity；只在完成任務的慶祝畫面（js/addphoto.js 呼叫 js/peeks.js 的 cheer()，其他地方不加 .pk-cheer）；
+   減少動態效果：cheer() 根本不加 .pk-cheer（停在現在的靜止圖），下面的總開關也會把時間壓到 0、停在最後一格＝靜止圖。
+   各層的位置（照畫布座標，1 單位≈0.6px）：.pk-hop＝邊線以上那層的全部內容、.pk-grip＝邊線以下那層（扣在照片上的那隻手）、
+   .pk-wave＝舉起來的那隻翅膀（外層 g 已經平移到肩膀，所以轉的原點是 0 0）、.pk-wave-lines＝揮動線（和紙才畫）。
+   起跳點 176：邊線以上露出來的最高點（頭頂的毛）離邊線 172 個單位，往下 176 才整隻藏在照片後面——第一版只往下 56，
+   慶祝畫面一出來頭就已經露一半，看起來像「卡在那裡」不是「跳上來」（錄影第 0 格看到的）。 */
+.pk-cheer .pk-hop { animation: pk-hop .6s cubic-bezier(.25, .8, .35, 1) both; }
+.pk-cheer .pk-grip { animation: pk-grip .6s linear both; }
+.pk-cheer .pk-wave { transform-box: view-box; transform-origin: 0 0; animation: pk-wave 1.1s ease-in-out .55s both; }
+.pk-cheer .pk-wave-lines { animation: pk-lines 1.1s ease-in-out .55s both; }
+@keyframes pk-hop { 0% { transform: translateY(176px); } 68% { transform: translateY(-6px); } 100% { transform: translateY(0); } }
+@keyframes pk-grip { 0%, 82% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(-16deg); } 40%, 80% { transform: rotate(9deg); } }
+@keyframes pk-lines { 0%, 100% { opacity: 1; } 20%, 60% { opacity: .25; } 40%, 80% { opacity: 1; } }
 .icon-btn {
   appearance: none;
   border: 0;

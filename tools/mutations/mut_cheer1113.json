@@ -1,0 +1,101 @@
+[
+  {
+    "name": "動畫：完成任務時不呼叫 cheer（回到沒有動畫的版本）",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）js/addphoto.js 拿掉 m.cheer(pk)：慶祝畫面照舊探頭、但完全不動。紅「有動」；另外四條（只用 transform／opacity、身體、翅膀、手與揮動線）的母體是會動的那幾層，沒有動畫就沒有那幾層——它們要求母體非空，所以一起紅，這是預期、不是紅錯地方。減少動態效果那輪本來就不動，照樣綠。",
+    "expect": ["動畫 完成任務那一刻有動", "動畫 只用 transform 和 opacity", "動畫 動完停在正確位置・身體", "動畫 動完停在正確位置・翅膀", "動畫 動完停在正確位置・扣在照片上的手與揮動線"],
+    "file": "js/addphoto.js",
+    "find": "m.cheer(pk);   // 完成任務這一刻跳上來揮手（v1.83.0，只有這一處呼叫）；減少動態效果時不動",
+    "replace": "// 突變：不呼叫 cheer",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：手的淡入多動一個 filter（不只 transform／opacity）",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）pk-grip 的 keyframes 多一個 filter: blur——會觸發重繪、舊手機不順，違反「只動 transform 和 opacity」。只紅那一條；最後一格 opacity 照樣 1、filter 回到 0，停的位置不受影響。",
+    "expect": ["動畫 只用 transform 和 opacity"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-grip { 0%, 82% { opacity: 0; } 100% { opacity: 1; } }",
+    "replace": "@keyframes pk-grip { 0%, 82% { opacity: 0; filter: blur(2px); } 100% { opacity: 1; filter: blur(0); } }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：身體停在衝過頭的那一格（卡在半空）",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）pk-hop 最後一格從 translateY(0) 改成 translateY(-6px)：動完身體停在比靜止圖高 6 個單位的地方。只紅「身體」；翅膀比的是相對於身體的矩陣，身體整個移動不影響它。",
+    "expect": ["動畫 動完停在正確位置・身體"],
+    "file": "css/style.css",
+    "find": "68% { transform: translateY(-6px); } 100% { transform: translateY(0); } }",
+    "replace": "68% { transform: translateY(-6px); } 100% { transform: translateY(-6px); } }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：翅膀停在揮到一半的角度",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）pk-wave 最後一格從 rotate(0deg) 改成 rotate(-16deg)：揮完翅膀沒回到原位。只紅「翅膀」；身體比的是它自己的矩陣，翅膀在裡面轉不影響它。",
+    "expect": ["動畫 動完停在正確位置・翅膀"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); }",
+    "replace": "@keyframes pk-wave { 0% { transform: rotate(0deg); } 100% { transform: rotate(-16deg); }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：扣在照片上的手最後是透明的",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）pk-grip 最後一格 opacity 改成 0：動完手不見了（靜止圖有那隻手）。只紅「手與揮動線」那一條的「手」那一半；有動、只用兩個屬性、身體、翅膀都不受影響。",
+    "expect": ["動畫 動完停在正確位置・扣在照片上的手與揮動線"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-grip { 0%, 82% { opacity: 0; } 100% { opacity: 1; } }",
+    "replace": "@keyframes pk-grip { 0%, 82% { opacity: 0; } 100% { opacity: 0; } }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：揮動線最後停在半透明",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）pk-lines 最後一格 opacity 改成 .25：動完揮動線淡淡的（靜止圖是完全看得到）。只紅「手與揮動線」那一條的「揮動線」那一半——跟上一條各打一個分支。",
+    "expect": ["動畫 動完停在正確位置・扣在照片上的手與揮動線"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-lines { 0%, 100% { opacity: 1; }",
+    "replace": "@keyframes pk-lines { 0% { opacity: 1; } 100% { opacity: .25; }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：cheer 不看減少動態效果",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）cheer() 拿掉 reduce-motion 那一行：開了減少動態效果照樣加 pk-cheer（CSS 總開關把時間壓到 0.01ms，但動畫物件還在、class 也在）。紅減少動態效果的兩條（設定頁的開關、系統設定）；兩條前置不受影響（<html> 照樣有 reduce-motion）；和紙那輪本來就會動，照樣綠。",
+    "expect": ["動畫 減少動態效果（設定頁的開關）", "動畫 減少動態效果（系統設定）"],
+    "file": "js/peeks.js",
+    "find": "if (document.documentElement.classList.contains('reduce-motion')) return false;",
+    "replace": "/* 突變：不看減少動態效果 */",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：cheer 只認系統設定（漏掉設定頁的開關）",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）cheer() 改成只看 matchMedia(prefers-reduced-motion)：設定頁打開開關、系統沒設定時照樣會動。只紅「設定頁的開關」那一條；系統設定那條照樣不動。證明兩個入口是分開驗的。",
+    "expect": ["動畫 減少動態效果（設定頁的開關）"],
+    "file": "js/peeks.js",
+    "find": "if (document.documentElement.classList.contains('reduce-motion')) return false;",
+    "replace": "if (matchMedia('(prefers-reduced-motion: reduce)').matches) return false;",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "動畫：cheer 只認設定頁的開關（漏掉系統設定）",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）cheer() 改成只看存起來的偏好 reduceMotion：系統設定減少動態、設定頁開關關著時照樣會動。只紅「系統設定」那一條；設定頁的開關那條照樣不動。",
+    "expect": ["動畫 減少動態效果（系統設定）"],
+    "file": "js/peeks.js",
+    "find": "if (document.documentElement.classList.contains('reduce-motion')) return false;",
+    "replace": "if (JSON.parse(localStorage.getItem('tripquest.prefs') || '{}').reduceMotion === true) return false;",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "前置：設定頁的開關不再讓 <html> 加上 reduce-motion",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）js/prefs.js 的 reducesMotion 只看系統設定：設定頁打開開關、偏好存了，<html> 卻沒有 reduce-motion。證明前置「設定頁打開 → 有 reduce-motion」會紅（情境沒造出來時不會默默通過）；那一輪的「設定頁的開關」也跟著紅（真的會動了）。系統設定那兩條不受影響。",
+    "expect": ["［減少動態］ 前置：設定頁打開「減少動態效果」", "動畫 減少動態效果（設定頁的開關）"],
+    "file": "js/prefs.js",
+    "find": "export function reducesMotion() { return !!prefs.reduceMotion || systemReducesMotion(); }",
+    "replace": "export function reducesMotion() { return systemReducesMotion(); }",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "前置：系統設定不再讓 <html> 加上 reduce-motion",
+    "why": "（事前寫 2026-11-13 16:3x，跑之前）js/prefs.js 的 systemReducesMotion 永遠回 false：瀏覽器模擬系統減少動態，<html> 卻沒有 reduce-motion。證明前置「系統設定 → 有 reduce-motion」會紅；那一輪的「系統設定」也跟著紅（真的會動了）。設定頁的開關那兩條不受影響。",
+    "expect": ["［減少動態］ 前置：系統設定減少動態效果", "動畫 減少動態效果（系統設定）"],
+    "file": "js/prefs.js",
+    "find": "return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;",
+    "replace": "return false;",
+    "cmd": "node scripts/peektest.mjs"
+  }
+]

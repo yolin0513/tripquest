@@ -80,6 +80,40 @@ export function peek(kind, k = 0.6) {
   return el;
 }
 
+// 完成任務那一刻跳上來、揮翅膀（v1.83.0；Yolin 2026-11-13 看了錄影：「圖片看不出來，可以先上線讓我看實際動畫」——先上線給他看實機，
+// 喜不喜歡、要不要推廣到別的時刻還沒定）。測試：scripts/peektest.mjs 的「動畫」那幾條（有動、減少動態效果時不動、只動 transform／opacity、停在靜止圖的位置）。
+// 只有登記在這裡的圖會動（現在只有小鳳打領結那一張）；wing＝舉起來那隻翅膀每一段共用的 transform 字串
+// （外框、底色、亮面、羽毛線四段分開畫、中間夾著別的部位，所以不能整包成一個 g，只能一段一段包），pivot＝肩膀。
+// 揮翅膀的角度與跳的高度在 css/style.css（.pk-cheer 那一段）；這裡只負責把圖拆成會動的幾層。
+const CHEER = Object.freeze({
+  done: { wing: 'translate(70 146) rotate(122)', pivot: [70, 146] },
+});
+export const CHEER_KINDS = Object.freeze(Object.keys(CHEER));
+// 把 peek() 做好的圖變成會動的版本；回傳有沒有動。減少動態效果（系統或設定頁，js/prefs.js 加的 reduce-motion）就不動：
+// 停在現在的靜止圖。只在呼叫的那一刻（完成任務的慶祝畫面）用，別的地方不呼叫。
+export function cheer(el) {
+  if (document.documentElement.classList.contains('reduce-motion')) return false;
+  const c = CHEER[el.getAttribute('data-peek')];
+  if (!c) return false;
+  const [up, dn] = el.querySelectorAll(':scope > g[clip-path]');
+  if (!up) return false;
+  const g = (attrs) => { const x = document.createElementNS(NS, 'g'); for (const [k, v] of Object.entries(attrs)) x.setAttribute(k, v); return x; };
+  const wrapKids = (host, cls) => { const w = g({ class: cls }); w.append(...host.childNodes); host.append(w); };
+  const wings = [...up.querySelectorAll('[transform]')].filter((x) => x.getAttribute('transform') === c.wing);
+  if (!wings.length) return false;   // 圖改過、對不上：寧可不動，也不要動錯地方
+  const [px, py] = c.pivot;
+  for (const w of wings) {
+    const outer = g({ transform: `translate(${px} ${py})` }), mid = g({ class: 'pk-wave' }), inner = g({ transform: `translate(${-px} ${-py})` });
+    w.replaceWith(outer);
+    inner.append(w); mid.append(inner); outer.append(mid);
+  }
+  up.querySelector('.mc-extra')?.classList.add('pk-wave-lines');
+  wrapKids(up, 'pk-hop');
+  if (dn) wrapKids(dn, 'pk-grip');
+  el.classList.add('pk-cheer');
+  return true;
+}
+
 // 完成任務的慶祝畫面放哪一張（一定有一張：沒把握就是 DONE_PEEK）
 // 「吃東西」只認兩種任務：必吃清單（景點庫裡的真的菜名）、策展的「吃」類任務。不看範本任務的 kind——
 // 夜市主題的範本任務 kind 也是 food，但題目多半是「拍最有氣勢的攤位」「人潮的縱深」，不是在吃；那些照景點類別走（夜市＝烤串）。

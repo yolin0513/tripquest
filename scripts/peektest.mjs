@@ -29,7 +29,13 @@
 //   主題：和紙不套白邊、動作線看得到；深色一輪白邊真的有套上、動作線不畫（跟 glyphs.js 的吉祥物同一條規矩）、
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
 //         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、拍照鈕一樣是圖示
+//   動畫（v1.83.0，js/peeks.js 的 cheer()、css/style.css 的 .pk-cheer）：完成任務那一刻小鳳打領結那張從照片後面跳上來、揮翅膀——
+//     和紙那輪 P3 的「古蹟 → 小鳳打領結」：慶祝畫面一出來就量（隔 150ms 量兩次位置不一樣＝有動）；每一段動畫的 keyframes 只動 transform、opacity；
+//     等每一段都結束，身體、翅膀沒有殘留的位移（框跟撤掉動畫的靜止圖一樣）、扣在照片上的手與揮動線都完全看得到（不會卡在半空）
+//     減少動態效果那輪：設定頁的開關、系統設定（瀏覽器模擬 prefers-reduced-motion）各完成一個任務——照舊探頭（靜止圖）、0 段動畫
 // 沒涵蓋（寫明）：慶祝時縮圖讀不到（沒有照片）→ 照舊在標題上面放整隻小鳳——使用者的路造不出「照片存好了、縮圖讀不到」。
+//   「只有完成任務那一刻會動」沒有另外寫斷言：cheer() 只有 js/addphoto.js 一處呼叫、也只認登記過的那一張（CHEER），是程式的結構保證的。
+//   慶祝畫面自己那 0.2 秒淡入跟小鳳的動畫同時開始，前 0.2 秒小鳳是半透明的——那是 .celebrate 的動畫，不在這支量。
 //
 // 每一條斷言不管前面成不成都會印（等不到的畫面記成 ✗、不丟例外）：突變執行器要「項數跟原樣一樣」才算跑滿。
 import { spawn } from 'node:child_process';
@@ -200,21 +206,80 @@ async function pickRow(page, spot, must) {
   }, spot, must);
 }
 
+// 動畫（v1.83.0）：慶祝畫面一出來就量。圖上每一段動畫的名字、狀態、keyframes 用到的屬性；
+// 隔 150ms 取兩次會動的那幾層（身體 .pk-hop、翅膀 .pk-wave、扣在照片上的手 .pk-grip、揮動線 .pk-wave-lines）的 transform／opacity，看有沒有變
+const PEEK_SEL = '.celebrate .celebrate-shot svg.gl-peek';
+const KF_META = ['offset', 'computedOffset', 'easing', 'composite'];   // getKeyframes() 每一格都帶的欄位，不是被動畫的屬性
+const animNow = (page) => page.evaluate(async (ps, meta) => {
+  const el = document.querySelector(ps);
+  if (!el) return { found: false };
+  const layers = () => [...el.querySelectorAll('.pk-hop, .pk-wave, .pk-grip, .pk-wave-lines')]
+    .map((x) => { const s = getComputedStyle(x); return `${x.getAttribute('class')}:${s.transform}|${s.opacity}`; }).join(';');
+  const anims = el.getAnimations({ subtree: true });
+  const props = [...new Set(anims.flatMap((a) => (a.effect?.getKeyframes?.() || []).flatMap((k) => Object.keys(k).filter((p) => !meta.includes(p)))))];
+  const s1 = layers();
+  await new Promise((r) => setTimeout(r, 150));
+  const s2 = layers();
+  const count = (sel) => el.querySelectorAll(sel).length;
+  return {
+    found: true, kind: el.getAttribute('data-peek'), cheer: el.classList.contains('pk-cheer'),
+    n: anims.length, running: anims.filter((a) => a.playState === 'running').length, names: anims.map((a) => a.animationName || '?'),
+    props, moved: s1 !== '' && s1 !== s2,
+    layers: { hop: count('.pk-hop'), wave: count('.pk-wave'), grip: count('.pk-grip'), lines: count('.pk-wave-lines') },
+  };
+}, PEEK_SEL, KF_META);
+// 動完：等圖上每一段動畫都結束（最多 5 秒），量會動的那幾層停在哪；
+// 再拿掉 pk-cheer（動畫整個撤掉＝靜止圖）量一次——兩次要一樣，才算停在靜止圖的位置、沒卡在半空。
+// 比的是位置矩陣（getScreenCTM），不是框：身體那層包著翅膀，比框的話翅膀沒轉回來身體的框也跟著變、身體沒落定翅膀的框也跟著移，
+// 一條突變會弄紅兩條、分不出是哪一層。所以身體比它自己的矩陣，翅膀比「相對於身體」的矩陣。
+const animEnd = (page) => page.evaluate(async (ps) => {
+  const el = document.querySelector(ps);
+  if (!el) return { found: false };
+  const anims = el.getAnimations({ subtree: true });
+  const done = await Promise.race([
+    Promise.all(anims.map((a) => a.finished)).then(() => anims.length > 0, () => false),
+    new Promise((r) => setTimeout(() => r(false), 5000)),
+  ]);
+  const ident = (t) => t === 'none' || t === 'matrix(1, 0, 0, 1, 0, 0)';
+  const css = (sel, k) => [...el.querySelectorAll(sel)].map((x) => getComputedStyle(x)[k]);
+  const hopT = css('.pk-hop', 'transform'), waveT = css('.pk-wave', 'transform');
+  const gripO = css('.pk-grip', 'opacity'), linesO = css('.pk-wave-lines', 'opacity');
+  const hop = el.querySelector('.pk-hop'), waves = [...el.querySelectorAll('.pk-wave')];
+  const six = (m) => [m.a, m.b, m.c, m.d, m.e, m.f];
+  const ctm = () => {
+    const h = hop ? hop.getScreenCTM() : null;
+    return { hop: h ? six(h) : null, waves: h ? waves.map((w) => six(h.inverse().multiply(w.getScreenCTM()))) : [] };
+  };
+  const moving = ctm();
+  el.classList.remove('pk-cheer');
+  const still = ctm();
+  const d = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  const r3 = (x) => +x.toFixed(3);
+  return {
+    found: true, done, n: anims.length, hopT, waveT, gripO, linesO,
+    hopIdent: hopT.length > 0 && hopT.every(ident), waveIdent: waveT.length > 0 && waveT.every(ident),
+    hopDiff: moving.hop && still.hop ? r3(d(moving.hop, still.hop)) : null,
+    waveDiff: moving.waves.length && moving.waves.length === still.waves.length ? r3(Math.max(...moving.waves.map((w, i) => d(w, still.waves[i])))) : null,
+  };
+}, PEEK_SEL);
+
 // 在那一列按「從相簿選」選一張照片，量慶祝畫面上的照片與探頭圖；量完把慶祝全部按掉
-async function complete(page, spot, must) {
+//   anim＝true：慶祝畫面一出來先量動畫（animNow）——動畫只有 1.65 秒，等 900ms 再量就只剩翅膀在動
+async function complete(page, spot, must, anim = false) {
   const none = { found: false };
   const row = await pickRow(page, spot, must);
-  if (!row) return { row: null, p: none, ttl: '', standalone: null };
+  if (!row) return { row: null, p: none, ttl: '', standalone: null, a: none };
   const inputs = await page.$$(`.qline[data-quest="${row.id}"] .addphoto-icons input[type=file]`);
-  if (inputs.length < 2) return { row, p: none, ttl: '', standalone: null };
+  if (inputs.length < 2) return { row, p: none, ttl: '', standalone: null, a: none };
   await inputs[1].uploadFile(photoPath);            // [0]=拍照 [1]=從相簿選
-  if (!await soft(page.waitForSelector('.celebrate', { timeout: 30000 }))) return { row, p: none, ttl: '', standalone: null };
+  if (!await soft(page.waitForSelector('.celebrate', { timeout: 30000 }))) return { row, p: none, ttl: '', standalone: null, a: none };
+  const a = anim ? await animNow(page) : none;
   await sleep(900);   // 彈出動畫跑完再量
   const p = await probe(page, '.celebrate .celebrate-shot img', '.celebrate .celebrate-shot svg.gl-peek');
   const ttl = await page.evaluate(() => document.querySelector('.celebrate h2')?.textContent || '');
   // 標題上面另外放的吉祥物（第三段的做法）或打勾的圓：有照片的時候都不該再出現
   const standalone = await page.evaluate(() => document.querySelectorAll('.celebrate .celebrate-mascot, .celebrate .celebrate-badge').length);
-  return { row, p, ttl, standalone };
+  return { row, p, ttl, standalone, a };
 }
 
 // P7：今天主角卡的「拍照解任務」
@@ -325,13 +390,13 @@ async function washiRound() {
       { label: '城市 → 相機', spot: '頭城老街', must: null, want: 'cam' },
       { label: '古蹟（沒有對得上的類別）→ 小鳳打領結', spot: '龍山寺', must: null, want: 'done' },
     ];
-    let first = null, doneP = { found: false };
+    let first = null, doneP = { found: false }, doneAnim = { found: false }, doneEnd = { found: false };
     for (const c of cases) {
-      const r = await complete(page, c.spot, c.must);
+      const r = await complete(page, c.spot, c.must, c.want === 'done');
       yes(/完成/.test(r.ttl) && r.p.found && r.p.kind === c.want && aligned(r.p) && r.p.inView && r.standalone === 0,
         `P3 ${c.label}：從照片上緣探頭、邊線對齊照片上緣、整張在畫面裡、標題上面沒有另一隻（${c.spot}「${r.row ? r.row.title : '找不到這一列'}」；慶祝「${r.ttl}」；${brief(r.p)}；在畫面裡 ${r.p.inView}；另外的吉祥物／打勾 ${r.standalone}）`);
       if (!first) first = r.p;
-      if (c.want === 'done') doneP = r.p;
+      if (c.want === 'done') { doneP = r.p; doneAnim = r.a; doneEnd = await animEnd(page); }
       await clearCelebrations(page);
       await sleep(500);
     }
@@ -340,6 +405,22 @@ async function washiRound() {
     // 動作線跟 glyphs.js 的吉祥物同一條規矩：和紙看得到（深色那輪驗不畫）
     yes(doneP.found && doneP.extra === true && doneP.filter === 'none',
       `［和紙］ 慶祝畫面的探頭圖：動作線看得到、身體不套白邊（小鳳打領結那張；動作線 ${doneP.extra}、濾鏡 ${doneP.filter}）`);
+
+    // ---- 動畫（v1.83.0）：完成任務那一刻小鳳打領結那張跳上來、揮翅膀 ----
+    const A = doneAnim, E = doneEnd, L = A.layers || {};
+    yes(A.found && A.kind === 'done' && A.cheer === true && A.running >= 1 && A.moved === true,
+      `動畫 完成任務那一刻有動：慶祝畫面一出來，小鳳打領結那張有動畫在跑、隔 150ms 量兩次位置不一樣（${A.kind}；pk-cheer ${A.cheer}；動畫 ${A.n} 段、跑著的 ${A.running}；位置變了 ${A.moved}）`);
+    // 母體：每一層一段動畫（身體 1、手 1、翅膀每一段各 1、揮動線 1——和紙才畫揮動線）
+    const ONLY = ['transform', 'opacity'], props = A.props || [];
+    yes(A.found && L.hop === 1 && L.grip === 1 && L.wave >= 1 && L.lines === 1 && A.n === L.hop + L.grip + L.wave + L.lines
+      && props.length > 0 && props.every((x) => ONLY.includes(x)),
+      `動畫 只用 transform 和 opacity：圖上每一段動畫的 keyframes 只動這兩個屬性（${A.n} 段：${(A.names || []).join('、')}；用到的屬性 ${props.join('、') || '無'}；會動的層 身體 ${L.hop}、翅膀 ${L.wave}、手 ${L.grip}、揮動線 ${L.lines}）`);
+    yes(E.found && E.done === true && E.hopIdent === true && E.hopDiff != null && E.hopDiff <= 0.01,
+      `動畫 動完停在正確位置・身體：每一段動畫都結束後，身體那層沒有殘留的位移、位置矩陣跟撤掉動畫的靜止圖一樣（結束了 ${E.done}；${E.n} 段；transform ${(E.hopT || []).join('、')}；矩陣最大差 ${E.hopDiff}）`);
+    yes(E.found && E.done === true && E.waveIdent === true && E.waveDiff != null && E.waveDiff <= 0.01,
+      `動畫 動完停在正確位置・翅膀：揮完回到原本的角度、相對於身體的位置矩陣跟靜止圖一樣（transform ${(E.waveT || []).join('、')}；矩陣最大差 ${E.waveDiff}）`);
+    yes(E.found && E.done === true && (E.gripO || []).length === 1 && E.gripO.every((o) => o === '1') && (E.linesO || []).length === 1 && E.linesO.every((o) => o === '1'),
+      `動畫 動完停在正確位置・扣在照片上的手與揮動線：都完全看得到（手 ${(E.gripO || []).join('、')}；揮動線 ${(E.linesO || []).join('、')}）`);
 
     // ---- P4 今天會下雪 ----
     wet = { 0: 'snow' };
@@ -529,9 +610,70 @@ async function darkRound() {
   }
 }
 
+// 設定頁的「減少動態效果」開關（使用者的路：底部分頁「設定」→ 點那一列），等 <html> 的 reduce-motion 跟著變
+async function setReduce(page, on) {
+  const read = () => page.evaluate(() => ({
+    checked: [...document.querySelectorAll('label.switch-row')].find((r) => r.textContent.includes('減少動態效果'))?.querySelector('input[type=checkbox]')?.checked ?? null,
+    cls: document.documentElement.classList.contains('reduce-motion'),
+    saved: JSON.parse(localStorage.getItem('tripquest.prefs') || '{}').reduceMotion ?? null,
+  }));
+  if (!await toHome(page)) return { ok: false };
+  if (!await tap(page, 'a.tab', '設定')) return { ok: false };
+  if (!await soft(page.waitForFunction(() => location.hash === '#/settings', { timeout: 15000 }))) return { ok: false };
+  if ((await read()).checked !== on && !await tap(page, 'label.switch-row', '減少動態效果')) return { ok: false };
+  await soft(page.waitForFunction((v) => document.documentElement.classList.contains('reduce-motion') === v, { timeout: 5000 }, on));
+  return { ok: true, ...await read() };
+}
+
+// 減少動態效果：設定頁的開關、系統設定各完成一個任務（龍山寺＝小鳳打領結那張，平常會動的那一張）
+// 照舊從照片上緣探頭（靜止圖），沒有 pk-cheer、0 段動畫。系統設定用瀏覽器模擬 prefers-reduced-motion，設定頁的開關先關回去，兩個入口分開驗。
+async function reducedRound() {
+  console.log('\n— 減少動態效果（設定頁的開關、系統設定）—');
+  const ctx = await browser.createBrowserContext();
+  const page = await newPage(ctx);
+  await page.setRequestInterception(true);
+  intercept(page, () => ({}));
+  const none = { found: false };
+  const still = (r) => r.p.found && r.p.kind === 'done' && aligned(r.p) && r.a.found && r.a.cheer === false && r.a.n === 0 && r.a.moved === false;
+  const said = (r) => `${brief(r.p)}；pk-cheer ${r.a.cheer}；動畫 ${r.a.n} 段；位置變了 ${r.a.moved}`;
+  try {
+    await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.hero');
+    const made = await makeTrip(page, '減少動態測試', plus(0), plus(1), [{ region: '台北', names: ['龍山寺'] }]);
+    yes(made.length === 1 && made[0].endsWith(':curated'), `［減少動態］ 前置：龍山寺對上內建景點庫（${made.join('、')}）`);
+
+    // ---- 設定頁的開關 ----
+    const s1 = await setReduce(page, true);
+    yes(s1.ok && s1.checked === true && s1.saved === true && s1.cls === true,
+      `［減少動態］ 前置：設定頁打開「減少動態效果」→ <html> 有 reduce-motion（點到了 ${s1.ok}；開關 ${s1.checked}；存進偏好 ${s1.saved}；class ${s1.cls}）`);
+    const r1 = (await openTrip(page, '減少動態測試')) ? await complete(page, '龍山寺', null, true) : { p: none, a: none };
+    yes(still(r1), `動畫 減少動態效果（設定頁的開關）完全不動：照舊從照片上緣探頭（靜止圖）、沒有 pk-cheer、0 段動畫（${said(r1)}）`);
+    await clearCelebrations(page);
+
+    // ---- 系統設定（設定頁的開關關回去）----
+    const s2 = await setReduce(page, false);
+    await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+    await page.reload({ waitUntil: 'networkidle0' });   // 重新載入：App 開頭讀一次系統設定（不靠「設定改變」事件）
+    const sys = await page.evaluate(() => ({
+      cls: document.documentElement.classList.contains('reduce-motion'),
+      saved: JSON.parse(localStorage.getItem('tripquest.prefs') || '{}').reduceMotion ?? null,
+    }));
+    yes(s2.ok && s2.checked === false && s2.cls === false && sys.saved === false && sys.cls === true,
+      `［減少動態］ 前置：系統設定減少動態效果、設定頁的開關關著 → <html> 有 reduce-motion（關掉開關後 class ${s2.cls}、開關 ${s2.checked}；偏好 ${sys.saved}；系統設定之後 class ${sys.cls}）`);
+    const r2 = (await openTrip(page, '減少動態測試')) ? await complete(page, '龍山寺', null, true) : { p: none, a: none };
+    yes(still(r2), `動畫 減少動態效果（系統設定）完全不動：照舊從照片上緣探頭（靜止圖）、沒有 pk-cheer、0 段動畫（${said(r2)}）`);
+    await clearCelebrations(page);
+  } catch (e) {
+    yes(false, `［減少動態］ 例外：${e && e.stack || e}`);
+  } finally {
+    await ctx.close();
+  }
+}
+
 try {
   await washiRound();
   await darkRound();
+  await reducedRound();
   console.log('\n探頭圖測試結束');
 } catch (e) {
   yes(false, '例外：' + (e && e.stack || e));
