@@ -1,0 +1,56 @@
+[
+  {
+    "name": "位置橫幅：旅程結束後照開關顯示（修正前的寫法）",
+    "why": "（事前寫 2026-11-13 15:0x，跑之前）posBanner 拿掉 pos.shareEnded 那一半、回到只看開關：旅程結束後開關還開著，行程頁又出現「正在跟旅伴分享你的位置」。只紅「旅程結束後：開關還開著」那一條；送不送（inTripWindow 自己呼叫 shareEnded）、設定頁的字（另一處呼叫）都不受影響。",
+    "expect": ["旅程結束後：開關還開著"],
+    "file": "js/views/trip.js",
+    "find": "if (!pos.sharing(tripId) || pos.shareEnded(store.get(tripId))) return null;",
+    "replace": "if (!pos.sharing(tripId)) return null;",
+    "cmd": "node scripts/postest.mjs"
+  },
+  {
+    "name": "分享期：拿掉結束日隔天的緩衝",
+    "why": "（事前寫 2026-11-13 15:0x，跑之前）shareEnded 改成結束日 23:59:59 一過就算結束：結束日的隔天橫幅收掉、也不再送座標。只紅「結束日的隔天」那一條（它同時要求有橫幅、而且送出有座標的位置）；結束日隔天也過完的那幾條照樣成立、旅程中照樣成立。這條證明分界真的是「隔天也過完」，不是「結束日一過」。15:07 第一次跑多紅一行「緊急求助頁不送座標」（送出 0 筆）：是測試的毛病——結束後那一段的母體靠上一段留下的那筆，這條突變讓上一段就把它清掉了。改測試讓那一段自己造情境（先關再開、只留它自己送的那筆），expect 不改，整份重跑。",
+    "expect": ["結束日的隔天："],
+    "file": "js/pos.js",
+    "find": "return now > Date.parse(trip.endDate + 'T23:59:59') + DAY_MS;",
+    "replace": "return now > Date.parse(trip.endDate + 'T23:59:59');",
+    "cmd": "node scripts/postest.mjs"
+  },
+  {
+    "name": "分享期：永遠不算結束",
+    "why": "（事前寫 2026-11-13 15:0x，跑之前）shareEnded 一律回 false：送不送、橫幅、設定頁三處共用的判斷壞掉。紅：旅程結束後的橫幅、緊急求助頁送出座標、設定頁還寫分享中，還有原本就有的「行程期間以外不上傳」（2020 年的行程）。三處都靠這一條，這是它們共同依靠的那一環，另列一條（§5.12）。",
+    "expect": ["旅程結束後：開關還開著", "旅程結束後：緊急求助頁不送座標", "旅程結束後：設定頁不再寫", "行程期間以外"],
+    "file": "js/pos.js",
+    "find": "  if (!trip || !trip.endDate) return false;\n  return now > Date.parse(trip.endDate + 'T23:59:59') + DAY_MS;",
+    "replace": "  return false;",
+    "cmd": "node scripts/postest.mjs"
+  },
+  {
+    "name": "送位置的閘門：分享期過了照送",
+    "why": "（事前寫 2026-11-13 15:0x，跑之前）inTripWindow 拿掉 shareEnded 那一行：結束後進緊急求助頁又送出有座標的位置。紅「旅程結束後：緊急求助頁不送座標」與原本的「行程期間以外不上傳」；橫幅、設定頁直接呼叫 shareEnded，不受影響——證明「不顯示」與「不送」是兩道各自的擋，不是一道。",
+    "expect": ["旅程結束後：緊急求助頁不送座標", "行程期間以外"],
+    "file": "js/pos.js",
+    "find": "  if (shareEnded(trip, now)) return false;\n",
+    "replace": "",
+    "cmd": "node scripts/postest.mjs"
+  },
+  {
+    "name": "設定頁：旅程結束後照寫「分享中」",
+    "why": "（事前寫 2026-11-13 15:0x，跑之前）posShareRow 的判斷換成 false：開關開著就寫「分享中：家人在緊急求助頁看得到你最後的位置」。只紅「旅程結束後：設定頁不再寫」那一條。",
+    "expect": ["旅程結束後：設定頁不再寫"],
+    "file": "js/views/trip.js",
+    "find": "? (pos.shareEnded(t)",
+    "replace": "? (false",
+    "cmd": "node scripts/postest.mjs"
+  },
+  {
+    "name": "測試的前置：結束前那一筆沒造出來",
+    "why": "（事前寫 2026-11-13 15:1x，跑之前）把測試「先關再開」的「再開」換成只把開關記號寫成開、不送位置：結束後那一段沒有可以清的那筆。前置那條必須紅；「緊急求助頁不送座標」也紅——它要求這段時間至少送出 1 筆墓碑（母體非空），沒有那筆就送不出墓碑。證明前置真的擋得住「情境沒造出來」，而不是恆真。",
+    "expect": ["前置：旅程最後一天手機上有", "旅程結束後：緊急求助頁不送座標"],
+    "file": "scripts/postest.mjs",
+    "find": "await pos.setSharing(t, false); await pos.setSharing(t, true); }",
+    "replace": "await pos.setSharing(t, false); localStorage.setItem('tripquest.poshare.' + t, '1'); }",
+    "cmd": "node scripts/postest.mjs"
+  }
+]

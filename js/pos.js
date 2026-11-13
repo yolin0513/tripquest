@@ -64,14 +64,20 @@ export async function stopSharing(tripId) {
 }
 
 // ---------- 行程期間才分享（前後各留一天緩衝）----------
+const DAY_MS = 86400000;
+// 分享期已經過了＝結束日的隔天也過完了（結束日 23:59:59 再加一天緩衝）。從這一刻起 updateNow 不再送位置；
+// 行程頁的「正在分享」橫幅、設定頁的「分享中」也跟著這一條收掉（v1.82.1，Yolin 2026-11-13：「位置分享直接不顯示」）——
+// 跟送不送用同一條判斷，畫面才不會說在分享、其實沒送，或反過來。沒設結束日＝沒有結束。
+export function shareEnded(trip, now = Date.now()) {
+  if (!trip || !trip.endDate) return false;
+  return now > Date.parse(trip.endDate + 'T23:59:59') + DAY_MS;
+}
 export function inTripWindow(trip, now = Date.now()) {
   if (!trip) return false;
-  const day = 86400000;
   const s = trip.startDate ? Date.parse(trip.startDate + 'T00:00:00') : null;
-  const e = trip.endDate ? Date.parse(trip.endDate + 'T23:59:59') : null;
-  if (s == null && e == null) return true;                 // 沒設日期的行程：不擋
-  if (s != null && now < s - day) return false;
-  if (e != null && now > e + day) return false;
+  if (s == null && !trip.endDate) return true;             // 沒設日期的行程：不擋
+  if (s != null && now < s - DAY_MS) return false;
+  if (shareEnded(trip, now)) return false;
   return true;
 }
 

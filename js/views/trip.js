@@ -1450,7 +1450,9 @@ function posShareRow(tripId, t) {
       h('div', {},
         h('div', { style: 'font-weight:700' }, '📍 讓家人看到我在哪'),
         h('div', { class: 'form-hint' }, on
-          ? '分享中：家人在「緊急求助」頁看得到你最後的位置。隨時可以關。'
+          ? (pos.shareEnded(t)
+            ? '這趟旅行已經結束，不會再傳出你的位置。'   // 開關還開著，但分享期過了、已經不送（跟行程頁橫幅同一條判斷）
+            : '分享中：家人在「緊急求助」頁看得到你最後的位置。隨時可以關。')
           : '預設關閉。走失時家人可以看到你最後一次打開 App 的位置，只在這趟旅行期間。')),
       cb);
   };
@@ -1458,9 +1460,10 @@ function posShareRow(tripId, t) {
   return box;
 }
 
-// 分享中的常駐指示 —— 長輩的手機常是子女設定的，這一條是手機主人唯一會看到的提醒
+// 分享中的常駐指示 —— 長輩的手機常是子女設定的，這一條是手機主人唯一會看到的提醒。
+// 分享期過了（pos.shareEnded：結束日的隔天也過完）就不顯示：那時已經不送位置，開關還開著也不能說「正在分享」。
 function posBanner(tripId) {
-  if (!pos.sharing(tripId)) return null;
+  if (!pos.sharing(tripId) || pos.shareEnded(store.get(tripId))) return null;
   return h('div', { class: 'pos-banner' },
     h('span', {}, '📍 正在跟旅伴分享你的位置'),
     h('button', {

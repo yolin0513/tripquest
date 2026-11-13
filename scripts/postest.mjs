@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { rm, readFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { clickText } from './userclick.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5631, API = 8817;
@@ -260,6 +261,84 @@ try {
     return withCoord;
   }, setup);
   yes(outside === 0, '行程期間以外，就算開了開關也不會上傳位置');
+
+  // ---------- 旅程結束後：不送、也不再說「正在分享」（v1.82.1，Yolin 2026-11-13：「位置分享直接不顯示」）----------
+  // 使用者的路：旅程中打開開關 → 旅程結束、開關沒關 → 回到行程頁、打開緊急求助頁。
+  // 分界跟送不送同一條（pos.shareEnded）：結束日的隔天還在分享期（還會送、橫幅照顯示），隔天也過完才收。
+  console.log('\n— 旅程結束後 —');
+  const dayStr = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const setDates = (start, end) => A.evaluate(async (o) => { await (await import('./js/store.js')).patch(o.tid, { startDate: o.start, endDate: o.end }); }, { ...setup, start, end });
+  // 回到行程頁：先回首頁（旅程裡的頁面沒有首頁那排分頁，用網址回去），再像使用者一樣點那張旅程卡（行程頁是進頁面時畫的）
+  const tripPageBanner = async () => {
+    await A.evaluate(() => { location.hash = '#/'; });
+    await A.waitForFunction(() => (location.hash === '#/' || location.hash === '') && document.querySelector('.trip-card'), { timeout: 10000 });
+    await clickText(A, '.trip-card', '台北行');
+    await A.waitForSelector('.progress-banner', { timeout: 15000 });
+    return A.evaluate(() => { const b = document.querySelector('.pos-banner'); return b ? b.textContent : null; });
+  };
+  const coordsMine = () => A.evaluate(async () => (await import('./js/store.js')).exportRecords({ all: true }).filter((r) => r.type === 'memberPos' && !r.deleted && r.lat != null).length);
+  // 開緊急求助頁（它一進來就 updateNow({ force, high })）；同時記下這段時間每一次 /push 送了哪些位置記錄
+  const visitSOS = async () => {
+    await A.evaluate(() => {
+      window.__posPush = [];
+      if (!window.__posFetch) {
+        window.__posFetch = window.fetch;
+        window.fetch = async (u, init) => {
+          if (String(u).includes('/push') && init && init.body) {
+            for (const r of (JSON.parse(init.body).records || [])) if (r.type === 'memberPos') window.__posPush.push({ lat: r.lat ?? null, deleted: !!r.deleted });
+          }
+          return window.__posFetch(u, init);
+        };
+      }
+    });
+    await A.evaluate((t) => { location.hash = '#/trip/' + t + '/sos'; }, setup.tid);
+    await A.waitForFunction(() => location.hash.endsWith('/sos') && document.body.textContent.includes('立刻更新旅伴位置'), { timeout: 15000 });
+    await sleep(1800);   // 等進頁時那一次 updateNow 與它的單筆推送做完
+    return A.evaluate(() => window.__posPush.slice());
+  };
+
+  // 旅程中：打開開關（真的送出一筆）→ 行程頁有橫幅（對照：橫幅本來就在）
+  await setDates(dayStr(0), dayStr(0));
+  await A.evaluate(async (t) => { await (await import('./js/pos.js')).setSharing(t, true); }, setup.tid);
+  await sleep(500);
+  const inTripCoords = await coordsMine();
+  const inTripBanner = await tripPageBanner();
+  yes(inTripCoords >= 1 && inTripBanner && inTripBanner.includes('正在跟旅伴分享'),
+    `旅程中：開關打開、送出 ${inTripCoords} 筆有座標的位置，行程頁有「正在分享」橫幅（${inTripBanner}）`);
+
+  // 結束日的隔天（緩衝日）：還在分享期——進緊急求助頁還會送有座標的位置，所以橫幅照顯示才誠實
+  await setDates(dayStr(-3), dayStr(-1));
+  const bufBanner = await tripPageBanner();
+  const bufPush = await visitSOS();
+  const bufSent = bufPush.filter((r) => r.lat != null).length;
+  yes(bufBanner && bufBanner.includes('正在跟旅伴分享') && bufSent >= 1,
+    `結束日的隔天：還在分享期，緊急求助頁送出 ${bufSent} 筆有座標的位置，行程頁照樣有橫幅（${bufBanner}）`);
+
+  // 結束日的隔天也過完：開關還開著，但已經不送、也不再顯示「正在分享」。
+  // 這一段自己造情境、不靠上一段留下的那筆（2026-11-13 突變「拿掉緩衝」時，上一段就把那筆清掉了，這一段的母體變成 0、多紅一行）：
+  // 旅程最後一天先關掉再打開（前面留下的全部變成墓碑、只剩這一段送出的那一筆有座標），再讓時間過到結束日的隔天也過完
+  await setDates(dayStr(0), dayStr(0));
+  await A.evaluate(async (t) => { const pos = await import('./js/pos.js'); await pos.setSharing(t, false); await pos.setSharing(t, true); }, setup.tid);
+  await sleep(500);
+  const preEnd = await coordsMine();
+  yes(preEnd >= 1, `前置：旅程最後一天手機上有 ${preEnd} 筆有座標的位置（結束後要被清掉的那筆）`);
+  await setDates(dayStr(-4), dayStr(-2));
+  const stillOn = await A.evaluate(async (t) => (await import('./js/pos.js')).sharing(t), setup.tid);
+  const endBanner = await tripPageBanner();
+  yes(stillOn === true && endBanner === null,
+    `旅程結束後：開關還開著（${stillOn}），行程頁不顯示「正在分享」橫幅（${endBanner === null ? '沒有' : endBanner}）`);
+  const endPush = await visitSOS();
+  const endCoordsLeft = await coordsMine();
+  yes(endPush.length >= 1 && endPush.every((r) => r.lat == null && r.deleted) && endCoordsLeft === 0,
+    `旅程結束後：緊急求助頁不送座標——這段時間送出的位置記錄 ${endPush.length} 筆全是沒有座標的墓碑（自己那筆被清掉），手機上剩 ${endCoordsLeft} 筆有座標`);
+  await A.evaluate((t) => { location.hash = '#/trip/' + t + '/settings'; }, setup.tid);
+  await A.waitForFunction(() => document.body.textContent.includes('讓家人看到我在哪'), { timeout: 10000 });
+  const endHint = await A.evaluate(() => [...document.querySelectorAll('.switch-row')].find((x) => x.textContent.includes('讓家人看到我在哪'))?.querySelector('.form-hint')?.textContent || '');
+  yes(endHint.includes('已經結束') && !endHint.includes('分享中'), `旅程結束後：設定頁不再寫「分享中」（${endHint}）`);
+  await A.evaluate(async (o) => {
+    await (await import('./js/pos.js')).setSharing(o.tid, false);
+    if (window.__posFetch) { window.fetch = window.__posFetch; delete window.__posFetch; }
+  }, setup);
 
   // ---------- 原始碼守衛：不進 APPEND_ONLY ----------
   const mergeSrc = await readFile(ROOT + 'js/merge.js', 'utf8');
