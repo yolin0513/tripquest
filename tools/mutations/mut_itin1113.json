@@ -23,8 +23,8 @@
     "why": "（事前寫 2026-11-13）主角卡裡少了「用地圖帶我去」那顆（帶路按鈕仍要留在任務頁）。預期只紅 W10「卡裡有帶路」。",
     "expect": ["W10 卡裡有帶路"],
     "file": "js/views/trip.js",
-    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav);",
-    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    null);",
+    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav,\n",
+    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    null,\n",
     "note": "v1.84.0 主角卡搬到主頁、拿掉拍照解任務，nav 變成最後一個參數，find 跟著改（意思不變、預期不變）",
     "cmd": "node scripts/washitest.mjs"
   },

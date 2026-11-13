@@ -76,8 +76,8 @@
     "why": "（事前寫 2026-11-13 v1.84.0）原本這條是「拍照鈕換回表情符號」；v1.84.0 那顆鈕整個拿掉（Yolin：主頁不放任務的跳轉），P7 改成驗主頁的下一站卡沒有它。這條把那顆鈕放回卡裡：兩輪的 P7 都紅。",
     "expect": ["［和紙］ P7", "［深色］ P7"],
     "file": "js/views/trip.js",
-    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav);",
-    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav, h('button', { class: 'btn btn-soft btn-block today-shot' }, '📷 拍照解任務・還有 3 個'));",
+    "find": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav,\n",
+    "replace": "      time ? h('span', { class: 'today-time' }, time) : null),\n    nav, h('button', { class: 'btn btn-soft btn-block today-shot' }, '📷 拍照解任務・還有 3 個'),\n",
     "cmd": "node scripts/peektest.mjs"
   },
   {

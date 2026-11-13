@@ -818,6 +818,25 @@ html[data-theme="washi"] .info-row + .info-row { border-top: 2px dashed var(--li
 .th-end-go { margin-top: 12px; }
 .th-tools { margin-top: 12px; }
 html[data-theme="washi"] .th-end { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+/* v1.84.0 主頁新區塊：下一站卡裡的「今天接下來」（底是 --today-bg：字一律用本文色，不用灰字）、今晚住、待買、帳沒結清 */
+.today-next { margin: 4px 2px 0; padding-top: 10px; border-top: 1px dashed var(--line); }
+.tn-label { font-weight: 800; font-size: 0.95rem; }
+.tn-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.tn-item { display: flex; align-items: baseline; gap: 10px; padding: 4px 0; font-weight: 700; }
+.tn-time { flex: none; font-variant-numeric: tabular-nums; font-weight: 900; }
+.tn-name { min-width: 0; overflow-wrap: anywhere; }
+.tn-all {
+  appearance: none; display: block; width: 100%; margin-top: 2px; background: none; border: 0; color: var(--text);
+  font: inherit; font-weight: 800; font-size: 0.95rem; text-align: right; padding: 10px 2px; min-height: var(--tap); cursor: pointer;
+}
+.th-stay {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; margin-top: 12px; padding: 12px 14px; min-height: var(--tap);
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); text-decoration: none;
+}
+.th-stay-t { font-weight: 800; overflow-wrap: anywhere; }
+.th-stay-s { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+.th-buy, .th-money { margin-top: 12px; }
+html[data-theme="washi"] .th-stay { border: 2.5px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
 /* 任務頁最上面一行進度（v1.84.0 進度卡縮成一行；圓環與鼓勵的話拿掉） */
 .task-prog { display: flex; align-items: center; gap: 12px; margin: 6px 2px 10px; }
 .tp-title { flex: none; font-weight: 800; }

@@ -1,0 +1,254 @@
+[
+  {
+    "name": "主頁：旅程卡點下去回到任務頁（舊入口）",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）旅程卡的入口改回 /trip/:id（任務頁）。openTrip 只等網址換成這一趟，所以每一條讀主頁的都紅：H1 落點、H2、H3、M1、M3、H4、H5 兩條、H6、H7、H8（點不到找附近）、C1～C12（主頁不在；C11 三趟都讀不到那一格）。不紅：M2（本來就要點「任務」分頁，落在任務頁照樣點得到）、R1～R10（從底部分頁進行程分頁）。",
+    "expect": ["H1 點旅程卡落在主頁", "H2 旅程中", "H3 主頁不放任務的跳轉", "M1 主頁找得到", "M3 「旅伴還看不到你」", "H4 還沒出發", "H5 結束後：", "H5 結束後點", "H6 全部拍完但還沒結束", "H7 沒有景點", "H8 主頁點「找附近」", "C1 旅程中、下一站在今天", "C2 點「整天的行程 ›」", "C3 不出「今天接下來」", "C4 今晚住：", "C5 今晚住沒填地址", "C6 出發前", "C7 點了到待買清單", "C8 不放待買", "C9 結束後帳還沒清", "C10 點了到分帳頁", "C11 結束後不放帳", "C12 旅程還沒結束"],
+    "file": "js/views/home.js",
+    "find": "onclick: () => navigate(`/trip/${trip.id}/home`)",
+    "replace": "onclick: () => navigate(`/trip/${trip.id}`)",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：底部分頁沒有「主頁」那一格",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）拿掉 tabItem('🏠', '主頁', …)。紅：H1（第一格不是主頁）、H8（找附近頁沒有亮著的格）、R1（底部分頁對不上五格）。不紅：其餘（落點照樣是主頁；行程、任務、分帳那幾格還在）。",
+    "expect": ["H1 點旅程卡落在主頁", "H8 主頁點「找附近」", "R1 旅程層的底部分頁"],
+    "file": "js/app.js",
+    "find": "      tabItem('🏠', '主頁', `${base}/home`, isHome),\n",
+    "replace": "",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：找附近頁不亮「主頁」",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）isHome 拿掉 nearby。紅：H8（找附近頁底部沒有亮的格）。不紅：其餘（天氣頁 hometest 沒進）。",
+    "expect": ["H8 主頁點「找附近」"],
+    "file": "js/app.js",
+    "find": "const isHome = /^\\/trip\\/[^/]+\\/(home|weather|nearby)$/.test(p);",
+    "replace": "const isHome = /^\\/trip\\/[^/]+\\/(home|weather)$/.test(p);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：沒有下一站卡",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）main 不放 todayCard（全部拍完那張照舊）。紅：H2、H3、M1、H4（都要下一站卡在）、C1、C2（今天接下來在卡裡）、C3（兩趟都要卡在才算數）、C4、C6（今晚住／待買要排在卡後面）、C8（旅程中那一趟要卡在）、C12（同）。不紅：H6（全部拍完本來就沒有）、H5、H7、M3、C5（不看卡）、C9～C11（結束後）。",
+    "expect": ["H2 旅程中", "H3 主頁不放任務的跳轉", "M1 主頁找得到", "H4 還沒出發", "C1 旅程中、下一站在今天", "C2 點「整天的行程 ›」", "C3 不出「今天接下來」", "C4 今晚住：", "C6 出發前", "C8 不放待買", "C12 旅程還沒結束"],
+    "file": "js/views/trip.js",
+    "find": "    main = todayCard(tripId, t) || (allDone ? h('section', { class: 'th-end' },",
+    "replace": "    main = null || (allDone ? h('section', { class: 'th-end' },",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：任務的一行進度放上主頁",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）在主頁的主卡後面插一張 .task-prog「已完成 0 / 1」。紅：H3（主頁不放任務的數字）。不紅：其餘（M2 讀的是任務頁）。",
+    "expect": ["H3 主頁不放任務的跳轉"],
+    "file": "js/views/trip.js",
+    "find": "    main,\n    // 今晚住",
+    "replace": "    main,\n    h('div', { class: 'task-prog' }, '已完成 0 / 1'),\n    // 今晚住",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：還沒出發不出倒數",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）主頁的倒數那一塊條件改成 false（待買的條件照舊用 cd）。紅：H4、C3（還沒出發那一趟要讀到倒數）、C8（全買好了那一趟要讀到倒數）。不紅：C6（不讀倒數）、其餘。",
+    "expect": ["H4 還沒出發", "C3 不出「今天接下來」", "C8 不放待買"],
+    "file": "js/views/trip.js",
+    "find": "    cd ? h('div', { class: 'countdown', role: 'status' },",
+    "replace": "    false ? h('div', { class: 'countdown', role: 'status' },",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：結束後照樣放下一站卡（舊規則）",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）不進 ended 那一支，結束的旅程走旅程中的下一站卡。紅：H5 兩條（沒有旅程結束了、點不到去看回顧）、C9（結束卡不在，帳排在它後面不成立）。不紅：C11（帳那一格只看 ended，照樣在、照樣算完是空的）、其餘。",
+    "expect": ["H5 結束後：", "H5 結束後點", "C9 結束後帳還沒清"],
+    "file": "js/views/trip.js",
+    "find": "  } else if (ended) {",
+    "replace": "  } else if (false) {",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：去看回顧帶到行程分頁",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）goMem 改到 /itinerary。紅：H5 結束後點（等不到回顧頁）。不紅：其餘（H6 只讀字、不點）。",
+    "expect": ["H5 結束後點"],
+    "file": "js/views/trip.js",
+    "find": "  const goMem = () => navigate(`/trip/${tripId}/memories`);",
+    "replace": "  const goMem = () => navigate(`/trip/${tripId}/itinerary`);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：全部拍完不出完成卡",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）allDone 那一張改成 false。紅：H6。不紅：H5（結束那一支另寫）、其餘。",
+    "expect": ["H6 全部拍完但還沒結束"],
+    "file": "js/views/trip.js",
+    "find": "(allDone ? h('section', { class: 'th-end' },",
+    "replace": "(false ? h('section', { class: 'th-end' },",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：沒有景點不出去安排景點",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）沒有景點那一支改成 false：H沒有景點沒結束，走下一站卡（null）→ 主卡是空的。紅：H7。不紅：其餘。",
+    "expect": ["H7 沒有景點"],
+    "file": "js/views/trip.js",
+    "find": "  if (!spots.length) {\n    main = h('div', { class: 'empty th-empty' }",
+    "replace": "  if (false) {\n    main = h('div', { class: 'empty th-empty' }",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：小工具沒有找附近",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）拿掉主頁的找附近按鈕。紅：H2、M1、H4、H5 結束後：、H6、H7（都要找附近在）、H8（點不到）。不紅：H5 結束後點、C 全部（不看找附近）、M2（任務頁本來就沒有）。",
+    "expect": ["H2 旅程中", "M1 主頁找得到", "H4 還沒出發", "H5 結束後：", "H6 全部拍完但還沒結束", "H7 沒有景點", "H8 主頁點「找附近」"],
+    "file": "js/views/trip.js",
+    "find": "      h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),",
+    "replace": "      null,",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：小工具沒有旅伴列",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）主頁的 crewButton 拿掉。紅：H2、M1。不紅：其餘。",
+    "expect": ["H2 旅程中", "M1 主頁找得到"],
+    "file": "js/views/trip.js",
+    "find": "      members.length ? crewButton(tripId, t, members) : null,",
+    "replace": "      null,",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "任務頁：旅伴列放回去（舊位置）",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）任務頁同步列後面插回 crewButton。紅：M2（任務頁原本那幾塊不該在）。不紅：M3（只看還看不到你）、其餘。",
+    "expect": ["M2 任務頁只做任務"],
+    "file": "js/views/trip.js",
+    "find": "    syncBanner(tripId, t),\n",
+    "replace": "    syncBanner(tripId, t),\n    crewButton(tripId, t, store.membersOf(t.groupId)),\n",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：沒有「旅伴還看不到你」",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）note 只剩新旅伴橫幅。紅：M3。不紅：其餘。",
+    "expect": ["M3 「旅伴還看不到你」"],
+    "file": "js/views/trip.js",
+    "find": "  const note = joinBanner(tripId, members) || claimNudge(tripId, t, members);",
+    "replace": "  const note = joinBanner(tripId, members);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今天接下來：拍完的也排",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）篩掉拍完的那一道改成全部留。C今天六站的台北101 拍完了，會排第一。紅：C1。不紅：C2（按鈕照樣在）、C3、其餘。",
+    "expect": ["C1 旅程中、下一站在今天"],
+    "file": "js/views/trip.js",
+    "find": "    return !(p.total > 0 && p.done === p.total);\n  }).slice(0, 2);",
+    "replace": "    return true;\n  }).slice(0, 2);",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今天接下來：不限兩站",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）拿掉 slice(0, 2)。C今天六站還沒拍完的有三站（士林夜市、中正紀念堂、永康街）。紅：C1。不紅：其餘。",
+    "expect": ["C1 旅程中、下一站在今天"],
+    "file": "js/views/trip.js",
+    "find": "  }).slice(0, 2);",
+    "replace": "  });",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今天接下來：不只看今天",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）today 不篩今天、拿整趟的站。R旅程中下一站是第 1 天的龍山寺，後面會排台北101、士林夜市；H還沒出發下一站象山，後面會排龍山寺、台北101。紅：C3。不紅：C1（C今天六站下一站後面剛好就是今天那幾站，結果一樣）、其餘。",
+    "expect": ["C3 不出「今天接下來」"],
+    "file": "js/views/trip.js",
+    "find": "  const today = next ? store.spotsOf(tripId).filter((s) => (s.day || 1) === todayDay) : [];",
+    "replace": "  const today = next ? store.spotsOf(tripId) : [];",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今天接下來：按鈕帶到任務頁",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）整天的行程 › 改到 /trip/:id。紅：C2。不紅：其餘。",
+    "expect": ["C2 點「整天的行程 ›」"],
+    "file": "js/views/trip.js",
+    "find": "onclick: () => navigate(`/trip/${tripId}/itinerary`) }, '整天的行程 ›')",
+    "replace": "onclick: () => navigate(`/trip/${tripId}`) }, '整天的行程 ›')",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今晚住：不看退房日",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）入住日 ≤ 今天就算。C今天六站的甲、丙都會出（丙只填入住日、是昨天）。紅：C4。不紅：C5（C民宿本來就算）、C9（結束了不出）、其餘。",
+    "expect": ["C4 今晚住："],
+    "file": "js/views/trip.js",
+    "find": "(s.checkOut ? s.checkIn <= today && today < s.checkOut : s.checkIn === today)",
+    "replace": "(s.checkIn <= today)",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今晚住：旅程結束了照樣出",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）ended 那一道拿掉。C帳沒清的旅店丁日期蓋到今天。紅：C9。不紅：其餘。",
+    "expect": ["C9 結束後帳還沒清"],
+    "file": "js/views/trip.js",
+    "find": "    ...(ended ? [] : tonightStays(tripId).map(",
+    "replace": "    ...(false ? [] : tonightStays(tripId).map(",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "今晚住：沒地址就不帶路",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）destination 只用地址。C民宿沒填地址 → destination 是空的。紅：C5。不紅：C4（有地址）、其餘。",
+    "expect": ["C5 今晚住沒填地址"],
+    "file": "js/views/trip.js",
+    "find": "encodeURIComponent(s.address || s.name)",
+    "replace": "encodeURIComponent(s.address)",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "待買：旅程中也放",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）拿掉「還沒出發」那一道。C今天六站有一項沒買。紅：C8。不紅：C6、C7、其餘。",
+    "expect": ["C8 不放待買"],
+    "file": "js/views/trip.js",
+    "find": "    cd && buyCounts(tripId).left > 0 ? h('button'",
+    "replace": "    buyCounts(tripId).left > 0 ? h('button'",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "待買：數的是全部項",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）字裡的數字改成 total（3 項）。紅：C6。不紅：C8（條件照舊看 left）、其餘。",
+    "expect": ["C6 出發前"],
+    "file": "js/views/trip.js",
+    "find": "`🛒 待買還有 ${buyCounts(tripId).left} 項沒買`",
+    "replace": "`🛒 待買還有 ${buyCounts(tripId).total} 項沒買`",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "待買：按鈕帶到行程分頁",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）待買那顆改到 /itinerary。紅：C7（等不到待買清單）。不紅：其餘。",
+    "expect": ["C7 點了到待買清單"],
+    "file": "js/views/trip.js",
+    "find": "onclick: () => navigate(`/trip/${tripId}/buy`) },",
+    "replace": "onclick: () => navigate(`/trip/${tripId}/itinerary`) },",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "帳：查不到匯率照樣出",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）拿掉 missingRate 那一道。C匯率查不到：台幣那筆算得出 1 筆、日圓那筆查不到匯率。紅：C11。不紅：C9、其餘。",
+    "expect": ["C11 結束後不放帳"],
+    "file": "js/views/trip.js",
+    "find": "    if (s.missingRate || !s.transfers.length || !slot.isConnected) return;",
+    "replace": "    if (!s.transfers.length || !slot.isConnected) return;",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "帳：結清了照樣出",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）拿掉 0 筆那一道。C帳結清會出「還有 0 筆」。紅：C11。不紅：C9、其餘。",
+    "expect": ["C11 結束後不放帳"],
+    "file": "js/views/trip.js",
+    "find": "    if (s.missingRate || !s.transfers.length || !slot.isConnected) return;",
+    "replace": "    if (s.missingRate || !slot.isConnected) return;",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "帳：旅程沒結束也放那一格",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）帳那一格不看 ended。紅：C12。不紅：其餘（C今天六站那筆只有小美自己、算出來 0 筆，不會出字）。",
+    "expect": ["C12 旅程還沒結束"],
+    "file": "js/views/trip.js",
+    "find": "    ended ? h('div', { class: 'th-money-slot' }) : null,",
+    "replace": "    h('div', { class: 'th-money-slot' }),",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "帳：按鈕帶到回顧頁",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）帳那顆改到 /memories。紅：C10（等不到分帳頁）。不紅：其餘。",
+    "expect": ["C10 點了到分帳頁"],
+    "file": "js/views/trip.js",
+    "find": "th-money', onclick: () => navigate(`/trip/${tripId}/expenses`) }",
+    "replace": "th-money', onclick: () => navigate(`/trip/${tripId}/memories`) }",
+    "cmd": "node scripts/hometest.mjs"
+  }
+]

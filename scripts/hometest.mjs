@@ -13,6 +13,9 @@
 //   R 回顧搬進「行程」分頁（示意圖 6）：底部分頁沒有「回顧」；出發前／旅程中回顧是最下面一列；結束日過了排到最上面、
 //     旅途資訊收成一列放最下面；只看結束日（全部拍完但還沒結束不換、沒設結束日不換）；
 //     點了進回顧頁、底部亮「行程」、返回鍵回行程分頁
+//   C 主頁的新區塊（規劃 5.1，第三個 commit）：下一站卡裡的「今天接下來」（今天、下一站後面還沒拍完的兩站＋整天的行程）、
+//     今晚住（今天落在入住～退房之間；地圖帶到地址，沒地址用名稱）、出發前的待買還剩幾項、結束後還有幾筆帳沒結清；
+//     每一樣都驗「該出現時出現」與「不該出現時不出現」（帳是背景算的，等算完才判）
 //
 // 走使用者的路：首頁點旅程卡 → 底部分頁 → 行程分頁裡的那一列／那張卡；不直接 goto 子頁。
 // 不打真網路（共用慣例 §5.6）：外站請求一律當場回 503。
@@ -114,8 +117,26 @@ const homeLayout = (page) => page.evaluate(() => {
     shot: btns.some((t) => t.includes('拍照解任務')), qline: pg.querySelectorAll('.qline, .qcollapse').length,
     prog: !!q('.task-prog') || /已完成 \d+ \/ \d+/.test(pg.textContent),
     dayBeforeCard: before(day, card), cdBeforeCard: before(cd, card), cardBeforeTools: before(card, tools), endBeforeTools: before(end, tools),
+    // C 新區塊（v1.84.0 第三個 commit）
+    nextName: card ? card.querySelector('.nextstn-name')?.textContent || '' : '',
+    tn: (() => { const tn = card && card.querySelector('.today-next'); return tn ? {
+      label: tn.querySelector('.tn-label')?.textContent || '',
+      items: [...tn.querySelectorAll('.tn-item')].map((li) => ({ time: li.querySelector('.tn-time')?.textContent || '', name: li.querySelector('.tn-name')?.textContent || '' })),
+      all: tn.querySelector('.tn-all')?.textContent || '' } : null; })(),
+    stays: [...pg.querySelectorAll('a.th-stay')].map((a) => ({ t: a.querySelector('.th-stay-t')?.textContent || '', s: a.querySelector('.th-stay-s')?.textContent ?? null, href: a.getAttribute('href') || '' })),
+    buy: q('.th-buy') ? q('.th-buy').textContent : null,
+    moneySlot: !!q('.th-money-slot'), moneyChecked: q('.th-money-slot')?.dataset.checked === '1',
+    money: q('.th-money') ? q('.th-money').textContent : null,
+    stayAfterCard: before(card, q('a.th-stay')), stayBeforeTools: before(q('a.th-stay'), tools),
+    buyAfterCard: before(card, q('.th-buy')), buyBeforeTools: before(q('.th-buy'), tools),
+    moneyAfterEnd: before(end, q('.th-money')), moneyBeforeTools: before(q('.th-money'), tools),
   };
 });
+// 結束後的「帳沒結清」是背景算的：等那一格算完（data-checked）再讀，才分得出「沒出現」與「還沒算完」
+async function homeAfterMoney(page) {
+  await soft(page.waitForFunction(() => { const s = document.querySelector('.trip-home .th-money-slot'); return !!document.querySelector('.trip-home') && (!s || s.dataset.checked === '1'); }, { timeout: 15000 }));
+  return homeLayout(page);
+}
 // 任務頁上還有沒有原本那幾塊（只讀 #view .page；搬走的東西一樣一樣數）
 const taskPageLeftovers = (page) => page.evaluate(() => {
   const pg = document.querySelector('#view .page');
@@ -154,18 +175,55 @@ try {
     await s.put({ id: g2, type: 'group', name: 'g2', syncSecret: 'h'.repeat(32) });
     await s.put({ id: uuid(), type: 'member', groupId: g2, displayName: '阿明' });
     await s.put({ id: uuid(), type: 'member', groupId: g2, displayName: '阿華' });
-    const mk = async (title, startDate, endDate, items, done, group = g) => {
+    const mk = async (title, startDate, endDate, items, done, group = g, extra = {}) => {
       const t = uuid();
-      await s.put({ id: t, type: 'trip', groupId: group, title, region: '台北', allowWiki: false, startDate, ...(endDate ? { endDate } : {}) });
-      if (!items.length) return;
+      await s.put({ id: t, type: 'trip', groupId: group, title, region: '台北', allowWiki: false, startDate, ...(endDate ? { endDate } : {}), ...extra });
+      if (!items.length) return { t, spots: [], quests: [] };
       const { spots, quests } = await generateForTrip({ tripId: t, region: '台北', items });
       for (const x of spots) await s.put(x);
       for (const x of quests) await s.put(x);
       if (done) for (const q of quests) await s.put({ id: uuid(), type: 'submission', tripId: t, questId: q.id, memberId: m, photoHash: 'h', createdAt: Date.now() });
+      return { t, spots, quests };
     };
-    await mk('H還沒出發', D.p3, D.p5, [{ name: '象山', day: 1 }], false);
+    const spotOf = (r, name) => r.spots.find((x) => x.name.includes(name) || name.includes(x.name));
+    const finish = async (r, name) => { const sp = spotOf(r, name); for (const q of r.quests.filter((x) => x.spotId === sp.id)) await s.put({ id: uuid(), type: 'submission', tripId: r.t, questId: q.id, memberId: m, photoHash: 'h', createdAt: Date.now() }); };
+    const stay = (t, name, checkIn, checkOut, address = '') => s.put({ type: 'stay', tripId: t, name, checkIn, checkOut, address, note: '' });
+    const buy = (t, text, done) => s.put({ type: 'buy', tripId: t, text, done, doneBy: null });
+    const spend = (t, group, payerId, amount, currency, participants) => s.put({ id: uuid(), type: 'expense', tripId: t, groupId: group, title: '一筆花費', category: 'other',
+      amount, currency, payerId, participants, shares: null, note: '', day: null, createdAt: Date.now() });
+
+    // H還沒出發：三站都在第 1 天（還沒出發＝沒有「今天」→ 不出「今天接下來」）；待買三項、一項買好了
+    const hPre = await mk('H還沒出發', D.p3, D.p5, [{ name: '象山', day: 1 }, { name: '龍山寺', day: 1 }, { name: '台北101', day: 1 }], false);
+    await buy(hPre.t, '轉接頭', false); await buy(hPre.t, '雨傘', false); await buy(hPre.t, '護照影本', true);
     await mk('H沒有景點', D.m1, D.p1, [], false);
-    await mk('H旅伴', D.m1, D.p1, [{ name: '象山', day: 1 }], false, g2);
+    const hCrew = await mk('H旅伴', D.m1, D.p1, [{ name: '象山', day: 1 }], false, g2);
+    await stay(hCrew.t, 'C民宿', D.m1, D.p1);                        // 今晚住、沒填地址 → 用名稱帶路
+
+    // ---- C 主頁的新區塊（自己造的名字與地址，不是真的行程）----
+    // C今天六站：今天第 2 天；第 1 天象山拍完了；今天六站，台北101 拍完了 → 下一站龍山寺、後面還沒拍完的是士林夜市、中正紀念堂、永康街（只放兩站）
+    const c6 = await mk('C今天六站', D.m1, D.p1, [{ name: '象山', day: 1 }, { name: '龍山寺', day: 2 }, { name: '台北101', day: 2 },
+      { name: '士林夜市', day: 2 }, { name: '中正紀念堂', day: 2 }, { name: '永康街', day: 2 }], false);
+    await finish(c6, '象山'); await finish(c6, '台北101');
+    for (const [name, min] of [['龍山寺', 540], ['台北101', 660], ['士林夜市', 840], ['中正紀念堂', 960], ['永康街', 1080]]) await s.patch(spotOf(c6, name).id, { startMin: min });
+    await stay(c6.t, 'C旅店甲', D.m1, D.p1, '合成市示範路 1 號');     // 今晚住
+    await stay(c6.t, 'C旅店乙', D.p1, D.p3, '合成市示範路 2 號');     // 明天才入住
+    await stay(c6.t, 'C旅店丙', D.m1, null, '合成市示範路 3 號');     // 只填入住日（昨天）→ 只有昨天算
+    await buy(c6.t, '充電線', false);                                 // 旅程中 → 主頁不放待買
+    const g3 = uuid(), a3 = uuid(), b3 = uuid();
+    await s.put({ id: g3, type: 'group', name: 'g3' });
+    await s.put({ id: a3, type: 'member', groupId: g3, displayName: '阿土' });
+    await s.put({ id: b3, type: 'member', groupId: g3, displayName: '阿金' });
+    await spend(c6.t, g, m, 500, 'TWD', [m]);                         // 旅程沒結束 → 主頁不放帳
+    const cBuy = await mk('C都買好了', D.p3, D.p5, [{ name: '象山', day: 1 }], false);
+    await buy(cBuy.t, '轉接頭', true);
+    // 結束後的帳：阿土付 300 兩人分 → 阿金欠 150（1 筆）；結清的；有一筆查不到匯率的（日圓，外站一律 503）
+    const cOwe = await mk('C帳沒清', D.m10, D.m9, [{ name: '象山', day: 1 }], false, g3, { baseCurrency: 'TWD' });
+    await spend(cOwe.t, g3, a3, 300, 'TWD', [a3, b3]);
+    await stay(cOwe.t, 'C旅店丁', D.m1, D.p1, '合成市示範路 4 號');   // 日期蓋到今天，但旅程結束了 → 不出「今晚住」
+    const cEven = await mk('C帳結清', D.m10, D.m9, [{ name: '象山', day: 1 }], false, g3, { baseCurrency: 'TWD' });
+    await spend(cEven.t, g3, a3, 200, 'TWD', [a3, b3]); await spend(cEven.t, g3, b3, 200, 'TWD', [a3, b3]);
+    const cFx = await mk('C匯率查不到', D.m10, D.m9, [{ name: '象山', day: 1 }], false, g3, { baseCurrency: 'TWD' });
+    await spend(cFx.t, g3, a3, 300, 'TWD', [a3, b3]); await spend(cFx.t, g3, b3, 1000, 'JPY', [a3, b3]);
     await mk('R旅程中', D.m1, D.p1, [{ name: '龍山寺', day: 1 }, { name: '台北101', day: 2 }, { name: '士林夜市', day: 3 }], false);
     await mk('R全部拍完', D.m1, D.p1, [{ name: '中正紀念堂', day: 1 }, { name: '永康街', day: 2 }], true);
     await mk('R已結束', D.m10, D.m9, [{ name: '象山', day: 1 }, { name: '龍山寺', day: 2 }], false);
@@ -300,6 +358,77 @@ try {
   L = ok ? await itinLayout(page) : null;
   yes(!!L && !L.top && L.rows === 1 && L.rowAfterDays && L.infoBeforeDays,
     `R7 沒設結束日：回顧一直在最下面一列（${JSON.stringify(L && { top: L.top, rows: L.rows, rowAfterDays: L.rowAfterDays })}）`);
+
+  // ================= C 主頁的新區塊（今天接下來、今晚住、待買、帳沒結清）=================
+  console.log('\n— C 主頁的新區塊 —');
+  let ck = await openTrip(page, 'C今天六站');
+  let C = ck ? await homeLayout(page) : null;
+  const tnNames = C && C.tn ? C.tn.items.map((x) => x.name) : [];
+  yes(!!C && /龍山寺/.test(C.nextName) && !!C.tn && C.tn.label === '今天接下來' && C.tn.items.length === 2
+    && /士林夜市/.test(tnNames[0] || '') && C.tn.items[0].time === '14:00' && /中正紀念堂/.test(tnNames[1] || '') && C.tn.items[1].time === '16:00'
+    && !tnNames.some((n) => /台北101|永康街|龍山寺/.test(n)),
+    `C1 旅程中、下一站在今天：下一站卡（${C ? C.nextName || '沒有' : '沒讀到'}）裡有「今天接下來」——後面還沒拍完的兩站（${C && C.tn ? C.tn.items.map((x) => `${x.time} ${x.name}`).join('／') : '沒有'}）；拍完的台北101、第三站永康街不放`);
+  ck = ck && await tap(page, '.today-next .tn-all', '整天的行程')
+    && await soft(page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-page'), { timeout: 15000 }));
+  const tnOn = ck ? (await tabState(page)).filter((x) => x.on).map((x) => x.name) : [];
+  yes(ck && tnOn.join() === '行程', `C2 點「整天的行程 ›」到行程分頁、底部亮「行程」（${tnOn.join('、') || '沒到'}）`);
+
+  // 不出現的兩種：還沒出發（沒有「今天」）、下一站不在今天
+  hk = await openTrip(page, 'H還沒出發');
+  const cPre = hk ? await homeLayout(page) : null;
+  hk = await openTrip(page, 'R旅程中');
+  const cOther = hk ? await homeLayout(page) : null;
+  yes(!!cPre && cPre.card && /^還有 \d+ 天出發$/.test(cPre.cd || '') && cPre.tn === null && !!cOther && cOther.card && cOther.day === '今天是第 2 天' && /龍山寺/.test(cOther.nextName) && cOther.tn === null,
+    `C3 不出「今天接下來」：還沒出發（${cPre ? cPre.cd : '沒讀到'}，第 1 天有三站，下一站 ${cPre ? cPre.nextName : ''}）；下一站在第 1 天、今天是第 2 天（下一站 ${cOther ? cOther.nextName : '沒讀到'}）`);
+
+  // 今晚住
+  ck = await openTrip(page, 'C今天六站');
+  C = ck ? await homeLayout(page) : null;
+  const stayHref = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent('合成市示範路 1 號');
+  yes(!!C && C.stays.length === 1 && C.stays[0].t === '🛏️ 今晚住：C旅店甲' && C.stays[0].s === '合成市示範路 1 號' && C.stays[0].href === stayHref
+    && C.stayAfterCard && C.stayBeforeTools,
+    `C4 今晚住：今天落在入住～退房之間的那一間（${C ? C.stays.map((x) => `${x.t}｜${x.s}`).join('／') || '沒有' : '沒讀到'}）、點了用地圖帶到地址；明天才入住的、只填入住日（昨天）的不算；在下一站卡後面、小工具前面（${JSON.stringify(C && { stayAfterCard: C.stayAfterCard, stayBeforeTools: C.stayBeforeTools, hrefOk: C.stays[0]?.href === stayHref })}）`);
+  hk = await openTrip(page, 'H旅伴');
+  const cNoAddr = hk ? await homeLayout(page) : null;
+  const nameHref = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent('C民宿');
+  yes(!!cNoAddr && cNoAddr.stays.length === 1 && cNoAddr.stays[0].t === '🛏️ 今晚住：C民宿' && cNoAddr.stays[0].s === null && cNoAddr.stays[0].href === nameHref,
+    `C5 今晚住沒填地址：不寫地址那一行、用名稱帶路（${cNoAddr ? JSON.stringify(cNoAddr.stays.map((x) => ({ t: x.t, s: x.s, hrefOk: x.href === nameHref }))) : '沒讀到'}）`);
+
+  // 待買（出發前）
+  hk = await openTrip(page, 'H還沒出發');
+  const cB = hk ? await homeLayout(page) : null;
+  yes(!!cB && cB.buy === '🛒 待買還有 2 項沒買' && cB.buyAfterCard && cB.buyBeforeTools,
+    `C6 出發前：「${cB ? cB.buy || '沒有' : '沒讀到'}」（三項裡一項買好了）、在下一站卡後面、小工具前面（${JSON.stringify(cB && { buyAfterCard: cB.buyAfterCard, buyBeforeTools: cB.buyBeforeTools })}）`);
+  hk = hk && await tap(page, '.trip-home .th-buy', '待買還有')
+    && await soft(page.waitForFunction(() => /\/buy$/.test(location.hash) && document.querySelector('.buy-input'), { timeout: 15000 }));
+  const buyOn = hk ? (await tabState(page)).filter((x) => x.on).map((x) => x.name) : [];
+  yes(hk && buyOn.join() === '行程', `C7 點了到待買清單、底部亮「行程」（${buyOn.join('、') || '沒到'}）`);
+  hk = await openTrip(page, 'C都買好了');
+  const cAllBought = hk ? await homeLayout(page) : null;
+  yes(!!C && C.card && C.buy === null && !!cAllBought && /^還有 \d+ 天出發$/.test(cAllBought.cd || '') && cAllBought.buy === null,
+    `C8 不放待買：旅程中（C今天六站有一項沒買：${C ? C.buy || '沒有' : '沒讀到'}）、出發前但全買好了（${cAllBought ? cAllBought.buy || '沒有' : '沒讀到'}）`);
+
+  // 帳沒結清（結束後）
+  ck = await openTrip(page, 'C帳沒清');
+  C = ck ? await homeAfterMoney(page) : null;
+  yes(!!C && C.moneyChecked && C.money === '💰 還有 1 筆帳沒結清' && C.moneyAfterEnd && C.moneyBeforeTools && C.stays.length === 0 && C.end === '🎁 旅程結束了',
+    `C9 結束後帳還沒清：「${C ? C.money || '沒有' : '沒讀到'}」、在旅程結束卡後面、小工具前面；住宿日期蓋到今天也不出「今晚住」（旅程結束了；今晚住 ${C ? C.stays.length : '?'} 張）`);
+  ck = ck && await tap(page, '.trip-home .th-money', '帳沒結清')
+    && await soft(page.waitForFunction(() => /\/expenses$/.test(location.hash), { timeout: 15000 }));
+  const moneyOn = ck ? (await tabState(page)).filter((x) => x.on).map((x) => x.name) : [];
+  yes(ck && moneyOn.join() === '分帳', `C10 點了到分帳頁、底部亮「分帳」（${moneyOn.join('、') || '沒到'}）`);
+  const noMoney = [];
+  for (const title of ['C帳結清', 'C匯率查不到', 'R已結束']) {
+    const okT = await openTrip(page, title);
+    const X = okT ? await homeAfterMoney(page) : null;
+    noMoney.push({ title, slot: !!X && X.moneySlot, checked: !!X && X.moneyChecked, money: X ? X.money : '沒讀到' });
+  }
+  yes(noMoney.length === 3 && noMoney.every((x) => x.slot && x.checked && x.money === null),
+    `C11 結束後不放帳（算完了才判）：結清了、有一筆查不到匯率（算不準）、沒有花費（${JSON.stringify(noMoney)}）`);
+  hk = await openTrip(page, 'C今天六站');
+  const cRun = hk ? await homeLayout(page) : null;
+  yes(!!cRun && cRun.card && !cRun.moneySlot && cRun.money === null,
+    `C12 旅程還沒結束：主頁不放帳（C今天六站有一筆只算自己的花費；帳那一格 ${cRun ? cRun.moneySlot : '沒讀到'}）`);
 
   console.log('\n主頁與回顧測試結束');
 } catch (e) {

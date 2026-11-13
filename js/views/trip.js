@@ -346,11 +346,62 @@ function todayCard(tripId, t) {
   const next = currentSpot(tripId);
   const label = store.getHereSpot(tripId) ? '現在這一站' : '下一站';
   const time = spotTimes(next).startTime || '';
+  const later = upNextToday(tripId, t, next);
   return h('section', { class: 'today-card', 'aria-label': label },
     h('div', { class: 'today-head' },
       h('span', { class: 'today-label' }, label),
       time ? h('span', { class: 'today-time' }, time) : null),
-    nav);
+    nav,
+    // v1.84.0「今天接下來」（規劃 5.1，Yolin「都照建議做」）：主頁不放整天的時間軸（那是行程分頁的），只放後面兩站＋去行程分頁
+    later.length ? h('div', { class: 'today-next' },
+      h('div', { class: 'tn-label' }, '今天接下來'),
+      h('ol', { class: 'tn-list' }, ...later.map((s) => {
+        const st = spotTimes(s).startTime || '';
+        return h('li', { class: 'tn-item' },
+          st ? h('span', { class: 'tn-time' }, st) : null,
+          h('span', { class: 'tn-name' }, `${s.emoji || '📍'} ${s.name}`));
+      })),
+      h('button', { class: 'tn-all', onclick: () => navigate(`/trip/${tripId}/itinerary`) }, '整天的行程 ›')) : null);
+}
+
+// 今天接下來：今天的行程裡排在下一站後面、還沒拍完的最多兩站（0 任務的地點照排，跟「下一站」同一個規矩）。
+// 只講今天：旅程中、而且下一站就在今天，才有；下一站在別天（手動指定、或今天全拍完了）就不出現。沒有就不出現（不猜）。
+function upNextToday(tripId, t, next) {
+  // 還沒出發 todayDay 是 0、結束了是 -1：沒有哪一站的 day 是它，today 自然是空的——所以只要一道「下一站在不在今天」就夠
+  const todayDay = dayForToday(t);
+  const today = next ? store.spotsOf(tripId).filter((s) => (s.day || 1) === todayDay) : [];
+  const i = today.findIndex((s) => s.id === next.id);
+  if (i < 0) return [];                 // 下一站不在今天（在別天、還沒出發、結束了）→ 不出現
+  return today.slice(i + 1).filter((s) => {
+    const p = store.spotProgress(s.id);
+    return !(p.total > 0 && p.done === p.total);
+  }).slice(0, 2);
+}
+
+// 今晚住（規劃 5.1）：今天落在 [入住, 退房) 的住宿；只填了入住日的，只有入住那天算。點了用地圖帶過去（有地址用地址、沒有用名稱）。
+// 住宿沒有「入住時間」這個欄位，所以不寫時間（規劃寫的「・入住時間」做不到，照實不寫）。日期是使用者填的，不從站名推。
+function tonightStays(tripId) {
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return staysOf(tripId).filter((s) => s.checkIn && (s.checkOut ? s.checkIn <= today && today < s.checkOut : s.checkIn === today));
+}
+
+// 旅程結束後「💰 還有 N 筆帳沒結清」（規劃 5.1）：跟分帳頁同一套算法（settleTrip 的結清方案筆數）；
+// 結清了（0 筆）、沒有花費、有查不到匯率的花費（算不準）都不出現——不猜。背景算（匯率可能要上網查），算完才放上去。
+async function fillUnsettled(slot, tripId, t) {
+  try {
+    const [ex, fx] = await Promise.all([import('../expenses.js'), import('../fx.js')]);
+    const list = ex.tripExpenses(tripId);
+    if (!list.length) return;
+    await fx.loadCurrencies();
+    const base = t.baseCurrency || fx.currencyForCountry(t.country) || 'TWD';
+    const rates = list.every((e) => e.currency === base) ? null : await fx.getRates();
+    const s = ex.settleTrip(tripId, base, rates);
+    if (s.missingRate || !s.transfers.length || !slot.isConnected) return;
+    slot.replaceChildren(h('button', { class: 'btn btn-soft btn-block th-money', onclick: () => navigate(`/trip/${tripId}/expenses`) },
+      `💰 還有 ${s.transfers.length} 筆帳沒結清`));
+  } catch { /* 算不出來就不出現（不顯示 0、不猜） */ }
+  finally { slot.dataset.checked = '1'; }   // 算完了（不管有沒有放東西）：測試等這個，才分得出「沒出現」與「還沒算完」
 }
 
 // 同步的旅程、還沒說「我是誰」→ 提示（點一下就好，非強制）
@@ -424,6 +475,18 @@ export async function tripHome(tripId, { drawPage, setTop } = {}) {
       h('span', { class: 'th-day-n' }, `今天是第 ${todayDay} 天`),
       t.startDate ? h('span', { class: 'th-day-d' }, `${dayDate(t, todayDay)} ${weekdayLabel(t.startDate, todayDay)}`.trim()) : null) : null,
     main,
+    // 今晚住（旅程沒結束才有；今天落在某一間住宿的日期裡才有）
+    ...(ended ? [] : tonightStays(tripId).map((s) => h('a', {
+      class: 'th-stay', href: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address || s.name)}`,
+      target: '_blank', rel: 'noopener',
+    },
+      h('span', { class: 'th-stay-t' }, `🛏️ 今晚住：${s.name}`),
+      s.address ? h('span', { class: 'th-stay-s' }, s.address) : null))),
+    // 出發前：待買還剩幾項（規劃 5.1「出發前」；0 項或沒有清單就不出現），點了到待買清單（行程分頁裡）
+    cd && buyCounts(tripId).left > 0 ? h('button', { class: 'btn btn-soft btn-block th-buy', onclick: () => navigate(`/trip/${tripId}/buy`) },
+      `🛒 待買還有 ${buyCounts(tripId).left} 項沒買`) : null,
+    // 結束後：還有幾筆帳沒結清（背景算，fillUnsettled 填進來；結清了就是空的）
+    ended ? h('div', { class: 'th-money-slot' }) : null,
     // 小工具：找附近、旅伴、（結束後）照片、位置分享（分享中才有；分享期過了自己不顯示，見 posBanner）
     h('div', { class: 'stack th-tools' },
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
@@ -438,6 +501,9 @@ export async function tripHome(tripId, { drawPage, setTop } = {}) {
     page.insertBefore(wxSlot, main && main.parentNode === page ? main : page.querySelector('.th-tools'));
     fillWeather(wxSlot, page, tripId, t);
   }
+
+  const moneySlot = page.querySelector('.th-money-slot');
+  if (moneySlot) fillUnsettled(moneySlot, tripId, t);
 
   drawPage(page);
   watchHere(tripId);
