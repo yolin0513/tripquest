@@ -11,6 +11,7 @@ import { pendingCount } from '../outbox.js';
 import { getContacts, setContacts } from '../emergency.js';
 import { getHome, setHome } from '../weather.js';
 import { wipeAllTripKeys, usageOf } from '../aikeys.js';
+import { mascot, MASCOT_SPOT } from '../glyphs.js';
 
 const HOME_CITIES = [
   { name: '台北', lat: 25.03, lng: 121.56 }, { name: '新北', lat: 25.01, lng: 121.46 },
@@ -193,6 +194,8 @@ export default async function settings({ drawPage, setTop }) {
     // ---- 關於 ----
     h('div', { class: 'section-label' }, '關於'),
     h('div', { class: 'card about' },
+      // 2026-11-13 起「關於」卡最上面站設定頁那一隻吉祥物（見 js/glyphs.js 的 MASCOT_SPOT）
+      h('div', { class: 'about-mascot' }, mascot(MASCOT_SPOT.settings, 96)),
       h('p', { class: 'sm' }, 'TripQuest 旅圖任務 — 純前端 App，不需帳號密碼。單機可用；設定同步後照片會存一份到旅伴共用的伺服器。'),
       h('p', { class: 'form-hint' }, '任務來源：內建景點資料庫 + 規則模板；景點示意圖來自 zh.wikipedia.org（只送景點名稱）。AI 加值功能預設關閉，開了也只用建立者自己的金鑰。'),
     ),

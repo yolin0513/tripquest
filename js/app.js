@@ -5,7 +5,7 @@ import * as store from './store.js';
 import { mount, h, toast, smoothScrollTo } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
 import { initIdentity } from './identity.js';
-import { backpack } from './glyphs.js';
+import { mascotHead } from './glyphs.js';
 
 const backBtn = document.getElementById('backBtn');
 const topTitle = document.getElementById('topTitle');
@@ -59,8 +59,8 @@ function fallbackFor(r) {
 
 // 不匯出：畫面改頂列一律用路由器給的 setTop（綁著那一次換頁，過期的不准改，見 router.js）
 function setTop({ title, back = true, action = null }) {
-  // 標題左邊放背包（App 識別，原創圖形，見 js/glyphs.js）；字放在自己的 span 裡，長了照樣截斷
-  topTitle.replaceChildren(backpack(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));
+  // 標題左邊放雪納瑞的頭（吉祥物，2026-11-13 取代背包、一樣高；見 js/glyphs.js）；字放在自己的 span 裡，長了照樣截斷
+  topTitle.replaceChildren(mascotHead(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));
   document.title = title ? `${title}｜TripQuest` : 'TripQuest 旅圖任務';
   backBtn.hidden = !back;
   _action = action;

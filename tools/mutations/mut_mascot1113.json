@@ -1,0 +1,173 @@
+[
+  {
+    "name": "吉祥物：頁首換回背包",
+    "why": "（事前寫 2026-11-13）mascotHead 回背包：頁首沒有雪納瑞的頭。預期紅兩輪的 M1 全部（首頁、設定頁、旅程頁的頭與高度，頁首高度量不到頭）、M7／M8 頁首的頭、M8 六個出場處（頁首那格沒看到）。",
+    "expect": ["［和紙］ M1 ", "［和紙］ M7 頁首的頭", "［和紙］ M8 頁首的頭", "［和紙］ M8 六個出場處", "［深色］ M1 ", "［深色］ M7 頁首的頭", "［深色］ M8 頁首的頭", "［深色］ M8 六個出場處"],
+    "file": "js/glyphs.js",
+    "find": "  return figure(MASCOT_SPOT.header, HEAD_VB, false, Math.round(hgt * 128 / 116), hgt, 'gl-mascot gl-mascot-head');",
+    "replace": "  return backpack(hgt);",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：頁首的頭比背包高",
+    "why": "（事前寫 2026-11-13）頭的預設高度 26 → 32。頁首有 min-height 60，頭 32 還塞得下，頁首不會變高；只有「頭高 26」那三頁兩輪紅。",
+    "expect": ["［和紙］ M1 首頁：頭高 26", "［和紙］ M1 設定頁：頭高 26", "［和紙］ M1 旅程頁：頭高 26", "［深色］ M1 首頁：頭高 26", "［深色］ M1 設定頁：頭高 26", "［深色］ M1 旅程頁：頭高 26"],
+    "file": "js/glyphs.js",
+    "find": "export function mascotHead(hgt = 26) {",
+    "replace": "export function mascotHead(hgt = 32) {",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：頁首被撐高",
+    "why": "（事前寫 2026-11-13）只給頭（不給背包）上下各 20px 的外距：頭照樣 26 高、在頁首裡，但頁首被撐到 66，換回背包量是 60。預期只紅兩輪的「頁首高度跟換回背包時一樣」。",
+    "expect": ["［和紙］ M1 頁首高度", "［深色］ M1 頁首高度"],
+    "file": "css/style.css",
+    "find": "#topbar h1 .gl-pack, #topbar h1 .gl-mascot { flex: none; }",
+    "replace": "#topbar h1 .gl-pack, #topbar h1 .gl-mascot { flex: none; }\n#topbar h1 .gl-mascot { margin: 20px 0; }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：和紙也套白邊",
+    "why": "（事前寫 2026-11-13）拿掉和紙關白邊那條 CSS：和紙下身體也套白邊濾鏡。預期只紅和紙輪六處的「和紙下身體沒有白邊」。",
+    "expect": ["［和紙］ M7 頁首的頭：和紙下身體沒有白邊", "［和紙］ M7 空白頁：和紙下身體沒有白邊", "［和紙］ M7 設定頁：和紙下身體沒有白邊", "［和紙］ M7 完成任務：和紙下身體沒有白邊", "［和紙］ M7 載入中：和紙下身體沒有白邊", "［和紙］ M7 行程回顧：和紙下身體沒有白邊"],
+    "file": "css/style.css",
+    "find": "html[data-theme=\"washi\"] .gl-mascot .mc-fig { filter: none; }",
+    "replace": "/* 突變：拿掉和紙關白邊 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：深色沒有白邊",
+    "why": "（事前寫 2026-11-13）身體那一層不掛 filter 屬性：深色下沒有白邊。預期紅深色輪六處的「深色下身體套白邊濾鏡」；另外雪納瑞與白兔圖裡沒有裁切框，拿掉濾鏡引用之後一個 url(#…) 都沒有，M8 的「圖裡 id／引用」那條要求引用 > 0（母體非空），兩輪的頁首的頭、空白頁會跟著紅。",
+    "expect": ["［深色］ M7 頁首的頭：深色下身體套白邊濾鏡", "［深色］ M7 空白頁：深色下身體套白邊濾鏡", "［深色］ M7 設定頁：深色下身體套白邊濾鏡", "［深色］ M7 完成任務：深色下身體套白邊濾鏡", "［深色］ M7 載入中：深色下身體套白邊濾鏡", "［深色］ M7 行程回顧：深色下身體套白邊濾鏡", "［和紙］ M8 頁首的頭：圖裡", "［和紙］ M8 空白頁：圖裡", "［深色］ M8 頁首的頭：圖裡", "［深色］ M8 空白頁：圖裡"],
+    "file": "js/glyphs.js",
+    "find": "    + `<g class=\"mc-fig\" filter=\"url(#${id})\">${pose}</g>`",
+    "replace": "    + `<g class=\"mc-fig\">${pose}</g>`",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：深色也畫陰影與動作線",
+    "why": "（事前寫 2026-11-13）拿掉深色藏陰影與動作線那條 CSS。預期只紅深色輪五處（有地面陰影的那五隻；頁首的頭沒有陰影）的「深色下地面陰影與動作線不畫」。",
+    "expect": ["［深色］ M7 空白頁：深色下地面陰影與動作線不畫", "［深色］ M7 設定頁：深色下地面陰影與動作線不畫", "［深色］ M7 完成任務：深色下地面陰影與動作線不畫", "［深色］ M7 載入中：深色下地面陰影與動作線不畫", "［深色］ M7 行程回顧：深色下地面陰影與動作線不畫"],
+    "file": "css/style.css",
+    "find": "html:not([data-theme=\"washi\"]) .gl-mascot .mc-shadow,\nhtml:not([data-theme=\"washi\"]) .gl-mascot .mc-extra { display: none; }",
+    "replace": "/* 突變：深色也畫陰影與動作線 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：空白頁換回行李箱",
+    "why": "（事前寫 2026-11-13）「還沒有旅程」那一塊放回 🧳。預期紅兩輪的 M2、M7 空白頁、M8 空白頁、M8 六個出場處。",
+    "expect": ["［和紙］ M2 ", "［和紙］ M7 空白頁", "［和紙］ M8 空白頁", "［和紙］ M8 六個出場處", "［深色］ M2 ", "［深色］ M7 空白頁", "［深色］ M8 空白頁", "［深色］ M8 六個出場處"],
+    "file": "js/views/home.js",
+    "find": "          h('div', { class: 'empty-mascot' }, mascot(MASCOT_SPOT.empty, 120)),",
+    "replace": "          h('div', { class: 'empty-emoji' }, '🧳'),",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：載入中沒有吉祥物",
+    "why": "（事前寫 2026-11-13）spinnerBox 不放吉祥物。預期紅兩輪的 M3、M7 載入中、M8 載入中、M8 六個出場處。",
+    "expect": ["［和紙］ M3 ", "［和紙］ M7 載入中", "［和紙］ M8 載入中", "［和紙］ M8 六個出場處", "［深色］ M3 ", "［深色］ M7 載入中", "［深色］ M8 載入中", "［深色］ M8 六個出場處"],
+    "file": "js/ui.js",
+    "find": "    mascot(MASCOT_SPOT.loading, 84),\n    h('div', { class: 'spinner' }),",
+    "replace": "    null,\n    h('div', { class: 'spinner' }),",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：載入中的吉祥物跑到轉圈下面",
+    "why": "（事前寫 2026-11-13）spinnerBox 裡吉祥物與轉圈對調。預期只紅兩輪 M3（圖底要在轉圈頂之上）。",
+    "expect": ["［和紙］ M3 ", "［深色］ M3 "],
+    "file": "js/ui.js",
+    "find": "    mascot(MASCOT_SPOT.loading, 84),\n    h('div', { class: 'spinner' }),",
+    "replace": "    h('div', { class: 'spinner' }),\n    mascot(MASCOT_SPOT.loading, 84),",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：完成任務照舊打勾",
+    "why": "（事前寫 2026-11-13）完成任務的慶祝不帶吉祥物（withMascot: false）。預期紅兩輪的 M5、M7 完成任務、M8 完成任務、M8 六個出場處；「跳出來的是完成任務的慶祝」照樣綠（標題沒變）。",
+    "expect": ["［和紙］ M5 ", "［和紙］ M7 完成任務", "［和紙］ M8 完成任務", "［和紙］ M8 六個出場處", "［深色］ M5 ", "［深色］ M7 完成任務", "［深色］ M8 完成任務", "［深色］ M8 六個出場處"],
+    "file": "js/addphoto.js",
+    "find": "        withMascot: true,\n",
+    "replace": "        withMascot: false,\n",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：前置——慶祝不是完成任務",
+    "why": "（事前寫 2026-11-13）完成一個任務的慶祝標題改成「好耶！」（吉祥物照放）：證明「跳出來的是完成任務的慶祝」這條前置會紅。預期只紅兩輪那條前置。",
+    "expect": ["［和紙］ 前置：跳出來的是完成任務的慶祝", "［深色］ 前置：跳出來的是完成任務的慶祝"],
+    "file": "js/addphoto.js",
+    "find": "        title: allDone ? '全部完成啦！🎉' : '完成一個任務！',",
+    "replace": "        title: allDone ? '全部完成啦！🎉' : '好耶！',",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：回顧沒有吉祥物",
+    "why": "（事前寫 2026-11-13）回顧標題上面不放吉祥物。預期紅兩輪的 M4、M7 行程回顧、M8 行程回顧、M8 六個出場處。",
+    "expect": ["［和紙］ M4 ", "［和紙］ M7 行程回顧", "［和紙］ M8 行程回顧", "［和紙］ M8 六個出場處", "［深色］ M4 ", "［深色］ M7 行程回顧", "［深色］ M8 行程回顧", "［深色］ M8 六個出場處"],
+    "file": "js/views/recap.js",
+    "find": "    h('div', { class: 'recap-mascot' }, mascot(MASCOT_SPOT.recap, 104)),\n",
+    "replace": "    null,\n",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：設定頁沒有吉祥物",
+    "why": "（事前寫 2026-11-13）「關於」卡不放吉祥物。預期紅兩輪的 M6、M7 設定頁、M8 設定頁、M8 六個出場處。",
+    "expect": ["［和紙］ M6 ", "［和紙］ M7 設定頁", "［和紙］ M8 設定頁", "［和紙］ M8 六個出場處", "［深色］ M6 ", "［深色］ M7 設定頁", "［深色］ M8 設定頁", "［深色］ M8 六個出場處"],
+    "file": "js/views/settings.js",
+    "find": "      h('div', { class: 'about-mascot' }, mascot(MASCOT_SPOT.settings, 96)),\n",
+    "replace": "      null,\n",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：兩處放同一隻",
+    "why": "（事前寫 2026-11-13）設定頁也放白熊（跟行程回顧同一隻，不平等）。預期紅兩輪的 M6（不是山雀）與 M8 六個出場處（只剩五種）。",
+    "expect": ["［和紙］ M6 ", "［和紙］ M8 六個出場處", "［深色］ M6 ", "［深色］ M8 六個出場處"],
+    "file": "js/glyphs.js",
+    "find": "  settings: 'tit',",
+    "replace": "  settings: 'bear',",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：圖裡帶字",
+    "why": "（事前寫 2026-11-13）每一張圖裡加一個 <title>（等於在圖上寫名字、讀螢幕會念）。預期紅兩輪六處的「aria-hidden、圖裡沒有 <text>／<title>」。",
+    "expect": ["［和紙］ M8 頁首的頭：aria-hidden", "［和紙］ M8 空白頁：aria-hidden", "［和紙］ M8 設定頁：aria-hidden", "［和紙］ M8 完成任務（頁首的頭也在同一頁）：aria-hidden", "［和紙］ M8 載入中：aria-hidden", "［和紙］ M8 行程回顧：aria-hidden", "［深色］ M8 頁首的頭：aria-hidden", "［深色］ M8 空白頁：aria-hidden", "［深色］ M8 設定頁：aria-hidden", "［深色］ M8 完成任務（頁首的頭也在同一頁）：aria-hidden", "［深色］ M8 載入中：aria-hidden", "［深色］ M8 行程回顧：aria-hidden"],
+    "file": "js/glyphs.js",
+    "find": "    rimDefs(id)\n    + (withGround",
+    "replace": "    '<title>吉祥物</title>' + rimDefs(id)\n    + (withGround",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：裁切框 id 沒加流水號",
+    "why": "（事前寫 2026-11-13）圖裡的裁切框 id 不加每一張自己的流水號。現在沒有畫面在同一頁放兩隻有裁切框的（回顧整理完會把載入框換掉，鷹與白熊不同時在），所以只有特地造的「同一頁兩張白熊」紅；預期只紅那一條。",
+    "expect": ["［和紙］ M8 同一頁兩張白熊"],
+    "file": "js/glyphs.js",
+    "find": "  const pose = a.pose.replace(/(\\bid=\"|url\\(#)(i\\d+)(?=[\")])/g, `$1mc${seq}-$2`);",
+    "replace": "  const pose = a.pose;",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：白邊濾鏡共用一個 id",
+    "why": "（事前寫 2026-11-13）白邊濾鏡的 id 每一張都叫 tq-rim。每個出場處都跟頁首的頭在同一頁，id 一定撞。預期紅兩輪六處的「圖裡 id 整頁唯一」與和紙輪的「同一頁兩張白熊」；M7 照樣綠（每張圖裡都找得到一個叫 tq-rim 的濾鏡——撞 id 由 M8 抓）。",
+    "expect": ["［和紙］ M8 頁首的頭：圖裡", "［和紙］ M8 空白頁：圖裡", "［和紙］ M8 設定頁：圖裡", "［和紙］ M8 完成任務（頁首的頭也在同一頁）：圖裡", "［和紙］ M8 載入中：圖裡", "［和紙］ M8 行程回顧：圖裡", "［和紙］ M8 同一頁兩張白熊", "［深色］ M8 頁首的頭：圖裡", "［深色］ M8 空白頁：圖裡", "［深色］ M8 設定頁：圖裡", "［深色］ M8 完成任務（頁首的頭也在同一頁）：圖裡", "［深色］ M8 載入中：圖裡", "［深色］ M8 行程回顧：圖裡"],
+    "file": "js/glyphs.js",
+    "find": "  const id = `tq-rim-${seq}`;",
+    "replace": "  const id = 'tq-rim';",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：前置——深色那輪沒切成深色",
+    "why": "（事前寫 2026-11-13）測試的深色輪不去設定頁切深色（情境沒造成）：證明「這一輪真的是深色」這條前置會紅。深色輪其實是和紙，所以深色輪的 M7 全部紅（白邊 6 條、陰影 5 條）。預期只紅深色輪的那條前置與深色輪的 M7。",
+    "expect": ["［深色］ 前置：這一輪真的是深色", "［深色］ M7 "],
+    "file": "scripts/mascottest.mjs",
+    "find": "    if (!washi) {\n      await toSettings(page);",
+    "replace": "    if (false) {\n      await toSettings(page);",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "吉祥物：前置——天氣請求沒扣住",
+    "why": "（事前寫 2026-11-13）按「最終回顧」之前不扣天氣請求（照樣當場回 503、不打真網路）：回顧一下就整理完，量不到載入中。證明「天氣請求被攔住、回顧還在整理中」這條前置會紅。預期紅兩輪那條前置、M3、M7 載入中、M8 載入中、M8 六個出場處（載入中那格沒看到）。",
+    "expect": ["［和紙］ 前置：天氣請求被攔住", "［和紙］ M3 ", "［和紙］ M7 載入中", "［和紙］ M8 載入中", "［和紙］ M8 六個出場處", "［深色］ 前置：天氣請求被攔住", "［深色］ M3 ", "［深色］ M7 載入中", "［深色］ M8 載入中", "［深色］ M8 六個出場處"],
+    "file": "scripts/mascottest.mjs",
+    "find": "    hold = true;\n    await clickText(page, 'a.tab', '回顧');",
+    "replace": "    hold = false;\n    await clickText(page, 'a.tab', '回顧');",
+    "cmd": "node scripts/mascottest.mjs"
+  }
+]

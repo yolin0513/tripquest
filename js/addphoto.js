@@ -63,6 +63,7 @@ export function addPhotoButtons(tripId, questId, { compact = false, icons = fals
       const allDone = prog1.done === prog1.total;
       const url = lastSub ? await blobURL(lastSub.thumbHash) : null;
       const res = await celebrate({
+        withMascot: true,
         title: allDone ? '全部完成啦！🎉' : '完成一個任務！',
         lines: allDone
           ? [`${prog1.total} 個任務全部達成`, '可以來做回憶影片了']

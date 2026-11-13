@@ -1,5 +1,7 @@
 // DOM / UI 小工具
 
+import { mascot, MASCOT_SPOT } from './glyphs.js';
+
 // 只允許的網址協定（擋 javascript: / data:text 等注入向量；blob:/data:image 用於本機照片）
 const SAFE_URL = /^(https?:|blob:|mailto:|tel:|geo:|#|\.?\/|data:image\/)/i;
 const URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'formaction', 'action', 'poster']);
@@ -173,8 +175,10 @@ export async function promptDialog(message, { value = '', placeholder = '', okLa
 // SVG 進度環
 // 等待中的畫面一定要有字。長輩看到一顆沒有說明的轉圈圈，會以為當掉了就把 App 關掉
 // —— 而關掉的往往正是「本來再等三秒就好了」的那一次。
+// 2026-11-13 起轉圈上面站一隻吉祥物（載入中那一隻，見 js/glyphs.js 的 MASCOT_SPOT）；字照舊一定要有。
 export function spinnerBox(text, sub = '') {
   return h('div', { class: 'center-fill wait-box', style: 'min-height:140px' },
+    mascot(MASCOT_SPOT.loading, 84),
     h('div', { class: 'spinner' }),
     h('p', { class: 'wait-text' }, text),
     sub ? h('p', { class: 'muted sm', style: 'margin:6px 0 0;text-align:center' }, sub) : null,
@@ -228,13 +232,17 @@ export function fmtDate(iso) {
 }
 
 // 成就慶祝畫面
-export function celebrate({ title, lines = [], photoURL, actions = [] }) {
+// withMascot：完成任務那一次（addphoto.js）把打勾的圓換成吉祥物（完成任務那一隻，見 js/glyphs.js 的 MASCOT_SPOT）；
+// 解鎖徽章等其他慶祝照舊是打勾。
+export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false }) {
   const root = document.getElementById('modalRoot');
   return new Promise((resolve) => {
     const close = (v) => { wrap.remove(); conf.remove(); resolve(v); };
     const conf = confetti();
     const wrap = h('div', { class: 'celebrate' },
-      h('div', { class: 'celebrate-badge' }, '✓'),
+      withMascot
+        ? h('div', { class: 'celebrate-mascot' }, mascot(MASCOT_SPOT.done, 132))
+        : h('div', { class: 'celebrate-badge' }, '✓'),
       h('h2', {}, title || '完成了！'),
       ...lines.map((l) => h('p', {}, l)),
       photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null,

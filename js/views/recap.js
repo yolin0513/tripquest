@@ -8,6 +8,7 @@ import { blobURL } from '../photos.js';
 import { downloadBlob, nativeShare } from '../share.js';
 import { buildRecap } from '../recap.js';
 import { loadThemes, themeForTrip, themeMeta } from '../theme.js';
+import { mascot, MASCOT_SPOT } from '../glyphs.js';
 
 export default async function recap(tripId, { drawPage, setTop }) {
   const trip = store.get(tripId);
@@ -32,6 +33,8 @@ export default async function recap(tripId, { drawPage, setTop }) {
 
   // 標題
   out.append(h('div', { class: 'recap-head' },
+    // 2026-11-13 起標題上面站行程回顧那一隻吉祥物（見 js/glyphs.js 的 MASCOT_SPOT）
+    h('div', { class: 'recap-mascot' }, mascot(MASCOT_SPOT.recap, 104)),
     h('div', { class: 'recap-title' }, r.title),
     // v1.73.5：拆成各自 nowrap 的 span。以前是一整串字串，特大字級下只能在
     // 奇怪的地方斷（使用者實機：「3」留在行尾、「天 · 4 人」跑到下一行）。

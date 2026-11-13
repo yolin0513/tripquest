@@ -224,17 +224,18 @@ try {
   // ---- G1／G2 兩個原創圖形（js/glyphs.js）----
   const g1 = await planeAt(page, 2);
   yes(g1.ok, `G1 紙飛機停在選中那天（第 2 天）的正上方、看得到、沒蓋到那格的字（${g1.why}）`);
+  // 2026-11-13 起頁首的背包換成雪納瑞的頭（吉祥物；細的驗法在 mascottest），這裡照樣驗「有圖、在字左邊、字看得到」
   const g2 = await page.evaluate(() => {
-    const pk = document.querySelector('#topTitle svg.gl-pack');
+    const pk = document.querySelector('#topTitle svg.gl-mascot');
     const tx = document.querySelector('#topTitle .top-title-text');
-    if (!pk || !tx) return { ok: false, why: `背包 ${!!pk}、標題字 ${!!tx}` };
+    if (!pk || !tx) return { ok: false, why: `頭 ${!!pk}、標題字 ${!!tx}` };
     const a = pk.getBoundingClientRect(), b = tx.getBoundingClientRect();
     const ok = a.width >= 12 && a.height >= 12 && a.top >= 0 && a.bottom <= document.getElementById('topbar').getBoundingClientRect().bottom && a.right <= b.left + 1;
-    return { ok, why: `背包 ${Math.round(a.width)}×${Math.round(a.height)}、右緣 ${Math.round(a.right)}、標題字左緣 ${Math.round(b.left)}` };
+    return { ok, why: `頭 ${Math.round(a.width)}×${Math.round(a.height)}、右緣 ${Math.round(a.right)}、標題字左緣 ${Math.round(b.left)}` };
   });
-  yes(g2.ok, `G2 頁首看得到背包，在標題字左邊、不疊在字上（${g2.why}）`);
+  yes(g2.ok, `G2 頁首看得到雪納瑞的頭，在標題字左邊、不疊在字上（${g2.why}）`);
   v = await seen(page, '#topTitle .top-title-text');
-  yes(v.ok && v.text === '進行中', `G2 加了背包之後，標題字照樣看得到（${v.why}；字「${v.text}」）`);
+  yes(v.ok && v.text === '進行中', `G2 加了頭之後，標題字照樣看得到（${v.why}；字「${v.text}」）`);
 
   const cell3 = await page.$('.daystrip .ds-day[data-day="3"]');
   yes(!!cell3, 'S2 日期列有第 3 天那一格');

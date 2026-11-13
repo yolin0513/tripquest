@@ -4,6 +4,7 @@ import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { isStandalone, shouldOfferInstall } from '../install.js';
 import { countdownText } from '../tripday.js';
+import { mascot, MASCOT_SPOT } from '../glyphs.js';
 
 // 從邀請連結加入，剪貼簿優先
 async function joinFromLink() {
@@ -44,7 +45,8 @@ export default function home({ drawPage, setTop }) {
     trips.length
       ? h('div', { class: 'stack' }, ...trips.map(tripCard))
       : h('div', { class: 'empty' },
-          h('div', { class: 'empty-emoji' }, '🧳'),
+          // 2026-11-13 起放空白頁那一隻吉祥物（原本是 🧳；見 js/glyphs.js 的 MASCOT_SPOT）
+          h('div', { class: 'empty-mascot' }, mascot(MASCOT_SPOT.empty, 120)),
           h('p', {}, '還沒有旅程'),
           h('p', { class: 'muted sm' }, justInstalledEmpty ? '或按下面的按鈕自己開一個' : '按下面的按鈕開一個'),
         ),

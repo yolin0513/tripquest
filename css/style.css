@@ -168,7 +168,7 @@ button, input, textarea, select { font: inherit; }
   padding: 0 4px;
   display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0;
 }
-#topbar h1 .gl-pack { flex: none; }
+#topbar h1 .gl-pack, #topbar h1 .gl-mascot { flex: none; }
 .top-title-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* 兩個原創圖形（js/glyphs.js）：線條用字色、色塊用主題色；深色與和紙各自套 */
@@ -180,6 +180,19 @@ button, input, textarea, select { font: inherit; }
 .gl-strap, .gl-flap { fill: none; }
 .gl-body { fill: var(--accent); }
 .gl-pocket { fill: var(--ok); stroke-width: 3.5; }
+
+/* 吉祥物（js/glyphs.js 的 mascot／mascotHead；2026-11-13）。顏色寫在圖裡、不跟主題變。
+   深色（沒有 data-theme）：身體套 SVG 屬性上的白邊濾鏡；地面陰影與動作線不畫（深底上看不到，白邊版本來就沒有）。
+   和紙：CSS 把白邊關掉（CSS 蓋得過 SVG 屬性）、陰影與動作線照畫。 */
+.gl-mascot { display: block; flex: none; }
+html:not([data-theme="washi"]) .gl-mascot .mc-shadow,
+html:not([data-theme="washi"]) .gl-mascot .mc-extra { display: none; }
+html[data-theme="washi"] .gl-mascot .mc-fig { filter: none; }
+.empty-mascot, .recap-mascot, .about-mascot { display: flex; justify-content: center; }
+.empty-mascot { margin-bottom: 6px; }
+.recap-mascot { margin-bottom: 6px; }
+.about-mascot { margin: 0 0 8px; }
+.celebrate-mascot { animation: pop 0.5s cubic-bezier(.17,.89,.32,1.28); }
 .icon-btn {
   appearance: none;
   border: 0;

@@ -180,9 +180,9 @@
   },
   {
     "name": "背包：頁首沒放",
-    "why": "標題列只剩字。預期紅 G2 的「看得到背包」與「標題字照樣看得到」（標題字的 span 一起不見）。",
+    "why": "標題列只剩字。預期紅 G2 的「看得到雪納瑞的頭」與「標題字照樣看得到」（標題字的 span 一起不見）。2026-11-13 頁首的背包換成雪納瑞的頭，find 跟著改；名字沿用（帳本認名字）。",
     "file": "js/app.js",
-    "find": "  topTitle.replaceChildren(backpack(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));",
+    "find": "  topTitle.replaceChildren(mascotHead(), h('span', { class: 'top-title-text' }, title || 'TripQuest'));",
     "replace": "  topTitle.textContent = title || 'TripQuest';",
     "cmd": "node scripts/itinviewtest.mjs"
   }
