@@ -59,7 +59,8 @@
   },
   {
     "name": "瀏覽器：不監聽系統設定的變化",
-    "why": "預期只紅 motiontest 的 R5（不重開就跟著變）。",
+    "why": "預期只紅 motiontest 的 R5（不重開就跟著變）。2026-11-14 R5 從固定等 200ms 改成等條件成立（最多 3 秒），這條證明沒有監聽時 3 秒也等不到、照樣紅（expect 事前寫）。",
+    "expect": ["R5 App 開著時系統改成減少動態"],
     "file": "js/prefs.js",
     "find": ".addEventListener?.('change', apply);",
     "replace": ".addEventListener?.('change-off', apply);",

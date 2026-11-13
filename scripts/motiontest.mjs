@@ -43,6 +43,13 @@ async function device({ reduce = false } = {}) {
 }
 
 const hasClass = (page) => page.evaluate(() => document.documentElement.classList.contains('reduce-motion'));
+// 等 reduce-motion 變成 want（最多 3 秒）；回 { ok, ms }。等不到回 ok:false，不丟例外（後面的斷言照樣印）
+async function waitClass(page, want) {
+  const t0 = Date.now();
+  const ok = await page.waitForFunction((w) => document.documentElement.classList.contains('reduce-motion') === w, { timeout: 3000, polling: 50 }, want)
+    .then(() => true, () => false);
+  return { ok, ms: Date.now() - t0 };
+}
 
 // 打開慶祝畫面（ui.js 對外的 celebrate），量它與幾個探針的實際時間，量完收掉
 async function measure(page) {
@@ -175,12 +182,14 @@ try {
   {
     const { ctx, page } = await device();
     yes(!(await hasClass(page)), 'R5 開頭：系統沒設、沒有 reduce-motion');
+    // 等條件成立（最多 3 秒），不是固定等 200ms（v1.85.0 起首頁的白兔一進來就揮手〔約 1.4 秒〕，動畫跑著時這個 change 事件會晚到，
+    // 固定 200ms 每次都不夠；2026-11-14 量到：設定頁 1ms、首頁白兔揮手時 184ms～906ms）。沒有監聽的話 3 秒也等不到，照樣紅。
     await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-    await sleep(200);
-    yes(await hasClass(page), 'R5 App 開著時系統改成減少動態 → 不用重開就有 reduce-motion');
+    const on = await waitClass(page, true);
+    yes(on.ok, `R5 App 開著時系統改成減少動態 → 不用重開就有 reduce-motion（等了 ${on.ms}ms，最多等 3 秒）`);
     await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
-    await sleep(200);
-    yes(!(await hasClass(page)), 'R5 改回來 → reduce-motion 拿掉');
+    const off = await waitClass(page, false);
+    yes(off.ok, `R5 改回來 → reduce-motion 拿掉（等了 ${off.ms}ms，最多等 3 秒）`);
     await ctx.close();
   }
 
