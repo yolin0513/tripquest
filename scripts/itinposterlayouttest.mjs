@@ -21,13 +21,21 @@
 //   A9 天氣的字照預報寫（下雨、下雪跟天氣條同一個判斷），寫明哪天查的
 //   A10 舊的預報（查不到新的）、不知道今天、沒有預報 → 整段不放
 //   A11 幾天幾夜；A12 日期範圍（跨年第二段也寫年）；A13 交通（選過、而且前一站對得上才寫）；A14 時間（有填才寫）
-// B 版面：6 種行程 × 2 版型 × 2 張數＝24 組，每一條檢查都跑過全部 24 組
+//   （v1.89）A15 每天一隻吉祥物：預報下雪／下雨優先；不然看可信類別、對得上圖的那幾站多數決（平手取先出現的），
+//             對不上的類別不算票；不在景點庫、名字改過、建立時打的字比不回、景點庫沒載好 → 打領結（不照名字猜）
+//   （v1.89）A16 每一站的真資料：停留多久（有填才寫）、約幾點到（跟行程分頁同一條 etaChain：使用者填的時間不覆蓋、
+//             鐵路公車那一段斷掉、上一站沒停留時間推不出來、沒有車程不推）、車程「約 N 分」（有才寫）
+//   （v1.89）A17 每天一張那一隻的大小：A4 放得下的最大那一個（200～440）；站多放不下就停在 200、頁面往下長；
+//             超過 A4 的頁面吉祥物一定是 200（放大過頭會讓頁面多出一截）
+// B 版面：8 種行程 × 2 版型 × 2 張數＝32 組，每一條檢查都跑過全部 32 組
 //   B0 每一組都排得出來；B1 張數與標籤；B2 寬固定、每天一張至少 A4；B3 字與框不出界；B4 框不疊框；B5 字不疊字；
 //   B6 站名與時間在站牌框裡；B7 站數母體（畫出來的站＋「還有 N 站」＝那天的站數，而且是前幾站、照順序）；
-//   B8 必吃母體；B9 天氣母體；B10 字的來源（只有模型裡的字與固定的幾個標題）；B11 沒有類別名、沒有類別 emoji
+//   B8 必吃母體；B9 天氣母體；B10 字的來源（只有模型裡的字與固定的幾個標題）；B11 沒有類別名、沒有類別 emoji；
+//   （v1.89）B12 吉祥物不蓋到字；B13 每天一隻、種類照模型、扣在那一天的框上緣、沒有角落那一隻；B14 每天一張的站卡寫真資料；
+//            B15 吉祥物夠大（全部一張至少 150、每天一張至少 200；下限寫在測試這邊，不讀版面的常數）
 // C PDF：xref 每一個位置都正好指到那個物件、startxref、頁數、長度欄位與內容、頁面比例、空的會擋
 // D import 登記（登記制＋孤兒檢查）；這幾支不直接打網路；畫的那支不碰模型與類別
-// 突變見 tools/mutations/mut_v188.json。
+// 突變見 tools/mutations/mut_v188.json、tools/mutations/mut_v189.json。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -231,10 +239,52 @@ yes(dr('2026-05-10', '2026-05-12') === '2026/5/10（週日） – 5/12（週二�
   `A12 日期範圍（跨年第二段也寫年；沒有出發日不寫）：${dr('2026-12-30', '2027-01-02')}`);
 const legs = day(M0, 1).stops.map((s) => s.leg);
 const M13 = model({ spots: SP.map((s) => (s === raohe ? { ...s, legFrom: 'not-the-previous-stop' } : s)) });
-yes(same(legs, [null, { mode: 'car', icon: LEG_ICON.car, label: LEG_LABEL.car }, { mode: 'walk', icon: LEG_ICON.walk, label: LEG_LABEL.walk }])
+yes(same(legs, [null, { mode: 'car', icon: LEG_ICON.car, label: LEG_LABEL.car, dur: '' }, { mode: 'walk', icon: LEG_ICON.walk, label: LEG_LABEL.walk, dur: '' }])
   && day(M13, 1).stops[2] && day(M13, 1).stops[2].leg === null,
   'A13 交通：選過、而且前一站對得上才寫（前一站換掉了 → 不寫）', JSON.stringify(legs));
 yes(same(day(M0, 1).stops.map((s) => s.time), ['', '09:30', '']), `A14 時間有填才寫（${day(M0, 1).stops.map((s) => s.time || '—').join('、')}）`);
+
+// A15 吉祥物（期望寫死成圖名，不從 THEME_PEEK 算：那張表本身也在被驗的範圍裡）
+const peeksOf = (m) => (m ? m.days.map((d) => d.peek) : []);
+yes(same(peeksOf(M0), ['grill', 'rain', 'snow']), `A15a 預報下雨／下雪優先；第 1 天兩個夜市（巷口麵店不在景點庫、不算票）→ 烤串（實得 ${peeksOf(M0).join('、')}）`);
+yes(same(peeksOf(M10c), ['grill', 'cam', 'grill']), `A15b 沒有預報 → 照可信類別（九份老街是打卡 → 相機）（實得 ${peeksOf(M10c).join('、')}）`);
+yes(same(peeksOf(M5), ['done', 'rain', 'snow']), `A15c 景點庫沒載好 → 類別一個都拿不到、打領結；天氣照樣（實得 ${peeksOf(M5).join('、')}）`);
+yes(day(M2, 4).peek === 'done' && day(M3, 4).peek === 'done' && day(M4, 4).peek === 'done' && day(M2, 4).stops.length === 1,
+  `A15d 分享匯入的同名景點、名字改過、建立時打的字比不回 → 打領結，不照名字猜（${day(M2, 4).peek}、${day(M3, 4).peek}、${day(M4, 4).peek}）`);
+const SP15 = await spotsFor([['永康街', '士林夜市', '寧夏夜市'], ['永康街', '士林夜市'], ['龍山寺', '永康街'], ['龍山寺'], ['台北101']]);
+const M15 = model({ spots: SP15, forecast: null, trip: { ...TRIP, endDate: '2026-05-14' } });
+const keys15 = SP15.map((s) => `${s.name}=${theme.trustedTheme(s, LK).key}`).join('、');
+yes(same(peeksOf(M15), ['grill', 'eat', 'eat', 'done', 'done']) && /永康街=food/.test(keys15) && /龍山寺=heritage/.test(keys15),
+  `A15e 多數決（美食 1 票、夜市 2 票 → 烤串）、平手取先出現的（美食、夜市 → 吃麵）、對不上圖的類別不算票（古蹟、美食 → 吃麵）、只有對不上的 → 打領結（實得 ${peeksOf(M15).join('、')}；${keys15}）`);
+
+// A16 每一站的真資料（合成的站，不走景點庫：只驗時間、停留、車程的規則）
+const R16 = [
+  { id: 'r1', name: '甲站', day: 1, startMin: 600, stayMin: 120 },
+  { id: 'r2', name: '乙站', day: 1, stayMin: 90, legFrom: 'r1', legMode: 'car' },
+  { id: 'r3', name: '丙站', day: 1, startMin: 900, legFrom: 'r2', legMode: 'walk' },
+  { id: 'r4', name: '丁站', day: 1, stayMin: 60, legFrom: 'r3', legMode: 'train' },
+  { id: 'r5', name: '戊站', day: 1, legFrom: 'r4', legMode: 'car' },
+  { id: 'r6', name: '己站', day: 1, startMin: 1080, legFrom: 'r5', legMode: 'car' },
+  { id: 'r7', name: '庚站', day: 1, legFrom: 'r6', legMode: 'car' },
+  { id: 'q1', name: '子站', day: 2, startMin: 540, stayMin: 60 },
+  { id: 'q2', name: '丑站', day: 2, stayMin: 30, legFrom: 'q1', legMode: 'car' },
+  { id: 'q3', name: '寅站', day: 2, legFrom: 'q2', legMode: 'walk' },
+];
+const LT16 = new Map([['r1>r2', [25, '約 25 分']], ['r2>r3', [10, '約 10 分']], ['r4>r5', [15, '約 15 分']], ['r5>r6', [20, '約 20 分']], ['r6>r7', [30, '約 30 分']],
+  ['q1>q2', [30, '約 30 分']], ['q2>q3', [12, '約 12 分']]].map(([k, [min, text]]) => [k, { min, text }]));
+const T16 = { title: '合成', startDate: '', endDate: '', groupId: 'g' };
+const M16 = tryDo('posterModel A16', () => MD.posterModel({ trip: T16, spots: R16, legTimes: LT16 }), null);
+const M16n = tryDo('posterModel A16 沒有車程', () => MD.posterModel({ trip: T16, spots: R16 }), null);
+const col16 = (m, k, f) => day(m, k).stops.map(f);
+yes(same(col16(M16, 1, (s) => s.stay), ['停留 2 小時', '停留 1 小時 30 分', '', '停留 1 小時', '', '', '']),
+  `A16a 停留多久：有填才寫（${col16(M16, 1, (s) => s.stay || '—').join('、')}）`);
+yes(same(col16(M16, 1, (s) => s.eta), ['', '約 12:25 到', '', '', '', '', '']) && same(col16(M16, 1, (s) => s.time), ['10:00', '', '15:00', '', '', '18:00', ''])
+  && same(col16(M16, 2, (s) => s.eta), ['', '約 10:30 到', '約 11:12 到']),
+  `A16b 約幾點到：10:00 到＋停 2 小時＋車程 25 分 → 約 12:25；連推兩站；自己填了時間的不覆蓋；鐵路那一段、上一站斷了、上一站沒停留都不推（第 1 天 ${col16(M16, 1, (s) => s.eta || s.time || '—').join('、')}；第 2 天 ${col16(M16, 2, (s) => s.eta || s.time || '—').join('、')}）`);
+yes(same(col16(M16, 1, (s) => (s.leg ? s.leg.dur : null)), [null, '約 25 分', '約 10 分', '', '約 15 分', '約 20 分', '約 30 分']),
+  `A16c 車程：有算出來的那一段才寫（鐵路那一段沒有）（${col16(M16, 1, (s) => (s.leg ? s.leg.dur || '—' : '×')).join('、')}）`);
+yes(!!M16n && M16n.days.every((d) => d.stops.every((s) => s.eta === '' && (!s.leg || s.leg.dur === ''))) && same(col16(M16n, 1, (s) => s.time), ['10:00', '', '15:00', '', '', '18:00', '']),
+  'A16d 沒有車程（快取裡沒有）→ 約幾點到、車程一個都不寫；使用者填的時間照寫');
 
 // ================= B 版面 =================
 const POOL = ['士林夜市', '饒河街觀光夜市', '寧夏夜市', '永康街', '九份老街', '淡水老街', '大稻埕', '龍山寺', '台北101', '西門町', '象山步道', '北投溫泉博物館'];
@@ -258,18 +308,58 @@ const SCEN = [
   await scenario({ label: '一天 15 站', startDate: '2026-05-10', days: [Array.from({ length: 15 }, (_, i) => `第${i + 1}站`)] }),
   await scenario({ label: '名字很長', title: '標題'.repeat(30), startDate: '2026-05-10', days: [[LONG, '士林夜市', LONG + '二'], [LONG + '三']] }),
   await scenario({ label: '必吃與天氣超過上限', startDate: '2026-05-10', days: Array.from({ length: 8 }, (_, d) => [POOL[(d * 2) % 7], POOL[(d * 2 + 1) % 7]]), forecast: fcFor('2026-05-10', 8) }),
+  await realScenario(),
+  // v1.89 每天一張：吉祥物照 A4 放得下的最大那一個——八站、沒有必吃的這一天落在下限與上限之間（A17b）
+  await scenario({ label: '一天 8 站、沒有必吃', startDate: '2026-05-10', days: [Array.from({ length: 8 }, (_, i) => `乙${i + 1}站`)] }),
 ];
+// v1.89 真資料：時間、停留、約幾點到、車程都有的一天（四站），和站少的一天（一站）；第 2 天下雨
+async function realScenario() {
+  const spots = await spotsFor([['士林夜市', '永康街', '寧夏夜市', '九份老街'], ['龍山寺']]);
+  const d1 = spots.filter((s) => s.day === 1);
+  d1[0].startMin = 600; d1[0].stayMin = 120;
+  d1[1].legFrom = d1[0].id; d1[1].legMode = 'car'; d1[1].stayMin = 90;
+  d1[2].legFrom = d1[1].id; d1[2].legMode = 'walk';
+  d1[3].legFrom = d1[2].id; d1[3].legMode = 'train';
+  const legTimes = new Map([[`${d1[0].id}>${d1[1].id}`, { min: 25, text: '約 25 分' }], [`${d1[1].id}>${d1[2].id}`, { min: 10, text: '約 10 分' }]]);
+  const trip = { title: '合成的真資料', startDate: '2026-05-10', endDate: '2026-05-11', groupId: 'g' };
+  const m = tryDo('真資料 posterModel', () => MD.posterModel({ trip, spots, members: [{}], lookup: LK, forecast: fcFor('2026-05-10', 2), today: '2026-05-08', legTimes }), null);
+  return { label: '真資料（時間、約幾點到、停留、車程）＋站少的一天', m };
+}
 const COMBOS = [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']];
 const SETS = [];
 for (const s of SCEN) for (const [kind, split] of COMBOS) {
   const pages = s.m ? tryDo(`${s.label} ${kind}/${split}`, () => L.posterPages(s.m, { kind, split }, measure), []) : [];
   SETS.push({ tag: `${s.label}｜${kind}/${split}`, m: s.m, kind, split, pages });
 }
-const sixM = SCEN[5].m;
-yes(SETS.length === 24 && SETS.every((x) => x.m && x.pages.length > 0) && errs.length === 0
-  && sixM && sixM.foods.length > L.FOOD_MAX && sixM.tips.length > L.TIP_MAX && SCEN[3].m && SCEN[3].m.days[0].stops.length > L.BAND_STOPS,
-  `B0 24 組都排得出來；情境成立：必吃 ${sixM && sixM.foods.length} 項＞${L.FOOD_MAX}、天氣 ${sixM && sixM.tips.length} 天＞${L.TIP_MAX}、一天 ${SCEN[3].m && SCEN[3].m.days[0].stops.length} 站＞${L.BAND_STOPS}`, errs.join('；'));
-// 每一條檢查：跑全部 24 組、每一張；說明裡印出查了幾張、幾個字
+const sixM = SCEN[5].m, realM = SCEN[6].m;
+const realStops = realM ? realM.days.flatMap((d) => d.stops) : [];
+const peekKinds = new Set(SCEN.flatMap((s) => (s.m ? s.m.days.map((d) => d.peek) : [])));
+yes(SETS.length === 32 && SETS.every((x) => x.m && x.pages.length > 0) && errs.length === 0
+  && sixM && sixM.foods.length > L.FOOD_MAX && sixM.tips.length > L.TIP_MAX && SCEN[3].m && SCEN[3].m.days[0].stops.length > L.BAND_STOPS
+  && realStops.some((s) => s.eta) && realStops.some((s) => s.stay) && realStops.some((s) => s.leg && s.leg.dur) && realStops.some((s) => s.time)
+  && realM.days.some((d) => d.stops.length === 1) && peekKinds.size >= 4,
+  `B0 ${SETS.length} 組都排得出來；情境成立：必吃 ${sixM && sixM.foods.length} 項＞${L.FOOD_MAX}、天氣 ${sixM && sixM.tips.length} 天＞${L.TIP_MAX}、一天 ${SCEN[3].m && SCEN[3].m.days[0].stops.length} 站＞${L.BAND_STOPS}；`
+  + `真資料那一趟有約幾點到 ${realStops.filter((s) => s.eta).length}、停留 ${realStops.filter((s) => s.stay).length}、車程 ${realStops.filter((s) => s.leg && s.leg.dur).length}、時間 ${realStops.filter((s) => s.time).length} 站、站少的一天；吉祥物 ${peekKinds.size} 種（${[...peekKinds].join('、')}）`, errs.join('；'));
+// A17 每天一張那一隻的大小（fitPeek）：取 A4 放得下的最大那一個，200～440。15 站的那天縮到下限 200 就不再縮、頁面往下長；
+// 八站、沒有必吃的那天落在中間、整頁剛好 A4；一站的那天放大過 280；每一張每天一張的頁面：超過 A4 的，吉祥物一定是下限
+// （頁面已經超過 A4 還留著大吉祥物＝放大過頭）。從真的排版入口（posterPages）量吉祥物外框的高
+const dayPages = (s, kind) => (SETS.find((x) => x.tag === `${s.label}｜${kind}/day`) || { pages: [] }).pages;
+const riseOf = (pg) => { const b = pg && pg.boxes.find((x) => x.kind === 'peek'); return b ? Math.round(b.h * 10) / 10 : NaN; };
+const r15 = ['route', 'band'].map((k) => dayPages(SCEN[3], k)[0]);
+const r8 = ['route', 'band'].map((k) => dayPages(SCEN[7], k)[0]);
+const r1 = ['route', 'band'].map((k) => dayPages(SCEN[6], k)[1]);
+yes(r15.every((pg) => pg && Math.abs(riseOf(pg) - 200) < 0.6 && pg.h > L.A4H),
+  `A17a 15 站的那天：吉祥物縮到下限 200 就停、頁面往下長（路線圖 ${riseOf(r15[0])} 高、頁高 ${r15[0] && r15[0].h}；色帶 ${riseOf(r15[1])} 高、頁高 ${r15[1] && r15[1].h}）`);
+yes(r8.every((pg) => pg && pg.h === L.A4H && riseOf(pg) > 200.6 && riseOf(pg) < 400),
+  `A17b 八站、沒有必吃的那天：吉祥物在下限與上限之間、整頁剛好 A4（路線圖 ${riseOf(r8[0])} 高、頁高 ${r8[0] && r8[0].h}；色帶 ${riseOf(r8[1])} 高、頁高 ${r8[1] && r8[1].h}）`);
+yes(r1.every((pg) => pg && riseOf(pg) > 280),
+  `A17c 一站的那天：頁面有空就把吉祥物放大過 280（路線圖 ${riseOf(r1[0])}、色帶 ${riseOf(r1[1])}）`);
+const dayAll = SETS.filter((x) => x.split === 'day').flatMap((x) => x.pages.map((pg, i) => ({ tag: `${x.tag} 第 ${i + 1} 張`, pg })));
+const over = dayAll.filter((p) => p.pg.h > L.A4H);
+const bigOver = over.filter((p) => riseOf(p.pg) > 200.6).map((p) => `${p.tag}：頁高 ${p.pg.h}、吉祥物 ${riseOf(p.pg)}`);
+yes(over.length > 0 && bigOver.length === 0,
+  `A17d 每天一張超過 A4 的頁面，吉祥物都是下限 200（每天一張 ${dayAll.length} 張、超過 A4 的 ${over.length} 張）`, bigOver.slice(0, 6).join('\n   '));
+// 每一條檢查：跑全部組、每一張；說明裡印出查了幾組、幾張、幾個字
 const allPages = SETS.flatMap((x) => x.pages.map((pg, i) => ({ x, pg, i })));
 const nText = allPages.reduce((a, p) => a + texts(p.pg).length, 0);
 const run = (fn) => {
@@ -297,10 +387,10 @@ yes(throws(() => pdfFromJpegs([])) && throws(() => pdfFromJpegs([{ bytes: new Ui
 
 // ================= D 原始碼 =================
 export const IMPORTS = {
-  'js/itinposter/model.js': ['../theme.js', '../spottime.js', '../legs.js', '../tripday.js', '../weather.js', '../poster/layout.js'],
-  'js/itinposter/layout.js': [],
-  'js/itinposter/draw.js': ['../poster/presets.js', '../glyphs.js', './layout.js'],
-  'js/itinposter/index.js': ['../store.js', '../quests/generate.js', '../theme.js', './model.js', './layout.js', './draw.js', '../pdf.js', '../views/weather.js', '../weather.js'],
+  'js/itinposter/model.js': ['../theme.js', '../spottime.js', '../legs.js', '../tripday.js', '../weather.js', '../poster/layout.js', '../peeks.js'],
+  'js/itinposter/layout.js': ['../peeks.js'],
+  'js/itinposter/draw.js': ['../poster/presets.js', '../peeks.js', './layout.js'],
+  'js/itinposter/index.js': ['../store.js', '../quests/generate.js', '../theme.js', './model.js', './layout.js', './draw.js', '../pdf.js', '../route.js', '../legs.js', '../views/weather.js', '../weather.js'],
   'js/pdf.js': [],
   'js/views/itinposter.js': ['../store.js', '../ui.js', '../router.js', '../share.js', '../itinposter/index.js'],
 };

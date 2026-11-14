@@ -82,6 +82,39 @@ export function peek(kind, k = 0.6) {
   return el;
 }
 
+// 行程海報（v1.89）用的那一張：海報上沒有卡片蓋在前面、也不套白邊（米色紙底，跟和紙主題一樣），所以不必分上下兩層——
+// 身體照樣在邊線裁掉（邊線以下本來藏在卡片後面，畫出來會蓋到框），前景（手掌、碗腳）一整塊畫、不裁。
+// 分兩層畫的話，下層裁切框的上緣那一列會在手掌的深色外框上透出一條淡線（2026-11-14 放大海報看到，海報上一個單位約 2 px，
+// 上面那 1 個單位的重疊蓋不住）。層的順序跟 peek() 一樣：身體、前景、動作線。
+export function peekFlat(kind, k = 1) {
+  const p = PEEK[kind];
+  if (!p) throw new Error('沒有這張探頭圖：' + kind);
+  const id = 'pf' + (++seq);   // 海報每一隻各自轉成一張圖，id 不會撞；照樣每張不同（跟 peek() 同一個流水號）
+  const [x, y, w, h] = p.vb, e = p.edge;
+  const el = document.createElementNS(NS, 'svg');
+  el.setAttribute('viewBox', p.vb.join(' '));
+  el.setAttribute('width', (w * k).toFixed(1));
+  el.setAttribute('height', (h * k).toFixed(1));
+  el.setAttribute('data-peek', kind);
+  const pre = (s) => s.replace(/(\bid="|url\(#)(i\d+)(?=[")])/g, `$1${id}-$2`);
+  const up = `clip-path="url(#${id}-up)"`;
+  el.innerHTML = `<defs><clipPath id="${id}-up"><rect x="${x - 20}" y="${y - 20}" width="${w + 40}" height="${e - y + 20}"/></clipPath></defs>`
+    + `<g class="mc-body" ${up}>${pre(p.fig)}</g>`
+    + (p.front ? `<g class="mc-front">${pre(p.front)}</g>` : '')
+    + (p.extra ? `<g class="mc-extra" ${up}>${pre(p.extra)}</g>` : '');
+  return el;
+}
+
+// 一張圖的尺寸（畫布單位）：寬、邊線以上多高（rise）、邊線以下多深（sink）。
+// 行程海報（v1.89）每天一隻探頭：排版那支（js/itinposter/layout.js）是純函式、不碰 DOM，先拿這個算出圖要佔多大、
+// 邊線以下的手掌會伸進框裡多深，排好再交給 js/itinposter/draw.js 用 peek() 畫。
+export function peekGeom(kind) {
+  const p = PEEK[kind];
+  if (!p) throw new Error('沒有這張探頭圖：' + kind);
+  const [, y, w, h] = p.vb;
+  return { w, rise: p.edge - y, sink: y + h - p.edge };
+}
+
 // 畫成「邊線以上剛好 px 高」的那一張（v1.87.1 主頁下雨／下雪那一句：跟原本站在對話框左邊那一隻一樣高）。
 // 縮放照這一張自己的畫布算，不另外寫一個數字——每一張邊線以上的高度不同（撐傘那一張比踩雪板那一張矮）。
 export function peekFit(kind, px) {

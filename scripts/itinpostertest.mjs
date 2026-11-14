@@ -7,23 +7,27 @@
 // 版面與 PDF 的檢查器跟那一支共用（scripts/itinposterlib.mjs），每次先跑那幾支的對照組。
 //
 // 驗什麼：
-//   P0 前置：造好兩趟（一趟 3 天 5 站、4 站對上景點庫、出發日是 2 天後；一趟沒有景點）
+//   P0 前置：造好兩趟（一趟 3 天 6 站、5 站對上景點庫、出發日是 2 天後；一趟沒有景點）
 //   P1a 從首頁 → 底部「行程」→「行程」那一格 → 按「做成行程海報」進得來；P1b 進去之後底部亮的還是「行程」
 //   P2a 沒有景點的一趟沒有那顆按鈕；P2b 直接開海報那一頁寫「還沒有排景點」、沒有預覽
-//   P3a 預覽跟成品是同一份（同一份版面另外畫一張，逐像素相同），不是空白；P3b 吉祥物真的畫出來了
-//   P4 真的字寬排出來的 4 組（2 版型 × 2 張數）跑 itinposterlayouttest 同一組版面檢查（B1～B11）
+//   P3a 預覽跟成品是同一份（同一份版面另外畫一張，逐像素相同），不是空白；P3b 每天一隻吉祥物真的畫出來了（v1.89）
+//   （v1.89）P3c 海報上的吉祥物沒有接縫：手掌的深色外框在邊線附近沒有夾在深色中間的一列淡線（量畫出來的像素；
+//         對照：App 的 peek() 分上下兩層的畫法，在同一個量法下量得到那條線）
+//   P4 真的字寬排出來的 4 組（2 版型 × 2 張數）跑 itinposterlayouttest 同一組版面檢查（B1～B15）
+//   （v1.89）P10a 沒開過行程分頁的一趟（路線快取裡沒有）直接開海報：不連路線服務、車程與約幾點到留白（不猜）；
+//         P10b 開過行程分頁（畫面補上「約 N 分」「約幾點到」）再按進海報：每天一張的站卡寫的跟行程分頁一樣
 //   P5a 天氣預報到了會重畫（小提醒放旅程那幾天）；P5b 查天氣只送目的地的座標與固定參數
 //   P6a 換版型、換張數、翻頁的字；P6b 按「下一張」；P6c 離開再進來還是上次選的
 //   P7a 存圖片：手機分享得了檔案 → 一次分享全部 PNG；P7b 分享不了 → 下載；檔名、尺寸跟預覽那一份一樣
 //   P8a 存 PDF：xref、長度欄位、頁數、每頁比例；P8b 存檔的時候沒有任何對外請求、沒有上傳
 //   P9 整段頁面沒有丟出例外
-// 不打真網路（共用慣例 §5.6）：Open-Meteo 回自己造的預報，其餘外站 503 並記下來。
+// 不打真網路（共用慣例 §5.6）：Open-Meteo 回自己造的預報，路線服務回自己造的秒數（照直線距離算），其餘外站 503 並記下來。
 // 分享與下載：手機的分享換成記錄用的替身（分享得了／分享不了兩種）；下載攔在 <a download>.click()，記下檔名與內容、
 //   不真的寫到磁碟（headless 的下載資料夾可能是使用者自己的「下載」）。這兩個是瀏覽器提供的，不是 App 的程式。
 // 時區撥到台北（emulateTimezone），日期照那個時區算，不靠今天是哪天。名字、行程都是造的。
 // 每一條斷言不管前面成不成都會印（等不到的畫面記成 ✗、不丟例外）：突變執行器要「項數跟原樣一樣」才算跑滿。
 // 從入口進不來時，直接開海報那一頁，讓後面的照樣量到（P1a 記成 ✗）——一條突變只紅它自己那一條。
-// 突變見 tools/mutations/mut_v188ui.json。
+// 突變見 tools/mutations/mut_v188ui.json、tools/mutations/mut_v189.json。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -44,13 +48,14 @@ const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox',
 
 // ---- 斷言：每一條有固定的編號與說明（突變的 expect 對開頭）；細節放括號裡 ----
 const LBL = Object.fromEntries([
-  'P0 前置：造好兩趟（一趟 3 天 5 站、4 站對上景點庫、出發日是 2 天後；一趟沒有景點）',
+  'P0 前置：造好兩趟（一趟 3 天 6 站、5 站對上景點庫、出發日是 2 天後；一趟沒有景點）',
   'P1a 從首頁 → 底部「行程」→「行程」那一格 → 按「做成行程海報」進得來、預覽畫出來了',
   'P1b 進了海報那一頁，底部亮的還是「行程」、只亮一格',
   'P2a 沒有景點的一趟：「行程」那一格沒有「做成行程海報」（前置：那一格有內容）',
   'P2b 沒有景點的一趟直接開海報那一頁：寫「還沒有排景點」、沒有預覽',
   'P3a 預覽跟成品是同一份：畫面上的預覽跟同一份版面另外畫的一張逐像素相同，而且不是空白',
-  'P3b 吉祥物真的畫出來了（吉祥物那一格裡跟底色不同的像素超過 5%）',
+  'P3b 吉祥物真的畫出來了：每天一隻（全部一張 3 天 3 隻），每一隻那一格裡跟底色不同的像素超過 5%',
+  'P3c 海報上的吉祥物沒有接縫：每一張、每一隻，邊線附近沒有夾在兩列深色中間的一列淡線（對照：App 分兩層的畫法量得到）',
   'P5a 天氣預報到了會重畫：小提醒放旅程那 3 天、寫哪天查的；預覽換成有預報的那一份（比沒預報的高）',
   'P5b 查天氣只送目的地的座標與固定參數（沒有行程名稱、景點名稱）',
   'P6a 換成「分天色帶」「每天一張」：預覽跟著換、選中的格子標 aria-checked、翻頁寫「第1天 / 共 3 張」',
@@ -61,6 +66,8 @@ const LBL = Object.fromEntries([
   'P8a 存成 PDF：下載一個 PDF，頁數對、xref 與長度欄位都對、每頁照那一張的比例',
   'P8b 存圖片、存 PDF 的時候沒有任何對外的請求，也沒有任何上傳（POST／PUT）',
   'P9 整段頁面沒有丟出例外',
+  'P10a 沒開過行程分頁的一趟直接開海報：不連路線服務，車程與約幾點到留白（不猜）',
+  'P10b 開過行程分頁再按進海報：每天一張的約幾點到、車程跟行程分頁畫面上寫的一樣',
 ].map((s) => [s.slice(0, s.indexOf(' ')), s]));
 const B1_LABEL = '張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排';
 for (const [code, label] of [['B1', B1_LABEL], ...PAGE_CHECKS]) LBL[`P4-${code}`] = `P4-${code} ${label}（真的字寬）`;
@@ -110,6 +117,16 @@ function fakeForecast() {
     daily.wind_speed_10m_max.push(10);
   }
   return { elevation: 20, timezone: TZ, current: { temperature_2m: 22, weather_code: 1 }, daily };
+}
+// 自己造的路線矩陣（v1.89）：直線距離 × 每公里秒數＋固定的上下車時間（開車）；網址照 route.js 打的路線服務
+const OSRM_RE = /^https:\/\/routing\.openstreetmap\.de\/routed-(car|foot)\/table\/v1\/(driving|foot)\/([^?]+)\?/;
+function fakeOsrm(u) {
+  const m = OSRM_RE.exec(u);
+  const pts = m[3].split(';').map((s) => s.split(',').map(Number));
+  const walk = m[2] === 'foot';
+  const km = (a, b) => { const R = 6371, r = Math.PI / 180; const dl = (b[1] - a[1]) * r, dg = (b[0] - a[0]) * r;
+    const x = Math.sin(dl / 2) ** 2 + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dg / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+  return { code: 'Ok', durations: pts.map((a) => pts.map((b) => (a === b ? 0 : Math.round(walk ? km(a, b) * 780 : km(a, b) * 110 + 360)))) };
 }
 
 // 每一頁一開就裝好：分享的替身、下載攔截、比對畫面的兩個小工具（對照組與檢查走同一份）
@@ -178,10 +195,27 @@ function initHooks() {
       for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - pr) + Math.abs(d[i + 1] - pg) + Math.abs(d[i + 2] - pb) > 40) n++;
       return n / (d.length / 4);
     },
+    // 一段範圍裡「夾在兩列深色中間的一列淡線」：同一欄，上一列、下一列都深（亮度 < 90），這一列比兩邊都亮 20 以上。
+    // 回傳有 3 個以上這種像素的列：[列, 個數]。手掌深色外框上的接縫（兩層在交接處各自反鋸齒）就是這個樣子
+    seams(cv, x0, x1, r0, r1) {
+      x0 = Math.max(0, Math.round(x0)); x1 = Math.min(cv.width, Math.round(x1));
+      r0 = Math.max(1, Math.round(r0)); r1 = Math.min(cv.height - 1, Math.round(r1));
+      if (x1 <= x0 || r1 <= r0) return [];
+      const W = x1 - x0;
+      const d = cv.getContext('2d').getImageData(x0, r0 - 1, W, r1 - r0 + 2).data;
+      const L = (x, r) => { const i = ((r - r0 + 1) * W + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
+      const out = [];
+      for (let r = r0; r < r1; r++) {
+        let n = 0;
+        for (let x = 0; x < W; x++) { const a = L(x, r - 1), b = L(x, r + 1), c = L(x, r); if (a < 90 && b < 90 && c - Math.max(a, b) > 20) n++; }
+        if (n >= 3) out.push([r, n]);
+      }
+      return out;
+    },
   };
 }
 
-const net = { outside: [], writes: [], meteo: [] };
+const net = { outside: [], writes: [], meteo: [], osrm: [] };
 const pageErrors = [];
 async function open() {
   const ctx = await browser.createBrowserContext();
@@ -198,6 +232,11 @@ async function open() {
     if (/^https:\/\/api\.open-meteo\.com\/v1\/forecast\?/.test(u)) {
       net.meteo.push(u);
       req.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(fakeForecast()) }).catch(() => {});
+      return;
+    }
+    if (OSRM_RE.test(u)) {
+      net.osrm.push(u);
+      req.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(fakeOsrm(u)) }).catch(() => {});
       return;
     }
     net.outside.push(u);
@@ -220,6 +259,9 @@ async function enterPoster(page, title, tid) {
     if (!await soft(page.waitForSelector('.itin-page .itin-seg', { timeout: 15000 }))) { why = '沒進到行程分頁'; return false; }
     if (!await tap(page, '.itin-seg button', '行程')) { why = '點不到「行程」那一格'; return false; }
     if (!await soft(page.waitForSelector('#itin-pane-plan .itin-edit', { visible: true, timeout: 15000 }))) { why = '「行程」那一格沒有內容'; return false; }
+    // v1.89：等行程那一格把「約幾點到」補上（路線服務的車程進了快取）再按海報——海報只讀快取，
+    // 按得比車程回來還快，預覽與後面另外收的那一份會差在車程上（看行程的人也是先看到這些再去做海報）。等不到不算失敗
+    await soft(page.waitForFunction(() => document.querySelectorAll('#itin-pane-plan .tl-eta').length > 0, { timeout: 8000 }));
     const btn = await page.$('#itin-pane-plan .itin-poster-btn');
     if (!btn) { why = '「行程」那一格沒有「做成行程海報」'; return false; }
     const k = await userClick(page, btn, '「做成行程海報」');
@@ -275,11 +317,12 @@ const matchShown = (page, tid) => page.evaluate(async (tid) => {
         const inBox = pg.boxes.filter((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h).map((b) => b.kind);
         return `${s} 落在［${inBox.join('、') || '沒有框'}］`;
       }) : [],
-      tips: m.tips.length, mascots: pg ? pg.boxes.filter((b) => b.kind === 'mascot') : [] });
+      tips: m.tips.length, days: split === 'one' ? m.days.length : 1, mascots: pg ? pg.boxes.filter((b) => b.kind === 'peek') : [] });
   }
   const hit = out.variants.find((v) => v.diff === 0) || null;
   out.match = hit ? hit.name : '';
   out.ink = window.__ck.inkRatio(cv, { x: 0, y: 0, w: cv.width, h: cv.height }, PAPER);
+  out.days = hit ? hit.days : 0;
   out.mascotInk = hit ? hit.mascots.map((b) => +window.__ck.inkRatio(cv, b, PAPER).toFixed(3)) : [];
   return out;
 }, tid);
@@ -326,6 +369,13 @@ try {
     x.fillStyle = '#333'; x.fillRect(60, 60, 50, 50);
     return { blank, drawn: window.__ck.inkRatio(c, box, '#fbf6ec') };
   }), { blank: 0, drawn: 0.25 });
+  ctl('接縫：深色塊中間一列淡線抓到那一列、整塊深色抓不到、淡線夾在底色中間（不是深色）抓不到', await page.evaluate(() => {
+    const mk = (fill) => { const c = document.createElement('canvas'); c.width = 40; c.height = 20; const x = c.getContext('2d'); x.fillStyle = '#fbf6ec'; x.fillRect(0, 0, 40, 20); fill(x); return c; };
+    const seam = mk((x) => { x.fillStyle = '#2f2c2a'; x.fillRect(10, 5, 20, 10); x.fillStyle = '#615f5c'; x.fillRect(12, 9, 10, 1); });
+    const solid = mk((x) => { x.fillStyle = '#2f2c2a'; x.fillRect(10, 5, 20, 10); });
+    const onPaper = mk((x) => { x.fillStyle = '#ffffff'; x.fillRect(12, 9, 10, 1); });
+    return { seam: window.__ck.seams(seam, 0, 40, 2, 18), solid: window.__ck.seams(solid, 0, 40, 2, 18), onPaper: window.__ck.seams(onPaper, 0, 40, 2, 18) };
+  }), { seam: [[9, 10]], solid: [], onPaper: [] });
   await page.evaluate(() => Promise.allSettled([fetch('https://ctl.invalid/x'), fetch('/ctl-post', { method: 'POST', body: 'x' })]));
   await sleep(300);
   ctl('網路紀錄：外站與上傳都記得到', { outside: net.outside.filter((u) => u.includes('ctl.invalid')).length, writes: net.writes.filter((w) => /^POST .*\/ctl-post$/.test(w)).length }, { outside: 1, writes: 1 });
@@ -358,18 +408,22 @@ try {
       for (const nm of ['小美', '阿明', '小華']) await s.put({ id: uuid(), type: 'member', groupId: g, displayName: nm, createdAt: ct++ });   // 合成的名字
       await s.put({ id: t, type: 'trip', groupId: g, title: '合成的台北三日', region: '台北', allowWiki: false, startDate: day(2), endDate: day(4) });
       await s.put({ id: e, type: 'trip', groupId: g, title: '合成的空行程', region: '台北', allowWiki: false, startDate: day(10), endDate: day(11) });
-      const items = [[1, '士林夜市'], [1, '巷口麵店'], [1, '饒河街觀光夜市'], [2, '九份老街'], [3, '士林夜市']].map(([d, name]) => ({ name, day: d, region: '台北' }));
+      const items = [[1, '士林夜市'], [1, '巷口麵店'], [1, '饒河街觀光夜市'], [2, '九份老街'], [3, '士林夜市'], [3, '寧夏夜市']].map(([d, name]) => ({ name, day: d, region: '台北' }));
       const { spots, quests } = await generateForTrip({ tripId: t, region: '台北', items });
       const shilin = spots.find((x) => x.day === 1 && x.placeId === 'taipei-shilin-nm');
       const alley = spots.find((x) => x.name === '巷口麵店');
       if (alley) { alley.startMin = 570; if (shilin) { alley.legFrom = shilin.id; alley.legMode = 'car'; } }
+      // v1.89 第 3 天：士林夜市 18:00 到、停 1 小時 30 分，開車去寧夏夜市——路線服務算得出車程，寧夏夜市就推得出「約幾點到」（P10b）
+      const sl3 = spots.find((x) => x.day === 3 && x.placeId === 'taipei-shilin-nm');
+      const nx3 = spots.find((x) => x.day === 3 && x.name === '寧夏夜市');
+      if (sl3 && nx3) { sl3.startMin = 1080; sl3.stayMin = 90; nx3.legFrom = sl3.id; nx3.legMode = 'car'; }
       for (const x of spots) await s.put(x);
       for (const x of quests) await s.put(x);
-      return { t, e, n: spots.length, curated: spots.filter((x) => x.source === 'curated').length, xy: spots.filter((x) => x.lat != null && x.lng != null).length,
-        start: day(2), today: day(0), alleyAuto: !!alley && alley.source !== 'curated', emptySpots: s.spotsOf(e).length };
+      return { g, t, e, n: spots.length, curated: spots.filter((x) => x.source === 'curated').length, xy: spots.filter((x) => x.lat != null && x.lng != null).length,
+        start: day(2), today: day(0), alleyAuto: !!alley && alley.source !== 'curated', day3: !!(sl3 && nx3 && nx3.lat != null && sl3.lat != null), emptySpots: s.spotsOf(e).length };
     }, TZ);
-    say('P0', S.n === 5 && S.curated === 4 && S.xy >= 4 && S.alleyAuto && S.start === dateIn(2) && S.today === dateIn(0) && S.emptySpots === 0,
-      `${S.n} 站、${S.curated} 站對上景點庫、${S.xy} 站有座標、出發日 ${S.start}；空的那一趟 ${S.emptySpots} 站`);
+    say('P0', S.n === 6 && S.curated === 5 && S.xy >= 5 && S.alleyAuto && S.day3 && S.start === dateIn(2) && S.today === dateIn(0) && S.emptySpots === 0,
+      `${S.n} 站、${S.curated} 站對上景點庫、${S.xy} 站有座標、第 3 天兩站都有座標 ${S.day3}、出發日 ${S.start}；空的那一趟 ${S.emptySpots} 站`);
   });
 
   // ================= P1 入口 =================
@@ -393,8 +447,58 @@ try {
     const c = await matchShown(page, S.t);
     say('P3a', c.match !== '' && c.ink > 0.05,
       `${c.kind}/${c.split} 第 ${c.idx + 1} 張 ${c.w}×${c.h}；${c.match ? `跟「${c.match}」那一份逐像素相同` : `兩份都不同：${c.variants.map((v) => `${v.name} ${v.diff}${v.where.length ? `〔另畫≠預覽：${v.where.join('；')}〕` : ''}`).join('、')}`}；跟底色不同的占 ${c.ink.toFixed(2)}`);
-    say('P3b', c.mascotInk.length >= 1 && c.mascotInk.every((r) => r > 0.05), `吉祥物 ${c.mascotInk.length} 隻，那一格跟底色不同的占 ${c.mascotInk.join('、')}`);
+    say('P3b', c.days === 3 && c.mascotInk.length === c.days && c.mascotInk.every((r) => r > 0.05), `${c.days} 天、吉祥物 ${c.mascotInk.length} 隻，每一隻那一格跟底色不同的占 ${c.mascotInk.join('、')}`);
     P3 = c;
+  });
+
+  // ================= P3c 吉祥物沒有接縫（v1.89） =================
+  await section(['P3c'], async () => {
+    const r = await page.evaluate(async (tid) => {
+      const ip = await import('./js/itinposter/index.js');
+      const pk = await import('./js/peeks.js');
+      const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
+      const out = { pages: 0, peeks: 0, rows: [], ctl: [], ctlN: 0, ctlErr: [] };
+      // 量哪一段：兩層的交接處——App 的畫法下層從邊線往上 1 個畫布單位開始、上層到邊線為止——往上多 2 px、往下 2 px。
+      // 不量更上面：烤串那張在邊線往上約 4 個單位，扣子與吊帶的外框之間本來就有一條細縫（peekFlat 與 peek 都有，
+      // 2026-11-14 量過：k 1.39 時同一列 8 個像素，兩種畫法一樣），那是圖本身，不是接縫
+      const band = (edge, k) => [edge - k - 2, edge + 2];
+      // 海報真的畫出來的每一張：每一隻吉祥物
+      for (const [kind, split] of [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']]) {
+        for (const pg of ip.renderPages(m, { kind, split })) {
+          const cv = document.createElement('canvas');
+          await ip.drawPoster(cv, pg);
+          out.pages++;
+          for (const o of pg.ops.filter((x) => x.op === 'peek')) {
+            out.peeks++;
+            const s = window.__ck.seams(cv, o.x, o.x + o.w, ...band(o.edge, o.k));
+            if (s.length) out.rows.push(`${kind}/${split} 第 ${o.day} 天 ${o.kind}（k ${o.k.toFixed(2)}）：${s.map(([y, n]) => `第 ${y} 列 ${n} 個`).join('、')}`);
+          }
+        }
+      }
+      // 對照：App 的 peek()（分上下兩層）拿掉白邊，照海報同一條路（序列化 → 圖片 → 畫到畫布）畫成海報上的大小，同一個量法要量得到
+      const load = (el) => new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im); im.onerror = () => rej(new Error('載不到'));
+        im.src = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' }));
+      });
+      for (const kind of pk.PEEK_KINDS) for (const k of [1.9, 2.4]) {
+        try {
+          const el = pk.peek(kind, k);
+          el.querySelectorAll('[filter]').forEach((g) => g.removeAttribute('filter'));
+          const im = await load(el);
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(im.width); cv.height = Math.round(im.height);
+          const x = cv.getContext('2d'); x.fillStyle = '#fbf6ec'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(im, 0, 0, cv.width, cv.height);
+          const E = pk.peekGeom(kind).rise * k;
+          out.ctlN++;
+          if (window.__ck.seams(cv, 0, cv.width, ...band(E, k)).length) out.ctl.push(`${kind}×${k}`);
+        } catch (e) { out.ctlErr.push(`${kind}×${k}：${e.message}`); }
+      }
+      return out;
+    }, S.t);
+    say('P3c', r.pages >= 8 && r.peeks >= 12 && r.rows.length === 0 && r.ctl.length > 0 && r.ctlErr.length === 0,
+      `海報 ${r.pages} 張、吉祥物 ${r.peeks} 隻，有接縫的 ${r.rows.length} 隻；對照（App 分兩層的畫法）${r.ctlN} 張裡量到接縫的 ${r.ctl.length} 張：${r.ctl.join('、') || '沒有——量法量不到這種缺陷'}`,
+      [...r.rows, ...r.ctlErr].join('\n   '));
   });
 
   // ================= P4 真的字寬排出來的版面 =================
@@ -487,7 +591,7 @@ try {
     const names = dims.length > 1 ? (v ? v.labels : []).map((l) => `${BASE}-行程海報-${l}.png`) : [`${BASE}-行程海報.png`];
     const pngOk = (files) => files.length === dims.length && files.every((f, i) => f.name === names[i] && f.type === 'image/png' && same(pngDims(f.head), { w: dims[i][0], h: dims[i][1] }));
     const show = (files) => files.map((f) => `${f.name} ${JSON.stringify(pngDims(f.head))}`).join('、');
-    net.outside.length = 0; net.writes.length = 0;
+    net.outside.length = 0; net.writes.length = 0; net.osrm.length = 0;
 
     await page.evaluate(() => { window.__shareMode = 'ok'; window.__shared = []; window.__dl = []; });
     await tap(page, '.ip-png', '存成圖片');
@@ -514,7 +618,82 @@ try {
     const pbad = pdf.length ? pdfProblems(pdf, dims.map(([w, h]) => ({ w, h }))) : ['沒有 PDF'];
     say('P8a', !!v && dims.length === 3 && p.shared === 0 && p.dl.length === 1 && p.dl[0].name === `${BASE}-行程海報.pdf` && p.dl[0].type === 'application/pdf' && pbad.length === 0,
       `下載 ${p.dl.map((d) => `${d.name}（${d.type}，${d.size} 位元組）`).join('、') || '沒有'}；${dims.length} 頁`, pbad.join('；'));
-    say('P8b', net.outside.length === 0 && net.writes.length === 0, `存了 3 次：對外 ${net.outside.length} 個、上傳 ${net.writes.length} 個`, [...net.outside, ...net.writes].join('；'));
+    say('P8b', net.outside.length === 0 && net.osrm.length === 0 && net.writes.length === 0, `存了 3 次：對外 ${net.outside.length} 個、路線服務 ${net.osrm.length} 個、上傳 ${net.writes.length} 個`, [...net.outside, ...net.osrm, ...net.writes].join('；'));
+  });
+
+  // ================= P10 約幾點到、車程：跟行程分頁同一份（v1.89） =================
+  await section(['P10a', 'P10b'], async () => {
+    // 站卡上的約幾點到、車程（照站的順序；每天一張的那幾張）——模型與畫出來的字各一份
+    const posterSide = (tid) => page.evaluate(async (tid) => {
+      const ip = await import('./js/itinposter/index.js');
+      const m = await ip.gatherModel(tid, { forecast: null });
+      const pages = ip.renderPages(m, { kind: 'band', split: 'day' });
+      return m.days.map((d, i) => ({
+        day: d.day,
+        eta: d.stops.map((s) => (s.time ? '' : s.eta)),
+        dur: d.stops.slice(1).map((s) => (s.leg ? s.leg.dur : '')),
+        drawnEta: (pages[i] ? pages[i].ops : []).filter((o) => o.op === 'text' && o.role === 'eta').map((o) => o.full),
+        drawnLeg: (pages[i] ? pages[i].ops : []).filter((o) => o.op === 'text' && o.role === 'leg').map((o) => o.full),
+      }));
+    }, tid);
+    // P10a：沒開過行程分頁的一趟（座標跟上面那一趟都不一樣，快取裡一定沒有）——直接開海報那一頁
+    const cold = await page.evaluate(async (g, tz) => {
+      const s = await import('./js/store.js');
+      const { uuid } = await import('./js/ids.js');
+      const { generateForTrip } = await import('./js/quests/generate.js');
+      const day = (n) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(Date.now() + n * 86400000));
+      const t = uuid();
+      await s.put({ id: t, type: 'trip', groupId: g, title: '合成的冷快取', region: '台北', allowWiki: false, startDate: day(20), endDate: day(20) });
+      const { spots, quests } = await generateForTrip({ tripId: t, region: '台北', items: [{ name: '龍山寺', day: 1, region: '台北' }, { name: '台北101', day: 1, region: '台北' }] });
+      if (spots[0] && spots[1]) { spots[0].startMin = 600; spots[0].stayMin = 60; spots[1].legFrom = spots[0].id; spots[1].legMode = 'car'; }
+      for (const x of spots) await s.put(x);
+      for (const x of quests) await s.put(x);
+      return { t, placed: spots.filter((x) => x.lat != null).length };
+    }, S.g, TZ);
+    net.osrm.length = 0;
+    await page.evaluate((t) => { location.hash = `#/trip/${t}/itinposter`; }, cold.t);
+    const coldDrawn = await soft(page.waitForFunction(() => { const c = document.querySelector('.poster-canvas'); return !!c && c.width > 0; }, { timeout: 20000 }));
+    await sleep(800);
+    const cs = await posterSide(cold.t);
+    await sleep(300);
+    const coldNet = net.osrm.length;
+    const c1 = cs[0] || { eta: [], dur: [], drawnEta: [], drawnLeg: [] };
+    say('P10a', cold.placed === 2 && coldDrawn && coldNet === 0 && c1.dur.length === 1 && c1.dur[0] === '' && c1.eta.every((x) => x === '') && c1.drawnEta.length === 0,
+      `兩站都有座標 ${cold.placed === 2}、預覽畫出來了 ${coldDrawn}；路線服務 ${coldNet} 次；車程「${c1.dur.join('｜')}」、約幾點到「${c1.eta.join('｜')}」、畫出來的約幾點到 ${c1.drawnEta.length} 個`);
+    // P10b：使用者的路——行程分頁「行程」那一格（畫面補上「約 N 分」「約幾點到」）→ 按「做成行程海報」
+    await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
+    let pre = await soft(page.waitForSelector('.trip-card', { timeout: 15000 }));
+    pre = pre && await tap(page, '.trip-card', TITLE);
+    pre = pre && await soft(page.waitForSelector('.trip-home', { timeout: 15000 }));
+    pre = pre && await tap(page, '#tabbar a.tab', '行程');
+    pre = pre && await soft(page.waitForSelector('.itin-page .itin-seg', { timeout: 15000 }));
+    pre = pre && await tap(page, '.itin-seg button', '行程');
+    pre = pre && await soft(page.waitForFunction(() => document.querySelectorAll('#itin-pane-plan .tl-eta').length > 0, { timeout: 20000 }));
+    await sleep(500);
+    const itin = await page.evaluate(() => [...document.querySelectorAll('#itin-pane-plan .itin-day')].map((sec) => ({
+      day: Number(sec.dataset.day),
+      eta: [...sec.querySelectorAll('li.tl-item > .tl-time')].map((x) => (x.classList.contains('tl-eta') ? x.textContent : '')),
+      dur: [...sec.querySelectorAll('li.tl-leg')].map((li) => { const x = li.querySelector('.tl-leg-min'); return x ? x.textContent : ''; }),
+    })));
+    const btn = await page.$('#itin-pane-plan .itin-poster-btn');
+    const k = btn ? await userClick(page, btn, '「做成行程海報」') : { ok: false, why: '沒有按鈕' };
+    await soft(page.waitForFunction(() => { const c = document.querySelector('.poster-canvas'); return !!c && c.width > 0; }, { timeout: 20000 }));
+    await sleep(500);
+    const ps = await posterSide(S.t);
+    const etaN = itin.reduce((a, d) => a + d.eta.filter(Boolean).length, 0), durN = itin.reduce((a, d) => a + d.dur.filter(Boolean).length, 0);
+    const diffs = [];
+    for (const d of itin) {
+      const p = ps.find((x) => x.day === d.day);
+      if (!p) { diffs.push(`第 ${d.day} 天海報沒有這一天`); continue; }
+      if (!same(p.eta, d.eta)) diffs.push(`第 ${d.day} 天約幾點到：行程分頁 ${JSON.stringify(d.eta)}、海報 ${JSON.stringify(p.eta)}`);
+      if (!same(p.dur, d.dur)) diffs.push(`第 ${d.day} 天車程：行程分頁 ${JSON.stringify(d.dur)}、海報 ${JSON.stringify(p.dur)}`);
+      if (!same(p.drawnEta, d.eta.filter(Boolean))) diffs.push(`第 ${d.day} 天畫出來的約幾點到 ${JSON.stringify(p.drawnEta)}`);
+      const lost = d.dur.filter(Boolean).filter((t) => !p.drawnLeg.some((x) => x.endsWith(' ' + t)));
+      if (lost.length) diffs.push(`第 ${d.day} 天畫出來的車程少了 ${JSON.stringify(lost)}（畫的是 ${JSON.stringify(p.drawnLeg)}）`);
+    }
+    say('P10b', pre && k.ok && itin.length === 3 && etaN >= 1 && durN >= 1 && diffs.length === 0,
+      `行程分頁${pre ? '' : '沒進到、'}${k.ok ? '' : `按不到海報（${k.why}）、`}${itin.length} 天，約幾點到 ${etaN} 站、車程 ${durN} 段：${itin.map((d) => `第 ${d.day} 天 ${d.eta.filter(Boolean).join('、') || '—'}／${d.dur.filter(Boolean).join('、') || '—'}`).join('；')}`,
+      diffs.join('\n   '));
   });
 
   // ================= P2 沒有景點的一趟 =================

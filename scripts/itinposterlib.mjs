@@ -19,10 +19,11 @@ export function outOfBounds(pg) {
   const ok = (r) => r.x >= M - EDGE && r.x + r.w <= PW - M + EDGE && r.y >= 0 && r.y + r.h <= pg.h;
   return [...texts(pg).filter((o) => !ok(textBox(o))).map((o) => `字「${o.text}」`), ...pg.boxes.filter((b) => !ok(b)).map((b) => `框 ${b.kind}`)];
 }
-// 框疊框：stopbox 以外的框兩兩不疊；stopbox 整個在某一條色帶裡、彼此不疊、也不疊到色帶以外的框
+// 框疊框：stopbox、peekfoot 以外的框兩兩不疊；stopbox 整個在某一條色帶裡、彼此不疊、也不疊到色帶以外的框；
+// peekfoot（v1.89 吉祥物邊線以下伸進框裡的那一條）整個在某一個站牌框或色帶裡（牠扣著的那一個），不疊到別的框、不疊到站框
 export function boxClash(pg) {
   const bad = [];
-  const top = pg.boxes.filter((b) => b.kind !== 'stopbox');
+  const top = pg.boxes.filter((b) => b.kind !== 'stopbox' && b.kind !== 'peekfoot');
   const sb = pg.boxes.filter((b) => b.kind === 'stopbox');
   for (let i = 0; i < top.length; i++) for (let j = i + 1; j < top.length; j++) if (overlap(top[i], top[j])) bad.push(`${top[i].kind}×${top[j].kind}`);
   sb.forEach((s, i) => {
@@ -30,6 +31,65 @@ export function boxClash(pg) {
     for (let j = i + 1; j < sb.length; j++) if (overlap(s, sb[j])) bad.push('stopbox×stopbox');
     for (const b of top) if (b.kind !== 'band' && overlap(s, b)) bad.push(`stopbox×${b.kind}`);
   });
+  for (const f of pg.boxes.filter((b) => b.kind === 'peekfoot')) {
+    const host = top.find((b) => (b.kind === 'frame' || b.kind === 'band') && inside(f, b));
+    if (!host) { bad.push('peekfoot 不在站牌框或色帶裡'); continue; }
+    for (const b of top) if (b !== host && overlap(f, b)) bad.push(`peekfoot×${b.kind}`);
+    for (const s of sb) if (overlap(f, s)) bad.push('peekfoot×stopbox');
+  }
+  return bad;
+}
+// 吉祥物不蓋到字：邊線以上那一塊（peek）、邊線以下那一條（peekfoot）都不碰到任何一個字
+export function peekCover(pg) {
+  const bad = [];
+  for (const b of pg.boxes.filter((x) => x.kind === 'peek' || x.kind === 'peekfoot')) {
+    for (const o of texts(pg)) if (overlap(b, textBox(o))) bad.push(`${b.kind} 蓋到「${o.text}」`);
+  }
+  return bad;
+}
+// 每天一隻（v1.89）：days 是這一張應該有的那幾天。每一天剛好一隻、種類照模型（day.peek）、
+// 邊線扣在那一天最上面的框（站牌框、色帶；每天一張的路線圖是第一站的卡）的上緣、左右在框裡；畫的那一筆（op）跟外框同一個位置；
+// 沒有 v1.88.0 角落那一隻（mascot）
+export function peekProblems(pg, days) {
+  const bad = [];
+  if (pg.ops.some((o) => o.op === 'mascot')) bad.push('還有角落那一隻（mascot）');
+  const pk = pg.boxes.filter((b) => b.kind === 'peek');
+  if (pk.length !== days.length) bad.push(`吉祥物 ${pk.length} 隻≠${days.length} 天`);
+  for (const d of days) {
+    const mine = pk.filter((b) => b.day === d.day);
+    if (mine.length !== 1) { bad.push(`第 ${d.day} 天的吉祥物 ${mine.length} 隻`); continue; }
+    const b = mine[0];
+    if (b.peek !== d.peek) bad.push(`第 ${d.day} 天畫的是 ${b.peek}，模型是 ${d.peek}`);
+    const hosts = pg.boxes.filter((h) => (h.kind === 'frame' || h.kind === 'band') && h.day === d.day);
+    const host = hosts.length ? hosts.reduce((a, h) => (h.y < a.y ? h : a)) : null;
+    if (!host) { bad.push(`第 ${d.day} 天找不到框`); continue; }
+    if (Math.abs(b.y + b.h - host.y) > 1 || b.x < host.x - 1 || b.x + b.w > host.x + host.w + 1) bad.push(`第 ${d.day} 天的吉祥物沒扣在那一天的框上緣`);
+    const op = pg.ops.find((o) => o.op === 'peek' && o.day === d.day);
+    if (!op || op.kind !== b.peek || Math.abs(op.x - b.x) > 0.5 || Math.abs(op.y - b.y) > 0.5 || Math.abs(op.w - b.w) > 0.5 || Math.abs(op.edge - (b.y + b.h)) > 1) bad.push(`第 ${d.day} 天畫的那一筆跟外框不一樣`);
+  }
+  return bad;
+}
+// 吉祥物要大、有存在感（Yolin 2026-11-14 嫌「太素」，Dispatch：不要做成角落的小圖示）：邊線以上那一塊（peek 外框）至少這麼高。
+// 下限寫在測試這邊、不讀版面的常數——版面把吉祥物改小，這裡照樣紅。全部一張至少 150（每一張圖在全部一張都排得到 166 以上，
+// 最寬的烤串被寬度卡在 166）；每天一張至少 200（站再多也不低於這個）
+export const PEEK_FLOOR = { one: 150, day: 200 };
+export function peekSizeProblems(pg, floor) {
+  return pg.boxes.filter((b) => b.kind === 'peek' && b.h < floor - 0.5).map((b) => `第 ${b.day} 天的 ${b.peek} 只有 ${Math.round(b.h)} 高（至少 ${floor}）`);
+}
+// 兩站之間怎麼去的那一句：圖示、方式、車程（有才寫）
+export const legLine = (leg) => [leg.icon, leg.label, leg.dur].filter(Boolean).join(' ');
+// 每天一張的站卡寫真資料（v1.89）：逐站——使用者填的時間、推算的「約幾點到」（有填時間的那一站不寫）、停留多久、
+// 兩站之間的方式與車程；模型有的照順序畫出來、沒有的不畫
+export function realDataProblems(pg, days) {
+  const bad = [];
+  for (const d of days) {
+    const picks = [['time', (s) => s.time], ['eta', (s) => (s.time ? '' : s.eta)], ['stay', (s) => s.stay], ['leg', (s, i) => (i > 0 && s.leg ? legLine(s.leg) : '')]];
+    for (const [role, pick] of picks) {
+      const want = d.stops.map(pick).filter(Boolean);
+      const got = texts(pg).filter((o) => o.role === role && (role === 'leg' || o.day === d.day)).map((o) => o.full);
+      if (JSON.stringify(got) !== JSON.stringify(want)) bad.push(`第 ${d.day} 天 ${role}：畫 ${got.length} 個、模型 ${want.length} 個（${got.join('、')}｜${want.join('、')}）`);
+    }
+  }
   return bad;
 }
 // 字疊字
@@ -43,7 +103,7 @@ export function textClash(pg) {
 export function strayText(pg) {
   const bad = [];
   for (const o of texts(pg)) {
-    const kinds = o.role === 'stop' || o.role === 'time' ? ['frame', 'stopbox'] : o.role === 'more' && o.day != null ? ['frame', 'band'] : null;
+    const kinds = ['stop', 'time', 'eta', 'stay'].includes(o.role) ? ['frame', 'stopbox'] : o.role === 'more' && o.day != null ? ['frame', 'band'] : null;
     if (kinds && !pg.boxes.some((b) => kinds.includes(b.kind) && inside(textBox(o), b))) bad.push(`${o.role}「${o.text}」`);
   }
   return bad;
@@ -114,7 +174,9 @@ export function allowedTexts(model, pageText) {
     d.stops.forEach((s, i) => {
       A.add(s.name); A.add(String(i + 1));
       if (s.time) A.add(s.time);
-      if (s.leg) { A.add(s.leg.label); if (s.leg.icon) { A.add(s.leg.icon); A.add(`${s.leg.icon} ${s.leg.label}`); } }
+      if (s.eta) A.add(s.eta);
+      if (s.stay) A.add(s.stay);
+      if (s.leg) { A.add(s.leg.label); A.add(legLine(s.leg)); if (s.leg.icon) { A.add(s.leg.icon); A.add(`${s.leg.icon} ${s.leg.label}`); } }
     });
     for (const f of d.foods) { A.add(f.name); A.add(f.at); }
   }
@@ -157,6 +219,10 @@ export const PAGE_CHECKS = [
   ['B10', '字的來源：只有模型裡的字、固定的標題、從模型數出來的句子', (x, pg, i) =>
     unsourced(pg, allowedTexts(x.m, x.split === 'day' ? `第 ${i + 1}／${x.pages.length} 張` : ''), new Set(x.m.days.flatMap((d) => d.foods.map((f) => f.name))))],
   ['B11', '沒有類別名、沒有類別或每站的 emoji（只准交通與天氣圖示）', (x, pg, i, o) => categoryLeak(pg, [...o.icons, ...x.m.tips.map((t) => t.icon).filter(Boolean)], o.labels)],
+  ['B12', '吉祥物不蓋到字（邊線以上那一塊、邊線以下伸進框裡那一條）', (x, pg) => peekCover(pg)],
+  ['B13', '每天一隻吉祥物：種類照模型、扣在那一天的框上緣、畫的跟外框同一個位置；沒有角落那一隻', (x, pg, i) => peekProblems(pg, x.split === 'one' ? x.m.days : [x.m.days[i]])],
+  ['B14', '每天一張的站卡寫真資料：時間、約幾點到、停留多久、車程，模型有的逐站畫出來、沒有的不畫', (x, pg, i) => (x.split === 'day' ? realDataProblems(pg, [x.m.days[i]]) : [])],
+  ['B15', '吉祥物夠大：全部一張至少 150 高、每天一張至少 200 高（不是角落的小圖示）', (x, pg) => peekSizeProblems(pg, PEEK_FLOOR[x.split])],
 ];
 // 張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排
 export function pageListProblems(x) {
@@ -243,6 +309,34 @@ export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legText, ic
   ctl('類別 emoji 接在站名前面', categoryLeak(page([tx(`${foodEmoji} 甲`, 0, 0, 20)], []), icons, labels), [`emoji「${foodEmoji} 甲」`]);
   ctl('類別名', categoryLeak(page([tx(foodLabel, 0, 0, 20)], []), icons, labels), [`類別名「${foodLabel}」`]);
   ctl('交通圖示放行', categoryLeak(page([tx(legText, 0, 0, 20)], []), icons, labels), []);
+  // v1.89 吉祥物（peekfoot 的三種擋法、蓋到字的兩種、每天一隻的五種、大小一種、站卡真資料的兩種，各一份要抓到的、一份要放行的）
+  const band = { kind: 'band', x: 60, y: 100, w: 600, h: 300, day: 1 };
+  const foot = (x, y) => ({ kind: 'peekfoot', x, y, w: 100, h: 15, peek: 'done', day: 1 });
+  ctl('吉祥物的手掌不在框裡', boxClash(page([], [band, foot(300, 40)])), ['peekfoot 不在站牌框或色帶裡']);
+  ctl('吉祥物的手掌疊到別的框', boxClash(page([], [band, foot(300, 100), { kind: 'leg', x: 350, y: 105, w: 60, h: 40 }])), ['band×leg', 'peekfoot×leg']);
+  ctl('吉祥物的手掌疊到站框', boxClash(page([], [band, foot(300, 100), { kind: 'stopbox', x: 90, y: 110, w: 500, h: 60 }])), ['peekfoot×stopbox']);
+  ctl('吉祥物的手掌在框裡、不碰別的放行', boxClash(page([], [band, foot(300, 100), { kind: 'stopbox', x: 90, y: 130, w: 500, h: 60 }])), []);
+  const pkb = (x, y, h = 150, extra = {}) => ({ kind: 'peek', x, y, w: 100, h, peek: 'done', day: 1, ...extra });
+  ctl('吉祥物（邊線以上）蓋到字', peekCover(page([tx('甲乙', 310, 80, 30)], [pkb(300, -50)])), ['peek 蓋到「甲乙」']);
+  ctl('吉祥物（邊線以下）蓋到字', peekCover(page([tx('甲乙', 310, 120, 30)], [foot(300, 100)])), ['peekfoot 蓋到「甲乙」']);
+  ctl('吉祥物不碰字的放行', peekCover(page([tx('甲乙', 310, 160, 30)], [pkb(300, -50), foot(300, 100)])), []);
+  const pday = (day, peek) => ({ ...fakeDay(day, ['甲']), peek });
+  const pop = (day, kind, x, y, w = 100) => ({ op: 'peek', kind, k: 1, x, y, w, h: 160, edge: y + 150, day });
+  const ok1 = [pop(1, 'done', 300, -50)], okb = [band, pkb(300, -50)];
+  ctl('吉祥物：還有角落那一隻', peekProblems(page([...ok1, { op: 'mascot', kind: 'x', x: 0, y: 0, w: 10, h: 10 }], okb), [pday(1, 'done')]), ['還有角落那一隻（mascot）']);
+  ctl('吉祥物：少一天', peekProblems(page(ok1, [...okb, { ...band, y: 500, day: 2 }], 900), [pday(1, 'done'), pday(2, 'eat')]), ['吉祥物 1 隻≠2 天', '第 2 天的吉祥物 0 隻']);
+  ctl('吉祥物：種類跟模型不一樣', peekProblems(page(ok1, okb), [pday(1, 'rain')]), ['第 1 天畫的是 done，模型是 rain']);
+  ctl('吉祥物：沒扣在框上緣（浮在上面 10）', peekProblems(page([pop(1, 'done', 300, -60)], [band, pkb(300, -60)]), [pday(1, 'done')]), ['第 1 天的吉祥物沒扣在那一天的框上緣']);
+  ctl('吉祥物：畫的那一筆跟外框不一樣', peekProblems(page([pop(1, 'done', 320, -50)], okb), [pday(1, 'done')]), ['第 1 天畫的那一筆跟外框不一樣']);
+  ctl('吉祥物：扣在那一天的框上、種類對的放行', peekProblems(page(ok1, okb), [pday(1, 'done')]), []);
+  ctl('吉祥物太小（每天一張 199 高）', peekSizeProblems(page([], [pkb(300, -50, 199)]), PEEK_FLOOR.day), ['第 1 天的 done 只有 199 高（至少 200）']);
+  ctl('吉祥物夠大的放行（每天一張 200 高、全部一張 150 高）', [...peekSizeProblems(page([], [pkb(300, -50, 200)]), PEEK_FLOOR.day), ...peekSizeProblems(page([], [pkb(300, -50, 150)]), PEEK_FLOOR.one)], []);
+  const rday = { ...fakeDay(1, ['甲', '乙']), stops: [{ name: '甲', time: '10:00', eta: '', stay: '停留 2 小時', leg: null }, { name: '乙', time: '', eta: '約 12:25 到', stay: '', leg: { icon: '', label: '搭車', dur: '約 25 分' } }] };
+  const rt = (t, role) => tx(t, 0, 0, 20, { role, day: role === 'leg' ? null : 1 });
+  const rOk = [rt('10:00', 'time'), rt('停留 2 小時', 'stay'), rt('約 12:25 到', 'eta'), rt('搭車 約 25 分', 'leg')];
+  ctl('站卡少畫了約幾點到', realDataProblems(page(rOk.filter((o) => o.role !== 'eta'), []), [rday]), ['第 1 天 eta：畫 0 個、模型 1 個（｜約 12:25 到）']);
+  ctl('站卡多畫了模型沒有的停留', realDataProblems(page([...rOk, rt('停留 1 小時', 'stay')], []), [rday]), ['第 1 天 stay：畫 2 個、模型 1 個（停留 2 小時、停留 1 小時｜停留 2 小時）']);
+  ctl('站卡真資料都對的放行', realDataProblems(page(rOk, []), [rday]), []);
 }
 
 // 參考用的 PDF 產生器：測試自己另外寫一份，不用被測的 pdfFromJpegs——不然 pdf.js 改壞時，壞的會被當成好的樣本、對照組先倒

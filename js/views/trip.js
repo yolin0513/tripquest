@@ -957,13 +957,14 @@ function legTimeline(daySpots, item) {
 // 走路／開車那幾段補「約 N 分鐘」。一天一種方式一次路線矩陣（route.js 有快取與節流）；
 // 降級成直線估算（src 'est'）就不寫——那是猜的。跨區長途也不寫。
 // 回傳真的寫上去的那幾段：「甲 id>乙 id」→ 分鐘（跟畫面上「約 N 分」同一個取整），給 fillEta 推下一站幾點到。
-const LEG_ROUTE_MODE = { walk: 'walk', car: 'drive' };
+// 哪幾種方式查、哪一段能寫、寫幾分：route.js 的 LEG_ROUTE_MODE／legUsable／legMinutes（行程海報用同一套，v1.89）。
 async function fillLegMinutes(ol, daySpots) {
   const mins = new Map();
-  const slots = [...ol.querySelectorAll('.tl-leg-min')].filter((x) => LEG_ROUTE_MODE[x.dataset.mode]);
-  if (!slots.length) return mins;
   let route;
   try { route = await import('../route.js'); } catch { return mins; }
+  const LEG_ROUTE_MODE = route.LEG_ROUTE_MODE;
+  const slots = [...ol.querySelectorAll('.tl-leg-min')].filter((x) => LEG_ROUTE_MODE[x.dataset.mode]);
+  if (!slots.length) return mins;
   const placed = daySpots.filter((s) => s.lat != null && s.lng != null);
   const at = new Map(placed.map((s, i) => [s.id, i]));
   for (const mode of new Set(slots.map((x) => LEG_ROUTE_MODE[x.dataset.mode]))) {
@@ -975,10 +976,10 @@ async function fillLegMinutes(ol, daySpots) {
     for (const x of mine) {
       const a = placed[at.get(x.dataset.from)], b = placed[at.get(x.dataset.to)];
       const sec = m.sec[at.get(x.dataset.from)][at.get(x.dataset.to)];
-      if (!Number.isFinite(sec) || route.longHaul(a, b, sec)) continue;
+      if (!route.legUsable(a, b, sec)) continue;
       x.textContent = `約 ${route.fmtDur(sec)}`;
       x.title = mode === 'walk' ? '路線服務算的步行時間' : '路線服務算的開車時間（不含塞車）';
-      mins.set(`${x.dataset.from}>${x.dataset.to}`, Math.max(1, Math.round(sec / 60)));
+      mins.set(`${x.dataset.from}>${x.dataset.to}`, route.legMinutes(sec));
     }
   }
   return mins;

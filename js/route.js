@@ -59,6 +59,23 @@ function canonical(pts) {
 // N 個點 → N×N 秒數矩陣。回 { sec, src: 'osrm' | 'est' }。
 // 快取 30 天（座標取 4 位小數當 key）；OSRM 失敗一律降級係數法，不讓規劃卡住。
 const _mem = new Map();
+// canonSec（正規順序的矩陣）→ 映射回呼叫端順序
+function remapSec(canon, pts, canonSec) {
+  const pos = [];                                          // 呼叫端 index → 正規 index
+  canon.order.forEach((origIdx, ci) => { pos[origIdx] = ci; });
+  return { sec: pts.map((_, i) => pts.map((_, j) => canonSec[pos[i]][pos[j]])) };
+}
+// 快取裡的那一份（記憶體、IndexedDB 30 天內）；沒有 → null。只讀、不連網
+async function fromCache(key) {
+  if (_mem.has(key)) return _mem.get(key);
+  const cached = await db.metaGet(key);
+  if (cached && Date.now() - cached.ts < 30 * 86400000) {
+    const v = { src: 'osrm', canonSec: cached.sec };
+    _mem.set(key, v);
+    return v;
+  }
+  return null;
+}
 export async function travelMatrix(pts, mode = 'drive') {
   const est = () => ({
     src: 'est',
@@ -68,19 +85,9 @@ export async function travelMatrix(pts, mode = 'drive') {
   if (pts.some((p) => p.lat == null || p.lng == null)) return est();   // 呼叫端應先濾掉
   const canon = canonical(pts);
   const key = 'osrm:v1:' + mode + ':' + canon.key;
-  // canonSec（正規順序的矩陣）→ 映射回呼叫端順序
-  const remap = (canonSec) => {
-    const pos = [];                                        // 呼叫端 index → 正規 index
-    canon.order.forEach((origIdx, ci) => { pos[origIdx] = ci; });
-    return { sec: pts.map((_, i) => pts.map((_, j) => canonSec[pos[i]][pos[j]])) };
-  };
-  if (_mem.has(key)) { const v = _mem.get(key); return { src: v.src, ...remap(v.canonSec) }; }
-  const cached = await db.metaGet(key);
-  if (cached && Date.now() - cached.ts < 30 * 86400000) {
-    const v = { src: 'osrm', canonSec: cached.sec };
-    _mem.set(key, v);
-    return { src: 'osrm', ...remap(v.canonSec) };
-  }
+  const remap = (canonSec) => remapSec(canon, pts, canonSec);
+  const hit = await fromCache(key);
+  if (hit) return { src: hit.src, ...remap(hit.canonSec) };
   const canonPts = canon.order.map((i) => pts[i]);
   const got = await throttled(async () => {
     const coords = canonPts.map((p) => `${p.lng},${p.lat}`).join(';');
@@ -103,6 +110,23 @@ export async function travelMatrix(pts, mode = 'drive') {
   _mem.set(key, { src: 'osrm', canonSec });
   return { src: 'osrm', ...remap(canonSec) };
 }
+
+// 只讀快取的 travelMatrix：快取裡有（路線服務算過、30 天內）就回 { src: 'osrm', sec }，沒有 → null，**不連網**。
+// 行程海報（v1.89）存檔時不發任何對外請求（scripts/itinpostertest.mjs 的 P8b），車程只拿行程分頁已經查過、進了快取的那一份。
+export async function cachedMatrix(pts, mode = 'drive') {
+  if (pts.length < 2 || pts.some((p) => p.lat == null || p.lng == null)) return null;
+  const canon = canonical(pts);
+  const hit = await fromCache('osrm:v1:' + mode + ':' + canon.key);
+  return hit ? { src: hit.src, ...remapSec(canon, pts, hit.canonSec) } : null;
+}
+
+// 兩站之間的車程：哪幾種交通方式查路線服務、哪一段能寫、寫幾分。行程分頁（js/views/trip.js 的 fillLegMinutes：
+// 「約 N 分」與推「約幾點到」）和行程海報（js/itinposter/index.js）同一套，不各寫一份。
+//   只有走路、開車查得到（電車、公車、船、飛機沒有班次資料——不拿開車時間冒充）；
+//   算不出來、跨區長途（longHaul）不寫；分鐘數跟畫面上「約 N 分」同一個取整、至少 1 分。
+export const LEG_ROUTE_MODE = Object.freeze({ walk: 'walk', car: 'drive' });
+export const legUsable = (a, b, sec) => Number.isFinite(sec) && !longHaul(a, b, sec);
+export const legMinutes = (sec) => Math.max(1, Math.round(sec / 60));
 
 // ---- 跨區移動 ----
 // 北海道到京都給「開車 19 小時」只會誤導 —— 實際是搭飛機或新幹線。

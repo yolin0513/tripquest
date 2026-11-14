@@ -1,0 +1,155 @@
+[
+  {
+    "name": "v189 每天的吉祥物：下雪不優先",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）預報下雪那天不換成踩雪板，改看類別或下雨。M0 第 3 天、M5 第 3 天（下雪）都換掉。預期紅 A15a、A15c；版面檢查照模型比，不紅。",
+    "expect": ["A15a 預報下雨／下雪優先", "A15c 景點庫沒載好"],
+    "file": "js/itinposter/model.js",
+    "find": "  if (wx && isSnowDay(wx)) return WEATHER_PEEK.snow;",
+    "replace": "  if (false) return WEATHER_PEEK.snow;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 每天的吉祥物：對不上圖的類別也算票",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）多數決不先濾掉沒有圖的類別（古蹟也算一票）。「古蹟、美食」平手取先出現的古蹟 → 沒有圖 → 打領結，不是吃麵。預期只紅 A15e。",
+    "expect": ["A15e 多數決"],
+    "file": "js/itinposter/model.js",
+    "find": "  const mapped = lookup ? list.filter((s) => THEME_PEEK[trustedTheme(s, lookup).key]) : [];",
+    "replace": "  const mapped = lookup ? list : [];",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 每天的吉祥物：可信類別拿不到就照名字猜",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）可信類別拿不到時改用景點上的 theme 欄（建立時照名字猜的、或景點庫寫進去的舊值）。景點庫沒載好那一趟、名字比不回的那幾天會換成猜出來的圖。預期紅 A15c、A15d（若那幾站沒有 theme 欄，這條等於沒改，屆時照實回報）。",
+    "expect": ["A15c 景點庫沒載好", "A15d 分享匯入的同名景點"],
+    "file": "js/itinposter/model.js",
+    "find": "  return THEME_PEEK[key] || DONE_PEEK;",
+    "replace": "  return THEME_PEEK[key] || THEME_PEEK[list[0] && list[0].theme] || DONE_PEEK;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 約幾點到：使用者填的時間也寫成約幾點到",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）有填時間的站也給 eta（etaChain 對填了時間的站 arrive＝填的時間、est＝false）。A16b 的欄位照「eta 優先、沒有才 time」印，第 1 站會變成「約 10:00 到」。畫的時候 time 優先，版面不變。預期只紅 A16b。",
+    "expect": ["A16b 約幾點到"],
+    "file": "js/itinposter/model.js",
+    "find": "        eta: chain[i].est ? `約 ${fmtHHMM(chain[i].arrive)} 到` : '',",
+    "replace": "        eta: chain[i].arrive != null ? `約 ${fmtHHMM(chain[i].arrive)} 到` : '',",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 停留多久：不寫",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）模型不放停留時間。A16a 紅；B0 的情境前置（真資料那一趟有停留）也紅。版面照模型畫，B14 不紅。預期紅 A16a、B0。",
+    "expect": ["A16a 停留多久", "B0 "],
+    "file": "js/itinposter/model.js",
+    "find": "        stay: t.stayMin ? stayText(t.stayMin) : '',",
+    "replace": "        stay: '',",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 車程：不傳進站卡",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）有算出來的車程也寫空字串（約幾點到照樣推得出來——etaChain 用的是 legTimes 的分鐘數）。A16c 紅；B0 的情境前置（有車程）也紅。預期紅 A16c、B0。",
+    "expect": ["A16c 車程", "B0 "],
+    "file": "js/itinposter/model.js",
+    "find": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,",
+    "replace": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: '' } : null,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 車程：不傳進站卡（瀏覽器，跟行程分頁比）",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）同上一條，從使用者的路驗：行程分頁寫了「約 N 分」，海報的站卡沒有。P10a 本來就應該留白，不紅。預期只紅 P10b。",
+    "expect": ["P10b 開過行程分頁再按進海報"],
+    "file": "js/itinposter/model.js",
+    "find": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,",
+    "replace": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: '' } : null,",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v189 只讀快取的路線矩陣：沒有快取就連網",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）cachedMatrix 快取裡沒有時改去打路線服務。沒開過行程分頁的那一趟直接開海報就會連網、而且寫出車程。開過行程分頁的那一趟快取裡本來就有，P10b 與存檔（P8b）不變。預期只紅 P10a。",
+    "expect": ["P10a 沒開過行程分頁的一趟"],
+    "file": "js/route.js",
+    "find": "  return hit ? { src: hit.src, ...remapSec(canon, pts, hit.canonSec) } : null;",
+    "replace": "  return hit ? { src: hit.src, ...remapSec(canon, pts, hit.canonSec) } : travelMatrix(pts, mode);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v189 角落那一隻回來",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）路線圖全部一張每一個站牌框多畫一筆 v1.88.0 那種角落吉祥物（op mascot；畫的那支不認得這種 op、不會畫出來，只看排版有沒有放）。預期只紅 B13。",
+    "expect": ["B13 每天一隻吉祥物"],
+    "file": "js/itinposter/layout.js",
+    "find": "    const pw = c.pill(`DAY ${d.day}`, fx + 20, fy + 22, 50, 30, col, { role: 'daytag' });",
+    "replace": "    c.ops.push({ op: 'mascot', kind: 'done', x: 900, y: 0, w: 10, h: 10 });\n    const pw = c.pill(`DAY ${d.day}`, fx + 20, fy + 22, 50, 30, col, { role: 'daytag' });",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 吉祥物畫的那一筆跟外框差 6 px",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）畫的那一筆（op）往下 6 px，外框（box）照舊。外框還是扣在框上緣、不蓋字，只有「畫的跟外框同一個位置」那一項抓得到。預期只紅 B13。",
+    "expect": ["B13 每天一隻吉祥物"],
+    "file": "js/itinposter/layout.js",
+    "find": "      ops.push({ op: 'peek', kind, k: s.k, x: x0, y: edgeY - s.rise, w: s.w, h: s.rise + s.sink, edge: edgeY, day });",
+    "replace": "      ops.push({ op: 'peek', kind, k: s.k, x: x0, y: edgeY - s.rise + 6, w: s.w, h: s.rise + s.sink, edge: edgeY, day });",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 每天一張的路線圖：吉祥物站在第 2 站的卡上",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）吉祥物不扣在那一天最上面的框（第 1 站的卡），扣在第 2 站；只有一站的那天就一隻都沒有。預期紅 B13（若吉祥物也蓋到第 1 站的字或疊到別的框，B12、B4 會一起紅，屆時照實回報）。",
+    "expect": ["B13 每天一隻吉祥物"],
+    "file": "js/itinposter/layout.js",
+    "find": "    if (s.i === 0) c.peek(d.peek, bx + 20, by, p.s.rise, PEEK_W, { day: d.day });",
+    "replace": "    if (s.i === 1) c.peek(d.peek, bx + 20, by, p.s.rise, PEEK_W, { day: d.day });",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 每天一張的吉祥物：沒有下限",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）縮小的下限從 200 改成 60。15 站的那天縮到 60。A17a、B15 紅；A17d（超過 A4 的頁面吉祥物不超過下限）照樣過。預期紅 A17a、B15。",
+    "expect": ["A17a 15 站的那天", "B15 吉祥物夠大"],
+    "file": "js/itinposter/layout.js",
+    "find": "  let lo = PEEK_DAY.min, hi = PEEK_DAY.max;",
+    "replace": "  let lo = 60, hi = PEEK_DAY.max;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 每天一張的吉祥物：一律放到最大、不看 A4",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）不管頁面多高都用 440。15 站的那天不是 200（A17a）、八站那天超過 A4（A17b）、超過 A4 的頁面吉祥物不是 200（A17d）。一站的那天本來就放到最大（A17c 不紅）。預期紅 A17a、A17b、A17d。",
+    "expect": ["A17a 15 站的那天", "A17b 八站、沒有必吃的那天", "A17d 每天一張超過 A4 的頁面"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (top.h <= A4H) return top;",
+    "replace": "  return top;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 每天一張的吉祥物：差多少就放大多少（舊算法）",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）照 280 排、不到 A4 就一次加上差的高度（2026-11-14 第一版的寫法）。手掌伸進框裡的深度跟著變大，八站那天超出 A4 幾 px、吉祥物卻不是下限。15 站與一站的那天不變。預期紅 A17b、A17d。",
+    "expect": ["A17b 八站、沒有必吃的那天", "A17d 每天一張超過 A4 的頁面"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (top.h <= A4H) return top;",
+    "replace": "  if (top.h <= A4H) return top;\n  { const p0 = plan(280); if (p0.h < A4H) return plan(Math.min(PEEK_DAY.max, 280 + (A4H - p0.h))); }",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 全部一張的吉祥物變小",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）全部一張的吉祥物高度上限從 170 改成 100（變回角落小圖示的大小）。其餘檢查照排出來的位置驗、不管大小。預期只紅 B15。",
+    "expect": ["B15 吉祥物夠大"],
+    "file": "js/itinposter/layout.js",
+    "find": "export const PEEK_ALL = { rise: 170, w: 250 };",
+    "replace": "export const PEEK_ALL = { rise: 100, w: 250 };",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 吉祥物大小不看寬度上限",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）只照高度上限算大小。每天一張的路線圖放到 440 高時，打領結那張寬約 430，超出第 1 站的卡（440 寬、從卡的左邊 20 開始）。預期紅 B13（左右不在框裡）；若也疊到路或出界，B4、B3 會一起紅，屆時照實回報。",
+    "expect": ["B13 每天一隻吉祥物"],
+    "file": "js/itinposter/layout.js",
+    "find": "  const k = Math.min(maxRise / g.rise, maxW / g.w);",
+    "replace": "  const k = maxRise / g.rise;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v189 海報的吉祥物分上下兩層（接縫回來）",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）peekFlat 的前景改回 App 的畫法：邊線以上一層、邊線以下往上多蓋 1 個單位一層。海報上一個單位約 2 px，手掌的深色外框上會透出一條淡線。位置、大小、畫不畫都不變。預期只紅 P3c。",
+    "expect": ["P3c 海報上的吉祥物沒有接縫"],
+    "file": "js/peeks.js",
+    "find": "    + (p.front ? `<g class=\"mc-front\">${pre(p.front)}</g>` : '')",
+    "replace": "    + (p.front ? `<defs><clipPath id=\"${id}-dn\"><rect x=\"${x - 20}\" y=\"${e - 1}\" width=\"${w + 40}\" height=\"${y + h - e + 21}\"/></clipPath></defs><g class=\"mc-front\" ${up}>${pre(p.front)}</g><g clip-path=\"url(#${id}-dn)\">${pre(p.front)}</g>` : '')",
+    "cmd": "node scripts/itinpostertest.mjs"
+  }
+]

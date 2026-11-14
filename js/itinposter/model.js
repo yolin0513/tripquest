@@ -16,16 +16,23 @@
 //   小提醒    只有天氣預報：日期**剛好落在旅程裡**的那幾天（天氣頁會退回「接下來 5 天」，那不是旅程的日子，這裡不退）；
 //             下雨、下雪照天氣條同一個判斷（weather.js 的 isRainDay／isSnowDay）；寫明是哪一天查的預報。
 //             預報是舊快取（查不到新的）就整段不放——說不出是哪天查的
+//   （v1.89）每一站還有：停留多久（使用者填的）、約幾點到（跟行程分頁同一條推算：js/spottime.js 的 etaChain——
+//             只用使用者填的「幾點到」「停留多久」與路線服務真的算出來的車程；車程由呼叫的一方從快取拿來給 legTimes，
+//             這支不打網路）；兩站之間的車程「約 N 分」（同一份 legTimes，行程分頁畫面上那一句）
+//   （v1.89）每一天一隻探頭的吉祥物（day.peek）：跟完成任務、天氣卡同一套只看可信資料的規則——
+//             那天的預報下雪／下雨 → 雪板／撐傘；不然看那天的站的可信類別（theme.js 的 trustedTheme，不看存著的 spot.theme、
+//             不照名字猜），對得上圖的那幾站多數決（平手取先出現的，theme.js 的 trustedThemeOf）；一個都沒有 → 打領結揮手
 // 不放：類別（名稱、插圖、每站 emoji）、景點介紹、AI 文案、住宿與航班（海報會傳出去：哪幾晚住哪裡、哪一班飛機不印）、
 //       Check Point（App 裡沒有讓使用者標「重點」的地方，不替他挑）、食物插圖（沒有對得上的圖，不畫猜的）。
-// 決定與替代方案見 docs/STATUS.md 的 v1.88.0。
+// 決定與替代方案見 docs/STATUS.md 的 v1.88.0、v1.89。
 
-import { trustedTheme } from '../theme.js';
-import { spotTimes } from '../spottime.js';
-import { legModeOf, LEG_ICON, LEG_LABEL } from '../legs.js';
+import { trustedTheme, trustedThemeOf } from '../theme.js';
+import { spotTimes, stayText, etaChain, fmtHHMM } from '../spottime.js';
+import { legModeOf, LEG_ICON, LEG_LABEL, LEG_NO_DURATION } from '../legs.js';
 import { weekdayLabel } from '../tripday.js';
 import { isRainDay, isSnowDay, wxIcon } from '../weather.js';
 import { dayDateLabel } from '../poster/layout.js';
+import { THEME_PEEK, WEATHER_PEEK, DONE_PEEK } from '../peeks.js';
 
 export const MUST_PER_SPOT = 3;   // 一站最多列幾項必吃（景點庫一筆有 3～5 項；海報放不下全部，取前面的）
 
@@ -89,9 +96,19 @@ function tipOf(w) {
   return { day: w.day, date: md(w.date), icon: wxIcon(w.code), text: [temp, warn].filter(Boolean).join('，'), warn: !!warn };
 }
 
+// 一天的吉祥物：預報（這一天的那一筆，沒有就 null）→ 可信類別 → 打領結（規則見檔頭）
+function dayPeek(list, wx, lookup) {
+  if (wx && isSnowDay(wx)) return WEATHER_PEEK.snow;
+  if (wx && isRainDay(wx)) return WEATHER_PEEK.rain;
+  const mapped = lookup ? list.filter((s) => THEME_PEEK[trustedTheme(s, lookup).key]) : [];
+  const key = mapped.length ? trustedThemeOf(mapped, lookup) : null;
+  return THEME_PEEK[key] || DONE_PEEK;
+}
+
 // trip、spots（store.spotsOf 的順序：第幾天、order）、members、lookup（generate.js 的 loadPlaceLookup；沒載好給 null → 必吃一項都沒有）、
-// forecast：{ days, stale }（weather.js 的 forecast 的結果；null 或 stale → 小提醒整段不放）、today：手機的日期 'YYYY-MM-DD'
-export function posterModel({ trip, spots, members = [], lookup = null, forecast = null, today = '' }) {
+// forecast：{ days, stale }（weather.js 的 forecast 的結果；null 或 stale → 小提醒整段不放）、today：手機的日期 'YYYY-MM-DD'、
+// legTimes：Map「甲 id>乙 id」→ { min, text }（路線服務算過的車程，index.js 從快取拿；沒有 → 約幾點到、車程都不寫）
+export function posterModel({ trip, spots, members = [], lookup = null, forecast = null, today = '', legTimes = null }) {
   const byDay = new Map();
   for (const s of spots || []) {
     const d = s.day || 1;
@@ -99,15 +116,23 @@ export function posterModel({ trip, spots, members = [], lookup = null, forecast
     byDay.get(d).push(s);
   }
   const dayNums = [...byDay.keys()].sort((x, y) => x - y);
+  const fresh = forecast && !forecast.stale && ISO.test(String(today || '')) ? forecast.days : null;
+  const wxDays = fresh ? tripWeather(trip, fresh) : [];
+  const legOf = (a, b) => (legTimes && legTimes.get(`${a.id}>${b.id}`)) || null;
   const foods = [];
   const days = dayNums.map((day) => {
     const list = byDay.get(day);
+    const chain = etaChain(list, (a, b) => { const t = legOf(a, b); return t ? t.min : null; }, (a, b) => LEG_NO_DURATION.includes(legModeOf(a, b)));
     const stops = list.map((s, i) => {
       const mode = legModeOf(i > 0 ? list[i - 1] : null, s);
+      const t = spotTimes(s);
+      const lt = mode && i > 0 ? legOf(list[i - 1], s) : null;
       return {
         name: String(s.name || '').trim() || '（沒有名字）',
-        time: spotTimes(s).startTime || '',
-        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode] } : null,
+        time: t.startTime || '',
+        eta: chain[i].est ? `約 ${fmtHHMM(chain[i].arrive)} 到` : '',
+        stay: t.stayMin ? stayText(t.stayMin) : '',
+        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,
       };
     });
     // 那一天的必吃只在那一天裡去重（第 6 天又去同一個夜市，第 6 天那一張照樣列）；整趟的清單（foods）跨天去重，列在第一次去的那天
@@ -127,10 +152,10 @@ export function posterModel({ trip, spots, members = [], lookup = null, forecast
       from: stops[0].name, to: stops[stops.length - 1].name,
       stops, foods: dayFoods,
       placeCount: new Set(stops.map((x) => x.name)).size,
+      peek: dayPeek(list, wxDays.find((w) => w.day === day) || null, lookup),
     };
   });
-  const fresh = forecast && !forecast.stale && ISO.test(String(today || '')) ? forecast.days : null;
-  const tips = fresh ? tripWeather(trip, fresh).map(tipOf) : [];
+  const tips = wxDays.map(tipOf);
   return {
     title: String((trip && trip.title) || '').trim() || '我們的旅程',
     span: spanOf(trip, dayNums.length ? dayNums[dayNums.length - 1] : 0),
