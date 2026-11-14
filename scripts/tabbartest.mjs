@@ -28,11 +28,39 @@ const yes = (c, m, x) => (c ? ok(m) : fail(m, x));
 
 const page = await browser.newPage();
 page.on('pageerror', (e) => { console.log('  [pageerror]', e.message); process.exitCode = 1; });
+// 不打真網路（共用慣例 §5.6；v1.87.0 補上）：外站一律當場回 503，記下是哪幾個主機（結尾印出來）。
+// 這支 v1.86.0 撞過一次「換個螢幕高度」那段等 #view .page 逾時（之後三次都過、根因沒找到）；外站是變因之一，先拿掉。
+const ORIGIN = `http://localhost:${WEB}`;
+const ext = new Map();
+await page.setRequestInterception(true);
+page.on('request', (r) => {
+  const u = r.url();
+  if (u.startsWith(ORIGIN) || !/^https?:/.test(u)) return r.continue();
+  const host = new URL(u).hostname;
+  ext.set(host, (ext.get(host) || 0) + 1);
+  return r.respond({ status: 503, contentType: 'text/plain', body: '' });
+});
+// 等不到 #view .page 時印出當下的樣子（網址、載入狀態、#view 裡有什麼、有沒有 SW 在控制、對話框、更新列）——
+// 根因沒找到，下一次撞到要有現場可以看，不能只剩一句逾時。照樣算失敗（不重試、不吞掉）。
+const scene = () => page.evaluate(() => {
+  const v = document.getElementById('view');
+  return {
+    hash: location.hash.replace(/[0-9a-f-]{20,}/g, '…'), ready: document.readyState,
+    view: v ? { n: v.childElementCount, first: v.firstElementChild ? `${v.firstElementChild.tagName}.${v.firstElementChild.className}` : '（空）', len: v.innerHTML.length } : '沒有 #view',
+    sw: navigator.serviceWorker ? !!navigator.serviceWorker.controller : '不支援',
+    modal: document.getElementById('modalRoot')?.childElementCount || 0, updateBar: !!document.getElementById('updateBar'),
+  };
+}).catch((e) => `讀不到（${e.message}）`);
 
 const measure = async (hash) => {
   await page.goto('about:blank');
-  await page.goto(`http://localhost:${WEB}/${hash}`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('#view .page', { timeout: 20000 });
+  await page.goto(`${ORIGIN}/${hash}`, { waitUntil: 'networkidle0' });
+  try {
+    await page.waitForSelector('#view .page', { timeout: 20000 });
+  } catch (e) {
+    console.log(`  [等不到 #view .page] ${hash.replace(/[0-9a-f-]{20,}/g, '…')}｜現場：${JSON.stringify(await scene())}｜外站：${JSON.stringify([...ext])}`);
+    throw e;
+  }
   await sleep(900);
   return page.evaluate(() => {
     const tb = document.getElementById('tabbar');
@@ -51,7 +79,7 @@ const measure = async (hash) => {
 
 try {
   await page.setViewport({ width: 390, height: 844 });
-  await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+  await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
 
   // 兩種資料量：一種有內容、一種幾乎空的（空的那種最容易比畫面矮）
@@ -117,4 +145,6 @@ try {
   await browser.close();
   web.kill();
 }
+// 說明行（不是判定）：攔下了哪些外站請求；0 次也照實印
+console.log(`・外站請求一律當場回 503、沒有放出去：${[...ext].map(([h, n]) => `${h}×${n}`).join('、') || '這一輪 0 次'}`);
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

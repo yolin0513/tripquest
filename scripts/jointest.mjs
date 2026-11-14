@@ -169,43 +169,53 @@ try {
 
   // ---------- 旅伴清單與加入橫幅（v1.57.3）----------
   console.log('\n— 旅伴與加入提示 —');
-  // A 先看一次主頁（把目前的 claim 記為已看；v1.84.0 起旅伴列與加入橫幅在主頁），B 已在剛剛 ensureMember 認領了「爸爸」
+  // A 先看一次主頁（把目前的 claim 記為已看；加入橫幅在主頁），B 已在剛剛 ensureMember 認領了「爸爸」。
+  // v1.87.0 起旅伴列（頭像＋N/M 位已加入）不在主頁、在旅程設定的旅伴名單最上面（Yolin 看 v1.86.0 實機）：
+  //   橫幅照舊從主頁讀；旅伴列走使用者的路——主頁頁首右上「⚙️ 設定」進旅程設定再讀
   await A.goto('about:blank');
   await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/home`, { waitUntil: 'networkidle0' });
-  await A.waitForSelector('.crew-btn', { timeout: 15000 });
-  const crew0 = await A.evaluate(() => document.querySelector('.crew-btn .crew-label').textContent);
+  await A.waitForSelector('.trip-home', { timeout: 15000 });
   await A.evaluate(async () => (await import('./js/outbox.js')).drain({ force: true }));
   await sleep(800);
   // 確定性重現「看頁之後才同步到新 claim」：把已看清單清空再重載 → 爸爸的 claim 是新的
   await A.evaluate((tid) => localStorage.setItem('tripquest.claimseen.' + tid, '[]'), setup.tid);
   await A.goto('about:blank');
   await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/home`, { waitUntil: 'networkidle0' });
-  await A.waitForSelector('.crew-btn', { timeout: 15000 });
-  const after = await A.evaluate(() => ({
-    banner: document.querySelector('.join-banner')?.textContent || '',
-    label: document.querySelector('.crew-btn .crew-label').textContent,
-    newDots: document.querySelectorAll('.crew-btn .crew-new').length,
-    ghosts: document.querySelectorAll('.crew-btn .avatar.ghost').length,
-  }));
-  yes(after.banner.includes('爸爸') && after.banner.includes('加入了旅程'), `同步後 A 看到加入橫幅：「${after.banner.replace('✕','').trim()}」`);
-  yes(after.label.includes('1/2 位已加入'), `旅伴列標示 ${after.label.trim()}（媽媽還沒認領）`);
-  yes(after.newDots === 1 && after.ghosts === 1, `新加入掛「新」×${after.newDots}、未加入頭像半透明 ×${after.ghosts}`);
-  void crew0;
-  // 點開旅伴清單
-  await A.evaluate(() => document.querySelector('.crew-btn').click());
-  await A.waitForSelector('.crew-row', { timeout: 8000 });
-  const crew = await A.evaluate(() => [...document.querySelectorAll('.crew-row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim()));
-  yes(crew.length === 2 && crew[0].includes('爸爸') && crew[0].includes('加入') && /拍了 \d+ 張/.test(crew[0]),
-    `清單第一列：${crew[0].slice(0, 40)}…`);
-  yes(crew[1].includes('媽媽') && crew[1].includes('還沒加入'), `清單第二列：${crew[1].slice(0, 34)}…`);
-  await A.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('知道了'))?.click());
-  await sleep(300);
+  await A.waitForSelector('.trip-home', { timeout: 15000 });
+  const banner = await A.evaluate(() => ({ text: document.querySelector('.join-banner')?.textContent || '', crewOnHome: !!document.querySelector('.trip-home .crew-btn') }));
+  yes(banner.text.includes('爸爸') && banner.text.includes('加入了旅程'), `同步後 A 看到加入橫幅：「${banner.text.replace('✕','').trim()}」`);
+  yes(!banner.crewOnHome, `主頁沒有旅伴列（v1.87.0 搬進旅程設定；主頁上 ${banner.crewOnHome ? '還有' : '沒有'}）`);
   // 按 ✕ → 橫幅看過就不再出現（背景重繪期間則會繼續在）
   await A.evaluate(() => document.querySelector('.join-banner .jb-x')?.click());
   await sleep(200);
+  // 主頁 → 頁首右上「⚙️ 設定」→ 旅程設定的旅伴名單
+  // 等不到（例：名單上沒有旅伴列）不丟例外：照樣讀、照樣印下面三條（記成 ✗），突變才判得出紅、不會變成「沒跑完」
+  await A.waitForFunction(() => { const b = document.getElementById('topActionBtn'); return b && !b.hidden && b.getAttribute('aria-label') === '旅程設定'; }, { timeout: 10000 });
+  await A.evaluate(() => document.getElementById('topActionBtn').click());
+  await A.waitForSelector('.member-list .member-row', { timeout: 15000 }).catch(() => null);
+  await A.waitForSelector('.member-list > .crew-btn', { timeout: 3000 }).catch(() => null);
+  const after = await A.evaluate(() => ({
+    label: document.querySelector('.member-list > .crew-btn .crew-label')?.textContent || '（名單上沒有旅伴列）',
+    newDots: document.querySelectorAll('.member-list > .crew-btn .crew-new').length,
+    ghosts: document.querySelectorAll('.member-list > .crew-btn .avatar.ghost').length,
+    rows: [...document.querySelectorAll('.member-list > .member-row')].map((r) => `${r.querySelector('.member-row-main > div')?.textContent || ''}｜${r.querySelector('.member-joined')?.textContent || ''}`),
+  }));
+  yes(after.label.includes('1/2 位已加入'), `旅程設定的旅伴列標示 ${after.label.trim()}（媽媽還沒認領）`);
+  yes(after.newDots === 1 && after.ghosts === 1, `新加入掛「新」×${after.newDots}、未加入頭像半透明 ×${after.ghosts}`);
+  yes(after.rows.length === 2 && after.rows.includes('爸爸｜✓ 已加入') && after.rows.includes('媽媽｜⏳ 還沒加入'),
+    `名單每一位寫加入了沒：${after.rows.join('、')}`);
+  // 點開旅伴清單（加入紀錄）
+  const crewOpen = await A.evaluate(() => { const b = document.querySelector('.member-list > .crew-btn'); if (b) b.click(); return !!b; });
+  if (crewOpen) await A.waitForSelector('.crew-row', { timeout: 8000 }).catch(() => null);
+  const crew = await A.evaluate(() => [...document.querySelectorAll('.crew-row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim()));
+  yes(crew.length === 2 && crew[0].includes('爸爸') && crew[0].includes('加入') && /拍了 \d+ 張/.test(crew[0]),
+    `清單第一列：${crew.length ? crew[0].slice(0, 40) : '（沒有打開加入紀錄）'}…`);
+  yes(crew.length === 2 && crew[1].includes('媽媽') && crew[1].includes('還沒加入'), `清單第二列：${crew.length > 1 ? crew[1].slice(0, 34) : '（沒有）'}…`);
+  await A.evaluate(() => [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent.includes('知道了'))?.click());
+  await sleep(300);
   await A.goto('about:blank');
   await A.goto(`http://localhost:${WEB}/#/trip/${setup.tid}/home`, { waitUntil: 'networkidle0' });
-  await A.waitForSelector('.crew-btn', { timeout: 15000 });
+  await A.waitForSelector('.trip-home', { timeout: 15000 });
   await sleep(400);
   yes(await A.evaluate(() => !document.querySelector('.join-banner')), '加入橫幅看過一次就不再出現');
 

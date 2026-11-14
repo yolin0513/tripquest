@@ -44,9 +44,9 @@
     "why": "（事前寫 2026-11-13 19:58，跑之前）在主頁的主卡後面插一張 .task-prog「已完成 0 / 1」。紅：H3（主頁不放任務的數字）。不紅：其餘（M2 讀的是任務頁）。",
     "expect": ["H3 主頁不放任務的跳轉"],
     "file": "js/views/trip.js",
-    "find": "    main,\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
-    "replace": "    main,\n    h('div', { class: 'task-prog' }, '已完成 0 / 1'),\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
-    "note": "v1.86.0 主卡後面接的是「這趟的數字」，不再是今晚住；find 跟著改，插的位置仍是主卡正後面（意思不變、預期不變）",
+    "find": "    sayEnd,\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
+    "replace": "    sayEnd,\n    h('div', { class: 'task-prog' }, '已完成 0 / 1'),\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
+    "note": "v1.86.0 主卡後面接的是「這趟的數字」，不再是今晚住；find 跟著改，插的位置仍是主卡正後面（意思不變、預期不變）。v1.87.0（2026-11-14 事前改）主卡後面多一格 sayEnd（旅程結束那一句，只有結束後才有），find 改成 sayEnd 那一行＋endNums；旅程中那幾趟 sayEnd 是 null，插的位置照樣是主卡正後面，預期不變",
     "cmd": "node scripts/hometest.mjs"
   },
   {
@@ -106,12 +106,13 @@
     "cmd": "node scripts/hometest.mjs"
   },
   {
-    "name": "主頁：小工具沒有旅伴列",
-    "why": "（事前寫 2026-11-13 19:58，跑之前）主頁的 crewButton 拿掉。紅：H2、M1。不紅：其餘。",
-    "expect": ["H2 旅程中", "M1 主頁找得到"],
+    "name": "主頁：旅伴列放回主頁的小工具",
+    "why": "（事前寫 2026-11-14，跑之前；取代「主頁：小工具沒有旅伴列」——v1.87.0 旅伴列搬進旅程設定，主頁沒有旅伴列變成正確的樣子，舊的那條守的方向反了）小工具最前面把旅伴列（crewSummary：頭像＋N/M 位已加入）放回主頁。紅：H2 旅程中（主頁不該有旅伴列）、M4 旅伴列（主頁沒有）。不紅：M1（主頁找得到的那幾樣照舊在）、其餘。",
+    "expect": ["H2 旅程中", "M4 旅伴列"],
     "file": "js/views/trip.js",
-    "find": "      members.length ? crewButton(tripId, t, members) : null,",
-    "replace": "      null,",
+    "find": "      posBanner(tripId)),",
+    "replace": "      members.length ? crewSummary(tripId, t) : null,\n      posBanner(tripId)),",
+    "note": "舊名「主頁：小工具沒有旅伴列」（find 是 v1.86.0 的 crewButton 那一行，v1.87.0 拿掉後找不到）。換掉而不是只改 find：行為反過來了，舊預期（H2、M1 紅）在新程式上不成立。帳本裡舊名那幾筆變成「帳本有、清單沒有」，見 STATUS v1.87.0。",
     "cmd": "node scripts/hometest.mjs"
   },
   {
@@ -120,7 +121,8 @@
     "expect": ["M2 任務頁只做任務"],
     "file": "js/views/trip.js",
     "find": "    syncBanner(tripId, t),\n",
-    "replace": "    syncBanner(tripId, t),\n    crewButton(tripId, t, store.membersOf(t.groupId)),\n",
+    "replace": "    syncBanner(tripId, t),\n    crewSummary(tripId, t),\n",
+    "note": "v1.87.0（2026-11-14 事前改）crewButton 拿掉、換成 crewSummary（同一排頭像＋N/M 位已加入，現在放在旅程設定）；不改的話突變後的程式叫一個不存在的函式、任務頁整頁壞掉，會紅在別的地方。插的東西還是同一排，預期不變。",
     "cmd": "node scripts/hometest.mjs"
   },
   {

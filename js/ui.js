@@ -249,13 +249,17 @@ export function mountPeek(host, el) {
 // move：標題上面那一隻動一下（glyphs.js 的 moveMascot；解鎖新徽章＝原地彈跳兩下，v1.85.0）。
 // peek：完成任務時的探頭圖（js/peeks.js；呼叫的一方挑好哪一張）。有照片就掛在照片上緣、標題上面不再另外放一隻；
 // 沒拿到照片（縮圖讀不到）就照舊在標題上面放整隻（MASCOT_SPOT.done）。
-export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, move = false, peek = null }) {
+// say：探頭的那一隻講的那一句（js/says.js 的 sayOnPeek 做好的元素，v1.87.0）。只在照片上有探頭圖時放（對話框要指著牠）；
+// 沒拿到照片就不放——標題上面那一隻沒有對話框的位置。
+export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, move = false, peek = null, say = null }) {
   const root = document.getElementById('modalRoot');
   return new Promise((resolve) => {
     const close = (v) => { wrap.remove(); conf.remove(); resolve(v); };
     const conf = confetti();
     const onPhoto = !!(withMascot && peek && photoURL);
     const photo = photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null;
+    const shot = onPhoto ? mountPeek(h('div', { class: 'celebrate-shot' }, photo), peek) : null;
+    if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面多留一點：那句話窄螢幕上可能排成三行
     const wrap = h('div', { class: 'celebrate' },
       onPhoto ? null
         : withMascot
@@ -263,7 +267,7 @@ export function celebrate({ title, lines = [], photoURL, actions = [], withMasco
           : h('div', { class: 'celebrate-badge' }, '✓'),
       h('h2', {}, title || '完成了！'),
       ...lines.map((l) => h('p', {}, l)),
-      onPhoto ? mountPeek(h('div', { class: 'celebrate-shot' }, photo), peek) : photo,
+      onPhoto ? shot : photo,
       ...actions.map((a) => h('button', {
         class: 'btn ' + (a.primary ? 'btn-primary' : 'btn-soft') + ' btn-block btn-big',
         onclick: () => close(a.value),

@@ -21,6 +21,7 @@ import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
 import { paperPlane } from '../glyphs.js';
+import { sayRow, departLine, endLine, weatherLine } from '../says.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
 import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
@@ -581,6 +582,12 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
     }
   }
 
+  // v1.87.0 吉祥物講一句（js/says.js；誰說、什麼時候講的表在 STATUS）。主頁一次最多一句，放在它講的那一塊旁邊：
+  //   旅程結束 → 「旅程結束了」那張卡下面；出發當天早上 → 「今天是第 1 天」那一行下面；
+  //   都沒有（或已經關掉）才輪到天氣那一句（天氣條下面，fillWeather 背景載完才知道）。
+  const sayEnd = ended && spots.length ? sayRow(tripId, endLine(true), { animate: fresh }) : null;
+  const sayDepart = !sayEnd && todayDay === 1 ? sayRow(tripId, departLine(t), { animate: fresh }) : null;
+
   // v1.86.0 主頁補內容（守夜模式照建議做；決定與替代方案見 STATUS）。都是「有才放」，沒有的不放、不顯示 0、不猜；不放任務的跳轉。
   //   結束後：這趟的數字（天數・景點・照片・花費）；出發前：每天的行程預覽＋下一班航班；照片列：有照片就有（不分哪個階段）
   const shotsSlot = spots.length ? h('div', { class: 'th-shots-slot' }) : null;
@@ -592,7 +599,9 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
     todayDay > 0 ? h('div', { class: 'th-day' },
       h('span', { class: 'th-day-n' }, `今天是第 ${todayDay} 天`),
       t.startDate ? h('span', { class: 'th-day-d' }, `${dayDate(t, todayDay)} ${weekdayLabel(t.startDate, todayDay)}`.trim()) : null) : null,
+    sayDepart,
     main,
+    sayEnd,
     ended && spots.length ? endNums(tripId, t, spots) : null,
     todayDay === 0 && spots.length ? planPreview(tripId, t, spots) : null,
     todayDay === 0 ? flightRow(tripId) : null,
@@ -610,10 +619,11 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
     shotsSlot,
     // 結束後：還有幾筆帳沒結清（背景算，fillUnsettled 填進來；結清了就是空的）
     ended ? h('div', { class: 'th-money-slot' }) : null,
-    // 小工具：找附近、旅伴、（結束後）照片、位置分享（分享中才有；分享期過了自己不顯示，見 posBanner）
+    // 小工具：找附近、（結束後）照片、位置分享（分享中才有；分享期過了自己不顯示，見 posBanner）
+    // v1.87.0 旅伴列（頭像＋「N/M 位已加入」）搬進旅程設定「旅伴與電話」的名單（memberEditor）；Yolin 看 v1.86.0 實機。
+    // 有人新加入、旅伴還看不到你這兩張通知照舊在主頁最上面（那是要你現在知道的事）。
     h('div', { class: 'stack th-tools' },
       h('button', { class: 'btn btn-soft btn-block', onclick: () => navigate(`/trip/${tripId}/nearby`) }, '🅿️ 找附近：停車場・廁所・超商'),
-      members.length ? crewButton(tripId, t, members) : null,
       ended ? h('button', { class: 'btn btn-soft btn-block th-photos', onclick: () => navigate(`/trip/${tripId}/people`) }, '📸 看大家的照片') : null,
       posBanner(tripId)),
   );
@@ -622,7 +632,7 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
   if (spots.some((s) => s.lat != null) && !ended) {
     const wxSlot = h('div', { class: 'wx-slot' });
     page.insertBefore(wxSlot, main && main.parentNode === page ? main : page.querySelector('.th-tools'));
-    fillWeather(wxSlot, page, tripId, t);
+    fillWeather(wxSlot, page, tripId, t, { say: !sayDepart && !sayEnd, animate: fresh });
   }
 
   const moneySlot = page.querySelector('.th-money-slot');
@@ -803,16 +813,18 @@ function dayCollapse(day, daySpots, tripId, t, ctx) {
         // 當日地圖（查看路線）2026-11-13 搬到「行程」分頁（itinerary() 的 dayMap()）：它畫的是計畫中的景點，屬於行程。
         // 時間軸：左邊一條虛線、每站一個點；有填時間的在那一站卡片上方寫幾點，沒填就只有點（不補猜的時間）。
         // 進行中而且看的是今天，才分「已到／現在／未到」（現在這一站之後的淡一點）；其餘不分，不猜他走到哪。
-        // 兩站之間一列「怎麼去」（js/legs.js）：就放在兩張卡中間，看行程時一眼就看到、點了就能設——不藏在編輯頁。
-        legTimeline(daySpots, (s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
+        // v1.87.0 兩站之間的「怎麼去」（🚗 搭車 ▸ 甲 → 乙 約 N 分）不放在任務頁、只在行程分頁（Yolin 看 v1.86.0 實機）：
+        // 任務頁只講「每一站要拍什麼」。設定、顯示都在行程分頁那一份（itinerary() 的 legTimeline）。
+        h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },
             h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
-            spotSection(s, tripId, ctx.focusId, ctx.hereId))))),
+            spotSection(s, tripId, ctx.focusId, ctx.hereId)))))),
   );
 }
 
 
-async function fillWeather(slot, container, tripId, trip) {
+// say：可以放吉祥物那一句（主頁上沒有別句的時候）——下雨／下雪那天放在天氣條下面（js/says.js 的 weatherLine）
+async function fillWeather(slot, container, tripId, trip, { say = false, animate = true } = {}) {
   try {
     const [{ destCoords, tripForecastDays }, wx, geo] = await Promise.all([
       import('./weather.js'), import('../weather.js'), import('../geo.js'),
@@ -854,7 +866,9 @@ async function fillWeather(slot, container, tripId, trip) {
           ? h('div', { class: 'wx-strip-tip' }, '🧳 ' + tips[0].text)
           : h('div', { class: 'wx-strip-tip muted' }, '天氣還算舒服，點看每天預報'),
     );
-    slot.replaceChildren(btn);
+    // 天氣條跟吉祥物那一句同一次放上去（只動一次版面）。那一句不放進天氣條的按鈕裡：✕ 才不會被當成「點天氣條」
+    const line = say ? sayRow(tripId, weatherLine(alert, today), { animate }) : null;
+    slot.replaceChildren(...[btn, line].filter(Boolean));
   } catch { /* 靜默：天氣是加分項 */ }
 }
 
@@ -1119,6 +1133,8 @@ function onTripPage(tripId) {
 // 真的使用者也會撞到：剛點開，背景一來就收起來。
 // 選項收起來時（再點一次那一列）補做一次；選了某一種的話 save() 自己會重畫，那一次就帶到最新的。
 // 只擋「選項開著」這一種：其他會被重畫打斷的操作（例：展開的任務卡）沒有實際回報，這次不擴大。
+// v1.87.0 起「怎麼去」只在行程分頁；行程分頁的簽章（itinSignature）本來就不含補圖那幾個欄位，
+// 所以現在會撞到這裡的是旅伴同步進來改了行程（名字、順序、時間、怎麼去）——legviewtest 第七段照這一種造情境。
 function legPickOpen() { return !!document.querySelector('.tl-leg-pick:not([hidden])'); }
 let hereDirty = false;     // 選項開著時，有東西想重畫（簽章以外的來源，例：AI 文案回來）
 let flushHere = null;      // 選項收起來時叫它：剛才擋下的重畫補上
@@ -1181,13 +1197,20 @@ function fmtAgo(ts) {
   if (s < 86400) return `${Math.round(s / 3600)} 小時前`;
   return `${Math.round(s / 86400)} 天前`;
 }
-function crewButton(tripId, t, members) {
+// 一位旅伴的頭像：還沒加入的是虛線圈（ghost），24 小時內剛加入的掛一個「新」
+function crewAvatar(x) {
+  const a = avatar(x.m.displayName, hashHue(x.m.id));
+  if (!x.joined) a.classList.add('ghost');
+  return h('span', { class: 'crew-wrap' }, a, x.isNew ? h('span', { class: 'crew-new' }, '新') : null);
+}
+// v1.87.0 旅伴列從主頁搬進旅程設定的名單最上面（Yolin 看 v1.86.0 實機）：頭像一排＋「N/M 位已加入」，點了開加入紀錄（openCrew）。
+// 字與規則跟主頁那一列一樣（crewInfo：選過「這是誰的手機」才算加入）。
+// after：加入紀錄關掉之後（裡面可以按「立刻檢查有沒有新的旅伴」）把名單重畫，剛同步進來的加入狀態才看得到
+function crewSummary(tripId, t, after) {
   const info = crewInfo(tripId, t);
-  return h('button', { class: 'crew-btn', 'aria-label': '看旅伴清單', onclick: () => openCrew(tripId, t) },
-    h('div', { class: 'avatars' }, ...info.map((x) => h('span', { class: 'crew-wrap' },
-      (() => { const a = avatar(x.m.displayName, hashHue(x.m.id)); if (!x.joined) a.classList.add('ghost'); return a; })(),
-      x.isNew ? h('span', { class: 'crew-new' }, '新') : null,
-    ))),
+  return h('button', { class: 'crew-btn', type: 'button', 'aria-label': `${info.filter((x) => x.joined).length}/${info.length} 位已加入，看加入紀錄`,
+    onclick: async () => { await openCrew(tripId, t); if (after) after(); } },
+    h('div', { class: 'avatars' }, ...info.map(crewAvatar)),
     h('span', { class: 'crew-label' }, `${info.filter((x) => x.joined).length}/${info.length} 位已加入 ›`),
   );
 }
@@ -1202,9 +1225,7 @@ async function openCrew(tripId, t) {
     closeX: true,
     body: h('div', {},
       ...info.map((x) => h('div', { class: 'crew-row' },
-        h('span', { class: 'crew-wrap' },
-          (() => { const a = avatar(x.m.displayName, hashHue(x.m.id)); if (!x.joined) a.classList.add('ghost'); return a; })(),
-          x.isNew ? h('span', { class: 'crew-new' }, '新') : null),
+        crewAvatar(x),
         h('div', { class: 'cr-main' },
           h('div', { class: 'cr-name' }, x.m.displayName),
           x.joined
@@ -1581,7 +1602,7 @@ async function removeTrip(tripId, t) {
 // 這趟旅程在本機留下的所有 localStorage 旗標
 function clearTripKeys(tripId) {
   const spotIds = store.spotsOf(tripId).map((s) => s.id);
-  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here', 'daySel', 'dayJump'].map((k) => `tripquest.${k}.${tripId}`);
+  const keys = ['me', 'welcome', 'claimseen', 'poshare', 'wall', 'focus', 'here', 'daySel', 'dayJump', 'said'].map((k) => `tripquest.${k}.${tripId}`);
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
@@ -1668,7 +1689,7 @@ async function doShare(tripId) {
 // ---------- 旅程設定 ----------
 // 2026-11-13「行程」分頁（Yolin 11-11 提、11-13 守夜做；決定與替代方案見 STATUS）。
 // 放：航班／住宿／待買（合成一張卡）、調整每天的行程、每天的行程（時間、兩站之間怎麼去、當天地圖＝查看路線）。
-// 「怎麼去」在任務頁也有一份（Yolin 11-12：留在任務頁、行程頁也顯示）——兩邊是同一個 legRow，改哪一邊都存同一筆。
+// 「怎麼去」v1.87.0 起只在這裡（Yolin 看 v1.86.0 實機：任務頁不顯示移動方式；11-12 原本是兩頁都放同一個 legRow）。
 // 回顧（v1.84.0 從底部分頁搬進「行程」分頁；Yolin 2026-11-13「都照建議做」＝規劃第 5.2 節、示意圖 6）。
 // 換位置只看結束日（結束日 23:59:59 過了，跟回顧頁開放影片同一條 tripEnded）——不看「全部拍完」：
 // 提早拍完、旅程還沒結束時，行程分頁還要看今天去哪，不能被回顧擠下去。沒設結束日 → 一直在最下面那一列。
@@ -1808,12 +1829,13 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
               isToday ? h('span', { class: 'dc-todaytag' }, '今天') : null),
             route ? h('span', { class: 'dc-route' }, route) : null,
             h('span', { class: 'dc-meta' }, h('span', {}, meta)))),
+        // v1.87.0 行程內容在上、可以播放的路線圖放到最下面（Yolin 看 v1.86.0 實機：先看今天去哪、怎麼去，地圖要看再往下）
         h('div', { class: 'dc-body' }, h('div', { class: 'dc-inner' },
-          dayMap(ds, tripId, day),
           legTimeline(ds, (s) => h('li', { class: 'tl-item' },
             h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
-            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))))));
+            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))),
+          dayMap(ds, tripId, day))));
       secs.set(day, sec);
       planPane.append(sec);
     }
@@ -1925,13 +1947,24 @@ function settingRow(label, control) {
   return h('div', { class: 'setting-row' }, h('span', { style: 'font-weight:700' }, label), control);
 }
 
+// 旅伴名單（旅程設定「旅伴與電話」）。v1.87.0 主頁的旅伴列整合進來（Yolin 看 v1.86.0 實機）：
+//   最上面一排頭像＋「N/M 位已加入 ›」（點了開加入紀錄：幾點加入、幾台裝置、拍了幾張、最後活動）；
+//   每一位前面放頭像（還沒加入是虛線圈）、名字下面一行寫「已加入」或「還沒加入」——規則同 crewInfo，不猜。
+// 名字照舊是 .member-row-main 的第一個 div（membergonetest 照這個找人），頭像放在它前面、不放進去。
 function memberEditor(tripId, groupId) {
-  const wrap = h('div', {});
+  const wrap = h('div', { class: 'member-list' });
   const draw = () => {
+    const t = store.get(tripId);
+    const info = t ? crewInfo(tripId, t) : [];
+    const byId = new Map(info.map((x) => [x.m.id, x]));
     wrap.replaceChildren(
+      ...(t && info.length ? [crewSummary(tripId, t, () => { if (wrap.isConnected) draw(); })] : []),
       ...store.membersOf(groupId).map((m) => h('div', { class: 'member-row' },
+        byId.has(m.id) ? crewAvatar(byId.get(m.id)) : null,
         h('div', { class: 'member-row-main' },
           h('div', { style: 'font-weight:700' }, m.displayName),
+          byId.has(m.id) ? h('div', { class: 'member-joined' + (byId.get(m.id).joined ? ' ok' : '') },
+            byId.get(m.id).joined ? '✓ 已加入' : '⏳ 還沒加入') : null,
           h('div', { class: 'muted sm' }, m.phone ? '📞 ' + m.phone : '未填電話（緊急求助會用到）'),
         ),
         h('button', { class: 'btn btn-soft sm-btn', onclick: async () => {

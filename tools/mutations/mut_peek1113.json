@@ -13,8 +13,9 @@
     "why": "（事前寫 2026-11-13 12:50，跑之前；取代草稿的「探頭圖放進提示那一行」——那一行程式已經拿掉）那一天會下雨／下雪時，照拿掉之前的寫法把探頭圖掛回天氣條（CSS 的加高那條已經拿掉，所以只多了圖、沒有加高）。紅：P1 任務頁的天氣條不掛探頭圖、P4 今天會下雪、P6 還沒出發、［深色］ 天氣條一樣沒有探頭圖——四條都量「天氣條沒有圖」。不紅：P5 晴天（沒有提示就不掛）、P5 沒有加高（只有圖、間距沒變）、天氣頁與慶祝。「探頭圖的數量」與「has-peek 標記」是同一件事的兩道偵測、互為備援：單獨拿掉其中一道是等價突變，不另配突變。（2026-11-13 20:5x 改 expect 的字：v1.84.0 天氣條搬到主頁，P1 的訊息從「任務頁的天氣條」改成「主頁的天氣條」、同一條斷言；第 917 次跑紅的四行正是這四條，只是第一條的字過期——預期清單過期，不是紅錯地方。）",
     "expect": ["P1 主頁的天氣條不掛探頭圖", "P4 今天會下雪", "P6 還沒出發", "［深色］ 天氣條一樣沒有探頭圖"],
     "file": "js/views/trip.js",
-    "find": "    slot.replaceChildren(btn);",
-    "replace": "    if (alert) { const pk = await import('../peeks.js'); (await import('../ui.js')).mountPeek(btn, pk.peek(pk.WEATHER_PEEK[alert.kind], 0.34)); }\n    slot.replaceChildren(btn);",
+    "find": "    slot.replaceChildren(...[btn, line].filter(Boolean));",
+    "replace": "    if (alert) { const pk = await import('../peeks.js'); (await import('../ui.js')).mountPeek(btn, pk.peek(pk.WEATHER_PEEK[alert.kind], 0.4)); }\n    slot.replaceChildren(...[btn, line].filter(Boolean));",
+    "note": "v1.87.0（2026-11-14 事前改）天氣條下面多一句吉祥物的話（line），replaceChildren 那一行改了；探頭圖照樣掛回天氣條按鈕上，預期不變。replace 裡的縮放值一併換掉（原本的值落在 Dispatch 的參考數字樣式裡，這一行改了就算新增一次）：四條斷言量的是「有沒有圖」，跟縮放多少無關",
     "cmd": "node scripts/peektest.mjs"
   },
   {

@@ -5,11 +5,15 @@
 // 驗什麼：時間軸兩站之間的設定列（不預選、真實點擊設定、存 legFrom＋_f.leg）、播放游標依段換圖示
 // （夾著沒座標的站＝圓點）、重排（走「調整每天的行程」的 ▼ 按鈕）與刪站後舊選擇不套用＋沒動到的那段仍在；
 // 選項格子（2026-11-11 A 方案：名字一律一行、15 種寬度×字級）與「點寫著搭車的那一格 → 存 car」；
-// 背景寫入（補維基圖片那一類）不收起打開的選項、收起來時補重畫（2026-11-11 守夜）。
+// 背景寫入不收起打開的選項、收起來時補重畫（2026-11-11 守夜）。
+// v1.87.0（Yolin 看 v1.86.0 實機）：「怎麼去」只在行程分頁——任務頁沒有「怎麼去」也沒有地圖（零），
+//   全部的設定都在行程分頁做；行程分頁那一天是行程內容在上、可以播放的路線圖在最下面（二之二）。
+// 不打真網路（共用慣例 §5.6；v1.87.0 補上——之前維基、路線服務的請求照樣放出去）：
+//   圖磚攔成本機合成格線；其他外站一律當場回 404（跟維基查不到那一條同一種回應：只寫「查過了」的旗標、不推高 updatedAt）。
+//   這支原本 flaky 的根因就在這裡：背景補維基圖片寫 heroHash → 任務頁的簽章變了 → 整頁重畫、點到一半的節點被換掉。
 // 已知捷徑：刪站用 store.remove（畫面上的刪站在景點設定頁，這支沒走）。
 // 突變實測（2026-11-05，在 _legshots 上）：拿掉 js/legs.js 的 legFrom 比對 → 正好紅重排兩條＋刪站一條。
-// 圖磚攔成本機合成格線，不打 OSM。資料是合成的（日期 2024 年、店名自編）。
-// 第 1 天 5 站：甲 → 乙 → 丙（沒座標）→ 丁 → 戊。
+// 資料是合成的（日期 2024 年、店名自編）。第 1 天 5 站：甲 → 乙 → 丙（沒座標）→ 丁 → 戊。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -19,6 +23,7 @@ const { LEG_ICON } = await import(new URL('../js/legs.js', import.meta.url));
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5781;
+const ORIGIN = `http://localhost:${WEB}`;
 const web = spawn('python', ['-m', 'http.server', String(WEB)], { cwd: ROOT, stdio: 'ignore' });
 await sleep(900);
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
@@ -31,6 +36,8 @@ const SPOTS = [
   [1, '丁・溫泉公園', '15:00', 24.826, 121.770],
   [1, '戊・夜市', '19:00', 24.677, 121.770],
 ];
+// 行程分頁裡打開的那一天（v1.87.0 起「怎麼去」只在這裡；選擇器一律從 .itin-page 開頭，跑到任務頁就什麼都量不到）
+const DC = '.itin-page .daycollapse.open';
 
 const page = await browser.newPage();
 const stable = async (sel) => {
@@ -40,28 +47,35 @@ const stable = async (sel) => {
     if (await page.evaluate((q) => !!window.__p && window.__p === document.querySelector(q), sel)) return;
   }
 };
-const legs = () => page.evaluate(() => [...document.querySelectorAll('.daycollapse.open .tl-leg')].map((li) => ({
+const legs = () => page.evaluate((dc) => [...document.querySelectorAll(`${dc} .tl-leg`)].map((li) => ({
   spot: li.dataset.spot, mode: li.dataset.mode, text: li.querySelector('.tl-leg-btn').textContent.trim(),
   unset: li.querySelector('.tl-leg-btn').classList.contains('is-unset'),
   on: [...li.querySelectorAll('.tl-leg-opt.is-on')].map((b) => b.dataset.mode),
-})));
-const names = () => page.evaluate(() => [...document.querySelectorAll('.daycollapse.open .tl-item .qc-name')].map((e) => e.firstChild.textContent));
+})), DC);
+// 行程分頁的站名：「📍 甲・車站」→ 拿掉最前面的表情符號
+const names = () => page.evaluate((dc) => [...document.querySelectorAll(`${dc} .tl-item .itin-stop`)].map((e) => e.textContent.replace(/^\S+\s/, '')), DC);
+const ext = new Map();   // 攔下的外站請求（主機 → 次數），結尾印出來
 try {
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await page.setBypassServiceWorker(true);
   page.on('pageerror', (e) => { fail++; console.log('✗ pageerror ' + e.message); });
   page.on('dialog', (d) => d.accept());
-  await page.evaluateOnNewDocument((u) => { window.__TQ_TILE_URL = u; }, `http://localhost:${WEB}/__tiles/{z}/{x}/{y}.png`);
+  await page.evaluateOnNewDocument((u) => { window.__TQ_TILE_URL = u; }, `${ORIGIN}/__tiles/{z}/{x}/{y}.png`);
   await page.setRequestInterception(true);
   page.on('request', (rq) => {
+    if (!/^https?:/.test(rq.url())) return rq.continue();   // data:、blob:
     const u = new URL(rq.url());
     if (u.hostname === 'tile.openstreetmap.org') { fail++; console.log('✗ 打到真的 OSM'); return rq.abort(); }
+    if (u.origin !== ORIGIN) {
+      ext.set(u.hostname, (ext.get(u.hostname) || 0) + 1);
+      return rq.respond({ status: 404, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
+    }
     if (!u.pathname.startsWith('/__tiles/')) return rq.continue();
     const [, , x, y] = u.pathname.split('/').map((s) => parseInt(s, 10));
     rq.respond({ status: 200, contentType: 'image/svg+xml', headers: { 'Access-Control-Allow-Origin': '*' },
       body: `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="${(x + y) % 2 ? '#e8efe6' : '#dfe8ee'}" stroke="#9aa"/></svg>` });
   });
-  await page.goto(`http://localhost:${WEB}/`, { waitUntil: 'networkidle0' });
+  await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.hero');
   const { tid, ids } = await page.evaluate(async (spots) => {
     const s = await import('./js/store.js');
@@ -78,12 +92,37 @@ try {
     return { tid, ids };
   }, SPOTS);
   const [A, B, C, D, E] = ids;
-  const openTrip = async () => {
-    await page.goto(`http://localhost:${WEB}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('.daycollapse.open .tl-leg', { timeout: 10000 });
-    await stable('.daycollapse.open .timeline');
+  // 進行程分頁的「行程」那一格。第一次走使用者的路（零：任務頁 → 底部「行程」→ 最上面那一排的「行程」）；
+  // 之後直接開行程分頁的網址——剛剛選的那一格記在 sessionStorage，同一個分頁重開還是「行程」；萬一沒記住就再點一次。
+  const openItin = async () => {
+    await page.goto(`${ORIGIN}/#/trip/${tid}/itinerary`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.itin-page .itin-seg', { timeout: 10000 });
+    if (await page.evaluate(() => document.getElementById('itin-pane-plan')?.hidden !== false)) {
+      for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
+    }
+    await page.waitForSelector(`${DC} .tl-leg`, { timeout: 10000 });
+    await stable(`${DC} .timeline`);
   };
-  await openTrip();
+
+  // 零、任務頁（v1.87.0；Yolin 看 v1.86.0 實機「任務頁不顯示移動方式，只在行程頁顯示」）：
+  // 任務頁的時間軸在、5 站都在（「沒有」才有母體），但沒有任何一列「怎麼去」、也沒有當天地圖。
+  await page.goto(`${ORIGIN}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.daycollapse.open .timeline .tl-item', { timeout: 10000 });
+  await stable('.daycollapse.open .timeline');
+  const task0 = await page.evaluate(() => ({
+    task: !document.querySelector('.itin-page') && !!document.querySelector('#view .page .qcollapse'),
+    items: document.querySelectorAll('.daycollapse.open .timeline > .tl-item').length,
+    legs: document.querySelectorAll('#view .tl-leg, #view .tl-leg-btn, #view .tl-leg-route').length,
+    map: document.querySelectorAll('#view .daymap').length,
+  }));
+  yes(task0.task && task0.items === 5 && task0.legs === 0 && task0.map === 0,
+    `零 任務頁：時間軸 5 站都在，沒有「怎麼去」（${task0.legs} 列）、沒有當天地圖（${task0.map} 張）`, JSON.stringify(task0));
+  for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
+  // v1.86.0：這趟是 2024 年（已結束），行程分頁預設亮「回顧」——點最上面那一排的「行程」（使用者的路）
+  await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-seg'), { timeout: 10000 });
+  for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
+  await page.waitForSelector(`${DC} .tl-leg`, { timeout: 10000 });
+  await stable(`${DC} .timeline`);
 
   // 一、一進來：5 站 → 4 列，全部「還沒設定」、選項裡沒有任何一個被預選
   let L = await legs();
@@ -100,23 +139,24 @@ try {
     blank0.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
 
   // 二、從真實入口設：點「乙」前面那一列 → 選項打開 → 點「鐵路」（代號 train；2026-11-11 前叫「電車・捷運」）
-  const pickVia = async (spotId, mode) => {
-    await page.evaluate((id) => document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`).scrollIntoView({ block: 'center' }), spotId);
-    await page.click(`.daycollapse.open .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
+  const pickVia = async (spotId) => {
+    await page.evaluate((dc, id) => document.querySelector(`${dc} .tl-leg[data-spot="${id}"]`).scrollIntoView({ block: 'center' }), DC, spotId);
+    await page.click(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
     await sleep(150);
-    return page.evaluate((id) => !document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-pick`).hidden, spotId);
+    return page.evaluate((dc, id) => !document.querySelector(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-pick`).hidden, DC, spotId);
   };
-  const opened = await pickVia(B, 'train');
+  const modeIs = (id, mode) => page.waitForFunction((dc, id, mode) => document.querySelector(`${dc} .tl-leg[data-spot="${id}"]`)?.dataset.mode === mode, { timeout: 8000 }, DC, id, mode).catch(() => {});
+  const opened = await pickVia(B);
   yes(opened, '點那一列 → 七個選項打開');
-  const optTexts = await page.evaluate((id) => [...document.querySelectorAll(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-opt`)].map((b) => b.textContent.trim()), B);
+  const optTexts = await page.evaluate((dc, id) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)].map((b) => b.textContent.trim()), DC, B);
   yes(optTexts.length === 7 && !optTexts.some((t) => t.includes('清除')), `沒設定時有 7 個選項、沒有「清除」（${optTexts.join('／')}）`);
-  await page.click(`.daycollapse.open .tl-leg[data-spot="${B}"] .tl-leg-opt[data-mode="train"]`);
-  await page.waitForFunction((id) => document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`)?.dataset.mode === 'train', { timeout: 8000 }, B).catch(() => {});
-  await stable('.daycollapse.open .timeline');
-  await pickVia(E, 'bus');
-  await page.click(`.daycollapse.open .tl-leg[data-spot="${E}"] .tl-leg-opt[data-mode="bus"]`);
-  await page.waitForFunction((id) => document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`)?.dataset.mode === 'bus', { timeout: 8000 }, E).catch(() => {});
-  await stable('.daycollapse.open .timeline');
+  await page.click(`${DC} .tl-leg[data-spot="${B}"] .tl-leg-opt[data-mode="train"]`);
+  await modeIs(B, 'train');
+  await stable(`${DC} .timeline`);
+  await pickVia(E);
+  await page.click(`${DC} .tl-leg[data-spot="${E}"] .tl-leg-opt[data-mode="bus"]`);
+  await modeIs(E, 'bus');
+  await stable(`${DC} .timeline`);
   L = await legs();
   const byS = Object.fromEntries(L.map((x) => [x.spot, x]));
   yes(byS[B]?.mode === 'train' && byS[B].text.includes('鐵路') && !byS[B].unset, `甲→乙 設成鐵路（train）後那一列寫「${byS[B]?.text}」`);
@@ -128,36 +168,44 @@ try {
   yes(blank1.ok && blank1.texts > 0 && blank1.hits.length === 0,
     `設了兩段、兩段沒設時：整個行程頁沒有空值被印成文字（掃了 ${blank1.texts} 個文字節點、${blank1.attrs} 個屬性）`,
     blank1.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
-  await page.evaluate(() => document.querySelector('.daycollapse.open .timeline').scrollIntoView({ block: 'start' }));
-  await sleep(300);
+  // 設好的「怎麼去」在任務頁照樣不出現（設了之後才有字可以漏出去）
+  await page.goto(`${ORIGIN}/#/trip/${tid}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.daycollapse.open .timeline .tl-item', { timeout: 10000 });
+  const task1 = await page.evaluate(() => ({
+    items: document.querySelectorAll('.daycollapse.open .timeline > .tl-item').length,
+    legs: document.querySelectorAll('#view .tl-leg, #view .tl-leg-btn, #view .tl-leg-route').length,
+    words: /鐵路|公車|怎麼去/.test(document.querySelector('#view .page')?.textContent || ''),
+  }));
+  yes(task1.items === 5 && task1.legs === 0 && !task1.words, `設了鐵路、公車之後，任務頁照樣沒有「怎麼去」（${task1.legs} 列；字面上有沒有「鐵路／公車／怎麼去」：${task1.words}）`, JSON.stringify(task1));
+  await openItin();
 
-  // 二之二（2026-11-13）：「怎麼去」行程頁也顯示一份（Yolin 11-12）、當天地圖（查看路線）只在行程頁。
-  // 任務頁上沒有地圖（先確認任務頁的時間軸在，「沒有」才有母體）；點底部分頁「行程」進去，同一段路的設定照樣看得到。
-  const taskMap = await page.evaluate(() => ({ tl: !!document.querySelector('.daycollapse.open .timeline'), map: document.querySelectorAll('.daycollapse .daymap').length }));
-  yes(taskMap.tl && taskMap.map === 0, `任務頁沒有當天地圖（時間軸在：${taskMap.tl}；地圖 ${taskMap.map} 張）`);
-  for (const a of await page.$$('#tabbar a.tab')) if ((await a.evaluate((e) => e.textContent)).includes('行程')) { await a.click(); break; }
-  // v1.86.0：這趟是 2024 年（已結束），行程分頁預設亮「回顧」——點最上面那一排的「行程」（使用者的路）
-  await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.itin-seg'), { timeout: 10000 });
-  for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
-  await page.waitForFunction(() => /\/itinerary$/.test(location.hash) && document.querySelector('.daycollapse.open .daymap'), { timeout: 10000 });
-  await stable('.daycollapse.open .timeline');
+  // 二之二（v1.87.0；Yolin 看 v1.86.0 實機）：行程分頁那一天——行程內容（時間軸、怎麼去）在上、可以播放的路線圖在最下面
+  const ord = await page.evaluate((dc) => {
+    const inner = document.querySelector(`${dc} .dc-inner`);
+    if (!inner) return null;
+    const tl = inner.querySelector(':scope > .timeline'), map = inner.querySelector(':scope > .daymap');
+    return { tl: !!tl, map: !!map, tlFirst: !!tl && inner.firstElementChild === tl, mapLast: !!map && inner.lastElementChild === map,
+      above: !!tl && !!map && tl.getBoundingClientRect().bottom <= map.getBoundingClientRect().top + 1, play: !!map && !!map.querySelector('.dm-play') };
+  }, DC);
+  yes(!!ord && ord.tl && ord.map && ord.tlFirst && ord.mapLast && ord.above && ord.play,
+    '行程分頁那一天：時間軸在最上面、可以播放的路線圖在最下面（畫面上也是時間軸在地圖上方）', JSON.stringify(ord));
   L = await legs();
   const itinB = L.find((x) => x.spot === B), itinE = L.find((x) => x.spot === E);
   yes(L.length === 4 && itinB?.mode === 'train' && itinB.text.includes('鐵路') && itinE?.mode === 'bus',
-    `行程頁也看得到同一份「怎麼去」：4 段、甲→乙 鐵路、丁→戊 公車（${L.map((x) => x.mode || '－').join('、')}）`);
+    `重開行程分頁，設好的「怎麼去」還在：4 段、甲→乙 鐵路、丁→戊 公車（${L.map((x) => x.mode || '－').join('、')}）`);
 
   // 三、播放（×4）：移動中的游標——甲→乙 是電車圖示、乙→丁（中間夾著沒座標的丙）是圓點、丁→戊 是公車；到站一律圓點
-  await page.evaluate(() => { const el = document.querySelector('.daycollapse.open .daymap'); window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'instant' }); });
+  await page.evaluate((dc) => { const el = document.querySelector(`${dc} .daymap`); window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'instant' }); }, DC);
   await sleep(400);
-  await page.click('.daycollapse.open .dm-speed'); await page.click('.daycollapse.open .dm-speed');
-  await page.click('.daycollapse.open .dm-play');
+  await page.click(`${DC} .dm-speed`); await page.click(`${DC} .dm-speed`);
+  await page.click(`${DC} .dm-play`);
   const log = [];
   for (let k = 0; k < 500; k++) {
-    const x = await page.evaluate(() => {
-      const b = document.querySelector('.daycollapse.open .dm-player');
-      const c = document.querySelector('.daycollapse.open .rm-cursor');
+    const x = await page.evaluate((dc) => {
+      const b = document.querySelector(`${dc} .dm-player`);
+      const c = document.querySelector(`${dc} .rm-cursor`);
       return { phase: b.dataset.phase, step: b.dataset.step, pm: b.dataset.mode || '', cm: c.dataset.mode || '', ic: c.textContent, isMode: c.classList.contains('is-mode') };
-    });
+    }, DC);
     log.push(x);
     if (x.phase === 'done') break;
     await sleep(30);
@@ -171,11 +219,11 @@ try {
   yes(atStop.length > 0 && atStop.every((x) => x.cm === '' && !x.isMode), `到站時一律圓點（${atStop.length} 筆）`);
 
   // 四、重排（真實路徑：調整每天的行程 → 乙「往後移」）：甲 丙 乙 丁 戊
-  await page.goto(`http://localhost:${WEB}/#/trip/${tid}/plan`, { waitUntil: 'networkidle0' });
+  await page.goto(`${ORIGIN}/#/trip/${tid}/plan`, { waitUntil: 'networkidle0' });
   await page.waitForSelector(`.plan-row[data-id="${B}"] .plan-arrow[aria-label="往後移"]`, { timeout: 10000 });
   await page.click(`.plan-row[data-id="${B}"] .plan-arrow[aria-label="往後移"]`);
   await sleep(800);
-  await openTrip();
+  await openItin();
   const order = await names();
   yes(order.join('，') === '甲・車站，丙・巷口小店，乙・博物館，丁・溫泉公園，戊・夜市', `前置：重排生效（${order.join('，')}）`);
   L = await legs();
@@ -186,7 +234,7 @@ try {
 
   // 五、刪站（丁）：戊的前一站變成乙，舊的「公車」（記的是丁）不套用
   await page.evaluate(async (id) => { const s = await import('./js/store.js'); await s.remove(id); }, D);
-  await openTrip();
+  await openItin();
   const order2 = await names();
   yes(!order2.includes('丁・溫泉公園') && order2.length === 4, `前置：丁已刪（${order2.join('，')}）`);
   L = await legs();
@@ -201,8 +249,8 @@ try {
   const openC = async () => { for (let k = 0; k < 3; k++) if (await pickVia(C)) return true; return false; };
   // 量格子：每格的名字只准一行（文字範圍的每個框同一個 top），而且整段落在格子內緣（扣框線與內距）裡。
   // 量的時候把選項區的 hidden 拿掉——換寬度、換字級時背景重畫可能把它收起來；這段量的是排版，不是開關。
-  const legFit = () => page.evaluate((id) => {
-    const pick = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-pick`);
+  const legFit = () => page.evaluate((dc, id) => {
+    const pick = document.querySelector(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-pick`);
     if (!pick) return { n: 0, bad: ['找不到選項區'] };
     pick.hidden = false;
     const bad = []; let n = 0;
@@ -220,11 +268,11 @@ try {
       if (nr.left < L || nr.right > R) bad.push(`「${nm.textContent}」超出格子（${Math.round(nr.left)}～${Math.round(nr.right)}，內緣 ${Math.round(L)}～${Math.round(R)}）`);
     }
     return { n, bad };
-  }, C);
+  }, DC, C);
   const MOB = (w) => ({ width: w, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const setFs = (v) => page.evaluate((v) => { if (v === 'm') delete document.documentElement.dataset.fs; else document.documentElement.dataset.fs = v; }, v);
   const opened6 = await openC();
-  const shown = await page.evaluate((id) => [...document.querySelectorAll(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-opt .tl-leg-name`)].map((e) => e.textContent.trim()), C);
+  const shown = await page.evaluate((dc, id) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt .tl-leg-name`)].map((e) => e.textContent.trim()), DC, C);
   const WANT = ['走路', '鐵路', '公車', '搭車', '船', '飛機', '其他'];
   // 對照組：名字改成可以折行、寬度壓到 1 個字，必須量到「折成 2 行」——量法抓不到折行，下面的「都一行」就不算數。
   // 第一版用「可折行＋字放大」：名字改短（最長 2 個字）之後放大也折不了行，對照組量不到、自己報紅（2026-11-11）——
@@ -252,13 +300,13 @@ try {
   // 不是字「搭車」、也不是新代號。顯示名稱和存進去的值是兩件事，改名時最容易把它們搞混。
   await openC();
   let carTile = null;
-  for (const t of await page.$$(`.daycollapse.open .tl-leg[data-spot="${C}"] .tl-leg-opt`)) {
+  for (const t of await page.$$(`${DC} .tl-leg[data-spot="${C}"] .tl-leg-opt`)) {
     if ((await t.$eval('.tl-leg-name', (e) => e.textContent.trim()).catch(() => '')) === '搭車') carTile = t;
   }
   if (carTile) await carTile.click();
-  await page.waitForFunction((id) => document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`)?.dataset.mode === 'car', { timeout: 8000 }, C).catch(() => {});
+  await modeIs(C, 'car');
   const rec6 = await page.evaluate(async (id) => { const s = await import('./js/store.js'); const x = s.get(id); return { legFrom: x.legFrom, legMode: x.legMode }; }, C);
-  const btn6 = await page.$eval(`.daycollapse.open .tl-leg[data-spot="${C}"] .tl-leg-btn`, (e) => e.textContent.trim()).catch(() => '');
+  const btn6 = await page.$eval(`${DC} .tl-leg[data-spot="${C}"] .tl-leg-btn`, (e) => e.textContent.trim()).catch(() => '');
   yes(!!carTile && rec6.legMode === 'car' && rec6.legFrom === A && btn6.includes('搭車') && !btn6.includes('計程車'),
     `點畫面上寫「搭車」的那一格 → 存進去的是代號 car、前一站＝甲；按鈕寫「${btn6}」`, `${carTile ? '' : '找不到寫「搭車」的格子｜'}${JSON.stringify(rec6)}`);
 
@@ -266,51 +314,65 @@ try {
   // 直接把一筆 train 寫進資料庫（不經新畫面，等於舊版手機推上來的那一筆）→ 重開頁面，那一列要寫新名字「鐵路」，
   // 不能寫舊名字、也不能變「還沒設定」（換代號就會變這樣）。丙→乙 這段現在沒設定，前一站是丙。
   await page.evaluate(async (id, from) => { const s = await import('./js/store.js'); await s.patch(id, { legFrom: from, legMode: 'train' }); }, B, C);
-  await openTrip();
-  const old6 = await page.evaluate((id) => { const li = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"]`); return { mode: li?.dataset.mode, text: li?.querySelector('.tl-leg-btn')?.textContent.trim() || '' }; }, B);
+  await openItin();
+  const old6 = await page.evaluate((dc, id) => { const li = document.querySelector(`${dc} .tl-leg[data-spot="${id}"]`); return { mode: li?.dataset.mode, text: li?.querySelector('.tl-leg-btn')?.textContent.trim() || '' }; }, DC, B);
   yes(old6.mode === 'train' && old6.text.includes('鐵路') && !old6.text.includes('電車') && !old6.text.includes('還沒設定'),
     `舊版存的 train（直接寫進資料庫）→ 畫面寫新名字（「${old6.text}」）`, JSON.stringify(old6));
 
-  // 七、背景變動不收起打開的選項（2026-11-11 守夜第 2 項）。補維基圖片會 store.patch 站點的 heroHash／heroAttr 這類
-  // 真資料欄位、推高 updatedAt → 行程頁的簽章變了 → 整頁重畫，剛點開的選項就被收起來（這支原樣 6 次被打斷 5 次）。
-  // 造情境：直接 store.patch 甲的 heroAttr（跟補圖寫的同一類欄位；甲前面沒有「怎麼去」那一列，不會動到要量的東西）。
-  // 先做對照：選項關著時，同樣的寫入要讓整頁重畫（時間軸換成新節點）——不然「選項還開著」可能只是根本沒重畫。
+  // 七、背景變動不收起打開的選項（2026-11-11 守夜第 2 項；v1.87.0 改在行程分頁）。
+  // v1.87.0 起「怎麼去」只在行程分頁；行程分頁的簽章（itinSignature）本來就不含補維基圖片寫的欄位（heroHash／heroAttr）：
+  //   七之一 補圖那一類寫入（甲的 heroAttr，updatedAt 照樣推高）→ 行程分頁不重畫（這一支原本 flaky 的根因：任務頁會重畫）；
+  //   七之二 會讓行程分頁重畫的背景變動＝旅伴同步進來改了行程：造情境用 store.patch 甲的表情符號（簽章裡有、畫面上看得到；
+  //          甲前面沒有「怎麼去」那一列，不會動到要量的東西）。
+  // 先做對照：選項關著時，改表情符號要讓整頁重畫（時間軸換成新節點）——不然「選項還開著」「沒重畫」可能只是根本不會重畫。
   // 現在順序是 甲 丙 乙 戊；戊那一列（乙→戊）沒設定。
-  const bgPatch = (n) => page.evaluate(async (id, n) => {
+  const EMO = ['🚉', '🏯', '⛩️'];
+  const bgPatch = (n, kind) => page.evaluate(async (id, n, kind, emo) => {
     const s = await import('./js/store.js'); const b = s.get(id).updatedAt || 0;
-    await s.patch(id, { heroAttr: `背景補圖（測試 ${n}）` });
+    await s.patch(id, kind === 'emoji' ? { emoji: emo[n] } : { heroAttr: `背景補圖（測試 ${n}）` });
     return s.get(id).updatedAt > b;
-  }, A, n);
-  const markTl = () => page.evaluate(() => { window.__tl7 = document.querySelector('.daycollapse.open .timeline'); });
-  const sameTl = () => page.evaluate(() => !!window.__tl7 && window.__tl7 === document.querySelector('.daycollapse.open .timeline'));
-  const redrawn = (ms) => page.waitForFunction(() => !!window.__tl7 && window.__tl7 !== document.querySelector('.daycollapse.open .timeline'), { timeout: ms }).then(() => true, () => false);
-  await stable('.daycollapse.open .timeline');
+  }, A, n, kind, EMO);
+  const markTl = () => page.evaluate((dc) => { window.__tl7 = document.querySelector(`${dc} .timeline`); }, DC);
+  const sameTl = () => page.evaluate((dc) => !!window.__tl7 && window.__tl7 === document.querySelector(`${dc} .timeline`), DC);
+  const redrawn = (ms) => page.waitForFunction((dc) => !!window.__tl7 && window.__tl7 !== document.querySelector(`${dc} .timeline`), { timeout: ms }, DC).then(() => true, () => false);
+  await stable(`${DC} .timeline`);
   await markTl();
   const t7 = Date.now();
-  const bumped0 = await bgPatch(0);
+  const bumped0 = await bgPatch(0, 'emoji');
   const redrew0 = await redrawn(6000);
   const lag7 = Date.now() - t7;
   const wait7 = Math.max(1500, lag7 * 3);
-  yes(bumped0 && redrew0, `前置：選項關著時背景寫一筆（甲的 heroAttr，updatedAt 有推高）→ 整頁重畫（${lag7} 毫秒）`, JSON.stringify({ bumped0, redrew0 }));
-  await stable('.daycollapse.open .timeline');
+  const emo0 = await page.evaluate((dc) => document.querySelector(`${dc} .tl-item .itin-stop`)?.textContent || '', DC);
+  yes(bumped0 && redrew0 && emo0.startsWith(EMO[0]), `前置：選項關著時背景改甲的表情符號（旅伴同步那一類）→ 整頁重畫、甲寫成「${emo0}」（${lag7} 毫秒）`, JSON.stringify({ bumped0, redrew0 }));
+  await stable(`${DC} .timeline`);
+  await markTl();
+  const bumpedH = await bgPatch(0, 'hero');
+  await sleep(wait7);
+  const sameH = await sameTl();
+  yes(redrew0 && bumpedH && sameH, `七之一 背景補維基圖片那一類寫入（甲的 heroAttr，updatedAt 有推高）→ 行程分頁不重畫（等了 ${wait7} 毫秒＝對照組的 3 倍、至少 1.5 秒）`,
+    JSON.stringify({ redrew0, bumpedH, sameH }));
+  await stable(`${DC} .timeline`);
   const open7 = await pickVia(E);
   await markTl();
-  const bumped1 = await bgPatch(1);
+  const bumped1 = await bgPatch(1, 'emoji');
   await sleep(wait7);
-  const still7 = await page.evaluate((id) => { const p = document.querySelector(`.daycollapse.open .tl-leg[data-spot="${id}"] .tl-leg-pick`); return !!p && !p.hidden; }, E);
+  const still7 = await page.evaluate((dc, id) => { const p = document.querySelector(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-pick`); return !!p && !p.hidden; }, DC, E);
   const same7 = await sameTl();
-  yes(redrew0 && open7 && bumped1 && still7 && same7, `選項打開時背景寫一筆 → 選項還開著、沒有整頁重畫（等了 ${wait7} 毫秒＝對照組的 3 倍、至少 1.5 秒）`,
+  yes(redrew0 && open7 && bumped1 && still7 && same7, `七之二 選項打開時背景改了行程（甲的表情符號）→ 選項還開著、沒有整頁重畫（等了 ${wait7} 毫秒）`,
     JSON.stringify({ redrew0, open7, bumped1, still7, same7 }));
-  // 收起來（再點一次那一列）→ 剛才擋下的重畫要補上，不然補到的圖要等下一次別的變動才出現。
+  // 收起來（再點一次那一列）→ 剛才擋下的重畫要補上，不然改過的行程要等下一次別的變動才出現。
   // 要先確認上一條真的擋下了（still7、same7），不然時間軸早就換過、這條會白白成立。
-  await page.click(`.daycollapse.open .tl-leg[data-spot="${E}"] .tl-leg-btn`);
+  await page.click(`${DC} .tl-leg[data-spot="${E}"] .tl-leg-btn`);
   const redrew1 = await redrawn(6000);
-  yes(still7 && same7 && redrew1, '收起選項 → 剛才擋下的重畫補上（時間軸換成新節點）', JSON.stringify({ still7, same7, redrew1 }));
+  const emo1 = await page.evaluate((dc) => document.querySelector(`${dc} .tl-item .itin-stop`)?.textContent || '', DC);
+  yes(still7 && same7 && redrew1 && emo1.startsWith(EMO[1]), `收起選項 → 剛才擋下的重畫補上（時間軸換成新節點、甲寫成「${emo1}」）`, JSON.stringify({ still7, same7, redrew1 }));
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {
   await browser.close();
   web.kill();
 }
+// 說明行（不是判定）：攔下了哪些外站請求——不打真網路的證據；0 次也照實印
+console.log(`・外站請求一律當場回 404、沒有放出去：${[...ext].map(([h, n]) => `${h}×${n}`).join('、') || '這一輪 0 次'}`);
 console.log(`\n交通方式畫面：${pass} 項通過、${fail} 項失敗`);
 process.exitCode = fail ? 1 : 0;

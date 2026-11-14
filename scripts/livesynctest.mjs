@@ -105,8 +105,9 @@ try {
   }, setup);
 
   const tJoin = await waitFor(A, (o) => {
-    const btn = [...document.querySelectorAll('.crew-btn, .join-banner')].map((x) => x.textContent).join(' ');
-    return btn.includes('2/2') || btn.includes('加入了');
+    // 主頁上「有人加入」看的是加入橫幅（v1.87.0 起旅伴列「N/M 位已加入」不在主頁、在旅程設定）
+    const btn = [...document.querySelectorAll('.join-banner')].map((x) => x.textContent).join(' ');
+    return btn.includes('加入了');
   }, setup);
   yes(tJoin != null, tJoin != null
     ? `A 在前景不動，${tJoin.toFixed(1)} 秒後畫面自己更新成「有人加入」`

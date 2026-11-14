@@ -259,6 +259,29 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
 .th-end.has-peek { margin-top: calc(var(--pk-rise) + 8px); }
 /* 絕對定位從框線內側算：和紙的框線 2.5px，不補的話小鳳的身體會疊在框線上約 2px（hometest H9 量到邊線差 2.01px）——往上補一個框線寬，邊線對在框線外緣 */
 .th-end > .gl-peek { right: 14px; bottom: calc(100% - var(--pk-sink) + var(--th-bd)); }
+/* 吉祥物講一句（v1.87.0；js/says.js）：主頁＝左邊一隻小的吉祥物、右邊對話框（尾巴指向牠）、最右邊 ✕；跟著版面排，不浮在別的東西上面。
+   完成任務＝慶祝畫面照片上緣探頭的那一隻講（.say-pk：放在牠右邊、尾巴指向牠，照片上面那塊本來就空著的地方）。
+   出場只動 opacity／transform（淡入、往上 6px）；減少動態效果時 js 不加 .say-in，下面的總開關也兜底。 */
+.say { display: flex; align-items: flex-end; gap: 2px; margin: 10px 0; }
+.say-who { flex: none; display: inline-flex; }
+.say-who > svg { display: block; }
+.say-text { position: relative; flex: 1; min-width: 0; margin: 0 0 12px 10px; padding: 10px 14px;
+  background: var(--bg-elev); border: 1.5px solid var(--line); border-radius: 16px; font-weight: 700; line-height: 1.45; text-align: left; }
+/* 尾巴：一個只有左、下框線的小方塊轉 45 度，尖角朝左；蓋在對話框的框線上，接起來像一條線 */
+.say-text::before { content: ''; position: absolute; left: -8px; bottom: 12px; width: 14px; height: 14px;
+  background: inherit; border: inherit; border-top: 0; border-right: 0; border-radius: 0 0 0 3px; transform: rotate(45deg); }
+.say-x { flex: none; align-self: center; min-width: 44px; min-height: 44px; margin-bottom: 12px; border: 0; background: transparent;
+  color: var(--muted); font: inherit; font-size: 1.05rem; cursor: pointer; border-radius: 12px; }
+html[data-theme="washi"] .say-text { border-width: 2.5px; }
+/* 照片只有 210px 寬：寬度不能跟著照片算（第一版 right:0，只剩 40px，字一個一個直排、疊到標題上）——
+   照字的長度排、最寬到螢幕右邊留 12px（慶祝畫面整個置中，照片中線＝螢幕中線）；有這一句時照片上面多留 26px，
+   窄螢幕排成三行也落在照片上面那塊空位裡、不碰到上面的「進度」那一行 */
+.celebrate-shot.has-say { margin-top: calc(var(--pk-rise) + 40px); }
+.celebrate-shot > .say-pk { position: absolute; left: calc(50% + var(--say-off, 64px)); right: auto; bottom: calc(100% + 10px); margin: 0;
+  width: max-content; max-width: calc(50vw - var(--say-off, 64px) - 12px); padding: 8px 10px; font-size: 0.95rem; }
+.say.say-in { animation: say-in .35s ease-out both; }
+.say-pk.say-in { animation: say-in .35s ease-out .7s both; }   /* 等探頭的那一隻跳上來（.6 秒）再講 */
+@keyframes say-in { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }
 .icon-btn {
   appearance: none;
   border: 0;
@@ -1249,7 +1272,7 @@ body.pv-open { overflow: hidden; }
 .hero.hero-tight { padding: 6px 2px 10px; }
 .hero.hero-tight h2 { font-size: 1.35rem; }
 .hero.hero-tight p { font-size: 0.95rem; }
-/* 旅伴列（行程頁）：可點開清單；未加入的頭像半透明、24 小時內加入的掛「新」 */
+/* 旅伴列（v1.87.0 起在旅程設定的旅伴名單最上面；原本在主頁）：可點開清單；未加入的頭像半透明、24 小時內加入的掛「新」 */
 .crew-btn { appearance: none; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
   display: flex; align-items: center; gap: 8px; background: transparent; border: 0; padding: 10px 2px; margin: 2px 0 4px; }
 .crew-btn .avatars { margin: 0; flex: 1; }
@@ -1838,6 +1861,14 @@ textarea.field { resize: vertical; line-height: 1.6; }
   padding: 12px 14px; margin-bottom: 8px;
 }
 .member-row-main { flex: 1; min-width: 0; }
+/* v1.87.0 主頁的旅伴列搬進這份名單：最上面一排頭像＋「N/M 位已加入 ›」、每一位前面放頭像、名字下面寫加入了沒 */
+.member-list > .crew-btn { margin: 0 0 6px; }
+.member-row > .crew-wrap { flex: none; }
+/* 名單列裡頭像右上的「新」再往外移：頭像旁邊就是名字，小標不要蓋到頭像上的字（上面那一排頭像擠在一起，照原本的位置） */
+.member-row .crew-new { right: -12px; top: -10px; }
+.member-row .avatar.ghost { opacity: 0.38; }
+.member-joined { color: var(--muted); font-size: 0.92rem; font-weight: 700; margin-top: 2px; }
+.member-joined.ok { color: var(--ok-text); }
 .contact-row {
   display: flex; align-items: center; gap: 10px;
   background: var(--bg-elev); border: 1px solid var(--line); border-radius: 14px;

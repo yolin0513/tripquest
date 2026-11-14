@@ -78,16 +78,18 @@
   {
     "name": "任務頁還有當天地圖",
     "why": "（事前寫 2026-11-13）當天地圖（查看路線）搬到行程分頁之後，任務頁每天也還畫一張。預期只紅 legviewtest 的「任務頁沒有當天地圖」。v1.86.0 同行夥伴那一列（原本的 find）拿掉了，find 改指任務頁時間軸那一行、地圖插在它前面（事前寫 2026-11-14，預期不變）。",
-    "expect": ["任務頁沒有當天地圖"],
+    "expect": ["零 任務頁"],
     "file": "js/views/trip.js",
-    "find": "        legTimeline(daySpots, (s) => h('li', { class: 'tl-item' + (states",
-    "replace": "        dayMap(daySpots, tripId, day), legTimeline(daySpots, (s) => h('li', { class: 'tl-item' + (states",
+    "find": "        h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states",
+    "replace": "        dayMap(daySpots, tripId, day), h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states",
+    "note": "v1.87.0（2026-11-14 事前改）任務頁的時間軸不再用 legTimeline（「怎麼去」只在行程分頁），find 改指新的那一行、地圖照樣插在它前面；legviewtest 改寫後「任務頁沒有當天地圖」併進「零 任務頁：…沒有「怎麼去」…、沒有當天地圖」那一條，expect 跟著改（同一件事、預期不變）",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
   },
   {
     "name": "行程頁的怎麼去是空的",
     "why": "（事前寫 2026-11-13）行程頁的時間軸畫了、但兩站之間「怎麼去」都是空的（沒讀那一站的 legMode；地圖照舊有）。預期只紅 legviewtest 的「行程頁也看得到同一份「怎麼去」」。",
-    "expect": ["行程頁也看得到同一份「怎麼去」"],
+    "expect": ["甲→乙 設成鐵路", "丁→戊 設成公車", "重開行程分頁，設好的「怎麼去」還在", "對照：丁→戊 沒被動到", "點畫面上寫「搭車」的那一格", "舊版存的 train"],
+    "note": "v1.87.0（2026-11-14 事前改，跑之前）「怎麼去」只在行程分頁，legviewtest 全部改在行程分頁設、讀——行程分頁的「怎麼去」是空的，凡是讀「設好之後那一列寫什麼」的都紅：甲→乙 鐵路、丁→戊 公車、重開之後還在、重排後的對照（丁→戊 仍是公車）、點「搭車」之後按鈕的字、舊版存的 train。不紅：一開始全部沒設定那幾條（本來就是空的）、存下去的值（讀資料庫）、播放（地圖讀的是原本的站，沒有被清掉）、重排與刪站「不套用」那兩條（本來就要空）、選項格子、第七段。原本的預期「行程頁也看得到同一份」那一條 v1.87.0 拿掉了（任務頁沒有了，沒有「也」）。",
     "file": "js/views/trip.js",
     "find": "          legTimeline(ds, (s) => h('li', { class: 'tl-item' },",
     "replace": "          legTimeline(ds.map((x) => ({ ...x, legMode: null })), (s) => h('li', { class: 'tl-item' },",

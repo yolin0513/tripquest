@@ -15,7 +15,7 @@
 //   第 1 批（2026-10-27）——每一條都用 seen()：捲到畫面中間、沒被蓋住、對比 ≥ 4.5，才算「看得到」：
 //   B1 日期列每格看得到日期（不寫星期），今天那格寫「今天」，不寫當天第一站（2026-11-05 Yolin 改）
 //   B2 當日標題卡看得到「第一站 → 最後一站」——v1.86.0 起在「行程」分頁那一天的標題
-//   B3 v1.86.0 起任務頁沒有「同行夥伴」那一列（前置：這趟有兩位旅伴、那一天的時間軸在）；旅伴在主頁的旅伴列看得到
+//   B3 v1.86.0 起任務頁沒有「同行夥伴」那一列（前置：這趟有兩位旅伴、那一天的時間軸在）；旅伴在旅程設定的旅伴名單最上面看得到（v1.87.0 從主頁搬過去）
 //   B4 進行中、看今天：現在這一站之後的換虛線框、字淡一點但對比照樣 ≥ 4.5
 //   B5 看的不是今天、還沒出發：什麼都不淡化
 //   G1 紙飛機（原創圖形，js/glyphs.js）停在選中那天的正上方、不蓋到那格的字；點別天就跟過去
@@ -303,11 +303,15 @@ try {
   yes(stick.y > natural + 20, `S1 前置：捲過了日期列原本的位置（scrollY ${stick.y}；日期列原本在標題列下面 ${natural}px）`);
   yes(stick.y > 0 && stick.top >= stick.topbar - 2 && stick.top <= stick.topbar + 2, `S1 捲到最下面（scrollY ${stick.y}）日期列還黏在標題列下面（top ${stick.top}、標題列高 ${stick.topbar}）`);
 
-  // ---- v1.86.0 搬走的兩樣：旅伴在主頁的旅伴列；天的標題（不是按鈕、第一站 → 最後一站）在「行程」分頁 ----
+  // ---- v1.86.0 搬走的兩樣：旅伴（v1.86.0 在主頁的旅伴列；v1.87.0 再搬進旅程設定的旅伴名單最上面）；
+  //      天的標題（不是按鈕、第一站 → 最後一站）在「行程」分頁 ----
   yes(await toTab(page, '主頁', '.trip-home'), 'B3 按底部「主頁」進主頁');
-  const crewH = await page.evaluate(() => { const b = document.querySelector('.trip-home .crew-btn'); return b ? b.querySelectorAll('.avatars .avatar').length : null; });
-  v = await seen(page, '.trip-home .crew-btn .crew-label');
-  yes(crewH === 2 && v.ok, `B3 前置：這趟有兩位旅伴——主頁的旅伴列在、兩個頭像、字看得到（頭像 ${crewH}；${v.why}；字「${v.text}」）`);
+  const topSet = await page.waitForFunction(() => { const b = document.getElementById('topActionBtn'); return b && !b.hidden && b.getAttribute('aria-label') === '旅程設定'; }, { timeout: 10000 })
+    .then(async () => userClick(page, await page.$('#topActionBtn'), '頁首的旅程設定'), () => ({ ok: false, why: '頁首沒有「設定」' }));
+  const inSet = topSet.ok && await page.waitForSelector('.member-list > .crew-btn', { timeout: 15000 }).then(() => true, () => false);
+  const crewH = inSet ? await page.evaluate(() => document.querySelectorAll('.member-list > .crew-btn .avatars .avatar').length) : null;
+  v = inSet ? await seen(page, '.member-list > .crew-btn .crew-label') : { ok: false, why: `沒進到旅程設定（${topSet.why}）`, text: null };
+  yes(crewH === 2 && v.ok, `B3 前置：這趟有兩位旅伴——主頁頁首「設定」進旅程設定，名單最上面的旅伴列在、兩個頭像、字看得到（頭像 ${crewH}；${v.why}；字「${v.text}」）`);
   yes(await toTab(page, '行程', '.itin-page .itin-day.open'), 'S5 按底部「行程」進行程分頁（旅程中預設是「行程」那一格）');
   const head = await page.evaluate(() => {
     const hd = document.querySelector('.itin-page .itin-day.open .dc-head');

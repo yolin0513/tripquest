@@ -1,0 +1,182 @@
+[
+  {
+    "name": "任務頁：「怎麼去」又放回時間軸",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）v1.87.0 Yolin：任務頁不顯示移動方式、只在行程頁顯示。任務頁的時間軸改回 legTimeline（兩站之間又夾一列「怎麼去」）。預期紅 legviewtest 的「零 任務頁」與「設了鐵路、公車之後，任務頁照樣沒有」；行程分頁那幾條不紅（設定、讀取都在行程分頁）。",
+    "expect": ["零 任務頁", "設了鐵路、公車之後，任務頁照樣沒有"],
+    "file": "js/views/trip.js",
+    "find": "        h('ol', { class: 'timeline' }, ...daySpots.map((s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },",
+    "replace": "        legTimeline(daySpots, ((s) => h('li', { class: 'tl-item' + (states[s.id] ? ' tl-' + states[s.id] : '') },",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：路線圖又放回行程內容上面",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）v1.87.0 Yolin：行程內容在上、可以播放的路線圖在最下面。改回地圖在時間軸前面。預期只紅 legviewtest 的「行程分頁那一天：時間軸在最上面、可以播放的路線圖在最下面」；播放那幾條不紅（地圖照樣在、照樣播）。",
+    "expect": ["行程分頁那一天"],
+    "file": "js/views/trip.js",
+    "find": "          legTimeline(ds, (s) => h('li', { class: 'tl-item' },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),\n            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),\n            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))),\n          dayMap(ds, tripId, day))));",
+    "replace": "          dayMap(ds, tripId, day),\n          legTimeline(ds, (s) => h('li', { class: 'tl-item' },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),\n            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),\n            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))))));",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：簽章把補圖欄位也算進去",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）legviewtest 原本 flaky 的根因：背景補維基圖片寫 heroHash／heroAttr、推高 updatedAt → 頁面整頁重畫。行程分頁的簽章（itinSignature）把這兩個欄位也算進去，補圖就會讓行程分頁重畫。預期只紅 legviewtest 的「七之一」（補圖那一類寫入 → 行程分頁不重畫）；外站一律攔下，其他段落不會有真的補圖寫入。",
+    "expect": ["七之一"],
+    "file": "js/views/trip.js",
+    "find": "    s.legFrom, s.legMode, s.lat, s.lng].join(',')).join(';');",
+    "replace": "    s.legFrom, s.legMode, s.lat, s.lng, s.heroAttr, s.heroHash].join(',')).join(';');",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "旅程設定：名單上沒有旅伴列",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）v1.87.0 旅伴列（頭像＋N/M 位已加入）從主頁搬進旅程設定的旅伴名單最上面；名單上沒放。預期只紅 hometest 的「M4 旅伴列」（主頁那幾條不受影響：主頁本來就沒有）。",
+    "expect": ["M4 旅伴列"],
+    "file": "js/views/trip.js",
+    "find": "      ...(t && info.length ? [crewSummary(tripId, t, () => { if (wrap.isConnected) draw(); })] : []),\n",
+    "replace": "",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "旅程設定：名單上沒有旅伴列（itinviewtest）",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）同上一條的改壞法，證明 itinviewtest 改過的 B3 前置（主頁頁首「設定」進旅程設定、名單最上面的旅伴列兩個頭像）會紅。預期只紅「B3 前置」。",
+    "expect": ["B3 前置"],
+    "file": "js/views/trip.js",
+    "find": "      ...(t && info.length ? [crewSummary(tripId, t, () => { if (wrap.isConnected) draw(); })] : []),\n",
+    "replace": "",
+    "cmd": "node scripts/itinviewtest.mjs"
+  },
+  {
+    "name": "旅程設定：名單上沒有旅伴列（jointest）",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）同上一條的改壞法，證明 jointest 改過的那段（主頁 → 頁首設定 → 名單最上面的旅伴列；點它開加入紀錄）會紅。預期紅「旅程設定的旅伴列標示」「新加入掛「新」」，以及點不到旅伴列、加入紀錄打不開的「清單第一列」「清單第二列」；「名單每一位寫加入了沒」不紅（每一位那一行照樣在）。",
+    "expect": ["旅程設定的旅伴列標示", "新加入掛「新」", "清單第一列", "清單第二列"],
+    "file": "js/views/trip.js",
+    "find": "      ...(t && info.length ? [crewSummary(tripId, t, () => { if (wrap.isConnected) draw(); })] : []),\n",
+    "replace": "",
+    "cmd": "node scripts/jointest.mjs"
+  },
+  {
+    "name": "旅程設定：名單沒寫加入了沒",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）名單每一位名字下面那一行「✓ 已加入／⏳ 還沒加入」沒放。預期只紅 hometest 的「M4 旅伴列」。",
+    "expect": ["M4 旅伴列"],
+    "file": "js/views/trip.js",
+    "find": "          byId.has(m.id) ? h('div', { class: 'member-joined' + (byId.get(m.id).joined ? ' ok' : '') },\n            byId.get(m.id).joined ? '✓ 已加入' : '⏳ 還沒加入') : null,\n",
+    "replace": "",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "旅程設定：名單沒寫加入了沒（jointest）",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）同上一條的改壞法；jointest 有真的認領（爸爸已加入、媽媽還沒）。預期只紅「名單每一位寫加入了沒」。",
+    "expect": ["名單每一位寫加入了沒"],
+    "file": "js/views/trip.js",
+    "find": "          byId.has(m.id) ? h('div', { class: 'member-joined' + (byId.get(m.id).joined ? ' ok' : '') },\n            byId.get(m.id).joined ? '✓ 已加入' : '⏳ 還沒加入') : null,\n",
+    "replace": "",
+    "cmd": "node scripts/jointest.mjs"
+  },
+  {
+    "name": "主頁：旅伴列放回主頁（jointest）",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）旅伴列又放回主頁的小工具（mut_home1113 同一個改壞法，這條證明 jointest 新加的「主頁沒有旅伴列」會紅）。預期只紅「主頁沒有旅伴列」。",
+    "expect": ["主頁沒有旅伴列"],
+    "file": "js/views/trip.js",
+    "find": "      posBanner(tripId)),",
+    "replace": "      members.length ? crewSummary(tripId, t) : null,\n      posBanner(tripId)),",
+    "cmd": "node scripts/jointest.mjs"
+  },
+  {
+    "name": "主頁：沒有加入橫幅（livesynctest）",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）livesynctest 原本等主頁的旅伴列變成「N/M 位已加入」，v1.87.0 旅伴列搬走，改等主頁的加入橫幅；這條證明改過的等待條件會紅：主頁不放加入橫幅。預期只紅「A 等了 N 秒還是沒看到 B 加入」。",
+    "expect": ["A 等了"],
+    "file": "js/views/trip.js",
+    "find": "  const note = joinBanner(tripId, members) || claimNudge(tripId, t, members);",
+    "replace": "  const note = claimNudge(tripId, t, members);",
+    "cmd": "node scripts/livesynctest.mjs"
+  },
+  {
+    "name": "出發那一句：不看幾點",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）出發當天下午也講「今天出發！」。預期紅 saytest 的 S0（12:00 該不講）與 S9（當地 15 點不講）；其他段落不紅（完成任務那幾趟今天出發、但只看慶祝畫面）。",
+    "expect": ["S0 純函式", "S9 出發當天下午"],
+    "file": "js/says.js",
+    "find": "  if (!trip || !trip.startDate || trip.startDate !== ymd(now) || now.getHours() >= 12) return null;",
+    "replace": "  if (!trip || !trip.startDate || trip.startDate !== ymd(now)) return null;",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "關掉的那一句照樣再講",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）sayRow 不看「關過了沒」。預期紅：S6（出發那一句關掉又出現、天氣那一句因此輪不到）、S6b（天氣那一句不在，量不到）、S7（天氣那一句沒出現、關不了）、S12（結束那一句關掉又出現）。不紅：S8（出發日改成明天之後沒有出發那一句，天氣那一句照樣講）。",
+    "expect": ["S6 按 ✕", "S6b 天氣那一句也不疊", "S7 下雨那一句關掉", "S12 結束那一句關掉"],
+    "file": "js/says.js",
+    "find": "  if (!line || saidKeys(tripId).includes(line.key)) return null;",
+    "replace": "  if (!line) return null;",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "天氣那一句不分哪一天",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）天氣那兩句的鍵不帶日期：今天關掉下雨那句，出發日改成明天、明天下雨也不講。預期紅 S0（鍵的格式）與 S8（使用者看得到的結果）；S6、S7 用「哪一種」找那一句，不紅；S10（另一個瀏覽情境、沒關過）不紅。",
+    "expect": ["S0 純函式", "S8 天氣那一句照"],
+    "file": "js/says.js",
+    "find": "  return { key: `${alert.kind}:${alert.day.date}`, who: SAY_WHO[alert.kind], text };",
+    "replace": "  return { key: alert.kind, who: SAY_WHO[alert.kind], text };",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "主頁一次講兩句",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）出發那一句在的時候，天氣那一句照樣講。預期只紅 S2（一次最多一句）；S1、S3（出發那一句本身）不紅。",
+    "expect": ["S2 主頁一次最多一句"],
+    "file": "js/views/trip.js",
+    "find": "    fillWeather(wxSlot, page, tripId, t, { say: !sayDepart && !sayEnd, animate: fresh });",
+    "replace": "    fillWeather(wxSlot, page, tripId, t, { say: true, animate: fresh });",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "減少動態效果：主頁那一句照樣淡入",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）sayRow 不看減少動態效果。總開關（.reduce-motion *）只把動畫時間壓到 0.01ms、不會拿掉 say-in。預期只紅 S16。",
+    "expect": ["S16 減少動態效果：主頁"],
+    "file": "js/says.js",
+    "find": "  if (animate && !reducedMotion()) el.classList.add('say-in');",
+    "replace": "  if (animate) el.classList.add('say-in');",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "減少動態效果：慶祝畫面那一句照樣淡入",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）sayOnPeek 不看減少動態效果。預期只紅 S17。",
+    "expect": ["S17 減少動態效果：慶祝畫面"],
+    "file": "js/says.js",
+    "find": "  if (!reducedMotion()) el.classList.add('say-in');",
+    "replace": "  el.classList.add('say-in');",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "慶祝畫面那一句寬度改回跟著照片",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）第一版的寫法：right:0、寬度跟著照片算（照片只有 210px 寬，那一句只剩約 40px，字一個一個直排、疊到標題上）。預期紅慶祝畫面四條：S13（390 寬）、S14（360／320）、S15（全部拍完）、S17（減少動態效果）；S13b（出場動畫）不紅。",
+    "expect": ["S13 完成任務", "S14 窄螢幕", "S15 全部拍完", "S17 減少動態效果：慶祝畫面"],
+    "file": "css/style.css",
+    "find": ".celebrate-shot > .say-pk { position: absolute; left: calc(50% + var(--say-off, 64px)); right: auto; bottom: calc(100% + 10px); margin: 0;\n  width: max-content; max-width: calc(50vw - var(--say-off, 64px) - 12px); padding: 8px 10px; font-size: 0.95rem; }",
+    "replace": ".celebrate-shot > .say-pk { position: absolute; left: calc(50% + var(--say-off, 64px)); right: 0; bottom: calc(100% + 10px); margin: 0;\n  padding: 8px 10px; font-size: 0.95rem; }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "慶祝畫面：有那一句時照片上面沒多留空間",
+    "why": "（事前寫 2026-11-14 11:30，跑之前；推測、沒先量）照片上面原本只留探頭圖的高度＋14px；那一句排成三行時會頂到上面的「進度」那一行。預期紅三行的那幾格：S14（360／320 寬都是三行）、S15（全部拍完，390 寬就三行）。兩行的 S13（390 寬）、S17 推測不紅（原本的空間夠兩行）——這兩格是推測，紅了照實記成非預期。",
+    "expect": ["S14 窄螢幕", "S15 全部拍完"],
+    "file": "css/style.css",
+    "find": ".celebrate-shot.has-say { margin-top: calc(var(--pk-rise) + 40px); }\n",
+    "replace": "",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "慶祝畫面沒有放那一句",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）celebrate 收到那一句卻沒放上去。預期紅慶祝畫面全部五條：S13、S13b、S14、S15、S17。",
+    "expect": ["S13 完成任務", "S13b 慶祝畫面那一句", "S14 窄螢幕", "S15 全部拍完", "S17 減少動態效果：慶祝畫面"],
+    "file": "js/ui.js",
+    "find": "    if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面多留一點：那句話窄螢幕上可能排成三行\n",
+    "replace": "",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "那一句出場動到版面屬性",
+    "why": "（事前寫 2026-11-14 11:30，跑之前）Dispatch 規矩：只用 transform／opacity。出場改成動 margin-top。預期紅 S5（主頁）與 S13b（慶祝畫面）；減少動態效果那兩條沒有 say-in、不紅；動畫結束後 margin-top 回到 0，量位置的那幾條不紅。",
+    "expect": ["S5 出場只動", "S13b 慶祝畫面那一句"],
+    "file": "css/style.css",
+    "find": "@keyframes say-in { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }",
+    "replace": "@keyframes say-in { 0% { opacity: 0; margin-top: 6px; } 100% { opacity: 1; margin-top: 0; } }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  }
+]

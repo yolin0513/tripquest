@@ -12,6 +12,7 @@
 //     一進主頁就慢慢探上來在動；主頁自己重畫（refreshPage）時圖照樣在、停在靜止圖，不會每重畫一次就再跳一次
 //   M 舊位置 → 新位置（STATUS 的對照表）：任務頁原本上面那幾塊，每一樣在主頁找得到、任務頁不再有
 //     （新旅伴橫幅在 jointest／livesynctest、位置分享在 postest、天氣條的內容在 peektest／photoicontest 驗，都改從主頁讀）
+//     M4（v1.87.0）：主頁的旅伴列再搬一次 → 旅程設定「旅伴與電話」名單最上面（主頁沒有、設定頁有、點了跳出加入紀錄）
 //   R 回顧在「行程」分頁（示意圖 6；v1.86.0 改成最上面一排「行程｜回顧」切換）：底部分頁沒有「回顧」；
 //     預設只看結束日——結束日過了亮「回顧」（三張成品卡）、其餘亮「行程」（全部拍完但還沒結束、沒設結束日都是「行程」）；
 //     「行程」那一格：沒結束＝旅途資訊在每天的行程前面，結束後＝旅途資訊收成一列放最下面；回顧那一列不在「行程」那一格；
@@ -171,7 +172,8 @@ const homeLayout = (page) => page.evaluate(() => {
     endGo: end ? end.querySelector('.th-end-go')?.textContent || '' : null,
     empty: !!q('.th-empty'), plan: btns.some((t) => t.includes('去安排景點')),
     near: !!tools && [...tools.querySelectorAll('button')].some((b) => b.textContent.includes('找附近')),
-    crew: !!(tools && tools.querySelector('.crew-btn')), photos: !!q('.th-photos'), wx: !!q('.wx-slot'),
+    // 旅伴列（頭像＋N/M 位已加入）：v1.87.0 起不在主頁的任何地方（搬進旅程設定的旅伴名單，見 M4）——所以找整頁、不只小工具那一塊
+    crew: !!q('.crew-btn'), photos: !!q('.th-photos'), wx: !!q('.wx-slot'),
     nudge: !!q('.claim-nudge'),
     shot: btns.some((t) => t.includes('拍照解任務')), qline: pg.querySelectorAll('.qline, .qcollapse').length,
     prog: !!q('.task-prog') || /已完成 \d+ \/ \d+/.test(pg.textContent),
@@ -362,15 +364,15 @@ try {
     && hTabs.filter((x) => x.on).length === 1,
     `H1 點旅程卡落在主頁（${hHash.replace(/[A-Za-z0-9-]{20,}/, '…')}）、底部第一格「主頁」亮著（${hTabs.map((x) => (x.on ? `［${x.name}］` : x.name)).join('、') || '沒讀到'}）`);
   let H = hk ? await homeLayout(page) : null;
-  yes(!!H && H.day === '今天是第 2 天' && H.cd === null && H.card && H.go && H.dayBeforeCard && H.cardBeforeTools && H.near && H.crew,
-    `H2 旅程中：今天是第幾天 → 下一站卡（帶我去）→ 小工具（找附近、旅伴），沒有出發倒數（${JSON.stringify(H && { day: H.day, cd: H.cd, card: H.card, go: H.go, dayBeforeCard: H.dayBeforeCard, cardBeforeTools: H.cardBeforeTools, near: H.near, crew: H.crew })}）`);
+  yes(!!H && H.day === '今天是第 2 天' && H.cd === null && H.card && H.go && H.dayBeforeCard && H.cardBeforeTools && H.near && !H.crew,
+    `H2 旅程中：今天是第幾天 → 下一站卡（帶我去）→ 小工具（找附近），沒有出發倒數、沒有旅伴列（v1.87.0 搬到旅程設定；${JSON.stringify(H && { day: H.day, cd: H.cd, card: H.card, go: H.go, dayBeforeCard: H.dayBeforeCard, cardBeforeTools: H.cardBeforeTools, near: H.near, crew: H.crew })}）`);
   yes(!!H && H.card && !H.shot && H.qline === 0 && !H.prog,
     `H3 主頁不放任務的跳轉：沒有「拍照解任務」、沒有任務列、沒有「已完成 X / Y」（下一站卡在才算數；${JSON.stringify(H && { card: H.card, shot: H.shot, qline: H.qline, prog: H.prog })}）`);
 
   // ---- M 舊位置 → 新位置（同一趟：主頁找得到 → 任務頁不再有）----
   console.log('\n— M 舊位置 → 新位置 —');
-  yes(!!H && H.card && H.go && H.crew && H.near && H.wx && /^今天是第 \d+ 天$/.test(H.day || ''),
-    `M1 主頁找得到：主角卡（下一站、帶我去）、旅伴列、找附近、天氣條的位置、今天第幾天（${JSON.stringify(H && { card: H.card, go: H.go, crew: H.crew, near: H.near, wx: H.wx, day: H.day })}）`);
+  yes(!!H && H.card && H.go && H.near && H.wx && /^今天是第 \d+ 天$/.test(H.day || ''),
+    `M1 主頁找得到：主角卡（下一站、帶我去）、找附近、天氣條的位置、今天第幾天（旅伴列 v1.87.0 搬到旅程設定，見 M4；${JSON.stringify(H && { card: H.card, go: H.go, near: H.near, wx: H.wx, day: H.day })}）`);
   hk = hk && await tabTo(page, '任務', '.qcollapse');
   const T = hk ? await taskPageLeftovers(page) : null;
   yes(!!T && T.spots > 0 && /^已完成 \d+ \/ \d+$/.test(T.prog || '') && T.found.length === 0 && Object.keys(T.left).length === 10,
@@ -384,6 +386,46 @@ try {
   const T2 = hk ? await taskPageLeftovers(page) : null;
   yes(!!H && H.nudge && nudgeBtn === '選擇我是誰' && !!T2 && T2.spots > 0 && !T2.left['還看不到你'],
     `M3 「旅伴還看不到你」在主頁最上面（按鈕「${nudgeBtn || '沒有'}」）、任務頁沒有（任務頁 ${T2 ? T2.spots : 0} 站、還看不到你 ${T2 ? T2.left['還看不到你'] : '沒讀到'}）`);
+
+  // M4 旅伴列（v1.87.0；Yolin 看 v1.86.0 實機）：主頁的「頭像＋N/M 位已加入」→ 旅程設定「旅伴與電話」名單最上面，
+  //   每位旅伴前面放頭像、名字下面寫「已加入／還沒加入」。走使用者的路：首頁點旅程卡（落在主頁）→ 頁首右上「⚙️ 設定」；
+  //   再點名單最上面那一排 → 跳出加入紀錄（👥 旅伴）。R旅程中＝一位旅伴（小美）、沒有人選過「這是誰的手機」→ 0/1、虛線圈
+  //   （「已加入」那一種在 jointest 從真的認領走一遍）
+  hk = await openTrip(page, 'R旅程中');
+  const H4 = hk ? await homeLayout(page) : null;
+  let MC = null, crewModal = null;
+  if (hk && await soft(page.waitForFunction(() => { const b = document.getElementById('topActionBtn'); return b && !b.hidden && b.getAttribute('aria-label') === '旅程設定'; }, { timeout: 10000 }))) {
+    const hit = await userClick(page, await page.$('#topActionBtn'), '頁首的旅程設定');
+    if (!hit.ok) console.log('  [點不到]', hit.why);
+    if (hit.ok && await soft(page.waitForFunction(() => /\/settings$/.test(location.hash) && document.querySelector('.member-list .member-row'), { timeout: 15000 }))) {
+      MC = await page.evaluate(() => {
+        const list = document.querySelector('.member-list');
+        const btn = list.querySelector(':scope > .crew-btn');
+        return {
+          first: !!btn && list.firstElementChild === btn, label: btn ? btn.querySelector('.crew-label')?.textContent || '' : null,
+          aria: btn ? btn.getAttribute('aria-label') : null,
+          avatars: btn ? btn.querySelectorAll('.avatars .avatar').length : 0, ghosts: btn ? btn.querySelectorAll('.avatars .avatar.ghost').length : 0,
+          rows: [...list.querySelectorAll(':scope > .member-row')].map((r) => ({
+            name: r.querySelector('.member-row-main > div')?.textContent || '',
+            avatarFirst: !!r.firstElementChild && r.firstElementChild.matches('.crew-wrap') && !!r.firstElementChild.querySelector('.avatar'),
+            ghost: !!r.querySelector(':scope > .crew-wrap > .avatar.ghost'),
+            joined: r.querySelector('.member-row-main > .member-joined')?.textContent ?? null })),
+        };
+      });
+      const hb = MC.first ? await userClick(page, await page.$('.member-list > .crew-btn'), '名單最上面的旅伴列') : { ok: false, why: '沒有旅伴列' };
+      if (hb.ok && await soft(page.waitForFunction(() => [...document.querySelectorAll('.modal-card .modal-title')].some((x) => x.textContent === '👥 旅伴'), { timeout: 10000 }))) {
+        crewModal = await page.evaluate(() => [...document.querySelectorAll('.modal-card .crew-row .cr-name')].map((x) => x.textContent).join('、'));
+        const x = await page.$('.modal-card .modal-x');
+        if (x) await userClick(page, x, '加入紀錄的關閉');
+        await soft(page.waitForFunction(() => !document.querySelector('.modal-card'), { timeout: 8000 }));
+      } else if (!hb.ok) console.log('  [點不到]', hb.why);
+    }
+  }
+  yes(!!H4 && !H4.crew && !!MC && MC.first && MC.label === '0/1 位已加入 ›' && MC.aria === '0/1 位已加入，看加入紀錄' && MC.avatars === 1 && MC.ghosts === 1
+    && MC.rows.length === 1 && MC.rows[0].name === '小美' && MC.rows[0].avatarFirst && MC.rows[0].ghost && MC.rows[0].joined === '⏳ 還沒加入'
+    && crewModal === '小美',
+    `M4 旅伴列：主頁沒有（${H4 ? H4.crew : '沒讀到'}）→ 旅程設定名單最上面「${MC ? MC.label : '沒讀到'}」（頭像 ${MC ? MC.avatars : 0}、虛線圈 ${MC ? MC.ghosts : 0}、在最上面 ${MC ? MC.first : '—'}）；`
+    + `每位前面頭像、名字下面寫加入了沒（${MC ? MC.rows.map((r) => `${r.name}：頭像在前 ${r.avatarFirst}、虛線 ${r.ghost}、「${r.joined}」`).join('；') : '沒讀到'}）；點了跳出加入紀錄（${crewModal ?? '沒跳出來'}）`);
 
   // H還沒出發
   hk = await openTrip(page, 'H還沒出發');
