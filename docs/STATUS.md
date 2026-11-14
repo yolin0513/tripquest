@@ -1,6 +1,7 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-11-14 23:3x 守夜模式：**Yolin 決定照這版上線（v1.90.0）。** 照 Dispatch：先跑受影響 27 支＋瀏覽器突變 7 條（Dispatch 許可），全綠才升版號、全套丟背景跑，全綠給五行、放行才推。待辦加一條：海報背景之後評估用生圖服務（混合版，現在不做；見交接最上面「待辦」）。
+> 最後更新：2026-11-14 23:5x 守夜模式：**v1.90.0 全套 95 支在背景跑（`--all --approved`，預估 3182 秒、約 00:47 跑完），全綠才給五行、放行才推。** 上線前的測試：瀏覽器突變 7/7 紅（6 條紅在預期，「點的位置加亂數抖動」多紅 8 行，都是「預覽＝成品」那道防線，Dispatch 同意這個解讀）；受影響 27 支跑到第 14 支 **shelltest 紅：新檔 `js/itinposter/legicons.js` 沒列進 `sw.js` 的離線清單**（測試抓到的真問題；後面 13 支沒跑）。照 Dispatch：修正併回程式那個 commit（改寫本機還沒推的歷史，備份分支 `bak-v190-before-fix`＝舊的 `d4ef5b3`，改寫前後的樹只差那一行）→ 單跑 shelltest 13 項綠 → 只升版號 `0df82f5` → 全套（含沒跑的 13 支）。程式 commit 現在是 `ceceda1`（原 `721723e`）。
+> 之前 23:3x 守夜模式：**Yolin 決定照這版上線（v1.90.0）。** 照 Dispatch：先跑受影響 27 支＋瀏覽器突變 7 條（Dispatch 許可），全綠才升版號、全套丟背景跑，全綠給五行、放行才推。待辦加一條：海報背景之後評估用生圖服務（混合版，現在不做；見交接最上面「待辦」）。
 > 之前 22:4x 守夜模式：**v1.90 海報乙案 ②③ 做好了、成品 12 個檔交 Dispatch，等 Yolin 看——不升版號、沒推。** 程式 `721723e`（交通方式改成畫的小圖示、路線圖路旁加裝飾、背景淡紋理）；版面突變 12/12 紅（11 條紅在預期、1 條多紅 B4）、改過 find 的兩條舊突變也紅；版面測試 146 項、瀏覽器測試 134 項（瀏覽器那次在 commit 前的工作區，跟 HEAD 只差測試檔頭一行註解）。**還沒跑、要許可的重負載**：受影響 27 支（預估 361 秒、13 支開瀏覽器）＋瀏覽器突變 7 條（約 5 分）；全套等 Yolin 看過 ②③。細節見交接最上面「v1.90」那一節。
 > 之前 21:5x 守夜模式：**v1.89.0 上線了（海報乙案 ①④）**——Dispatch 核對五行後放行；21:52 `safe-push.sh` 回 0，5 個 commit，`09cbca2..8a00bae`，遠端 main＝本機 HEAD（ls-remote 再問一次相同）。線上 21:53:26 換新；21:54 逐位元組比對 8 支（`sw.js`、`js/itinposter/` 四支、`js/peeks.js`、`js/route.js`、`js/views/trip.js`）全部跟 HEAD 相同，對照組：同一個比對器拿 `09cbca2` 那一份比 8 支都判不同、自己比自己判相同；`sw.js` 9305 位元組、sha256 相同；只改客戶端、沒部署 Worker。**接著做 ②③**（路線小圖示、背景淡紋理；做好先拍成品給 Dispatch）。
 > 之前 21:5x 守夜模式：**v1.89.0 全套 95/95 一次跑完全綠（20:56～21:49，在 `896f82b`，3185 秒、行首 ✗ 0 行），等 Dispatch 核對五行、放行才推。** 推完再實作 ②③（規劃與突變預期寫在 session 暫存區，實作時進 repo）；`js/legs.js` 那句過期的註解跟 ② 一起改。
@@ -76,7 +77,12 @@
   - 這次改到的三條舊突變照現在的寫法改 find（測的行為不變）：`mut_v188`「海報畫圖：多 import 類別」、`mut_v189`「v189 車程：不傳進站卡」與它的瀏覽器版。版面那兩條重跑都紅：v189 那條紅在預期；v188 那條紅 D1（預期）、另紅 D3「畫的那支不碰模型與類別」（推論：在 draw.js 多 import 類別那一支，D3 也擋——第二道防線）。改 find 前 `mutlint` 抓到這三條「find 出現 0 次」，改完 650 條 find 都對得上。
   - `tools/mutations/mut_v190ui.json` 瀏覽器 6 條＋`mut_v189` 那條瀏覽器版：**沒跑**（重負載，等許可）。
   - 秒級檢查（實測）：`mutlint`、`mutexpecttest` 17、`mutcmdtest` 15、`mutstale` 15 都過。
-- **沒跑的（要許可的重負載；這不是全套）**：① `run-affected --base origin/main`：27 支，預估 361 秒，13 支開瀏覽器（`js/legs.js` 只改了註解，但挑選器照 import 關係把引用它的 9 支 App 測試都挑進來——規則從寬，沒動它）；② 瀏覽器突變 7 條（itinpostertest 一次約 30 秒，連原樣約 4～5 分）。全套 95 支等 Yolin 看過 ②③。
+- **上線前的測試（23:35～23:5x，實測；Yolin 23:3x 決定照這版上線、Dispatch 許可下面兩場）**：
+  - 瀏覽器突變（23:35～23:39，在 `d4ef5b3`、工作區＝HEAD）：`mut_v190ui.json` 6 條，原樣 itinpostertest 134 項綠，**紅 6、沒紅 0**，每條跑滿 134 項，崩潰／逾時／沒套上／情境未成立 0；紅在預期 5 條，「點的位置加亂數抖動」除了預期的 P12 另紅 8 行（P3a、P3b、P5a、P6a、P6b、P7a、P7b、P8a）。讀程式（實測）：這 8 條都先拿畫面上的預覽跟另外畫的一張逐像素比、認出是哪一份（`matchShown`／`variantOf`），認不出來時 `v` 空、`dims` 空陣列，P8a 才會印「0 頁」。推論：點有亂數，每畫一次都不一樣、認不出來——「預覽＝存出來的檔」那道防線也擋到，而且擋得對（Dispatch 同意）。`mut_v189` 改過 find 的瀏覽器那條紅在預期的 P10b。
+  - 受影響 27 支（23:40～23:43，在 `d4ef5b3`）：前 13 支綠，第 14 支 **shelltest 紅在 S2「每一支都在離線清單；漏列：js/itinposter/legicons.js」**（整份紀錄行首 ✗ 只有這行與「停在這裡」），後面 13 支沒跑（guesscensustest、themetrusttest、viewentrytest、legviewtest、tagdaytest、playertest、overviewtest、recordstest、likenumtest、matchinputtest、nullinserttest、itinposterlayouttest、itinpostertest）；154 秒（預估 361，中途停）；逐一計數峰值作廢（結束事件漏收 6 個）（`.logs/res-1114-v190-aff-2340.log`）。推論：照這樣推上去，裝了離線快取、沒網路時海報那一頁載不起來（`layout.js`、`draw.js` 都 import 它）。先前沒抓到：commit 前只跑了海報那兩支、沒跑 `test:affected`；拍成品是開本機伺服器直接看，不經過離線快取。既有的 S2 抓到，不另補斷言（這一次就是「修正前會紅」）。
+  - 修法（Dispatch 23:5x 點頭）：`sw.js` 的離線清單在海報 `draw.js` 後面加 `'./js/itinposter/legicons.js'`，**併回程式那個 commit**（每個 commit 單獨拿出來都要綠）——在 `721723e` 上改、amend（訊息補一段寫明漏列與誰抓到的）、兩個 STATUS commit 照順序 cherry-pick 回來：程式 `ceceda1`、STATUS `7492c71`、`b81c0d0`；跟備份分支 `bak-v190-before-fix` 比，樹只差那一行（`git diff --stat` 1 支 1 行）。單跑 shelltest 13 項綠（清單 124 → 125 項）。然後只升版號 `0df82f5`（`sw.js` → `tripquest-v1.90.0`）。
+  - 全套：照 Dispatch 選的甲，直接 `run-affected --all --approved` 95 支（改 `sw.js` 本來就放大成全套，含上面沒跑的 13 支），預估 3182 秒（95 支都量過）。
+- **（23:3x 以前寫的）沒跑的（要許可的重負載；這不是全套）**：① `run-affected --base origin/main`：27 支，預估 361 秒，13 支開瀏覽器（`js/legs.js` 只改了註解，但挑選器照 import 關係把引用它的 9 支 App 測試都挑進來——規則從寬，沒動它）；② 瀏覽器突變 7 條（itinpostertest 一次約 30 秒，連原樣約 4～5 分）。全套 95 支等 Yolin 看過 ②③。
 - **已知沒守著的（照實寫）**：
   - 裝飾的顏色（星星用那一天的顏色、圓點與短線用淡一點的）沒有斷言——換成別的顏色不會有測試紅。
   - B18 的「字壓在點上的對比」只對內文字色算；以後若有天數色的字直接寫在紙上（不在不鋪點的地方），那一支要回頭擴大。
