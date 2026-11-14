@@ -1,0 +1,200 @@
+[
+  {
+    "name": "海報必吃：不看複核，有 placeId 就取景點庫",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）v1.88.0 必吃只從對得回景點庫的站來（跟可信類別同一套複核）。改成只要有 placeId 就取。預期只紅 itinposterlayouttest 的 A3（名字改過）、A4（建立時打的字比不回）；A2 不紅（不在景點庫、分享匯入的都沒有 placeId）。",
+    "expect": ["A3 名字被改過", "A4 建立時打的字"],
+    "file": "js/itinposter/model.js",
+    "find": "  return v.recheck ? lookup.placeById(v.placeId) : null;",
+    "replace": "  return v.placeId ? lookup.placeById(v.placeId) : null;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報必吃：一站不截前 3 項",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）景點庫一筆有 3～5 項，海報一站只取前 3 項。拿掉截斷。預期紅 A1（第 1 天的清單變長）、A6（第 3 天變 5 項）、A6b（整趟 9 項變多）。",
+    "expect": ["A1 對得回景點庫的站", "A6 第 3 天又去士林夜市", "A6b 整趟的必吃清單"],
+    "file": "js/itinposter/model.js",
+    "find": "      for (const f of place.must.slice(0, MUST_PER_SPOT)) {",
+    "replace": "      for (const f of place.must) {",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報必吃：整趟的清單不跨天去重",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）同一個夜市去兩次，整趟的必吃清單會列兩次。預期只紅 A6b。",
+    "expect": ["A6b 整趟的必吃清單"],
+    "file": "js/itinposter/model.js",
+    "find": "    for (const f of dayFoods) if (!foods.some((x) => x.name === f.name)) foods.push(f);",
+    "replace": "    foods.push(...dayFoods);",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報必吃：那一天也跨天去重（第一版的寫法）",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）第一版把「那一天」的必吃也跨天去重，第 6 天又去同一個夜市、第 6 天那一張的必吃就空了（14:0x 預覽圖看到後修掉）。改回第一版。預期只紅 A6（第 3 天變 0 項）；A6b 不紅（整趟清單一樣）。",
+    "expect": ["A6 第 3 天又去士林夜市"],
+    "file": "js/itinposter/model.js",
+    "find": "        if (!name || dayFoods.some((x) => x.name === name)) continue;",
+    "replace": "        if (!name || dayFoods.some((x) => x.name === name) || foods.some((x) => x.name === name)) continue;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報幾個地方：數站數、不去重",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）吉祥物那一句「N 個地方」，同一個地方去兩次算一個。改成數站數。預期只紅 A7（整趟 4 變 5）；B10 不紅（白名單照模型的數字）。",
+    "expect": ["A7 幾個地方"],
+    "file": "js/itinposter/model.js",
+    "find": "    placeCount: new Set(days.flatMap((d) => d.stops.map((x) => x.name))).size,",
+    "replace": "    placeCount: (spots || []).length,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報天氣：旅程結束之後的預報也放",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）只放日期落在出發日～結束日的預報。拿掉上限。預期只紅 A8（多出 5/13）。",
+    "expect": ["A8 天氣只放旅程裡的日子"],
+    "file": "js/itinposter/model.js",
+    "find": "    .filter(({ i }) => i != null && i >= a && i <= end)",
+    "replace": "    .filter(({ i }) => i != null && i >= a)",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報天氣：舊的預報也放",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）查不到新的預報（stale）就整段不放——說不出是哪天查的。拿掉這個判斷。預期只紅 A10。",
+    "expect": ["A10 舊的預報"],
+    "file": "js/itinposter/model.js",
+    "find": "  const fresh = forecast && !forecast.stale && ISO.test(String(today || '')) ? forecast.days : null;",
+    "replace": "  const fresh = forecast && ISO.test(String(today || '')) ? forecast.days : null;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報幾天幾夜：夜數算錯",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）N 天是 N－1 夜。改成 N 夜。預期只紅 A11；B10 不紅（白名單照模型的字）。",
+    "expect": ["A11 幾天幾夜"],
+    "file": "js/itinposter/model.js",
+    "find": "  return { days, nights: days - 1, label: days === 1 ? '一日遊' : `${days}天${days - 1}夜` };",
+    "replace": "  return { days, nights: days - 1, label: days === 1 ? '一日遊' : `${days}天${days}夜` };",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報交通：不看前一站對不對得上",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）交通只在使用者選過、而且前一站還是同一站時才寫（legs.js 的 legModeOf）。改成有 legMode 就寫。預期只紅 A13（前一站換掉了照樣寫走路）。",
+    "expect": ["A13 交通"],
+    "file": "js/itinposter/model.js",
+    "find": "      const mode = legModeOf(i > 0 ? list[i - 1] : null, s);",
+    "replace": "      const mode = s.legMode || null;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報路線圖：站牌框截了站但不寫還有 N 站",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）全部一張的站牌框最多列 4 站，多的寫「還有 N 站」。拿掉那一行。預期只紅 B7（一天 15 站、三天的第 1 天以外都 ≤4 站）。",
+    "expect": ["B7 站數母體"],
+    "file": "js/itinposter/layout.js",
+    "find": "    if (more > 0) c.text(`還有 ${more} 站`, fx + 48,",
+    "replace": "    if (more < 0) c.text(`還有 ${more} 站`, fx + 48,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報色帶：截了站但不寫還有 N 站",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）色帶全部一張一天最多畫 12 站，多的寫「還有 N 站」。拿掉。預期只紅 B7（一天 15 站那一組）。",
+    "expect": ["B7 站數母體"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (more) c.text(moreText, moreX,",
+    "replace": "  if (false) c.text(moreText, moreX,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報色帶：站排不下也不換行",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）一天的站排到右邊放不下就換到下一行。拿掉換行。預期紅 B3（站框出右邊界）、B4（站框不在色帶裡）。",
+    "expect": ["B3 字與框不出界", "B4 框不疊框"],
+    "file": "js/itinposter/layout.js",
+    "find": "    if (i > 0 && cx + GAP + bw > x1) { row++; cx = x0 + 40; }",
+    "replace": "    if (false) { row++; cx = x0 + 40; }",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報：名字太長也不截",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）放不下的名字截成「…」。拿掉截斷。預期紅 B3（60 字的標題、40 字的站名出界）、B6（站名超出站牌框）；B5 可能也紅（長名字壓到別的字），事前判斷不了，不寫進預期。",
+    "expect": ["B3 字與框不出界", "B6 站名與時間在站牌框裡"],
+    "file": "js/itinposter/layout.js",
+    "find": "      const s = clipTo(measure, full, maxW, size, weight);",
+    "replace": "      const s = full;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報必吃清單：截了但不寫還有 N 項",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）必吃清單最多 12 項，多的寫「還有 N 項」。拿掉。預期只紅 B8（八天 21 項那一組）。",
+    "expect": ["B8 必吃母體"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (more) c.text(`還有 ${more} 項`, x + 30,",
+    "replace": "  if (false) c.text(`還有 ${more} 項`, x + 30,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報小提醒：截了但不寫還有 N 天",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）小提醒最多 6 天，多的寫「還有 N 天」。拿掉。預期只紅 B9（八天預報那一組）。",
+    "expect": ["B9 天氣母體"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (more) c.text(`還有 ${more} 天`,",
+    "replace": "  if (false) c.text(`還有 ${more} 天`,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報色帶每天一張：必吃放整趟的",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）每天一張的色帶，必吃只放那一天的。改成整趟的。預期只紅 B8（色帶每天一張那幾組）；B10 不紅（別天的必吃也是模型裡的字）。",
+    "expect": ["B8 必吃母體"],
+    "file": "js/itinposter/layout.js",
+    "find": "  y += bandH + 40;\n  if (d.foods.length) y = foodsPanel(c, d.foods,",
+    "replace": "  y += bandH + 40;\n  if (d.foods.length) y = foodsPanel(c, model.foods,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報吉祥物：多講一句模型裡沒有的",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）吉祥物只講數得出來的（幾天幾夜、幾個地方）。多加一句。預期只紅 B10。",
+    "expect": ["B10 字的來源"],
+    "file": "js/itinposter/layout.js",
+    "find": "  const line = model.span ? `${model.span.label}，${model.placeCount} 個地方！` : `${model.placeCount} 個地方！`;",
+    "replace": "  const line = model.span ? `${model.span.label}，${model.placeCount} 個地方，出發囉！` : `${model.placeCount} 個地方！`;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "PDF：圖的位置差一個位元組",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）xref 的每一筆要正好指到物件開頭。圖的那一筆多 1。預期紅 C1、C2；對照組不受影響（參考產生器是測試自己寫的）。",
+    "expect": ["C1 PDF 結構", "C2 一張長圖"],
+    "file": "js/pdf.js",
+    "find": "    offsets[img] = len;",
+    "replace": "    offsets[img] = len + 1;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "PDF：頁數寫錯",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）/Count 要等於頁數。多寫 1。預期紅 C1、C2。",
+    "expect": ["C1 PDF 結構", "C2 一張長圖"],
+    "file": "js/pdf.js",
+    "find": "/Count ${n} >>`);",
+    "replace": "/Count ${n + 1} >>`);",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "PDF：每一頁硬縮成 A4",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）頁面高照圖的比例（長圖就是長頁）。改成固定 A4 高。預期紅 C1（第 2 張 1240×3001 的頁）、C2（長頁變 A4）。",
+    "expect": ["C1 PDF 結構", "C2 一張長圖"],
+    "file": "js/pdf.js",
+    "find": "    const pw = +pageWidthPt.toFixed(2), ph = +(pageWidthPt * im.h / im.w).toFixed(2);",
+    "replace": "    const pw = +pageWidthPt.toFixed(2), ph = 842.03;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報畫圖：多 import 類別",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）畫的那支只照 ops 畫，不讀類別。多 import 一支沒登記的。預期只紅 D1。",
+    "expect": ["D1 import 登記"],
+    "file": "js/itinposter/draw.js",
+    "find": "import { PAPER } from './layout.js';",
+    "replace": "import { PAPER } from './layout.js';\nimport { themeMeta } from '../theme.js';",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "海報 PDF：存的時候順便上傳",
+    "why": "（事前寫 2026-11-14 14:21，跑之前）全部在手機上做、不上傳。存 PDF 時多一個 fetch POST。預期只紅 D2。",
+    "expect": ["D2 不直接打網路"],
+    "file": "js/itinposter/index.js",
+    "find": "  return new File([pdfFromJpegs(imgs)], `${base}-行程海報.pdf`, { type: 'application/pdf' });",
+    "replace": "  fetch('./upload', { method: 'POST' });\n  return new File([pdfFromJpegs(imgs)], `${base}-行程海報.pdf`, { type: 'application/pdf' });",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  }
+]

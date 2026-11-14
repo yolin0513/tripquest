@@ -77,6 +77,45 @@ const legs = () => page.evaluate((dc) => [...document.querySelectorAll(`${dc} .t
 // 行程分頁的站名：「📍 甲・車站」→ 拿掉最前面的表情符號
 const names = () => page.evaluate((dc) => [...document.querySelectorAll(`${dc} .tl-item .itin-stop`)].map((e) => e.textContent.replace(/^\S+\s/, '')), DC);
 const ext = new Map();   // 攔下的外站請求（主機 → 次數），結尾印出來
+// 第八段點「怎麼去」與選項的點法：先捲到畫面中間再點（使用者也是看得到才點）。
+// puppeteer 的 click 只在元素不在畫面內時才捲；整顆在畫面內、卻落在固定的底部分頁列後面時，點正中間會點到分頁列。
+// 實例：v1.87.1 15:27 八之六第一次跑；2026-11-14 v1.88.0 全套與單跑——海報按鈕插在時間軸上面、時間軸往下移，
+//   八之二原本用 page.click 點「子→丑 怎麼去」，網址變成 #/trip/…/people（分頁列「照片」那一格）、後面四條讀到空的。
+// 點之前記下那一顆正中間被什麼蓋住、捲到中間後再記一次（說明行，不判定；八之二、五、六各印一行）。
+// 一～七段的點法沒改：v1.88.0 全套時那幾段都過了，改了要另外重跑守那幾段的 17 條突變（同一類寫法的盤點見 STATUS）。
+const coverOf = (el) => el.evaluate((e) => {
+  const r = e.getBoundingClientRect();
+  const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  if (!t) return null;                                  // 正中間不在畫面內
+  if (e === t || e.contains(t)) return '';              // 沒被蓋住
+  const host = t.closest('[id]');
+  const word = (t.closest('a, button')?.textContent || '').replace(/\s+/g, '').slice(0, 8);   // 例：分頁列的哪一格
+  return (host ? `#${host.id} ` : '') + (t.getAttribute('class') || t.tagName.toLowerCase()) + (word ? `「${word}」` : '');
+});
+const tapCentered = async (el) => {
+  const before = await coverOf(el);
+  await el.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  const after = await coverOf(el);
+  await el.click();
+  return { before, after };
+};
+const coverTxt = (what, c) => `${what}${c.before === null ? '原本不在畫面內' : c.before ? `被「${c.before}」蓋住` : '沒被蓋住'}`
+  + (c.after ? `（捲到中間後仍被「${c.after}」蓋住）` : c.after === null ? '（捲到中間後仍不在畫面內）' : '');
+// 選項那一格量的是「舊點法」下的位置：舊點法點按鈕不捲（按鈕沒被蓋住時），選項就在按鈕原本的位置下面打開；
+// 新點法先把按鈕捲到中間，選項跟著到中間，直接量就量不到舊點法會點到什麼（18:14 第一次單跑就是這樣：兩格都「沒被蓋住」）。
+// 所以點完按鈕、捲回點之前的位置再量那一格，量完才捲到中間點。捲動只是平移，選項開著的版面不變。
+const pickLeg = async (spotId, label) => {
+  const btn = await page.$(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
+  if (!btn) return { ok: false, cover: '找不到「怎麼去」按鈕' };
+  const y0 = await page.evaluate(() => window.scrollY);
+  const c1 = await tapCentered(btn);
+  const opt = await page.evaluateHandle((dc, id, label) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
+    .find((b) => b.querySelector('.tl-leg-name')?.textContent === label) || null, DC, spotId, label);
+  const ok = !!(await opt.evaluate((b) => !!b));
+  if (ok) await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), y0);
+  const c2 = ok ? await tapCentered(opt.asElement()) : null;
+  return { ok, cover: `${coverTxt('按鈕', c1)}、${c2 ? coverTxt(`「${label}」那一格在點按鈕之前的捲動位置（＝舊點法會點的地方）`, c2) : `找不到「${label}」那一格`}` };
+};
 try {
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await page.setBypassServiceWorker(true);
@@ -434,18 +473,18 @@ try {
   yes(pre8 && J(R0.map((x) => x.t)) === J(['10:00', '', '', '16:00', '約 16:55 到', '上一站沒設停留時間，推不出幾點到'])
     && J(R0.map((x) => x.stay)) === J(['停留 3 小時', '停留 1 小時', '停留 30 分', '停留 30 分', '', '']),
     `八之一 子→丑還沒設怎麼去：丑、寅推不出來；卯照他填的、辰從卯接上「約 16:55 到」、巳說缺上一站的停留；站卡寫停留時間（${J(R0.map((x) => x.t))}；${J(R0.map((x) => x.stay))}）`);
-  // 從畫面設子→丑＝搭車（那一列掛在丑上）：點「怎麼去：還沒設定」→ 點寫著「搭車」的那一格
-  await page.click(`${DC} .tl-leg[data-spot="${etaIds.ids[1]}"] .tl-leg-btn`);
-  const carOpt = await page.evaluateHandle((dc, id) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
-    .find((b) => b.querySelector('.tl-leg-name')?.textContent === '搭車') || null, DC, etaIds.ids[1]);
-  const tapped = !!(await carOpt.evaluate((b) => !!b));
-  if (tapped) await carOpt.asElement().click();
+  // 從畫面設子→丑＝搭車（那一列掛在丑上）：點「怎麼去：還沒設定」→ 點寫著「搭車」的那一格（點法見檔頭 pickLeg 那段：先捲到畫面中間）
+  const tap2 = await pickLeg(etaIds.ids[1], '搭車');
+  console.log(`・八之二 點之前：${tap2.cover}`);
+  const tapped = tap2.ok;
   const got13 = (await cellIs(1, '約 13:40 到')) && (await cellIs(2, '約 14:56 到'));
   const R1 = await etaRead();
   const mins8 = await page.evaluate((dc) => [...document.querySelectorAll(`${dc} .tl-leg-min`)].map((x) => x.textContent), DC);
+  const hash2 = await page.evaluate(() => location.hash);
   yes(tapped && got13 && J(R1.map((x) => x.t)) === J(['10:00', '約 13:40 到', '約 14:56 到', '16:00', '約 16:55 到', '上一站沒設停留時間，推不出幾點到'])
     && J(mins8) === J(['約 40 分', '約 16 分', '約 10 分', '約 25 分', '約 12 分']),
-    `八之二 從畫面把子→丑設成搭車 → 丑「約 13:40 到」（10:00＋停 3 小時＋40 分）、寅「約 14:56 到」，其餘不變；每段車程照畫面上寫的分鐘算（${J(R1.map((x) => x.t))}；${J(mins8)}）`);
+    `八之二 從畫面把子→丑設成搭車 → 丑「約 13:40 到」（10:00＋停 3 小時＋40 分）、寅「約 14:56 到」，其餘不變；每段車程照畫面上寫的分鐘算（${J(R1.map((x) => x.t))}；${J(mins8)}）`,
+    `點到了：${tapped}、現在的網址 ${hash2}`);
   // 使用者填的不覆蓋、推算的看得出不同：卯、子照舊是他填的那幾個字、不是推算的樣式；推算的字比他填的細；推出來的不寫進資料
   const kept = await page.evaluate(async (ids) => {
     const s = await import('./js/store.js');
@@ -464,24 +503,7 @@ try {
   //   期望：丑寫「鐵路／公車沒有車程資料，之後幾站推不出幾點到」（小字那一種樣式）、寅推不出來（留白）、卯照他填的 16:00、
   //   辰從卯接上「約 16:55 到」、巳照樣缺停留；子→丑那一段不寫分鐘（不拿開車時間冒充）。還沒選怎麼去的那一段留白，八之一已經驗過（丑是空的）。
   const NODATA = '鐵路／公車沒有車程資料，之後幾站推不出幾點到';
-  // 點之前先記下那一顆的正中間被什麼蓋住（說明行印出來、不判定），再捲到畫面中間才點（使用者也是看得到才點）。
-  // 15:27 第一次跑：八之五（鐵路，選項第一列）過、八之六（公車，第二列）讀到整天都不在——推論是那一格落在底部分頁列後面、
-  // 點到了分頁列、換了頁（同一類見 css「動作列不黏底」那段註解）；這一行就是用來證實或推翻這個推論的。
-  const coverOf = (el) => el.evaluate((e) => {
-    const r = e.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return !t ? '（在畫面外）' : (e === t || e.contains(t)) ? '' : (t.getAttribute('class') || t.tagName);
-  });
-  const tapCentered = async (el) => { const c = await coverOf(el); await el.evaluate((e) => e.scrollIntoView({ block: 'center' })); await el.click(); return c; };
-  const pickLeg = async (spotId, label) => {
-    const btn = await page.$(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
-    if (!btn) return { ok: false, cover: '找不到「怎麼去」按鈕' };
-    const c1 = await tapCentered(btn);
-    const opt = await page.evaluateHandle((dc, id, label) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
-      .find((b) => b.querySelector('.tl-leg-name')?.textContent === label) || null, DC, spotId, label);
-    const ok = !!(await opt.evaluate((b) => !!b));
-    const c2 = ok ? await tapCentered(opt.asElement()) : '';
-    return { ok, cover: `按鈕${c1 ? '被「' + c1 + '」蓋住' : '沒被蓋住'}、「${label}」那一格${c2 ? '被「' + c2 + '」蓋住' : '沒被蓋住'}` };
-  };
+  // 點法（先捲到畫面中間、點之前印被什麼蓋住）見檔頭 pickLeg 那段；15:27 八之六第一次跑那次的推論，由八之二那一行一起證實或推翻。
   const legSwitched = (spotId, mode) => page.waitForSelector(`${DC} .tl-leg[data-spot="${spotId}"][data-mode="${mode}"]`, { timeout: 10000 }).then(() => true, () => false);
   for (const [no, label, mode] of [['八之五', '鐵路', 'train'], ['八之六', '公車', 'bus']]) {
     const tapN = await pickLeg(etaIds.ids[1], label);

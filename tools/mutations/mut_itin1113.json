@@ -52,8 +52,8 @@
     "why": "（事前寫 2026-11-13）進了行程分頁，底部沒有任何一格亮著。預期只紅 recordstest 的「行程分頁：底部亮的是「行程」」。",
     "expect": ["行程分頁：底部亮的是「行程」"],
     "file": "js/app.js",
-    "find": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster)$/.test(p);",
-    "note": "v1.84.0 回顧那幾頁也算行程分頁，find 跟著加長（意思不變、預期不變）",
+    "find": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster|itinposter)$/.test(p);",
+    "note": "v1.84.0 回顧那幾頁也算行程分頁，find 跟著加長（意思不變、預期不變）；v1.88.0 行程海報（itinposter）也算，find 再加長（意思不變、預期不變）",
     "replace": "    const isItin = false;",
     "cmd": "node scripts/recordstest.mjs"
   },

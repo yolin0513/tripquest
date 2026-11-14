@@ -1807,7 +1807,10 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
       ended ? null : infoCard(tripId),
       h('div', { class: 'section-label' }, '每天的行程'),
       h('button', { class: 'btn btn-soft btn-block itin-edit', onclick: () => navigate(`/trip/${tripId}/plan`) },
-        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點')].filter(Boolean));
+        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點'),
+      // v1.88.0 行程海報（Yolin：放在行程頁籤的「行程」那一側；回顧那邊的海報不動）。沒有景點就不放（做不出東西）
+      spots.length ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },
+        '🗺️ 做成行程海報（圖片／PDF）') : null].filter(Boolean));
     if (spots.length) planDays();
     if (ended) {
       planPane.append(h('details', { class: 'info-fold' },

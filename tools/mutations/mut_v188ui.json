@@ -1,0 +1,92 @@
+[
+  {
+    "name": "海報入口：行程分頁沒有那顆按鈕",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）行程分頁「行程」那一格不放「做成行程海報」。測試從入口進不來時直接開那一頁、後面照樣量。預期只紅 P1a；P2a（空的一趟沒有按鈕）照樣綠。",
+    "expect": ["P1a 從首頁 → 底部「行程」"],
+    "file": "js/views/trip.js",
+    "find": "      spots.length ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },",
+    "replace": "      false ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報入口：沒有景點的一趟也放按鈕",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）沒有景點也放「做成行程海報」（按進去做不出東西）。預期只紅 P2a；P2b（直接開那一頁寫「還沒有排景點」）照樣綠。",
+    "expect": ["P2a 沒有景點的一趟"],
+    "file": "js/views/trip.js",
+    "find": "      spots.length ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },",
+    "replace": "      true ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報頁：底部不亮「行程」",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）app.js 判斷「這一頁屬於行程分頁」的那一串不認 itinposter：進了海報那一頁，底部沒有一格亮。預期只紅 P1b。",
+    "expect": ["P1b 進了海報那一頁"],
+    "file": "js/app.js",
+    "find": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster|itinposter)$/.test(p);",
+    "replace": "    const isItin = /^\\/trip\\/[^/]+\\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster)$/.test(p);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報頁：沒記住上次選的版型與張數",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）換版型、換張數時不存進這支手機。離開再進來變回預設（路線圖・全部一張）。測試在存檔之前會自己再點回「分天色帶・每天一張」，所以存檔那幾條不連帶。預期只紅 P6c。",
+    "expect": ["P6c 離開再從行程分頁進來"],
+    "file": "js/views/itinposter.js",
+    "find": "        try { localStorage.setItem(PREF + tripId, JSON.stringify(pref)); } catch { /* 存不了：這次照樣換 */ }",
+    "replace": "        try { void 0; } catch { /* 存不了：這次照樣換 */ }",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報頁：天氣預報到了不重畫",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）預報查到了也不放進小提醒（照樣重畫一次，但用的是沒有預報的那一份）。P3a、P6a、P6b 只要求預覽跟「有預報」或「沒預報」其中一份逐像素相同，P7、P8 跟當下預覽那一份比，所以都不連帶。預期只紅 P5a。",
+    "expect": ["P5a 天氣預報到了會重畫"],
+    "file": "js/views/itinposter.js",
+    "find": "    forecast = f;\n    await rebuild();",
+    "replace": "    forecast = null;\n    await rebuild();",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報畫圖：吉祥物沒畫上去",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）畫的時候略過吉祥物。預覽跟另外畫的那一張都少了吉祥物，逐像素照樣相同（P3a 不紅）；吉祥物那一格只剩底色。預期只紅 P3b。",
+    "expect": ["P3b 吉祥物真的畫出來了"],
+    "file": "js/itinposter/draw.js",
+    "find": "      if (im) ctx.drawImage(im, o.x, o.y, o.w, o.h);",
+    "replace": "      if (false) ctx.drawImage(im, o.x, o.y, o.w, o.h);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報存圖片：不先試手機的分享",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）存成圖片一律下載、不試分享（手機上傳不了 LINE）。預期只紅 P7a；P7b（分享不了 → 下載）照樣綠。",
+    "expect": ["P7a 存成圖片（手機分享得了檔案）"],
+    "file": "js/views/itinposter.js",
+    "find": "      if (type === 'png' && navigator.canShare && navigator.canShare({ files })",
+    "replace": "      if (false && type === 'png' && navigator.canShare && navigator.canShare({ files })",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報存 PDF：頁面高度寫錯",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）PDF 裡每一張圖的高度欄位寫成寬（頁面變成正方形、圖被壓扁）。預期只紅 P8a。",
+    "expect": ["P8a 存成 PDF"],
+    "file": "js/itinposter/index.js",
+    "find": "    imgs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: pages[i].w, h: pages[i].h });",
+    "replace": "    imgs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: pages[i].w, h: pages[i].w });",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "海報存 PDF：存的時候順便上傳",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）存 PDF 時多一個 POST（同一個網站，所以「對外」那一半不會抓到，靠「上傳」那一半）。PDF 照樣存得出來。預期只紅 P8b。",
+    "expect": ["P8b 存圖片、存 PDF 的時候"],
+    "file": "js/itinposter/index.js",
+    "find": "  return new File([pdfFromJpegs(imgs)], `${base}-行程海報.pdf`, { type: 'application/pdf' });",
+    "replace": "  fetch('./upload', { method: 'POST', body: 'x' }).catch(() => {});\n  return new File([pdfFromJpegs(imgs)], `${base}-行程海報.pdf`, { type: 'application/pdf' });",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "天氣預報：多送一個參數",
+    "why": "（事前寫 2026-11-14 14:40，跑之前）查天氣時多帶一個參數（海報那一頁的說明寫「全部在這支手機上產生，不會上傳」，唯一的網路是天氣預報、只送座標）。預期只紅 P5b。",
+    "expect": ["P5b 查天氣只送目的地的座標"],
+    "file": "js/weather.js",
+    "find": "  u.searchParams.set('forecast_days', '16');",
+    "replace": "  u.searchParams.set('forecast_days', '16');\n  u.searchParams.set('q', 'x');",
+    "cmd": "node scripts/itinpostertest.mjs"
+  }
+]

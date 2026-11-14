@@ -158,8 +158,9 @@
     "why": "（事前寫 2026-11-14 03:55，跑之前）buildPlan 的原生 append 不先濾掉 null。結束後「行程」那一格最上面多出「null」兩個字（v1.86.0 截圖抓到的第一版就是這樣；修正前實跑 R11 紅、多出 [\"null\",\"null\"]）。紅：R11。不紅：R6（只看結構、不看字）、其餘。",
     "expect": ["R11 結束後兩格裡沒有多出來的字"],
     "file": "js/views/trip.js",
-    "find": "        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點')].filter(Boolean));",
-    "replace": "        spots.length ? '📅 調整每天的行程' : '＋ 去安排景點')]);",
+    "find": "        '🗺️ 做成行程海報（圖片／PDF）') : null].filter(Boolean));",
+    "replace": "        '🗺️ 做成行程海報（圖片／PDF）') : null]);",
+    "note": "v1.88.0 這一串最後多了行程海報按鈕（沒有景點時是 null），find 改成新的最後一行（意思不變、預期不變）",
     "cmd": "node scripts/hometest.mjs"
   },
   {

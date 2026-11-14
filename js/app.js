@@ -127,7 +127,8 @@ function renderTabs() {
     const isHome = /^\/trip\/[^/]+\/(home|weather|nearby)$/.test(p);
     const isTasks = p === base || /^\/trip\/[^/]+\/spot\//.test(p) || p.startsWith('/quest/');
     // 回顧（memories 與它底下的相簿、成就、最終回顧、海報）v1.84.0 搬進「行程」分頁：底部少了「回顧」一格
-    const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster)$/.test(p);
+    // 行程海報（itinposter，v1.88.0）從「行程」那一格進來，也算行程分頁
+    const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster|itinposter)$/.test(p);
     const isPhotos = p === `${base}/people`;
     const isSplit = p === `${base}/expenses`;
     mount(tabbar,
@@ -160,6 +161,7 @@ route('/trip/:id/settings', async ({ params, drawPage, setTop }) => (await impor
 route('/trip/:id/people', async ({ params, drawPage, setTop }) => (await import('./views/people.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/album', async ({ params, drawPage, setTop }) => (await import('./views/album.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/poster', async ({ params, drawPage, setTop }) => (await import('./views/poster.js')).default(params.id, { drawPage, setTop }));
+route('/trip/:id/itinposter', async ({ params, drawPage, setTop }) => (await import('./views/itinposter.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/plan', async ({ params, drawPage, setTop }) => (await import('./views/plan.js')).default(params.id, { drawPage, setTop }));
 route('/trip/:id/findspot', async ({ params, query, drawPage, setTop }) => (await import('./views/findspot.js')).default(params.id, query, { drawPage, setTop }));
 route('/trip/:id/sos', async ({ params, drawPage, setTop }) => (await import('./views/sos.js')).default(params.id, { drawPage, setTop }));
