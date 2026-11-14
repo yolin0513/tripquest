@@ -145,8 +145,8 @@
   },
   {
     "name": "慶祝畫面那一句寬度改回跟著照片",
-    "why": "（事前寫 2026-11-14 11:30，跑之前）第一版的寫法：right:0、寬度跟著照片算（照片只有 210px 寬，那一句只剩約 40px，字一個一個直排、疊到標題上）。預期紅慶祝畫面四條：S13（390 寬）、S14（360／320）、S15（全部拍完）、S17（減少動態效果）；S13b（出場動畫）不紅。",
-    "expect": ["S13 完成任務", "S14 窄螢幕", "S15 全部拍完", "S17 減少動態效果：慶祝畫面"],
+    "why": "（事前寫 2026-11-14 11:30，跑之前）第一版的寫法：right:0、寬度跟著照片算（照片只有 210px 寬，那一句只剩約 40px，字一個一個直排、疊到標題上）。預期紅慶祝畫面四條：S13（390 寬）、S14（360／320）、S15（全部拍完）、S17（減少動態效果）；S13b（出場動畫）不紅。（事前寫 2026-11-14 12:3x，跑之前：saytest 加了 S18 夜市那一張，字直排一樣疊到標題 → 再多紅「S18 夜市」；「S18 前置」只看探頭的是哪一張、不紅）",
+    "expect": ["S13 完成任務", "S14 窄螢幕", "S15 全部拍完", "S17 減少動態效果：慶祝畫面", "S18 夜市"],
     "file": "css/style.css",
     "find": ".celebrate-shot > .say-pk { position: absolute; left: calc(50% + var(--say-off, 64px)); right: auto; bottom: calc(100% + 10px); margin: 0;\n  width: max-content; max-width: calc(50vw - var(--say-off, 64px) - 12px); padding: 8px 10px; font-size: 0.95rem; }",
     "replace": ".celebrate-shot > .say-pk { position: absolute; left: calc(50% + var(--say-off, 64px)); right: 0; bottom: calc(100% + 10px); margin: 0;\n  padding: 8px 10px; font-size: 0.95rem; }",
@@ -154,19 +154,19 @@
   },
   {
     "name": "慶祝畫面：有那一句時照片上面沒多留空間",
-    "why": "（事前寫 2026-11-14 11:30，跑之前；推測、沒先量）照片上面原本只留探頭圖的高度＋14px；那一句排成三行時會頂到上面的「進度」那一行。預期紅三行的那幾格：S14（360／320 寬都是三行）、S15（全部拍完，390 寬就三行）。兩行的 S13（390 寬）、S17 推測不紅（原本的空間夠兩行）——這兩格是推測，紅了照實記成非預期。",
-    "expect": ["S14 窄螢幕", "S15 全部拍完"],
-    "file": "css/style.css",
-    "find": ".celebrate-shot.has-say { margin-top: calc(var(--pk-rise) + 40px); }\n",
+    "why": "（事前寫 2026-11-14 11:30，跑之前；推測、沒先量）照片上面原本只留探頭圖的高度＋14px；那一句排成三行時會頂到上面的「進度」那一行。預期紅三行的那幾格：S14（360／320 寬都是三行）、S15（全部拍完，390 寬就三行）。兩行的 S13（390 寬）、S17 推測不紅（原本的空間夠兩行）——這兩格是推測，紅了照實記成非預期。（2026-11-14 12:17 實跑：沒紅——那時 saytest 只用龍山寺，探頭的是預設那張，邊線以上最高、照片上面原本就留得夠，三行也不碰到上面的字。五張探頭圖裡夜市那張最矮，saytest 補 S18 夜市那一站；原樣量到 360／320 寬離上面的字只剩 6px，拿掉多留的 26px 就會疊上去。預期改寫在 12:3x，這條突變重跑之前：只紅「S18 夜市」；S14、S15 照實跑過不紅，從預期拿掉。12:34 重跑還是沒紅：S18 當時用「下一個」那一句，量到垂直疊上 20px，但慶祝畫面置中排、每一行只有字那麼寬，上面那一行「進度 N / M」很窄，那一句在右邊、碰不到字。S18 改成夜市那一站是這趟最後一個任務（全部拍完，上面那一行是較寬的「可以來做回憶影片了」），12:4x 再重跑之前，預期不變。12:36 重跑：**原樣就紅**——320 寬、夜市那一張、全部拍完排成四行，正常程式也疊到上面那一行 20px（寫死的＋40 不夠）。改成 js/ui.js 的 roomForSay 量了再設、CSS 那一條拿掉；這條突變改成拿掉 roomForSay 那一行＝照片上面只留探頭圖的高度＋14px（同 12:17 那一次改壞後的版面：預設那張 S13～S17 量過都不疊）。預期寫在 12:4x、跑之前：只紅「S18 夜市」）",
+    "expect": ["S18 夜市"],
+    "file": "js/ui.js",
+    "find": "    if (shot && say) roomForSay(shot, say);\n",
     "replace": "",
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   },
   {
     "name": "慶祝畫面沒有放那一句",
-    "why": "（事前寫 2026-11-14 11:30，跑之前）celebrate 收到那一句卻沒放上去。預期紅慶祝畫面全部五條：S13、S13b、S14、S15、S17。",
-    "expect": ["S13 完成任務", "S13b 慶祝畫面那一句", "S14 窄螢幕", "S15 全部拍完", "S17 減少動態效果：慶祝畫面"],
+    "why": "（事前寫 2026-11-14 11:30，跑之前）celebrate 收到那一句卻沒放上去。預期紅慶祝畫面全部五條：S13、S13b、S14、S15、S17。（事前寫 2026-11-14 12:3x，跑之前：saytest 加了 S18 夜市那一張 → 「S18 前置」「S18 夜市」也紅：沒有那一句就量不到探頭的是哪一張）",
+    "expect": ["S13 完成任務", "S13b 慶祝畫面那一句", "S14 窄螢幕", "S15 全部拍完", "S17 減少動態效果：慶祝畫面", "S18 前置", "S18 夜市"],
     "file": "js/ui.js",
-    "find": "    if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面多留一點：那句話窄螢幕上可能排成三行\n",
+    "find": "    if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面要留得下那一句：見 roomForSay（放進畫面之後才量得到）\n",
     "replace": "",
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   },
@@ -177,6 +177,15 @@
     "file": "css/style.css",
     "find": "@keyframes say-in { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }",
     "replace": "@keyframes say-in { 0% { opacity: 0; margin-top: 6px; } 100% { opacity: 1; margin-top: 0; } }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "慶祝畫面：照片上面留多高不跟著轉螢幕重算",
+    "why": "（事前寫 2026-11-14 12:4x，跑之前）roomForSay 只在打開時量一次（不看 ResizeObserver）。S18 先在 390 寬量（三行，留的高度照三行算），再換 360、320——320 寬排成四行時留的高度還是三行的，疊到上面那一行。預期只紅「S18 夜市」；S14 用預設那張（露出來的高度＋40 本來就夠三行），不紅。跟「沒多留空間」那條紅在同一條斷言：都是 S18 在窄螢幕量到疊上去，偵測共用，照實寫明。",
+    "expect": ["S18 夜市"],
+    "file": "js/ui.js",
+    "find": "  if (ro) ro.observe(say);\n",
+    "replace": "",
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   }
 ]

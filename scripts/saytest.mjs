@@ -15,7 +15,9 @@
 //   還沒出發、出發那天會下雪：山雀講「出發那天可能會下雪」
 //   旅程結束：「旅程結束了」那張卡下面白熊講一句；關掉之後這趟不再講
 //   完成任務：慶祝畫面照片上探頭的那一隻旁邊講一句（390／360／320 寬都在畫面裡、不疊到標題、說明、照片、吉祥物）；
-//     全部拍完講另一句
+//     全部拍完講另一句；夜市那一站、最後一個任務（S18）：探頭的是夜市那一張——五張裡邊線以上最矮、照片上面原本留的空間最少，
+//     全部拍完那一句排成三行、上面那一行又最寬，最可能碰到字（龍山寺那張是預設圖、留得最多，原本只驗它，
+//     「有那一句時多留空間」拿掉也照樣綠）
 //   減少動態效果（系統設定）：照樣講、不動（主頁、慶祝畫面都是）
 //
 // 時區用 emulateTimezone 撥（不在 App 裡留測試開關，共用慣例 §5.13）。不打真網路（§5.6）：Open-Meteo 回自己造的預報，其餘外站 503。
@@ -217,15 +219,20 @@ const celebSay = (page) => page.evaluate(() => {
   const OK = new Set(['offset', 'easing', 'composite', 'computedOffset', 'opacity', 'transform']);
   const props = [...new Set(anims.flatMap((a) => a.effect.getKeyframes().flatMap((k) => Object.keys(k))))];
   const lines = (() => { const rg = document.createRange(); rg.selectNodeContents(el); return new Set([...rg.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size; })();
+  // 離上面的字多遠（只印、不斷言）：那一句上緣 − 標題／說明裡最下面那一個的下緣
+  const above = [c.querySelector('h2'), ...c.querySelectorAll(':scope > p')].filter(Boolean).map((o) => o.getBoundingClientRect().bottom);
   return {
     found: true, celeb: true, text: el.textContent, role: el.getAttribute('role'), ttl: c.querySelector('h2')?.textContent || '',
+    peek: pk ? pk.getAttribute('data-peek') : null, gap: above.length ? Math.round(r.top - Math.max(...above)) : null,
     inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight && r.width > 0,
     over: others.filter((o) => hit(r, o.getBoundingClientRect())).map((o) => o.tagName.toLowerCase() + (o.className && typeof o.className === 'string' ? '.' + o.className.split(' ')[0] : '')),
     rightOfPeek: !!pr && r.left >= pr.right - 1, w: Math.round(r.width), lines, vw: innerWidth,
     sayIn: el.classList.contains('say-in'), anims: anims.length, badProps: props.filter((p) => !OK.has(p)),
   };
 });
-const celebOk = (s, text) => s.found && s.text === text && s.role === 'status' && s.inView && s.over.length === 0 && s.rightOfPeek;
+// 最多 4 行：讀得下去（正常最多 4 行＝320 寬、夜市那一張、全部拍完；第一版寬度跟著照片算是 8 行、一兩個字一行）。
+// 照片上面留多高改成量了再設（ui.js 的 roomForSay）之後，排成 8 行也不會疊到上面的字——只看「疊不疊到」就抓不到字直排。
+const celebOk = (s, text) => s.found && s.text === text && s.role === 'status' && s.inView && s.over.length === 0 && s.rightOfPeek && s.lines <= 4;
 const celebBrief = (s) => (s.found ? `「${s.text}」寬 ${s.w}px、${s.lines} 行、在畫面裡 ${s.inView}、在探頭那隻右邊 ${s.rightOfPeek}、疊到 ${s.over.join('、') || '沒有'}` : s.celeb ? `慶祝畫面（${s.ttl}）上沒有那一句` : '沒有慶祝畫面');
 async function clearCelebrations(page, max = 10) {
   for (let k = 0; k < max; k++) {
@@ -394,6 +401,25 @@ try {
     const okA = await openTrip(page, '只拍一張') && await completeOne(page, '龍山寺');
     const cAll = okA ? await celebSay(page) : { found: false, celeb: false };
     yes(celebOk(cAll, '全部拍完了，辛苦啦！'), `S15 全部拍完：慶祝畫面那一句是「全部拍完了，辛苦啦！」（${celebBrief(cAll)}）`);
+    await clearCelebrations(page);
+    // 夜市那一站、這趟最後一個任務：探頭的是夜市那一張（js/peeks.js 的 THEME_PEEK），邊線以上最矮 → 照片上面原本留的空間最少；
+    // 全部拍完那一句排成三行，上面那一行是較寬的「可以來做回憶影片了」——靠「有那一句時照片上面多留空間」才不碰到它。
+    // （慶祝畫面置中排、每一行只有字那麼寬：「下一個」那一句上面是很窄的「進度 N / M」，垂直疊到也碰不到字，所以不用那一句）
+    await makeTrip(page, '夜市', dateIn(tz, 0), dateIn(tz, 1), [{ name: '士林夜市', day: 1 }], true);
+    const okN = await openTrip(page, '夜市') && await completeOne(page, '士林夜市');
+    const nm = [];
+    if (okN) {
+      for (const [w, hh] of [[390, 844], [360, 740], [320, 740]]) {
+        await page.setViewport({ width: w, height: hh });
+        await sleep(400);
+        nm.push([w, await celebSay(page)]);
+      }
+    }
+    await page.setViewport({ width: 390, height: 844 });
+    yes(nm.length === 3 && nm.every(([, s]) => s.found && s.peek === 'grill'),
+      `S18 前置：夜市那一站完成任務，照片上探頭的是夜市那一張（${nm.map(([w, s]) => `${w}：${s.found ? s.peek : '沒有那一句'}`).join('、') || '沒進到慶祝畫面'}）`);
+    yes(nm.length === 3 && nm.every(([, s]) => celebOk(s, '全部拍完了，辛苦啦！')),
+      `S18 夜市那一張、全部拍完（照片上面原本留的空間最少、上面那一行最寬）：三種寬那一句都在畫面裡、不疊到標題、說明、照片、吉祥物（${nm.map(([w, s]) => `${w} 寬：${celebBrief(s)}、離上面的字 ${s.gap ?? '—'}px`).join('；') || '沒進到慶祝畫面'}）`);
     await clearCelebrations(page);
     await ctx.close();
   }

@@ -259,7 +259,7 @@ export function celebrate({ title, lines = [], photoURL, actions = [], withMasco
     const onPhoto = !!(withMascot && peek && photoURL);
     const photo = photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null;
     const shot = onPhoto ? mountPeek(h('div', { class: 'celebrate-shot' }, photo), peek) : null;
-    if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面多留一點：那句話窄螢幕上可能排成三行
+    if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面要留得下那一句：見 roomForSay（放進畫面之後才量得到）
     const wrap = h('div', { class: 'celebrate' },
       onPhoto ? null
         : withMascot
@@ -274,10 +274,27 @@ export function celebrate({ title, lines = [], photoURL, actions = [], withMasco
       }, a.label)),
     );
     root.append(conf, wrap);
+    if (shot && say) roomForSay(shot, say);
     if (move) moveMascot(wrap.querySelector('.celebrate-mascot svg.gl-mascot'));
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch { /* noop */ } }
     if (!actions.length) setTimeout(() => close(null), 2200);
   });
+}
+
+// 慶祝畫面那一句（.say-pk）絕對定位在照片上緣上面，照片上面要留的高度＝
+//   max(探頭圖露出來的高度＋40, 那一句的高度＋10（離照片上緣）＋8（離上面那一行字）)。
+// 那一句排成幾行要看螢幕寬、探頭的是哪一張（--say-off）、字數——CSS 算不到，放進畫面之後量了再設。
+// （v1.87.0 第一版在 CSS 寫死「露出來的高度＋40」：320 寬、夜市那一張、全部拍完排成四行，疊到上面那一行 20px，saytest S18 量到。）
+// 轉螢幕時跟著重算；畫面關掉（不在頁面上了）就停。只改版面、不是動畫（動畫照舊只動 opacity／transform）。
+function roomForSay(shot, say) {
+  const rise = parseFloat(shot.style.getPropertyValue('--pk-rise')) || 0;
+  const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => fit()) : null;
+  const fit = () => {
+    if (!shot.isConnected) { if (ro) ro.disconnect(); return; }
+    shot.style.marginTop = `${Math.max(rise + 40, say.offsetHeight + 10 + 8)}px`;
+  };
+  fit();
+  if (ro) ro.observe(say);
 }
 
 function confetti() {

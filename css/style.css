@@ -274,9 +274,9 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
   color: var(--muted); font: inherit; font-size: 1.05rem; cursor: pointer; border-radius: 12px; }
 html[data-theme="washi"] .say-text { border-width: 2.5px; }
 /* 照片只有 210px 寬：寬度不能跟著照片算（第一版 right:0，只剩 40px，字一個一個直排、疊到標題上）——
-   照字的長度排、最寬到螢幕右邊留 12px（慶祝畫面整個置中，照片中線＝螢幕中線）；有這一句時照片上面多留 26px，
-   窄螢幕排成三行也落在照片上面那塊空位裡、不碰到上面的「進度」那一行 */
-.celebrate-shot.has-say { margin-top: calc(var(--pk-rise) + 40px); }
+   照字的長度排、最寬到螢幕右邊留 12px（慶祝畫面整個置中，照片中線＝螢幕中線）。
+   照片上面要留多高由 js/ui.js 的 roomForSay 量了再設：排成幾行要看螢幕寬、探頭的是哪一張、字數，這裡算不到
+   （第一版在這裡寫死「露出來的高度＋40px」，320 寬、夜市那一張、全部拍完排成四行就疊到上面那一行）。 */
 .celebrate-shot > .say-pk { position: absolute; left: calc(50% + var(--say-off, 64px)); right: auto; bottom: calc(100% + 10px); margin: 0;
   width: max-content; max-width: calc(50vw - var(--say-off, 64px) - 12px); padding: 8px 10px; font-size: 0.95rem; }
 .say.say-in { animation: say-in .35s ease-out both; }
