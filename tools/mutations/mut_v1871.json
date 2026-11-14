@@ -1,0 +1,281 @@
+[
+  {
+    "name": "動態表情列：人數又用 null 佔位（likenumtest）",
+    "why": "（事前寫 2026-11-14，跑之前）v1.87.1 Yolin 實機：照片牆動態的表情列右邊一個 null。改回原生 replaceChildren 收 null 的寫法。預期只紅 likenumtest「動態表情列沒有空值印成字」（B、C、D 三則不寫人數，表情列多一個文字節點、整頁掃到 null）；人數、亮哪顆的那幾條不紅（只數 .react-btn／.react-count）。",
+    "expect": ["動態表情列沒有空值印成字"],
+    "file": "js/views/people.js",
+    "find": "      ...(lk.showCount ? [h('span', { class: 'react-count' }, `${lk.count} 人按讚`)] : []),",
+    "replace": "      lk.showCount ? h('span', { class: 'react-count' }, `${lk.count} 人按讚`) : null,",
+    "cmd": "node scripts/likenumtest.mjs", "done": "^讚數＝按讚人數：\\d+ 項通過"
+  },
+  {
+    "name": "動態表情列：人數又用 null 佔位（nullinserttest）",
+    "why": "（事前寫 2026-11-14，跑之前）同上一條，改由靜態掃描抓。預期只紅 nullinserttest「原生插入收到可能是空的值：0 處」；對照組全不紅（掃的是複本裡另外寫的樣本）。",
+    "expect": ["原生插入收到可能是空的值"],
+    "file": "js/views/people.js",
+    "find": "      ...(lk.showCount ? [h('span', { class: 'react-count' }, `${lk.count} 人按讚`)] : []),",
+    "replace": "      lk.showCount ? h('span', { class: 'react-count' }, `${lk.count} 人按讚`) : null,",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "照片下載中：副標又用 null 佔位",
+    "why": "（事前寫 2026-11-14，跑之前）v1.87.1 同一輪掃出來的：「照片下載中…」那一次會印成「照片下載中…nullnull」。改回其中一個參數的舊寫法。預期只紅 nullinserttest「原生插入收到可能是空的值」。",
+    "expect": ["原生插入收到可能是空的值"],
+    "file": "js/photoimg.js",
+    "find": "      ...(sub2 ? [h('span', { class: 'ph-state-s' }, sub2)] : []),",
+    "replace": "      sub2 ? h('span', { class: 'ph-state-s' }, sub2) : null,",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "匯入摘要：提醒數又用 null 佔位",
+    "why": "（事前寫 2026-11-14，跑之前）v1.87.1 同一輪掃出來的：沒有提醒時「要建立 N 個景點null」。改回舊寫法。預期只紅 nullinserttest「原生插入收到可能是空的值」。",
+    "expect": ["原生插入收到可能是空的值"],
+    "file": "js/views/import.js",
+    "find": "      ...(warn.length ? [h('span', { class: 'imp-warn-c' }, `　⚠ ${warn.length} 個有提醒`)] : []),",
+    "replace": "      warn.length ? h('span', { class: 'imp-warn-c' }, `　⚠ ${warn.length} 個有提醒`) : null,",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：拿掉三元那一支",
+    "why": "（事前寫 2026-11-14，跑之前）T 分支不判。預期紅兩個 T 樣本（一般、巢狀）＋ S 樣本（展開陣列裡那一個元素也是靠 kindOf 的 T 判出來的——S 偵測共用 T，照實寫明）；整支跑那一條放五個樣本，A、O 照樣命中、不紅；真實程式 0 處、不紅。",
+    "expect": ["對照組：T 三元有一支是空的", "對照組：T 巢狀三元裡有空的", "對照組：S 展開陣列沒過濾"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "  if (ternary(e) && hasNullBranch(e)) return 'T';",
+    "replace": "  if (false && ternary(e) && hasNullBranch(e)) return 'T';",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：三元只看一層",
+    "why": "（事前寫 2026-11-14，跑之前）巢狀的三元不遞迴（a ? x : b ? y : null 的 null 藏在第二層）。預期只紅「T 巢狀三元裡有空的」。",
+    "expect": ["對照組：T 巢狀三元裡有空的"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "  return hasNullBranch(t[1]) || hasNullBranch(t[2]);",
+    "replace": "  return nullish(t[1]) || nullish(t[2]);",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：拿掉 && 那一支",
+    "why": "（事前寫 2026-11-14，跑之前）A 分支不判。預期只紅「A 頂層 &&」。",
+    "expect": ["對照組：A 頂層 &&"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "  if (topIndexes(e, (s, j) => s[j] === '&' && s[j + 1] === '&').length) return 'A';",
+    "replace": "  if (false && topIndexes(e, (s, j) => s[j] === '&' && s[j + 1] === '&').length) return 'A';",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：拿掉「或預設空」那一支",
+    "why": "（事前寫 2026-11-14，跑之前）O 分支不判。預期只紅「O 或預設空」。",
+    "expect": ["對照組：O 或預設空"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "  if (ors.length && nullish(e.slice(ors[ors.length - 1] + 2))) return 'O';",
+    "replace": "  if (false && ors.length && nullish(e.slice(ors[ors.length - 1] + 2))) return 'O';",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：拿掉展開陣列那一支",
+    "why": "（事前寫 2026-11-14，跑之前）S 分支不報。預期只紅「S 展開陣列沒過濾」。",
+    "expect": ["對照組：S 展開陣列沒過濾"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "            if (bad.length) hits.push({ line, kind: 'S', method: x[1], arg: show });",
+    "replace": "            if (false && bad.length) hits.push({ line, kind: 'S', method: x[1], arg: show });",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：過濾過的展開陣列也報",
+    "why": "（事前寫 2026-11-14，跑之前）不認 .filter(：…[c ? null : x].filter(Boolean) 被誤報。預期紅反向樣本那一條＋真實程式那一條（trip.js 的 buildPlan 正是這個寫法，會被報成 1 處）。",
+    "expect": ["對照組：反向：不報「x.append(...[c ? 空值", "原生插入收到可能是空的值"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "          if (end >= 0 && !after.startsWith('.filter(')) {",
+    "replace": "          if (end >= 0) {",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：註解不遮掉",
+    "why": "（事前寫 2026-11-14，跑之前）// 註解原樣留著。預期只紅反向的註解樣本；js/ 底下的註解沒有原生插入的寫法（2026-11-14 搜過 0 筆），真實程式不紅。",
+    "expect": ["對照組：反向：不報「// x.append"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "      if (c === '/' && d === '/') { const e = src.indexOf('\\n', i); const end = e < 0 ? src.length : e; out += keepNl(src.slice(i, end)); i = end; continue; }",
+    "replace": "      if (c === '/' && d === '/') { const e = src.indexOf('\\n', i); const end = e < 0 ? src.length : e; out += src.slice(i, end); i = end; continue; }",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：字串不遮掉",
+    "why": "（事前寫 2026-11-14，跑之前）字串的內容原樣留著。預期紅反向的字串樣本；真實程式的字串裡有逗號、問號，可能被切壞而多紅「0 處」那一條——預測不準，跑完照實記。",
+    "expect": ["對照組：反向：不報「const s ="],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "        out += c + fill(src.slice(i + 1, j)) + (src[j] === c ? c : ''); i = src[j] === c ? j + 1 : j; continue;",
+    "replace": "        out += c + src.slice(i + 1, j) + (src[j] === c ? c : ''); i = src[j] === c ? j + 1 : j; continue;",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "空值插入檢查：有命中也不擋（處置那一環）",
+    "why": "（事前寫 2026-11-14，跑之前）最後那條斷言永遠成立。預期只紅「對照組：整支跑」（它放五個樣本、要整支回非 0）；各分支的樣本不紅（偵測照常）。",
+    "expect": ["對照組：整支跑"],
+    "file": "scripts/nullinserttest.mjs",
+    "find": "    yes(s.hits.length === 0, `原生插入收到可能是空的值：0 處",
+    "replace": "    yes(s.hits.length >= 0, `原生插入收到可能是空的值：0 處",
+    "cmd": "node scripts/nullinserttest.mjs", "done": "^空值插入檢查：\\d+ 項通過"
+  },
+  {
+    "name": "推算：使用者填的時間只認第一站（legtest）",
+    "why": "（事前寫 2026-11-14，跑之前）第二站以後填的「幾點到」被推算蓋掉。預期只紅 legtest「行程推算：使用者自己填的時間優先」（E1、E6 只有第一站有填，不紅）。",
+    "expect": ["行程推算：使用者自己填的時間優先"],
+    "file": "js/spottime.js",
+    "find": "    if (Number.isFinite(t.startMin)) arrive = t.startMin;",
+    "replace": "    if (Number.isFinite(t.startMin) && i === 0) arrive = t.startMin;",
+    "cmd": "node scripts/legtest.mjs", "done": "^交通方式等三組欄位：\\d+ 項通過"
+  },
+  {
+    "name": "推算：使用者填的時間只認第一站（legviewtest）",
+    "why": "（事前寫 2026-11-14，跑之前）同上，從畫面看。卯（自己填 16:00）被寫成推出來的「約 15:36 到」；設子→丑之前卯推不出、辰也接不上。預期紅 legviewtest 八之一、八之二、八之三；一～七不紅（那一趟每站都自己填了、沒有車程）。（15:3x 加了八之五、八之六之後補，仍在跑之前）子→丑改成鐵路／公車時卯不算數、辰接不上 → 八之五、八之六也紅。",
+    "expect": ["八之一", "八之二", "八之三", "八之五", "八之六"],
+    "file": "js/spottime.js",
+    "find": "    if (Number.isFinite(t.startMin)) arrive = t.startMin;",
+    "replace": "    if (Number.isFinite(t.startMin) && i === 0) arrive = t.startMin;",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "推算：沒設停留就當 1 小時",
+    "why": "（事前寫 2026-11-14，跑之前）拿猜的停留補（設計原則不准）。預期紅 legtest E1（第四站變成推出來的、不是缺停留）與 E2（上一站沒設停留）。",
+    "expect": ["行程推算：10:00＋停 3 小時", "行程推算：上一站沒設停留時間"],
+    "file": "js/spottime.js",
+    "find": "    leave = arrive != null && t.stayMin ? arrive + t.stayMin : null;",
+    "replace": "    leave = arrive != null ? arrive + (t.stayMin || 60) : null;",
+    "cmd": "node scripts/legtest.mjs", "done": "^交通方式等三組欄位：\\d+ 項通過"
+  },
+  {
+    "name": "推算：第一站沒填就用 9 點",
+    "why": "（事前寫 2026-11-14，跑之前）拿預設的出發時間當起點。預期只紅 legtest E5「行程推算：第一站沒填幾點到」。（15:3x 加了 E7 之後補，仍在跑之前）E7c 第一站沒填、接鐵路那一段：起點變成 9 點之後鏈接得上、鐵路那一站會被標 → 「鏈在前面就斷了」也紅。",
+    "expect": ["行程推算：第一站沒填幾點到", "行程推算：鏈在前面就斷了"],
+    "file": "js/spottime.js",
+    "find": "    if (Number.isFinite(t.startMin)) arrive = t.startMin;",
+    "replace": "    if (Number.isFinite(t.startMin)) arrive = t.startMin; else if (i === 0) { arrive = 540; est = true; }",
+    "cmd": "node scripts/legtest.mjs", "done": "^交通方式等三組欄位：\\d+ 項通過"
+  },
+  {
+    "name": "推算：鐵路公車那一段不標",
+    "why": "（事前寫 2026-11-14 15:3x，跑之前；Dispatch 加的「鐵路／公車沒有車程資料」，可推翻）etaChain 不標 noData。E7a 丑那一站變成「—」（上一站有停留、不是缺停留）、E7b 也變「—」（缺停留要那一段有車程才標）。預期只紅 legtest「行程推算：選了鐵路或公車的那一段」；E7c 本來就不標、不紅。",
+    "expect": ["行程推算：選了鐵路或公車的那一段"],
+    "file": "js/spottime.js",
+    "find": "    else if (i > 0 && prevArrive != null && noDataOf(spots[i - 1], spots[i])) noData = true;",
+    "replace": "    else if (false && i > 0 && prevArrive != null && noDataOf(spots[i - 1], spots[i])) noData = true;",
+    "cmd": "node scripts/legtest.mjs", "done": "^交通方式等三組欄位：\\d+ 項通過"
+  },
+  {
+    "name": "推算：鏈在前面斷了也標鐵路",
+    "why": "（事前寫 2026-11-14 15:3x，跑之前）不管上一站有沒有時間，鐵路那一段一律標。預期只紅 legtest「行程推算：鏈在前面就斷了」（E7c 的第二站被標）；E7a、E7b 上一站都有時間、不變。",
+    "expect": ["行程推算：鏈在前面就斷了"],
+    "file": "js/spottime.js",
+    "find": "    else if (i > 0 && prevArrive != null && noDataOf(spots[i - 1], spots[i])) noData = true;",
+    "replace": "    else if (i > 0 && noDataOf(spots[i - 1], spots[i])) noData = true;",
+    "cmd": "node scripts/legtest.mjs", "done": "^交通方式等三組欄位：\\d+ 項通過"
+  },
+  {
+    "name": "推算：上一站沒設停留時不標鐵路",
+    "why": "（事前寫 2026-11-14 15:3x，跑之前）只在上一站有停留時才標 noData（等於叫人去補一個補了也沒用的停留——這裡連缺停留也不標，因為那一段沒車程）。E7b 變「10:00 —」。預期只紅 legtest「行程推算：選了鐵路或公車的那一段」（E7a 上一站有停留、不變）。",
+    "expect": ["行程推算：選了鐵路或公車的那一段"],
+    "file": "js/spottime.js",
+    "find": "    else if (i > 0 && prevArrive != null && noDataOf(spots[i - 1], spots[i])) noData = true;",
+    "replace": "    else if (i > 0 && prevArrive != null && prevStay != null && noDataOf(spots[i - 1], spots[i])) noData = true;",
+    "cmd": "node scripts/legtest.mjs", "done": "^交通方式等三組欄位：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：鐵路公車那一段不講",
+    "why": "（事前寫 2026-11-14 15:3x，跑之前）fillEta 拿到 noData 不寫字。預期只紅 legviewtest 八之五、八之六（丑那一格空著）；八之一～四不紅（那時沒有鐵路公車）。",
+    "expect": ["八之五", "八之六"],
+    "file": "js/views/trip.js",
+    "find": "    else if (c.noData) { cell.textContent = '鐵路／公車沒有車程資料，之後幾站推不出幾點到'; cell.classList.add('tl-eta-miss'); }",
+    "replace": "    else if (c.noData) { void 0; }",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：公車不算沒有車程",
+    "why": "（事前寫 2026-11-14 15:3x，跑之前）清單只剩鐵路。預期只紅 legviewtest 八之六（改成公車那一次丑沒字）；八之五（鐵路）不紅。",
+    "expect": ["八之六"],
+    "file": "js/legs.js",
+    "find": "export const LEG_NO_DURATION = ['train', 'bus'];",
+    "replace": "export const LEG_NO_DURATION = ['train'];",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：還沒選怎麼去的也標沒車程",
+    "why": "（事前寫 2026-11-14 15:3x，跑之前）不是走路、搭車就當成沒車程（連「還沒選」也算）。Dispatch 定還沒選的那一段留白。預期只紅 legviewtest 八之一（子→丑還沒設，丑會被寫上那一句）；一～七那一趟每站都自己填了時間、不會被標；八之二以後子→丑都有選、不變。",
+    "expect": ["八之一"],
+    "file": "js/views/trip.js",
+    "find": "(a, b) => LEG_NO_DURATION.includes(legModeOf(a, b))",
+    "replace": "(a, b) => !['walk', 'car'].includes(legModeOf(a, b))",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：算完車程沒有接著推時間",
+    "why": "（事前寫 2026-11-14，跑之前）fillEta 沒被呼叫。預期紅 legviewtest 八之一（辰、巳沒字）、八之二、八之三；八之四不紅。（15:3x 補，仍在跑之前）八之五、八之六的丑也沒字 → 也紅。",
+    "expect": ["八之一", "八之二", "八之三", "八之五", "八之六"],
+    "file": "js/views/trip.js",
+    "find": "  queueMicrotask(() => { fillLegMinutes(ol, daySpots).then((mins) => fillEta(ol, daySpots, mins)).catch(() => {}); });",
+    "replace": "  queueMicrotask(() => { fillLegMinutes(ol, daySpots).then(() => {}).catch(() => {}); });",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：站卡不寫停留時間",
+    "why": "（事前寫 2026-11-14，跑之前）Yolin：第一站卡上看不到停留時間。拿掉那一行。預期只紅 legviewtest 八之一（它斷言站卡第二行）。",
+    "expect": ["八之一"],
+    "file": "js/views/trip.js",
+    "find": "              spotTimes(s).stayMin ? h('span', { class: 'itin-stay' }, stayText(spotTimes(s).stayMin)) : null))),",
+    "replace": "              null))),",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：推算的時間跟自己填的一樣粗",
+    "why": "（事前寫 2026-11-14，跑之前）Dispatch：推算的要跟使用者自己填的在視覺上分開。預期只紅 legviewtest 八之三（推算的字要比較細）。",
+    "expect": ["八之三"],
+    "file": "css/style.css",
+    "find": ".tl-time.tl-eta { font-weight: 600; }",
+    "replace": ".tl-time.tl-eta { font-weight: 800; }",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "行程分頁：缺停留時不講",
+    "why": "（事前寫 2026-11-14，跑之前）只差上一站停留時，那一格空著不說為什麼。預期紅 legviewtest 八之一、八之二（巳那一格）、八之三（巳的樣式）。（15:3x 補，仍在跑之前）八之五、八之六也斷言巳那一格 → 也紅。",
+    "expect": ["八之一", "八之二", "八之三", "八之五", "八之六"],
+    "file": "js/views/trip.js",
+    "find": "    else if (c.missStay) { cell.textContent = '上一站沒設停留時間，推不出幾點到'; cell.classList.add('tl-eta-miss'); }",
+    "replace": "    else if (c.missStay) { void 0; }",
+    "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "主頁天氣那一句：講話的又是一般那一隻",
+    "why": "（事前寫 2026-11-14，跑之前）Yolin：下雨那句要配撐傘那一隻。不把探頭圖交給 sayRow。預期紅 saytest S6c、S10b；S1～S10 不紅（字、位置、關掉照舊）。",
+    "expect": ["S6c", "S10b"],
+    "file": "js/views/trip.js",
+    "find": "    const line = wl ? sayRow(tripId, wl, { animate, peek: pkEl }) : null;",
+    "replace": "    const line = wl ? sayRow(tripId, wl, { animate }) : null;",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "主頁天氣那一句：邊線沒補框線寬",
+    "why": "（事前寫 2026-11-14，跑之前）探頭圖的邊線對在框線內側（差一個框線寬，1.5 或 2.5px）。預期紅 saytest S6c、S10b（邊線差 > 1px）。",
+    "expect": ["S6c", "S10b"],
+    "file": "css/style.css",
+    "find": ".say-text > .gl-peek { left: 14px; bottom: calc(100% - var(--pk-sink) + var(--say-bd)); }",
+    "replace": ".say-text > .gl-peek { left: 14px; bottom: calc(100% - var(--pk-sink)); }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "主頁天氣那一句：上面沒留出探頭的高度",
+    "why": "（事前寫 2026-11-14，跑之前）對話框上面不留空間，探頭圖疊到天氣條上。預期紅 saytest S6c、S10b（圖疊到別的區塊）。",
+    "expect": ["S6c", "S10b"],
+    "file": "css/style.css",
+    "find": ".say-peek .say-text { --say-bd: 1.5px; margin: var(--pk-rise) 0 0; }",
+    "replace": ".say-peek .say-text { --say-bd: 1.5px; margin: 0; }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "主頁天氣那一句：對話框還留著尾巴",
+    "why": "（事前寫 2026-11-14，跑之前）探頭的擺法沒有左邊那一隻，尾巴指向空的地方。預期紅 saytest S6c、S10b。",
+    "expect": ["S6c", "S10b"],
+    "file": "css/style.css",
+    "find": ".say-peek .say-text::before { content: none; }",
+    "replace": ".say-peek .say-text::before { }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  }
+]

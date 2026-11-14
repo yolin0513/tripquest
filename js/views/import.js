@@ -287,10 +287,11 @@ async function confirmItems(parsed, cityHint) {
   const tally = () => {
     const on = items.filter((i) => i.include && i.name.trim());
     const warn = on.filter((i) => (i.warnings || []).length);
+    // 原生 replaceChildren 不會略過 null：沒有提醒時會變成「要建立 N 個景點null」（v1.87.1 掃出來）
     summary.replaceChildren(
       h('b', {}, `要建立 ${on.length} 個景點`),
       // 「有提醒」不是「有問題」。全部預設建立，這些只是我覺得值得多看一眼的
-      warn.length ? h('span', { class: 'imp-warn-c' }, `　⚠ ${warn.length} 個有提醒`) : null,
+      ...(warn.length ? [h('span', { class: 'imp-warn-c' }, `　⚠ ${warn.length} 個有提醒`)] : []),
     );
   };
 

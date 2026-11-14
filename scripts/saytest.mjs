@@ -161,7 +161,16 @@ const says = (page) => page.evaluate(() => {
     const anims = el.getAnimations();
     const all = el.getAnimations({ subtree: true });
     const props = [...new Set(anims.flatMap((a) => (a.effect && a.effect.getKeyframes ? a.effect.getKeyframes() : []).flatMap((k) => Object.keys(k))))];
+    // v1.87.1 下雨／下雪那一句：講話的是探頭圖（對話框上緣探頭）。量：哪一張、邊線（圖底往上 --pk-sink）跟對話框外框上緣差幾 px、
+    // 圖本身疊不疊到別的區塊（天氣條）、還有沒有左邊那一隻、對話框還有沒有尾巴
+    const tx = el.querySelector('.say-text');
+    const pk = tx ? tx.querySelector(':scope > svg.gl-peek') : null;
+    const pr = pk ? pk.getBoundingClientRect() : null;
+    const edgeGap = pk ? Math.round((pr.bottom - parseFloat(pk.style.getPropertyValue('--pk-sink')) - tx.getBoundingClientRect().top) * 100) / 100 : null;
     return {
+      peek: pk ? pk.dataset.peek : null, peekHidden: !!pk && pk.getAttribute('aria-hidden') === 'true', peekW: pr ? Math.round(pr.width) : 0, edgeGap,
+      peekOver: pk ? others.filter((o) => hit(pr, o.getBoundingClientRect())).map((o) => o.className || o.tagName) : [],
+      general: !!el.querySelector('.say-who svg[data-mascot]'), tail: !!tx && getComputedStyle(tx, '::before').content !== 'none',
       key: el.dataset.say, who: el.dataset.who, text: el.querySelector('.say-text')?.textContent || '',
       role: el.querySelector('.say-text')?.getAttribute('role') || null,
       whoHidden: !!who && who.getAttribute('aria-hidden') === 'true' && !!who.querySelector('svg'),
@@ -306,6 +315,12 @@ try {
       `S6 按 ✕ 關掉出發那一句 → 這趟不再講；換一頁再回主頁，輪到天氣條下面那一句（記下的：${JSON.stringify(keys1)}；主頁上：${brief(S2)}${rain ? `；在天氣那一格 ${rain.inWx}、上一個 ${rain.prev}` : ''}）`);
     yes(!!rain && rain.over.length === 0 && rain.pos === 'static',
       `S6b 天氣那一句也不疊在別的區塊上（疊到：${rain ? rain.over.join('、') || '沒有' : '—'}）`);
+    // v1.87.1（Yolin 看 v1.87.0 實機）：下雨那一句要配撐傘的那一隻（天氣頁那一張探頭圖），不是一般那一隻。
+    // 期望（2026-11-14 事前寫）：對話框上緣探頭的是 rain（鬍鬍撐傘）、aria-hidden；邊線對在對話框外框上緣（差 ≤ 1px）；
+    // 圖不疊到天氣條；沒有左邊那一隻；對話框沒有尾巴。出發那一句（S1）照舊是左邊那一隻、沒有探頭圖。
+    yes(!!rain && rain.peek === 'rain' && rain.peekHidden && rain.peekW > 0 && rain.edgeGap != null && Math.abs(rain.edgeGap) <= 1
+      && rain.peekOver.length === 0 && !rain.general && !rain.tail && !!dep && dep.peek === null && dep.general,
+      `S6c 下雨那一句：撐傘的那一隻從對話框上緣探頭（${rain ? `探頭圖 ${rain.peek || '沒有'}、寬 ${rain.peekW}px、邊線差 ${rain.edgeGap}px、疊到 ${rain.peekOver.join('、') || '沒有'}、左邊那一隻 ${rain.general}、尾巴 ${rain.tail}` : '—'}；出發那一句：探頭圖 ${dep ? dep.peek : '—'}、左邊那一隻 ${dep ? dep.general : '—'}）`);
     const closed2 = !!rain && await closeSay(page, rain.key);
     const ok3 = closed2 && await backToHome(page);
     const S3 = ok3 ? await says(page) : null;
@@ -349,6 +364,10 @@ try {
     const snow = oneKind(S, 'snow');
     yes(!!snow && snow.who === 'tit' && snow.text === '出發那天可能會下雪，保暖的衣服記得帶！' && snow.inWx && S.length === 1,
       `S10 還沒出發、出發那天會下雪：天氣條下面山雀講「出發那天可能會下雪，保暖的衣服記得帶！」（主頁上：${brief(S)}）`);
+    // v1.87.1：下雪那一句配天氣頁那一張踩雪板的（期望事前寫：snow、邊線差 ≤ 1px、不疊、沒有左邊那一隻、沒有尾巴）
+    yes(!!snow && snow.peek === 'snow' && snow.peekHidden && snow.peekW > 0 && snow.edgeGap != null && Math.abs(snow.edgeGap) <= 1
+      && snow.peekOver.length === 0 && !snow.general && !snow.tail,
+      `S10b 下雪那一句：踩雪板的那一隻從對話框上緣探頭（${snow ? `探頭圖 ${snow.peek || '沒有'}、寬 ${snow.peekW}px、邊線差 ${snow.edgeGap}px、疊到 ${snow.peekOver.join('、') || '沒有'}、左邊那一隻 ${snow.general}、尾巴 ${snow.tail}` : '—'}）`);
     await ctx.close();
   }
 

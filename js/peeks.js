@@ -82,6 +82,14 @@ export function peek(kind, k = 0.6) {
   return el;
 }
 
+// 畫成「邊線以上剛好 px 高」的那一張（v1.87.1 主頁下雨／下雪那一句：跟原本站在對話框左邊那一隻一樣高）。
+// 縮放照這一張自己的畫布算，不另外寫一個數字——每一張邊線以上的高度不同（撐傘那一張比踩雪板那一張矮）。
+export function peekFit(kind, px) {
+  const p = PEEK[kind];
+  if (!p) throw new Error('沒有這張探頭圖：' + kind);
+  return peek(kind, px / (p.edge - p.vb[1]));
+}
+
 // 探頭圖的動作：先從卡片／照片後面跳上來，再做這一張自己的動作。
 // v1.83.0 只有完成任務那一刻的小鳳打領結（Yolin 看了實機：「效果不錯，推廣到其他時刻」）；v1.85.0 推廣到每一張（核過的那張表）。
 // 在哪裡呼叫：完成任務的慶祝畫面（js/addphoto.js，五張之一）、天氣頁的出門提醒卡（js/views/weather.js，下雨／下雪）、

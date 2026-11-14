@@ -74,4 +74,46 @@ const modes = (spots) => dayMapModel(spots).segs.map((s) => `${s.from}→${s.to}
   yes(LEG_MODES.every((k) => legModeOf({ id: 'a' }, { legFrom: 'a', legMode: k }) === k), `七個代號都認得（${LEG_MODES.join('／')}）`);
 }
 
+// ---------- 3. 行程分頁的「約幾點到」（js/spottime.js 的 etaChain，v1.87.1）----------
+// Yolin 看 v1.87.0 實機：第一站 10:00 到、停 3 小時，下一段搭車約 40 分，後面幾站沒帶出時間。
+// 規則：只用使用者填的「幾點到」「停留多久」＋路線服務真的算出來的車程；缺一樣下一站就不推；使用者填的一律優先、鏈從那裡接上。
+// 期望值全部寫死（不呼叫 etaChain 以外的東西算）。
+{
+  const { etaChain, stayText, fmtHHMM } = await import('../js/spottime.js');
+  const legs = (m) => (a, b) => (m[`${a.id}>${b.id}`] ?? null);
+  const L = { 'p1>p2': 40, 'p2>p3': 16, 'p3>p4': 10 };
+  const brief = (c) => c.map((x) => (x.arrive == null ? (x.noData ? '沒車程' : x.missStay ? '缺停留' : '—') : (x.est ? '約' : '') + fmtHHMM(x.arrive))).join(' ');
+  // E1：第一站 10:00、停 3 小時 → 第二站 13:40（停 1 小時）→ 第三站 14:56（沒停留）→ 第四站只差上一站的停留
+  const e1 = etaChain([{ id: 'p1', startMin: 600, stayMin: 180 }, { id: 'p2', stayMin: 60 }, { id: 'p3' }, { id: 'p4' }], legs(L));
+  yes(brief(e1) === '10:00 約13:40 約14:56 缺停留' && !e1[0].est && e1[1].est && e1[2].est,
+    '行程推算：10:00＋停 3 小時＋車程 40 分 → 約 13:40；再＋停 1 小時＋16 分 → 約 14:56；第三站沒設停留 → 第四站標「缺停留」', brief(e1));
+  // E2：上一站沒設停留 → 不推（不拿猜的停留補）
+  const e2 = etaChain([{ id: 'p1', startMin: 600 }, { id: 'p2', stayMin: 60 }], legs(L));
+  yes(brief(e2) === '10:00 缺停留' && e2[1].arrive == null, '行程推算：上一站沒設停留時間 → 下一站不推、標「缺停留」', brief(e2));
+  // E3：使用者自己填的時間優先（推出來是 13:40，他填 15:00 → 用 15:00，下一站從 15:00 接）
+  const e3 = etaChain([{ id: 'p1', startMin: 600, stayMin: 180 }, { id: 'p2', startMin: 900, stayMin: 60 }, { id: 'p3' }], legs(L));
+  yes(brief(e3) === '10:00 15:00 約16:16' && !e3[1].est, '行程推算：使用者自己填的時間優先、不覆蓋，鏈從他填的那一站接上（15:00＋1 小時＋16 分 → 約 16:16）', brief(e3));
+  // E4：那一段算不出車程（電車、公車沒有班次資料；路線服務沒回）→ 不推，也不標缺停留（缺的不是停留）
+  const e4 = etaChain([{ id: 'p1', startMin: 600, stayMin: 180 }, { id: 'p2', stayMin: 60 }, { id: 'p3' }], legs({ 'p2>p3': 16 }));
+  yes(brief(e4) === '10:00 — —', '行程推算：那一段沒有車程 → 下一站不推、不標缺停留，再下一站也不推', brief(e4));
+  // E5：第一站沒填時間 → 整天都不推（不拿預設的 9 點出發）
+  const e5 = etaChain([{ id: 'p1', stayMin: 180 }, { id: 'p2', stayMin: 60 }, { id: 'p3' }], legs(L));
+  yes(brief(e5) === '— — —', '行程推算：第一站沒填幾點到 → 整天不推（不用預設的出發時間）', brief(e5));
+  // E6：舊資料只有字串（startTime／endTime）也讀得到；推過午夜寫「隔天」
+  const e6 = etaChain([{ id: 'p1', startTime: '22:00', endTime: '23:50' }, { id: 'p2' }], legs({ 'p1>p2': 40 }));
+  yes(brief(e6) === '22:00 約隔天 00:30', '行程推算：舊的字串時間（22:00～23:50）也算得到，過午夜寫「隔天 00:30」', brief(e6));
+  // E7（v1.87.1 Dispatch 加，可推翻）：選了鐵路或公車的那一段沒有車程資料 → 那一站標「沒車程」（畫面寫「鐵路／公車沒有車程資料…」），之後幾站不推。
+  // 上一站也沒設停留時照樣標沒車程（補了停留也推不出來，不叫人去補）；鏈在更前面就斷了（第一站沒填幾點到）不標。
+  const { LEG_NO_DURATION } = await import('../js/legs.js');
+  const nd = (pairs) => (a, b) => pairs.includes(`${a.id}>${b.id}`);
+  const e7a = etaChain([{ id: 'p1', startMin: 600, stayMin: 180 }, { id: 'p2', stayMin: 60 }, { id: 'p3' }, { id: 'p4' }], legs({ 'p2>p3': 16, 'p3>p4': 10 }), nd(['p1>p2']));
+  const e7b = etaChain([{ id: 'p1', startMin: 600 }, { id: 'p2' }], legs({}), nd(['p1>p2']));
+  yes(brief(e7a) === '10:00 沒車程 — —' && brief(e7b) === '10:00 沒車程' && J(LEG_NO_DURATION) === J(['train', 'bus']),
+    `行程推算：選了鐵路或公車的那一段 → 那一站標「沒車程」、之後幾站不推；上一站也沒設停留照樣標沒車程（${brief(e7a)}｜${brief(e7b)}；${J(LEG_NO_DURATION)}）`);
+  const e7c = etaChain([{ id: 'p1', stayMin: 180 }, { id: 'p2' }], legs({}), nd(['p1>p2']));
+  yes(brief(e7c) === '— —', `行程推算：鏈在前面就斷了（第一站沒填幾點到）→ 鐵路那一段不標（${brief(e7c)}）`);
+  yes(stayText(180) === '停留 3 小時' && stayText(90) === '停留 1 小時 30 分' && stayText(45) === '停留 45 分',
+    `停留時間的字：180→「${stayText(180)}」、90→「${stayText(90)}」、45→「${stayText(45)}」`);
+}
+
 console.log(`\n交通方式等三組欄位：${pass} 項通過${process.exitCode ? '，有失敗' : ''}`);

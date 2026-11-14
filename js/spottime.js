@@ -67,9 +67,39 @@ export function spotTimes(s) {
   const startTime = fmtHHMM(startMin);
   const endTime = (startMin != null && stayMin) ? fmtHHMM(startMin + stayMin) : '';
   let label = startTime;
-  if (startTime && stayMin) {
-    const h = Math.floor(stayMin / 60), mi = stayMin % 60;
-    label = `${startTime} 停留 ${h ? h + ' 小時' + (mi ? ' ' + mi + ' 分' : '') : mi + ' 分'}`;
-  }
+  if (startTime && stayMin) label = `${startTime} ${stayText(stayMin)}`;
   return { startMin, stayMin, startTime, endTime, label };
+}
+
+// 「停留 3 小時」「停留 1 小時 30 分」「停留 45 分」（景點設定頁的 label 與行程分頁的站卡共用）
+export function stayText(min) {
+  const h = Math.floor(min / 60), mi = min % 60;
+  return `停留 ${h ? h + ' 小時' + (mi ? ' ' + mi + ' 分' : '') : mi + ' 分'}`;
+}
+
+// 行程分頁的「約幾點到」（v1.87.1，Yolin 看 v1.87.0 實機：第一站 10:00 到、停 3 小時、搭車約 40 分，後面幾站沒帶出時間）。
+// 只用三樣東西：使用者自己填的「幾點到」、使用者自己填的「停留多久」、路線服務真的算出來的那一段車程（legMinOf 給分鐘，
+// 算不出來給 null）。任何一樣缺了，下一站就不推——不拿預設的出發時間、不拿猜的停留（stayForSpot）、不拿直線估算補
+// （設計原則：猜出來的不變成畫面上的字）。使用者自己填了「幾點到」的那一站一律用他填的、不覆蓋，鏈從那裡重新接上。
+// noDataOf(前一站, 這一站)：這一段選的方式本來就沒有車程資料（鐵路、公車，見 legs.js 的 LEG_NO_DURATION）就回 true。
+// 鏈推到這一段斷掉時標 noData（v1.87.1）——比「缺停留」優先：那一段就算補了停留也推不出來，講停留會叫人去補一個沒用的東西。
+// 鏈在更前面就斷了（上一站本來就沒有時間）不標：那時推不出來不是這一段的錯。
+// 回傳每一站 { id, arrive（分鐘，可能 ≥ 1440＝隔天）, est（是推算的）, missStay（只差上一站的停留就推得出來）, noData（斷在沒有車程資料的那一段） }。
+export function etaChain(spots, legMinOf, noDataOf = () => false) {
+  const out = [];
+  let leave = null;            // 上一站幾點離開（知道才有）
+  let prevArrive = null, prevStay = null;
+  for (let i = 0; i < spots.length; i++) {
+    const t = spotTimes(spots[i]);
+    const leg = i > 0 ? legMinOf(spots[i - 1], spots[i]) : null;
+    let arrive = null, est = false, missStay = false, noData = false;
+    if (Number.isFinite(t.startMin)) arrive = t.startMin;
+    else if (leave != null && Number.isFinite(leg)) { arrive = leave + leg; est = true; }
+    else if (i > 0 && prevArrive != null && noDataOf(spots[i - 1], spots[i])) noData = true;
+    else if (i > 0 && prevArrive != null && prevStay == null && Number.isFinite(leg)) missStay = true;
+    out.push({ id: spots[i].id, arrive, est, missStay, noData });
+    prevArrive = arrive; prevStay = t.stayMin;
+    leave = arrive != null && t.stayMin ? arrive + t.stayMin : null;
+  }
+  return out;
 }

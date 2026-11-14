@@ -288,6 +288,8 @@ async function feedItem(sub, tripId, allSubs, multi) {
 
   const redraw = () => {
     const lk = store.likesOf(sub.id, activeMemberId(tripId));
+    // 原生 replaceChildren 不會略過 null（會印成「null」兩個字——v1.87.0 實機截圖：表情列右邊多一個 null）；
+    // 沒有人數要寫時給空陣列展開，跟全螢幕檢視器（viewer.js）那一列同一個寫法。nullinserttest 掃這個形狀。
     actions.replaceChildren(
       ...REACTIONS.map((emo) => {
         return h('button', {
@@ -300,7 +302,7 @@ async function feedItem(sub, tripId, allSubs, multi) {
           },
         }, emo);
       }),
-      lk.showCount ? h('span', { class: 'react-count' }, `${lk.count} 人按讚`) : null,
+      ...(lk.showCount ? [h('span', { class: 'react-count' }, `${lk.count} 人按讚`)] : []),
     );
     const comments = store.commentsOf(sub.id);
     commentsBox.replaceChildren(

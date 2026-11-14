@@ -29,6 +29,7 @@ await sleep(900);
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 let pass = 0, fail = 0;
 const yes = (c, m, x) => { if (c) { pass++; console.log('✓ ' + m); } else { fail++; console.log('✗ ' + m + (x ? '｜' + x : '')); } };
+const J = (x) => JSON.stringify(x);
 const SPOTS = [
   [1, '甲・車站', '10:00', 24.754, 121.758],
   [1, '乙・博物館', '11:30', 24.869, 121.835],
@@ -38,6 +39,27 @@ const SPOTS = [
 ];
 // 行程分頁裡打開的那一天（v1.87.0 起「怎麼去」只在這裡；選擇器一律從 .itin-page 開頭，跑到任務頁就什麼都量不到）
 const DC = '.itin-page .daycollapse.open';
+// 八（v1.87.1「約幾點到」）的另一趟：一天 6 站，名字自編、座標合成（彼此相隔幾公里，不會被當成跨區）。
+// [名字, 自己填的幾點到, 停留分鐘, lat, lng]
+const ETA = [
+  ['子・老街口', '10:00', 180, 24.600, 121.700],
+  ['丑・河濱公園', '', 60, 24.640, 121.720],
+  ['寅・小書店', '', 30, 24.680, 121.740],
+  ['卯・茶屋', '16:00', 30, 24.720, 121.760],
+  ['辰・漁港', '', 0, 24.760, 121.780],
+  ['巳・夜市口', '', 0, 24.800, 121.800],
+];
+// 相鄰兩站的合成車程（秒）：40、16、10、25、12 分；不相鄰的隨便給（用不到）
+const ETA_SEC = [2400, 960, 600, 1500, 720];
+let osrmFake = 0;
+// 路線服務的 /table：座標全是這一趟的才回合成的矩陣（其他照舊 404——原本那一趟的行為不變）
+function fakeTable(pathname) {
+  const pts = decodeURIComponent(pathname.split('/').pop() || '').split(';').map((s) => s.split(',').map(Number));
+  const idx = pts.map(([lng, lat]) => ETA.findIndex((e) => Math.abs(e[3] - lat) < 1e-9 && Math.abs(e[4] - lng) < 1e-9));
+  if (!idx.length || idx.some((i) => i < 0)) return null;
+  const sec = (a, b) => (a === b ? 0 : Math.abs(a - b) === 1 ? ETA_SEC[Math.min(a, b)] : 3000);
+  return JSON.stringify({ code: 'Ok', durations: idx.map((a) => idx.map((b) => sec(a, b))) });
+}
 
 const page = await browser.newPage();
 const stable = async (sel) => {
@@ -67,6 +89,10 @@ try {
     const u = new URL(rq.url());
     if (u.hostname === 'tile.openstreetmap.org') { fail++; console.log('✗ 打到真的 OSM'); return rq.abort(); }
     if (u.origin !== ORIGIN) {
+      if (u.hostname === 'routing.openstreetmap.de') {
+        const body = fakeTable(u.pathname);
+        if (body) { osrmFake++; return rq.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body }); }
+      }
       ext.set(u.hostname, (ext.get(u.hostname) || 0) + 1);
       return rq.respond({ status: 404, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
     }
@@ -366,6 +392,110 @@ try {
   const redrew1 = await redrawn(6000);
   const emo1 = await page.evaluate((dc) => document.querySelector(`${dc} .tl-item .itin-stop`)?.textContent || '', DC);
   yes(still7 && same7 && redrew1 && emo1.startsWith(EMO[1]), `收起選項 → 剛才擋下的重畫補上（時間軸換成新節點、甲寫成「${emo1}」）`, JSON.stringify({ still7, same7, redrew1 }));
+
+  // 八、行程分頁的「約幾點到」與停留時間（v1.87.1；Yolin 看 v1.87.0 實機：第一站 10:00 到、停 3 小時，下一段設成搭車約 40 分，
+  //    後面幾站沒帶出時間；第一站卡上也看不到停留時間）。另一趟（上面的 ETA）：
+  //    子 10:00 停 3 小時 →(搭車 40 分)→ 丑 停 1 小時 →(16 分)→ 寅 停 30 分 →(10 分)→ 卯 自己填 16:00、停 30 分 →(25 分)→ 辰 沒設停留 →(12 分)→ 巳
+  //    期望（2026-11-14 事前寫）：子「10:00」、丑「約 13:40 到」、寅「約 14:56 到」、卯照他填的「16:00」（推出來會是 15:36，不覆蓋）、
+  //    辰「約 16:55 到」（從卯填的 16:00 接）、巳「上一站沒設停留時間，推不出幾點到」。站卡第二行：子「停留 3 小時」、丑「停留 1 小時」、
+  //    寅、卯「停留 30 分」，辰、巳沒有。子→丑那一段從畫面設（使用者的路：點「怎麼去：還沒設定」→ 搭車）；設之前丑、寅推不出來
+  //    （鏈的起點那一段沒有車程），辰、巳照樣有（從卯填的時間接）。其餘四段事先寫好。
+  const etaIds = await page.evaluate(async (spots, firstTrip) => {
+    const s = await import('./js/store.js');
+    let k = 0; const uuid = () => `00000000-0000-4000-9000-${String(++k).padStart(12, '0')}`;
+    const tid = uuid();
+    await s.put({ id: tid, type: 'trip', groupId: s.get(firstTrip).groupId, title: '範例時間推算', region: '宜蘭', startDate: '2024-04-01', endDate: '2024-04-01' });
+    const ids = spots.map(() => uuid());
+    for (let i = 0; i < spots.length; i++) {
+      const [name, startTime, stayMin, lat, lng] = spots[i];
+      await s.put({ id: ids[i], type: 'spot', tripId: tid, name, emoji: '📍', day: 1, order: i, lat, lng,
+        ...(startTime ? { startTime } : {}), ...(stayMin ? { stayMin } : {}),
+        ...(i >= 2 ? { legFrom: ids[i - 1], legMode: 'car' } : {}) });
+    }
+    return { tid, ids };
+  }, ETA, tid);
+  const etaRead = () => page.evaluate((dc) => [...document.querySelectorAll(`${dc} .timeline > .tl-item`)].map((li) => {
+    const t = li.querySelector(':scope > .tl-time');
+    return { t: t ? t.textContent : '', eta: !!t && t.classList.contains('tl-eta'), miss: !!t && t.classList.contains('tl-eta-miss'),
+      w: t && t.textContent ? getComputedStyle(t).fontWeight : '', stay: li.querySelector('.itin-stay')?.textContent || '' };
+  }), DC);
+  const cellIs = (i, text) => page.waitForFunction((dc, i, text) => {
+    const li = [...document.querySelectorAll(`${dc} .timeline > .tl-item`)][i];
+    return !!li && li.querySelector(':scope > .tl-time')?.textContent === text;
+  }, { timeout: 15000 }, DC, i, text).then(() => true, () => false);
+  await page.goto(`${ORIGIN}/#/trip/${etaIds.tid}/itinerary`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.itin-page .itin-seg', { timeout: 10000 });
+  if (await page.evaluate(() => document.getElementById('itin-pane-plan')?.hidden !== false)) {
+    for (const b of await page.$$('.itin-seg button')) if ((await b.evaluate((e) => e.textContent)) === '行程') { await b.click(); break; }
+  }
+  await page.waitForSelector(`${DC} .tl-leg`, { timeout: 10000 });
+  const pre8 = (await cellIs(4, '約 16:55 到')) && (await cellIs(5, '上一站沒設停留時間，推不出幾點到'));
+  const R0 = await etaRead();
+  yes(pre8 && J(R0.map((x) => x.t)) === J(['10:00', '', '', '16:00', '約 16:55 到', '上一站沒設停留時間，推不出幾點到'])
+    && J(R0.map((x) => x.stay)) === J(['停留 3 小時', '停留 1 小時', '停留 30 分', '停留 30 分', '', '']),
+    `八之一 子→丑還沒設怎麼去：丑、寅推不出來；卯照他填的、辰從卯接上「約 16:55 到」、巳說缺上一站的停留；站卡寫停留時間（${J(R0.map((x) => x.t))}；${J(R0.map((x) => x.stay))}）`);
+  // 從畫面設子→丑＝搭車（那一列掛在丑上）：點「怎麼去：還沒設定」→ 點寫著「搭車」的那一格
+  await page.click(`${DC} .tl-leg[data-spot="${etaIds.ids[1]}"] .tl-leg-btn`);
+  const carOpt = await page.evaluateHandle((dc, id) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
+    .find((b) => b.querySelector('.tl-leg-name')?.textContent === '搭車') || null, DC, etaIds.ids[1]);
+  const tapped = !!(await carOpt.evaluate((b) => !!b));
+  if (tapped) await carOpt.asElement().click();
+  const got13 = (await cellIs(1, '約 13:40 到')) && (await cellIs(2, '約 14:56 到'));
+  const R1 = await etaRead();
+  const mins8 = await page.evaluate((dc) => [...document.querySelectorAll(`${dc} .tl-leg-min`)].map((x) => x.textContent), DC);
+  yes(tapped && got13 && J(R1.map((x) => x.t)) === J(['10:00', '約 13:40 到', '約 14:56 到', '16:00', '約 16:55 到', '上一站沒設停留時間，推不出幾點到'])
+    && J(mins8) === J(['約 40 分', '約 16 分', '約 10 分', '約 25 分', '約 12 分']),
+    `八之二 從畫面把子→丑設成搭車 → 丑「約 13:40 到」（10:00＋停 3 小時＋40 分）、寅「約 14:56 到」，其餘不變；每段車程照畫面上寫的分鐘算（${J(R1.map((x) => x.t))}；${J(mins8)}）`);
+  // 使用者填的不覆蓋、推算的看得出不同：卯、子照舊是他填的那幾個字、不是推算的樣式；推算的字比他填的細；推出來的不寫進資料
+  const kept = await page.evaluate(async (ids) => {
+    const s = await import('./js/store.js');
+    return ids.map((id) => { const r = s.get(id); return [r.startTime || '', r.startMin ?? null]; });
+  }, etaIds.ids);
+  const userW = R1.filter((x) => x.t && !x.eta && !x.miss).map((x) => x.w), etaW = R1.filter((x) => x.eta).map((x) => x.w);
+  yes(got13 && !R1[0].eta && !R1[3].eta && R1[1].eta && R1[2].eta && R1[4].eta && R1[5].miss
+    && userW.length === 2 && etaW.length === 3 && userW.every((w) => etaW.every((e) => Number(e) < Number(w)))
+    && J(kept) === J([['10:00', null], ['', null], ['', null], ['16:00', null], ['', null], ['', null]]),
+    `八之三 自己填的時間不被蓋掉（資料照舊、推出來的沒寫進去）、推算的「約…到」字比較細（自己填的 ${J(userW)}、推算的 ${J(etaW)}；資料 ${J(kept)}）`);
+  const blank8 = await blankTextScan(page);
+  yes(blank8.ok && blank8.texts > 0 && blank8.hits.length === 0,
+    `八之四 推算之後整個行程頁沒有空值被印成字（掃了 ${blank8.texts} 個文字節點、${blank8.attrs} 個屬性；對照樣本${blank8.ok ? '全中' : '沒中：' + blank8.broken.join('、')}）`,
+    blank8.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
+  // 八之五、八之六（v1.87.1 Dispatch 加，可推翻；2026-11-14 事前寫）：從畫面把子→丑改成鐵路、再改成公車（使用者改主意的路）。
+  //   期望：丑寫「鐵路／公車沒有車程資料，之後幾站推不出幾點到」（小字那一種樣式）、寅推不出來（留白）、卯照他填的 16:00、
+  //   辰從卯接上「約 16:55 到」、巳照樣缺停留；子→丑那一段不寫分鐘（不拿開車時間冒充）。還沒選怎麼去的那一段留白，八之一已經驗過（丑是空的）。
+  const NODATA = '鐵路／公車沒有車程資料，之後幾站推不出幾點到';
+  // 點之前先記下那一顆的正中間被什麼蓋住（說明行印出來、不判定），再捲到畫面中間才點（使用者也是看得到才點）。
+  // 15:27 第一次跑：八之五（鐵路，選項第一列）過、八之六（公車，第二列）讀到整天都不在——推論是那一格落在底部分頁列後面、
+  // 點到了分頁列、換了頁（同一類見 css「動作列不黏底」那段註解）；這一行就是用來證實或推翻這個推論的。
+  const coverOf = (el) => el.evaluate((e) => {
+    const r = e.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !t ? '（在畫面外）' : (e === t || e.contains(t)) ? '' : (t.getAttribute('class') || t.tagName);
+  });
+  const tapCentered = async (el) => { const c = await coverOf(el); await el.evaluate((e) => e.scrollIntoView({ block: 'center' })); await el.click(); return c; };
+  const pickLeg = async (spotId, label) => {
+    const btn = await page.$(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
+    if (!btn) return { ok: false, cover: '找不到「怎麼去」按鈕' };
+    const c1 = await tapCentered(btn);
+    const opt = await page.evaluateHandle((dc, id, label) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
+      .find((b) => b.querySelector('.tl-leg-name')?.textContent === label) || null, DC, spotId, label);
+    const ok = !!(await opt.evaluate((b) => !!b));
+    const c2 = ok ? await tapCentered(opt.asElement()) : '';
+    return { ok, cover: `按鈕${c1 ? '被「' + c1 + '」蓋住' : '沒被蓋住'}、「${label}」那一格${c2 ? '被「' + c2 + '」蓋住' : '沒被蓋住'}` };
+  };
+  const legSwitched = (spotId, mode) => page.waitForSelector(`${DC} .tl-leg[data-spot="${spotId}"][data-mode="${mode}"]`, { timeout: 10000 }).then(() => true, () => false);
+  for (const [no, label, mode] of [['八之五', '鐵路', 'train'], ['八之六', '公車', 'bus']]) {
+    const tapN = await pickLeg(etaIds.ids[1], label);
+    console.log(`・${no} 點之前：${tapN.cover}`);
+    const switched = tapN.ok && (await legSwitched(etaIds.ids[1], mode));
+    const gotN = switched && (await cellIs(1, NODATA)) && (await cellIs(4, '約 16:55 到'));
+    const RN = await etaRead();
+    const minsN = await page.evaluate((dc) => [...document.querySelectorAll(`${dc} .tl-leg-min`)].map((x) => x.textContent), DC);
+    const hashN = await page.evaluate(() => location.hash);
+    yes(gotN && J(RN.map((x) => x.t)) === J(['10:00', NODATA, '', '16:00', '約 16:55 到', '上一站沒設停留時間，推不出幾點到'])
+      && RN[1].miss && !RN[1].eta && J(minsN) === J(['', '約 16 分', '約 10 分', '約 25 分', '約 12 分']),
+      `${no} 從畫面把子→丑改成${label} → 丑寫「${NODATA}」、寅留白、卯照他填的、辰「約 16:55 到」；那一段不寫分鐘（${J(RN.map((x) => x.t))}；${J(minsN)}）`,
+      `點到了：${tapN.ok}、換成${label}：${switched}、現在的網址 ${hashN}`);
+  }
 } catch (e) {
   fail++; console.log('✗ 例外 ' + (e && e.stack || e));
 } finally {
@@ -374,5 +504,6 @@ try {
 }
 // 說明行（不是判定）：攔下了哪些外站請求——不打真網路的證據；0 次也照實印
 console.log(`・外站請求一律當場回 404、沒有放出去：${[...ext].map(([h, n]) => `${h}×${n}`).join('、') || '這一輪 0 次'}`);
+console.log(`・路線服務：八那一趟的座標回合成車程 ${osrmFake} 次（其他照舊 404，算在上一行）`);
 console.log(`\n交通方式畫面：${pass} 項通過、${fail} 項失敗`);
 process.exitCode = fail ? 1 : 0;

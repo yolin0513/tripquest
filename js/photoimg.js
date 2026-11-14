@@ -45,13 +45,14 @@ export function subPhoto(sub, { className = 'fi-photo', alt = '' } = {}) {
   const say = (text, sub2, retry) => {
     state.hidden = false;
     img.hidden = true;
+    // 原生 replaceChildren 不會略過 null：「照片下載中…」那一次兩個都是空的，會印成「照片下載中…nullnull」（v1.87.1 掃出來）
     state.replaceChildren(
       h('span', { class: 'ph-state-t' }, text),
-      sub2 ? h('span', { class: 'ph-state-s' }, sub2) : null,
-      retry ? h('button', {
+      ...(sub2 ? [h('span', { class: 'ph-state-s' }, sub2)] : []),
+      ...(retry ? [h('button', {
         class: 'btn btn-sm ph-retry', type: 'button',
         onclick: (e) => { e.stopPropagation(); e.preventDefault(); load(true); },
-      }, '重新下載') : null,
+      }, '重新下載')] : []),
     );
   };
 

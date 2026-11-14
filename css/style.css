@@ -273,6 +273,14 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
 .say-x { flex: none; align-self: center; min-width: 44px; min-height: 44px; margin-bottom: 12px; border: 0; background: transparent;
   color: var(--muted); font: inherit; font-size: 1.05rem; cursor: pointer; border-radius: 12px; }
 html[data-theme="washi"] .say-text { border-width: 2.5px; }
+/* 下雨／下雪那一句（v1.87.1，Yolin 看 v1.87.0 實機）：講話的換成天氣頁那一張探頭圖（鬍鬍撐傘／山雀踩雪板），從對話框上緣探頭——
+   跟出門提醒卡同一種擺法。沒有左邊那一格、沒有尾巴（牠就扣在框上）；對話框上面留出牠露出來的高度（--pk-rise，ui.js 的 mountPeek 設）。
+   邊線對在框線外緣：絕對定位從框線內側算，補一個框線寬（同 .th-end）。 */
+.say-peek .say-text { --say-bd: 1.5px; margin: var(--pk-rise) 0 0; }
+html[data-theme="washi"] .say-peek .say-text { --say-bd: 2.5px; }
+.say-peek .say-text::before { content: none; }
+.say-peek .say-x { align-self: flex-end; margin-bottom: 0; }
+.say-text > .gl-peek { left: 14px; bottom: calc(100% - var(--pk-sink) + var(--say-bd)); }
 /* 照片只有 210px 寬：寬度不能跟著照片算（第一版 right:0，只剩 40px，字一個一個直排、疊到標題上）——
    照字的長度排、最寬到螢幕右邊留 12px（慶祝畫面整個置中，照片中線＝螢幕中線）。
    照片上面要留多高由 js/ui.js 的 roomForSay 量了再設：排成幾行要看螢幕寬、探頭的是哪一張、字數，這裡算不到
@@ -581,6 +589,10 @@ button.card { appearance: none; font: inherit; }
 .tl-item > .qcollapse { margin-top: 10px; }
 .tl-time { display: block; margin: 12px 0 -4px; font-weight: 800; font-size: 0.85rem; line-height: 1.2; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tl-time:empty { display: none; }
+/* 行程分頁推算的「約 HH:MM 到」（v1.87.1；js/views/trip.js 的 fillEta）：跟使用者自己填的時間分開——字細一截、前面「約」後面「到」；
+   只差上一站停留時間的那一句再小一號 */
+.tl-time.tl-eta { font-weight: 600; }
+.tl-time.tl-eta-miss { font-weight: 600; font-size: 0.8rem; }
 /* 點的中心對準線的中心：線在 --tl-line、寬 3px；點連框共 19px */
 .tl-dot { position: absolute; left: calc(var(--tl-line) - var(--tl-col) + 1.5px - 9.5px); top: 1.45rem;
   width: 13px; height: 13px; border-radius: 50%; background: var(--dot-fill); border: 3px solid var(--dot-edge); }
@@ -944,6 +956,8 @@ html[data-theme="washi"] .th-nums, html[data-theme="washi"] .th-shots, html[data
 .info-fold[open] .info-fold-sum { margin-bottom: 8px; }
 .itin-stop { margin-top: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-elev);
   font-weight: 800; overflow-wrap: anywhere; }
+/* 站卡第二行：使用者設的停留時間（v1.87.1；沒設就沒有這一行） */
+.itin-stay { display: block; margin-top: 2px; font-weight: 600; font-size: 0.85rem; color: var(--muted); }
 /* 大數字（第 8 項）：航班的時間與機場；日期與「未填」維持一般字 */
 .fl-time { font-size: 1.6rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .fl-place { font-size: 1.15rem; font-weight: 800; }

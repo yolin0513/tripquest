@@ -13,8 +13,9 @@
     "why": "（事前寫 2026-11-14 11:30，跑之前）v1.87.0 Yolin：行程內容在上、可以播放的路線圖在最下面。改回地圖在時間軸前面。預期只紅 legviewtest 的「行程分頁那一天：時間軸在最上面、可以播放的路線圖在最下面」；播放那幾條不紅（地圖照樣在、照樣播）。",
     "expect": ["行程分頁那一天"],
     "file": "js/views/trip.js",
-    "find": "          legTimeline(ds, (s) => h('li', { class: 'tl-item' },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),\n            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),\n            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))),\n          dayMap(ds, tripId, day))));",
-    "replace": "          dayMap(ds, tripId, day),\n          legTimeline(ds, (s) => h('li', { class: 'tl-item' },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),\n            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),\n            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))))));",
+    "find": "          legTimeline(ds, (s) => h('li', { class: 'tl-item' },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),\n            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),\n            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`,\n              spotTimes(s).stayMin ? h('span', { class: 'itin-stay' }, stayText(spotTimes(s).stayMin)) : null))),\n          dayMap(ds, tripId, day))));",
+    "replace": "          dayMap(ds, tripId, day),\n          legTimeline(ds, (s) => h('li', { class: 'tl-item' },\n            h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),\n            h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),\n            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`,\n              spotTimes(s).stayMin ? h('span', { class: 'itin-stay' }, stayText(spotTimes(s).stayMin)) : null))))));",
+    "note": "v1.87.1（2026-11-14）站卡多了停留時間那一行，find／replace 跟著改成新的那幾行；突變的意思不變（路線圖搬回時間軸前面）",
     "cmd": "node scripts/legviewtest.mjs", "done": "^交通方式畫面：\\d+ 項通過"
   },
   {
@@ -112,8 +113,9 @@
     "why": "（事前寫 2026-11-14 11:30，跑之前）天氣那兩句的鍵不帶日期：今天關掉下雨那句，出發日改成明天、明天下雨也不講。預期紅 S0（鍵的格式）與 S8（使用者看得到的結果）；S6、S7 用「哪一種」找那一句，不紅；S10（另一個瀏覽情境、沒關過）不紅。",
     "expect": ["S0 純函式", "S8 天氣那一句照"],
     "file": "js/says.js",
-    "find": "  return { key: `${alert.kind}:${alert.day.date}`, who: SAY_WHO[alert.kind], text };",
-    "replace": "  return { key: alert.kind, who: SAY_WHO[alert.kind], text };",
+    "find": "  return { key: `${alert.kind}:${alert.day.date}`, who: SAY_WHO[alert.kind], text, peek: alert.kind };",
+    "replace": "  return { key: alert.kind, who: SAY_WHO[alert.kind], text, peek: alert.kind };",
+    "note": "v1.87.1（2026-11-14）weatherLine 多帶一個 peek 欄位，find／replace 跟著改；突變的意思不變（鍵不帶日期）",
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   },
   {

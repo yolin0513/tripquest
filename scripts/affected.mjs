@@ -21,6 +21,8 @@ export const BASELINE = ['affectedtest', 'guesscensustest', 'themetrusttest', 'v
 // matchinputtest：只准 generate.js 寫 matchInput 的登記（新的寫入點可能出現在任何一支 js；同 themetrusttest 的理由，v1.76.0）。
 // 另起一行加，不改上面那一行：好幾份突變清單的 find 是那一行的片段，改了就失效
 BASELINE.push('matchinputtest');
+// nullinserttest：原生插入不收可能是空的值（新的一處可能出現在任何一支 js，只有每次都跑才抓得到；v1.87.1，同一種 bug 第三次上畫面）
+BASELINE.push('nullinserttest');
 // ---------- 放大器（R4） ----------
 // imgtest：案例 ②（v1.41）就是 trip.js 的畫面結構改動讓它紅的（修訂 1-C）
 export const AMP_A_TESTS = ['layouttest', 'tabbartest', 'scrolltest', 'densitytest', 'recapcardtest', 'screenshots', 'tagtest', 'walltest', 'imgtest'];

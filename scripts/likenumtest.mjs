@@ -22,6 +22,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { blankTextScan } from './blanktext.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5795;
@@ -103,6 +104,20 @@ try {
   yes(f.length === 5 && f.every((x) => x.btns.length === 4 && x.btns.every((t) => !/\d/.test(t))), `動態：表情鈕本身不寫數字（${f.length} 則）`);
   yes(J(fBy(0).on) === J(['❤️']) && J(fBy(3).on) === J(['👍']) && fBy(2).on?.length === 0 && fBy(4).on?.length === 0,
     `動態：亮的鈕只看新的 like（A ❤️、D 👍；C 只有舊讚不亮、E 別人按不亮）（${J(f.map((x) => x.on))}）`);
+  // v1.87.1（2026-11-14 Yolin 實機截圖）：沒有人數要寫的那幾則，表情列右邊多一個純文字「null」——原生 replaceChildren 收到 null。
+  // 為什麼上面幾條沒抓到：它們只數 .react-btn／.react-count，那個 null 是兩者之外的文字節點。
+  // 前置：「不寫人數」的那幾則要在（B、C、D 三則）——不然量不到會出事的情境。表情列的子節點要剛好是 4 顆鈕（＋有人數才有的那一個），
+  // 再整個畫面掃一次空值印成字（scripts/blanktext.mjs，含對照樣本）。
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.feed-item .fi-actions')].map((r) => ({
+    kids: r.childNodes.length, btns: r.querySelectorAll(':scope > .react-btn').length, cnt: r.querySelectorAll(':scope > .react-count').length,
+    stray: [...r.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data) })));
+  const noCnt = rows.filter((r) => r.cnt === 0).length;
+  const blankF = await blankTextScan(page, '#view');
+  yes(rows.length === 5 && noCnt === 3 && rows.every((r) => r.btns === 4 && r.kids === 4 + r.cnt && r.stray.length === 0)
+    && blankF.ok && blankF.texts > 0 && blankF.hits.length === 0,
+    `動態表情列沒有空值印成字：不寫人數的 ${noCnt} 則（應為 3）表情列只有 4 顆鈕、沒有多出來的字（${J(rows.map((r) => r.stray))}）；`
+    + `整個畫面掃了 ${blankF.texts} 個文字節點、${blankF.attrs} 個屬性，空值 ${blankF.hits.length} 處（對照樣本${blankF.ok ? '全中' : '沒中：' + blankF.broken.join('、')}）`,
+    blankF.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
 
   // ---------- 動態：從畫面按——按讚、換表情、收回（Yolin 2026-11-10 第 3 題）----------
   const clickE = async (emo) => {

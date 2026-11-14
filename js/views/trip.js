@@ -18,13 +18,13 @@ import { loadThemes, themeForSpot, themeMeta, themePlaceholder, trustedTheme } f
 import { loadEmergency } from '../emergency.js';
 import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
-import { spotTimes } from '../spottime.js';
+import { spotTimes, stayText, etaChain, fmtHHMM } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
 import { paperPlane } from '../glyphs.js';
-import { sayRow, departLine, endLine, weatherLine } from '../says.js';
+import { sayRow, departLine, endLine, weatherLine, WHO_PX } from '../says.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
-import { LEG_MODES, LEG_LABEL, LEG_ICON, legModeOf } from '../legs.js';
+import { LEG_MODES, LEG_LABEL, LEG_ICON, LEG_NO_DURATION, legModeOf } from '../legs.js';
 import { buyCounts } from '../buylist.js';
 import { staysOf } from '../stays.js';
 import { flightsOf, nextFlight, flightCountdown } from '../flights.js';
@@ -867,7 +867,13 @@ async function fillWeather(slot, container, tripId, trip, { say = false, animate
           : h('div', { class: 'wx-strip-tip muted' }, '天氣還算舒服，點看每天預報'),
     );
     // 天氣條跟吉祥物那一句同一次放上去（只動一次版面）。那一句不放進天氣條的按鈕裡：✕ 才不會被當成「點天氣條」
-    const line = say ? sayRow(tripId, weatherLine(alert, today), { animate }) : null;
+    // v1.87.1（Yolin 看 v1.87.0 實機）：講話的換成天氣頁那一張探頭圖——下雨＝鬍鬍撐傘、下雪＝山雀踩雪板——從對話框上緣探頭，
+    // 邊線以上跟原本那一隻一樣高（WHO_PX）；動作跟天氣頁一樣慢慢探上來（減少動態效果、或主頁自己重畫時不動）。圖載不到：照舊是左邊那一隻。
+    const wl = say ? weatherLine(alert, today) : null;
+    const pk = wl && wl.peek ? await import('../peeks.js').catch(() => null) : null;
+    const pkEl = pk && pk.WEATHER_PEEK[wl.peek] ? pk.peekFit(pk.WEATHER_PEEK[wl.peek], WHO_PX) : null;
+    const line = wl ? sayRow(tripId, wl, { animate, peek: pkEl }) : null;
+    if (line && pkEl && animate) pk.cheer(pkEl, { soft: true });
     slot.replaceChildren(...[btn, line].filter(Boolean));
   } catch { /* 靜默：天氣是加分項 */ }
 }
@@ -944,18 +950,20 @@ function legRow(prev, s, i) {
 
 function legTimeline(daySpots, item) {
   const ol = h('ol', { class: 'timeline' }, ...daySpots.flatMap((s, i) => [i > 0 ? legRow(daySpots[i - 1], s, i) : null, item(s)]).filter(Boolean));
-  queueMicrotask(() => { fillLegMinutes(ol, daySpots).catch(() => {}); });
+  queueMicrotask(() => { fillLegMinutes(ol, daySpots).then((mins) => fillEta(ol, daySpots, mins)).catch(() => {}); });
   return ol;
 }
 
 // 走路／開車那幾段補「約 N 分鐘」。一天一種方式一次路線矩陣（route.js 有快取與節流）；
 // 降級成直線估算（src 'est'）就不寫——那是猜的。跨區長途也不寫。
+// 回傳真的寫上去的那幾段：「甲 id>乙 id」→ 分鐘（跟畫面上「約 N 分」同一個取整），給 fillEta 推下一站幾點到。
 const LEG_ROUTE_MODE = { walk: 'walk', car: 'drive' };
 async function fillLegMinutes(ol, daySpots) {
+  const mins = new Map();
   const slots = [...ol.querySelectorAll('.tl-leg-min')].filter((x) => LEG_ROUTE_MODE[x.dataset.mode]);
-  if (!slots.length) return;
+  if (!slots.length) return mins;
   let route;
-  try { route = await import('../route.js'); } catch { return; }
+  try { route = await import('../route.js'); } catch { return mins; }
   const placed = daySpots.filter((s) => s.lat != null && s.lng != null);
   const at = new Map(placed.map((s, i) => [s.id, i]));
   for (const mode of new Set(slots.map((x) => LEG_ROUTE_MODE[x.dataset.mode]))) {
@@ -970,8 +978,28 @@ async function fillLegMinutes(ol, daySpots) {
       if (!Number.isFinite(sec) || route.longHaul(a, b, sec)) continue;
       x.textContent = `約 ${route.fmtDur(sec)}`;
       x.title = mode === 'walk' ? '路線服務算的步行時間' : '路線服務算的開車時間（不含塞車）';
+      mins.set(`${x.dataset.from}>${x.dataset.to}`, Math.max(1, Math.round(sec / 60)));
     }
   }
+  return mins;
+}
+
+// 沒填「幾點到」的站，推得出來就在時間那一格寫「約 HH:MM 到」（規則見 spottime.js 的 etaChain）；
+// 只差上一站的停留時間就推得出來的，寫一句「上一站沒設停留時間」——讓人知道是哪一塊沒填，不是壞了；
+// 斷在選了鐵路／公車的那一段（沒有車程資料，legs.js 的 LEG_NO_DURATION），寫「鐵路／公車沒有車程資料…」（v1.87.1）。還沒選怎麼去的那一段留白。
+// 使用者自己填了時間的站，etaChain 一律回 est:false（用他填的），這裡就不會寫——「不覆蓋」只靠那一條規則，不在這裡另擋一道
+// （另擋一道的話單獨拿掉也不會有任何測試紅，§5.12）。時間那一格是每一站 li 的第一個 .tl-time（跟 daySpots 同一個順序）。
+function fillEta(ol, daySpots, mins) {
+  if (!ol.isConnected) return;
+  const cells = [...ol.children].filter((li) => li.classList.contains('tl-item')).map((li) => li.querySelector(':scope > .tl-time'));
+  if (cells.length !== daySpots.length) return;
+  etaChain(daySpots, (a, b) => mins.get(`${a.id}>${b.id}`) ?? null, (a, b) => LEG_NO_DURATION.includes(legModeOf(a, b))).forEach((c, i) => {
+    const cell = cells[i];
+    if (!cell) return;
+    if (c.est) { cell.textContent = `約 ${fmtHHMM(c.arrive)} 到`; cell.classList.add('tl-eta'); }
+    else if (c.noData) { cell.textContent = '鐵路／公車沒有車程資料，之後幾站推不出幾點到'; cell.classList.add('tl-eta-miss'); }
+    else if (c.missStay) { cell.textContent = '上一站沒設停留時間，推不出幾點到'; cell.classList.add('tl-eta-miss'); }
+  });
 }
 
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，
@@ -1834,7 +1862,8 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
           legTimeline(ds, (s) => h('li', { class: 'tl-item' },
             h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
-            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`))),
+            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`,
+              spotTimes(s).stayMin ? h('span', { class: 'itin-stay' }, stayText(spotTimes(s).stayMin)) : null))),
           dayMap(ds, tripId, day))));
       secs.set(day, sec);
       planPane.append(sec);

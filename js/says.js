@@ -9,12 +9,14 @@
 //   - 出場只動 opacity／transform（淡入、往上 6px）；減少動態效果（glyphs.js 的 reducedMotion）照樣顯示、不動。
 //   - 吉祥物一律 aria-hidden；那句話在 role="status" 裡，讀螢幕的軟體念得到。
 // 完成任務那一句不在主頁：在慶祝畫面上，由照片上緣探頭的那一隻講（addphoto.js 用 sayOnPeek 做好、交給 ui.js 的 celebrate）。
-import { h } from './ui.js';
+import { h, mountPeek } from './ui.js';
 import { mascot, reducedMotion } from './glyphs.js';
 
 // 主頁那幾句誰講（glyphs.js 的吉祥物種類）：出發、下雨＝雪納瑞（主角、撐傘那一隻）；下雪＝山雀（踩雪板那一隻）；
 // 旅程結束＝白熊（行程回顧那一隻）。完成任務＝照片上探頭的那一隻（peeks.js 挑的，預設小鳳）。
 export const SAY_WHO = Object.freeze({ depart: 'schnauzer', rain: 'schnauzer', snow: 'tit', end: 'bear' });
+// 主頁那一句的吉祥物多高（px）：左邊那一隻畫這麼高；下雨／下雪換成探頭圖時，邊線以上也是這麼高（peeks.js 的 peekFit）
+export const WHO_PX = 56;
 
 const KEY = (tripId) => 'tripquest.said.' + tripId;
 export function saidKeys(tripId) {
@@ -50,7 +52,9 @@ export function weatherLine(alert, today) {
   const text = alert.kind === 'snow'
     ? (isToday ? '今天可能會下雪，穿暖一點、走路慢慢來！' : '出發那天可能會下雪，保暖的衣服記得帶！')
     : (isToday ? '今天可能會下雨，傘帶了嗎？' : '出發那天可能會下雨，傘先放進行李吧！');
-  return { key: `${alert.kind}:${alert.day.date}`, who: SAY_WHO[alert.kind], text };
+  // peek：講話的換成哪一張探頭圖（peeks.js 的 WEATHER_PEEK 的鍵；v1.87.1 Yolin 看 v1.87.0 實機——下雨那句要配撐傘那一隻）。
+  // 這支不 import peeks.js（圖用到時才載），由呼叫的一方（trip.js 的 fillWeather）載圖、做好交給 sayRow。
+  return { key: `${alert.kind}:${alert.day.date}`, who: SAY_WHO[alert.kind], text, peek: alert.kind };
 }
 // 完成任務那一句（慶祝畫面，照片上探頭的那一隻講）：講的是完成數，不評論照片
 export function doneLine(allDone) {
@@ -59,15 +63,19 @@ export function doneLine(allDone) {
 
 // 主頁的一句：左邊一隻小的吉祥物、右邊一個對話框、最右邊 ✕。已經關過的那一句回 null（不放）。
 // animate：淡入那一下只在真的導覽進主頁時做；主頁自己重畫（同步進來、換了現在這一站）時直接出現，不會每重畫一次就閃一次。
-export function sayRow(tripId, line, { animate = true } = {}) {
+// peek：探頭圖（peeks.js 做好的 <svg>；下雨＝鬍鬍撐傘、下雪＝山雀踩雪板）。有的話不放左邊那一隻、對話框沒有尾巴，
+//   牠從對話框上緣探頭、手扣在框上——跟天氣頁出門提醒卡同一種擺法（v1.87.1）。圖載不到時呼叫的一方給 null，照舊是左邊那一隻。
+export function sayRow(tripId, line, { animate = true, peek = null } = {}) {
   if (!line || saidKeys(tripId).includes(line.key)) return null;
-  const el = h('div', { class: 'say', dataset: { say: line.key, who: line.who } },
-    h('span', { class: 'say-who', 'aria-hidden': 'true' }, mascot(line.who, 56)),
-    h('p', { class: 'say-text', role: 'status' }, line.text),
+  const text = h('p', { class: 'say-text', role: 'status' }, line.text);
+  const el = h('div', { class: 'say' + (peek ? ' say-peek' : ''), dataset: { say: line.key, who: line.who } },
+    peek ? null : h('span', { class: 'say-who', 'aria-hidden': 'true' }, mascot(line.who, WHO_PX)),
+    text,
     h('button', {
       class: 'say-x', type: 'button', 'aria-label': '關掉這句話',
       onclick: () => { markSaid(tripId, line.key); el.remove(); },
     }, '✕'));
+  if (peek) mountPeek(text, peek);
   if (animate && !reducedMotion()) el.classList.add('say-in');
   return el;
 }
