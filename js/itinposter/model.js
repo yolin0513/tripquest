@@ -9,7 +9,8 @@
 //   日期      出發日～結束日（沒設就不寫，不猜）
 //   旅伴      幾個人（membersOf 的人數；0 不寫）
 //   每天      第幾天、那天的日期（有出發日才算）、第一站 → 最後一站、每一站的名字與時間（有填才寫）、
-//             兩站之間怎麼去（使用者選過、而且前一站還是同一站才算：legs.js 的 legModeOf）
+//             兩站之間怎麼去（使用者選過、而且前一站還是同一站才算：legs.js 的 legModeOf）——只放代號與名稱；
+//             圖示（v1.90 起是畫的、不是 emoji）由版面照代號挑（js/itinposter/legicons.js），模型不放圖示
 //   必吃      只從景點庫來：那一站要對得回景點庫——跟可信類別同一套檢查（js/theme.js 的 trustedTheme：
 //             curated＋placeId、那一筆還在、拿名字再比一次是同一筆、建立時打的字再比一次也是同一筆），
 //             通過的（recheck）才取景點庫那一筆人工整理的 must；對不上的那一站一個都不列，也不照名字猜
@@ -28,7 +29,7 @@
 
 import { trustedTheme, trustedThemeOf } from '../theme.js';
 import { spotTimes, stayText, etaChain, fmtHHMM } from '../spottime.js';
-import { legModeOf, LEG_ICON, LEG_LABEL, LEG_NO_DURATION } from '../legs.js';
+import { legModeOf, LEG_LABEL, LEG_NO_DURATION } from '../legs.js';
 import { weekdayLabel } from '../tripday.js';
 import { isRainDay, isSnowDay, wxIcon } from '../weather.js';
 import { dayDateLabel } from '../poster/layout.js';
@@ -132,7 +133,7 @@ export function posterModel({ trip, spots, members = [], lookup = null, forecast
         time: t.startTime || '',
         eta: chain[i].est ? `約 ${fmtHHMM(chain[i].arrive)} 到` : '',
         stay: t.stayMin ? stayText(t.stayMin) : '',
-        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,
+        leg: mode ? { mode, label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,
       };
     });
     // 那一天的必吃只在那一天裡去重（第 6 天又去同一個夜市，第 6 天那一張照樣列）；整趟的清單（foods）跨天去重，列在第一次去的那天

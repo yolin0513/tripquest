@@ -49,8 +49,8 @@
     "why": "（事前寫 2026-11-14 20:35，跑之前）有算出來的車程也寫空字串（約幾點到照樣推得出來——etaChain 用的是 legTimes 的分鐘數）。A16c 紅；B0 的情境前置（有車程）也紅。預期紅 A16c、B0。",
     "expect": ["A16c 車程", "B0 "],
     "file": "js/itinposter/model.js",
-    "find": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,",
-    "replace": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: '' } : null,",
+    "find": "        leg: mode ? { mode, label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,",
+    "replace": "        leg: mode ? { mode, label: LEG_LABEL[mode], dur: '' } : null,",
     "cmd": "node scripts/itinposterlayouttest.mjs"
   },
   {
@@ -58,8 +58,8 @@
     "why": "（事前寫 2026-11-14 20:35，跑之前）同上一條，從使用者的路驗：行程分頁寫了「約 N 分」，海報的站卡沒有。P10a 本來就應該留白，不紅。預期只紅 P10b。",
     "expect": ["P10b 開過行程分頁再按進海報"],
     "file": "js/itinposter/model.js",
-    "find": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,",
-    "replace": "        leg: mode ? { mode, icon: LEG_ICON[mode] || '', label: LEG_LABEL[mode], dur: '' } : null,",
+    "find": "        leg: mode ? { mode, label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,",
+    "replace": "        leg: mode ? { mode, label: LEG_LABEL[mode], dur: '' } : null,",
     "cmd": "node scripts/itinpostertest.mjs"
   },
   {

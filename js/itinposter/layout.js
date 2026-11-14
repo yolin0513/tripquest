@@ -19,8 +19,15 @@
 //   路線圖全部一張是站牌框、色帶是那一天的色帶、路線圖每天一張是第一站的卡；角落那一隻拿掉。
 //   每天一張：站卡寫真資料（使用者填的時間、推算的「約幾點到」、停留多久、車程「約 N 分」），站距收緊、不再拉長填滿 A4，
 //   空出來的高度給那一天的吉祥物放大（頁面照樣至少 A4，不因為站少就變短）。
+//
+// v1.90（Yolin 選乙的 ②③；決定見 docs/STATUS.md 的 v1.90.0）：
+//   ② 兩站之間怎麼去：只有使用者選過的那一段才畫，圖示是畫的（legicons.js），不再用 emoji；「其他」沒有圖、照舊寫字。
+//      路線圖兩種的路旁加不帶內容的裝飾（小星星、小圓點、短線；decorate）——位置照固定算法、不用亂數，碰到框、字、路就不放。
+//   ③ 背景淡紋理：錯位的小圓點格子（規則的花樣、不用雜訊；每一張的 bg）。標題區與頁尾留白不鋪點；色帶的底改成不透明的
+//      （跟原本半透明疊在紙上看起來一樣），所以每一個字底下都不會有點——字的對比跟沒有紋理時一樣。
 
 import { peekGeom } from '../peeks.js';
+import { hasGlyph } from './legicons.js';
 
 export const PW = 1240;           // 寬（A4 在 150dpi 的寬度）
 export const A4H = 1754;          // 每天一張的最小高度（A4 比例）
@@ -60,6 +67,22 @@ export const colorOf = (day) => DAY_COLORS[(Math.max(1, day) - 1) % DAY_COLORS.l
 export function tint(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+// 顏色以 a 的比例疊在紙色上、算成不透明的 #rrggbb（v1.90：色帶的底。半透明的話底下的紋理點會透上來，字的底就不一樣了）
+export function mix(hex, a) {
+  const c = (h, s) => (parseInt(h.slice(1), 16) >> s) & 255;
+  const ch = (s) => Math.round(c(hex, s) * a + c(PAPER, s) * (1 - a)).toString(16).padStart(2, '0');
+  return `#${ch(16)}${ch(8)}${ch(0)}`;
+}
+
+// 背景淡紋理（v1.90 ③）：錯位的小圓點格子——每 DOT_STEP 一顆、奇數列錯半格。點的顏色比紙底深一點點：
+// 跟紙的對比約 1.19（看得出來、不搶眼）；最淺的字色 SUB 壓在點上仍有 4.65（就算哪天有字落在點上，對比也不掉到 4.5 以下）
+export const DOT = { step: 36, r: 3, color: '#ede2cc' };
+// 不鋪點的地方：標題區（外擴 14）與頁尾那一條。其餘的字都在不透明的底上（白框、膠囊、色帶），點本來就被蓋住
+function background(boxes, h) {
+  const clear = boxes.filter((b) => b.kind === 'header').map((b) => ({ x: b.x - 14, y: b.y - 14, w: b.w + 28, h: b.h + 28 }));
+  clear.push({ x: M - 14, y: h - 80, w: PW - 2 * M + 28, h: 80 });
+  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear };
 }
 
 // 名字太長：截到放得下，結尾「…」
@@ -107,6 +130,10 @@ function canvasOps(measure) {
       return { ...s, x: x0 };
     },
     box(kind, x, y, w, h, extra = {}) { boxes.push({ kind, x, y, w, h, ...extra }); },
+    // 交通圖示（v1.90）：mode＝模型那一段的代號（有畫的圖才會叫到這裡）；(x, y) 左上角、s 邊長；day、to＝第幾天、到第幾站（0 起算）
+    legicon(mode, x, y, s, color, day, to) { ops.push({ op: 'legicon', mode, x, y, s, color, day, to }); },
+    // 路旁的裝飾（v1.90）：shape＝star｜dot｜dash，(x, y) 中心、r 半徑、a 短線的角度；不帶字
+    deco(shape, x, y, r, color, a = 0) { ops.push({ op: 'deco', shape, x, y, r, color, a }); },
     // 膠囊（DAY 1、START…）：回傳寬度
     pill(t, x, y, h, size, fill, { color = '#ffffff', align = 'left', role = 'label', weight = 800 } = {}) {
       const tw = measure(String(t), size, weight);
@@ -257,6 +284,43 @@ function drawRoad(c, points) {
   }
 }
 
+// 路旁的裝飾（v1.90 ②）：小星星、小圓點、短線三種輪流——不帶內容（不畫地標、食物、天氣這類會被讀成資訊的東西）。
+// 位置照固定的算法：沿著路的中線每走 DECO_STEP 放一個、左右輪流、離中線 DECO_OFF；**不用亂數**（同一份行程排兩次一模一樣）。
+// 不放的情況：碰到任何外框或字（外擴 6）、出了左右邊界、離路的任何一段太近（會壓到路）、跟站點同一個高度（那裡有接到框的虛線）。
+// 要在所有框與字都排好之後叫（判斷碰不碰到靠的是它們）。colorAt(第幾段) → 那一段路屬於哪一天的顏色
+const DECO_STEP = 64, DECO_OFF = 54, DECO_R = 10, DECOS = ['star', 'dot', 'dash'];
+function bezAt(a, b, t) {
+  const dy = (b.y - a.y) / 2, u = 1 - t;
+  const P = [a, { x: a.x, y: a.y + dy }, { x: b.x, y: b.y - dy }, b];
+  const at = (k) => u * u * u * P[0][k] + 3 * u * u * t * P[1][k] + 3 * u * t * t * P[2][k] + t * t * t * P[3][k];
+  return { x: at('x'), y: at('y') };
+}
+const rectOfText = (o) => ({ x: o.align === 'center' ? o.x - o.w / 2 : o.align === 'right' ? o.x - o.w : o.x, y: o.y - o.size * 0.88, w: o.w, h: o.size * 1.1 });
+const hits = (a, b) => Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y);
+function decorate(c, points, stopYs, colorAt) {
+  const line = [];
+  for (let i = 1; i < points.length; i++) for (let k = 0; k <= 48; k++) line.push({ ...bezAt(points[i - 1], points[i], k / 48), seg: i });
+  const taken = [...c.boxes, ...c.ops.filter((o) => o.op === 'text').map(rectOfText)];
+  let walked = 0, j = 0;
+  for (let n = 1; n < line.length; n++) {
+    const a = line[n - 1], b = line[n], len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!len) continue;
+    walked += len;
+    if (walked < DECO_STEP) continue;
+    walked -= DECO_STEP;
+    const side = j % 2 ? 1 : -1, shape = DECOS[j % DECOS.length];
+    j++;
+    const x = b.x - side * (b.y - a.y) / len * DECO_OFF, y = b.y + side * (b.x - a.x) / len * DECO_OFF;
+    const box = { x: x - DECO_R - 6, y: y - DECO_R - 6, w: 2 * DECO_R + 12, h: 2 * DECO_R + 12 };
+    if (box.x < M || box.x + box.w > PW - M) continue;
+    if (stopYs.some((sy) => Math.abs(sy - y) < DECO_R + 16)) continue;
+    if (taken.some((r) => hits(r, box))) continue;
+    if (line.some((p) => Math.hypot(p.x - x, p.y - y) < 23 + DECO_R + 10)) continue;
+    const col = colorAt(b.seg);
+    c.deco(shape, x, y, DECO_R, shape === 'star' ? col : mix(col, shape === 'dot' ? 0.55 : 0.45), Math.atan2(b.y - a.y, b.x - a.x));
+  }
+}
+
 // ---------- 路線圖 ----------
 const FW = 440;                       // 站牌框寬
 const LX = M, RX = PW - M - FW;       // 左框、右框的 x
@@ -316,7 +380,9 @@ function routeAll(model, measure) {
   if (model.tips.length) y = tipsPanel(c, model.tips, model.tipsAsOf, y) + 30;
   const h = y + 64;
   footer(c, h, '');
-  return { w: PW, h, ops: c.ops, boxes: c.boxes };
+  // 路旁的裝飾：第 i 段路（往第 i 天的站點；最後一段往 GOAL）用那一天的顏色
+  decorate(c, [{ x: CX, y: top }, ...st, { x: CX, y: goalY }], st.map((s) => s.y), (seg) => colorOf(model.days[Math.min(seg, n) - 1].day));
+  return { w: PW, h, ops: c.ops, boxes: c.boxes, bg: background(c.boxes, h) };
 }
 
 // 每天一張的站卡：上面一行時間（使用者填的「幾點到」；沒填、推得出來就寫「約 HH:MM 到」）、站名、下面一行停留多久——
@@ -331,8 +397,19 @@ function routeCard(c, sp, bx, by, w, pad, day) {
   ty += 42;
   if (sp.stay) c.text(sp.stay, bx + 24, ty + 26, 22, { weight: 600, color: SUB, role: 'stay', day });
 }
-// 兩站之間怎麼去：圖示、方式、路線服務算的「約 N 分」（有才寫）
-const legText = (leg) => [leg.icon, leg.label, leg.dur].filter(Boolean).join(' ');
+// 兩站之間怎麼去：方式、路線服務算的「約 N 分」（有才寫）；圖示另外畫（legicon），不在字裡
+const legText = (leg) => [leg.label, leg.dur].filter(Boolean).join(' ');
+// 路線圖每天一張那一顆白色膠囊：有畫的圖就放在字的左邊、膠囊跟著加寬；「其他」只有字
+const LEG_PH = 44, LEG_IS = 32, LEG_FS = 22;
+function legPill(c, leg, cx, cy, col, day, to) {
+  const t = legText(leg), ic = hasGlyph(leg.mode);
+  const w = measureOf(c)(t, LEG_FS, 700) + LEG_PH * 0.8 + (ic ? LEG_IS + 8 : 0);
+  const x0 = cx - w / 2;
+  c.rect(x0, cy - LEG_PH / 2, w, LEG_PH, { r: LEG_PH / 2, fill: '#ffffff' });
+  if (ic) c.legicon(leg.mode, x0 + LEG_PH * 0.4, cy - LEG_IS / 2, LEG_IS, col, day, to);
+  c.text(t, x0 + LEG_PH * 0.4 + (ic ? LEG_IS + 8 : 0), cy + LEG_FS * (0.88 - 0.22) / 2, LEG_FS, { weight: 700, color: INK, role: 'leg' });
+  c.box('leg', x0, cy - LEG_PH / 2, w, LEG_PH);
+}
 
 function routeDay(model, d, idx, total, measure) {
   const c = canvasOps(measure);
@@ -376,18 +453,15 @@ function routeDay(model, d, idx, total, measure) {
     c.box('frame', bx, by, LW, bh, { day: d.day });
     bottom = Math.max(bottom, by + bh);
     // 兩站之間怎麼去（使用者選過才寫）：放在路的中間那一段上
-    if (s.i > 0 && sp.leg) {
-      const my = (st[s.i - 1].y + s.y) / 2;
-      const w = c.pill(legText(sp.leg), CX, my - 20, 40, 22, '#ffffff', { color: INK, align: 'center', role: 'leg', weight: 700 });
-      c.box('leg', CX - w / 2, my - 20, w, 40);
-    }
+    if (s.i > 0 && sp.leg) legPill(c, sp.leg, CX, (st[s.i - 1].y + s.y) / 2, col, d.day, s.i);
   }
   y = bottom + 44;
   if (d.foods.length) y = foodsPanel(c, d.foods, y + air, { title: '這天的必吃', tags: false }) + 30;
   if (tip.length) y = tipsPanel(c, tip, model.tipsAsOf, y + air) + 30;
   const h = Math.max(A4H, y + 64);
   footer(c, h, `第 ${idx + 1}／${total} 張`);
-  return { w: PW, h, ops: c.ops, boxes: c.boxes };
+  decorate(c, [{ x: CX, y: top }, ...st, { x: CX, y: goalY }], st.map((s) => s.y), () => col);
+  return { w: PW, h, ops: c.ops, boxes: c.boxes, bg: background(c.boxes, h) };
 }
 
 // 每天一張：吉祥物放到最大還不到 A4，剩下的高度平均加進 n 段之間的空白（標題與吉祥物之間、站與面板、面板與面板之間），
@@ -396,6 +470,7 @@ const AIR_MAX = 120;
 const airOf = (h, n) => (h < A4H ? Math.min(AIR_MAX, Math.floor((A4H - h) / n)) : 0);
 
 // ---------- 分天色帶 ----------
+const BAND_IS = 30;   // 色帶裡交通圖示的邊長
 // 一條色帶：左邊標籤（tab＝true）＋帶子裡的站與虛線箭頭＋必吃那一行。回傳底部的 y
 function band(c, d, y0, { tab = true, nameSize = 28 } = {}) {
   const m = measureOf(c);
@@ -427,7 +502,7 @@ function band(c, d, y0, { tab = true, nameSize = 28 } = {}) {
   const foodLine = d.foods.length ? listFit(m, d.foods.map((f) => f.name), x1 - x0 - 90, 24, 600) : null;
   const h = Math.max(tab ? 190 : 0, 26 + rows * rowH + (foodLine ? 46 : 0) + 14);
   // 底與標籤
-  c.rect(M, y0, PW - 2 * M, h, { r: 26, fill: tint(col, 0.12), stroke: col, lw: 3 });
+  c.rect(M, y0, PW - 2 * M, h, { r: 26, fill: mix(col, 0.12), stroke: col, lw: 3 });
   if (tab) {
     c.rect(M, y0, TAB, h, { r: 26, fill: col });
     c.text('DAY', M + TAB / 2, y0 + 50, 26, { weight: 800, color: '#ffffff', align: 'center', role: 'label' });
@@ -445,10 +520,9 @@ function band(c, d, y0, { tab = true, nameSize = 28 } = {}) {
       const ax1 = p.x - 8;
       c.path(`M ${ax0} ${ay} L ${ax1 - 4} ${ay}`, { stroke: col, lw: 4, dash: [9, 8] });
       c.path(`M ${ax1 - 14} ${ay - 9} L ${ax1} ${ay} L ${ax1 - 14} ${ay + 9}`, { stroke: col, lw: 4 });
-      if (p.sp.leg) {
-        const t = p.sp.leg.icon || p.sp.leg.label;
-        c.text(t, (ax0 + ax1) / 2, ay - 14, p.sp.leg.icon ? 26 : 18, { weight: 700, align: 'center', maxW: ax1 - ax0, role: 'leg' });
-      }
+      // 怎麼去：有畫的圖就畫在箭頭上方（BAND_IS 見方、底邊離箭頭 6），「其他」寫字
+      if (p.sp.leg && hasGlyph(p.sp.leg.mode)) c.legicon(p.sp.leg.mode, (ax0 + ax1) / 2 - BAND_IS / 2, ay - 6 - BAND_IS, BAND_IS, col, d.day, i);
+      else if (p.sp.leg) c.text(p.sp.leg.label, (ax0 + ax1) / 2, ay - 14, 18, { weight: 700, align: 'center', maxW: ax1 - ax0, role: 'leg' });
       // 換行時，上一行最後一站後面也拉一段出去，看得出是接到下一行
       if (p.row !== prev.row) {
         const py = yRow(prev.row) + boxH / 2;
@@ -494,7 +568,7 @@ function bandAll(model, measure) {
   if (model.tips.length) y = tipsPanel(c, model.tips, model.tipsAsOf, y) + 30;
   const h = y + 64;
   footer(c, h, '');
-  return { w: PW, h, ops: c.ops, boxes: c.boxes };
+  return { w: PW, h, ops: c.ops, boxes: c.boxes, bg: background(c.boxes, h) };
 }
 
 // 每天一張的色帶：一整頁只有這一天，站由上往下排（橫排會在 A4 上留一大片空白）。必吃只放下面的面板（不在帶子裡重複）。
@@ -524,7 +598,7 @@ function bandDay(model, d, idx, total, measure) {
   const air = airOf(p.h, 1 + (d.foods.length ? 1 : 0) + (tip.length ? 1 : 0));
   const { s, padT, bandH } = p;
   y += air + Math.ceil(s.rise);
-  c.rect(M, y, PW - 2 * M, bandH, { r: 26, fill: tint(col, 0.12), stroke: col, lw: 3 });
+  c.rect(M, y, PW - 2 * M, bandH, { r: 26, fill: mix(col, 0.12), stroke: col, lw: 3 });
   c.peek(d.peek, PX, y, s.rise, PEEK_W, { align: 'right', day: d.day });
   bubble(c, line, PX - s.w - 16, y - Math.min(s.rise, BUBBLE_H + 80) / 2 - 10);
   const bx = M + 34, bw = PW - 2 * M - 68;
@@ -536,7 +610,12 @@ function bandDay(model, d, idx, total, measure) {
       const ax = bx + 40, ay0 = by - gap + 8, ay1 = by - 8;
       c.path(`M ${ax} ${ay0} L ${ax} ${ay1 - 4}`, { stroke: col, lw: 4, dash: [8, 7] });
       c.path(`M ${ax - 10} ${ay1 - 14} L ${ax} ${ay1} L ${ax + 10} ${ay1 - 14}`, { stroke: col, lw: 4 });
-      if (sp.leg) c.text(legText(sp.leg), ax + 26, (ay0 + ay1) / 2 + 9, 26, { weight: 700, role: 'leg' });
+      // 怎麼去：箭頭右邊先畫圖（有畫的才畫），再寫方式與車程
+      if (sp.leg) {
+        const my = (ay0 + ay1) / 2, ic = hasGlyph(sp.leg.mode);
+        if (ic) c.legicon(sp.leg.mode, ax + 26, my - BAND_IS / 2, BAND_IS, col, d.day, i);
+        c.text(legText(sp.leg), ax + 26 + (ic ? BAND_IS + 10 : 0), my + 9, 26, { weight: 700, role: 'leg' });
+      }
     }
     c.rect(bx, by, bw, BH, { r: 18, fill: '#ffffff', stroke: col, lw: 3 });
     c.circle(bx + 40, by + BH / 2, 21, { fill: col });
@@ -559,10 +638,10 @@ function bandDay(model, d, idx, total, measure) {
   if (tip.length) y = tipsPanel(c, tip, model.tipsAsOf, y + air) + 30;
   const h = Math.max(A4H, y + 64);
   footer(c, h, `第 ${idx + 1}／${total} 張`);
-  return { w: PW, h, ops: c.ops, boxes: c.boxes };
+  return { w: PW, h, ops: c.ops, boxes: c.boxes, bg: background(c.boxes, h) };
 }
 
-// 對外：每一張的 { w, h, ops, boxes, label, day }。kind：'route'｜'band'；split：'one'｜'day'
+// 對外：每一張的 { w, h, ops, boxes, bg, label, day }。kind：'route'｜'band'；split：'one'｜'day'；bg：背景紋理（background()）
 export function posterPages(model, { kind = 'route', split = 'one' } = {}, measure) {
   if (!model || !model.days.length) return [];
   if (split === 'day') {

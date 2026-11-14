@@ -2,7 +2,7 @@
 // 兩支用同一組檢查：node 那支用近似字寬排版，瀏覽器那支用 canvas 的 measureText 排版——同一個檢查器、兩種字寬。
 // 每一個檢查器都有對照組（layoutControls、pdfControls）：一份一定要被抓到的樣本、一份一定要放行的；
 // 用到它的測試**每次先跑對照組**，沒過就停、不採信後面的結果（共用慣例 §5.3）。
-import { M, PW, A4H } from '../js/itinposter/layout.js';
+import { M, PW, A4H, PAPER, INK, SUB } from '../js/itinposter/layout.js';
 import { A4_WIDTH_PT } from '../js/pdf.js';
 
 const EDGE = 2;
@@ -76,8 +76,8 @@ export const PEEK_FLOOR = { one: 150, day: 200 };
 export function peekSizeProblems(pg, floor) {
   return pg.boxes.filter((b) => b.kind === 'peek' && b.h < floor - 0.5).map((b) => `第 ${b.day} 天的 ${b.peek} 只有 ${Math.round(b.h)} 高（至少 ${floor}）`);
 }
-// 兩站之間怎麼去的那一句：圖示、方式、車程（有才寫）
-export const legLine = (leg) => [leg.icon, leg.label, leg.dur].filter(Boolean).join(' ');
+// 兩站之間怎麼去的那一句：方式、車程（有才寫）。v1.90 起圖示是畫的（legicon），不在字裡
+export const legLine = (leg) => [leg.label, leg.dur].filter(Boolean).join(' ');
 // 每天一張的站卡寫真資料（v1.89）：逐站——使用者填的時間、推算的「約幾點到」（有填時間的那一站不寫）、停留多久、
 // 兩站之間的方式與車程；模型有的照順序畫出來、沒有的不畫
 export function realDataProblems(pg, days) {
@@ -176,7 +176,7 @@ export function allowedTexts(model, pageText) {
       if (s.time) A.add(s.time);
       if (s.eta) A.add(s.eta);
       if (s.stay) A.add(s.stay);
-      if (s.leg) { A.add(s.leg.label); A.add(legLine(s.leg)); if (s.leg.icon) { A.add(s.leg.icon); A.add(`${s.leg.icon} ${s.leg.label}`); } }
+      if (s.leg) { A.add(s.leg.label); A.add(legLine(s.leg)); }
     });
     for (const f of d.foods) { A.add(f.name); A.add(f.at); }
   }
@@ -189,7 +189,8 @@ export function unsourced(pg, A, foodNames) {
   return texts(pg).filter((o) => !(A.has(o.full) || /^還有 \d+ [站項天]$/.test(o.full) || (o.role === 'foodline' && isFoodLine(o.full))))
     .map((o) => `「${o.full}」（${o.role}）`);
 }
-// 類別：類別名不准單獨出現；emoji 只准交通與天氣的圖示（類別的 emoji、每站 emoji 都不准）
+// 類別：類別名不准單獨出現；emoji 只准 icons 裡的（呼叫的一方給天氣的圖示——類別的 emoji、每站 emoji 都不准；
+// v1.90 起交通的 emoji 也不准：交通圖示改成畫的）
 export function categoryLeak(pg, icons, labels) {
   const bad = [];
   for (const o of texts(pg)) {
@@ -197,6 +198,132 @@ export function categoryLeak(pg, icons, labels) {
     for (const ic of icons) s = s.split(ic).join('');
     if (/\p{Extended_Pictographic}/u.test(s)) bad.push(`emoji「${o.full}」`);
     if (labels.has(o.full)) bad.push(`類別名「${o.full}」`);
+  }
+  return bad;
+}
+
+// ---- v1.90 ② 交通圖示（B16）、路旁的裝飾（B17）；③ 背景紋理（B18） ----
+const sq = (o) => ({ x: o.x, y: o.y, w: o.s, h: o.s });
+const mid = (r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+// 交通圖示：只畫使用者選過的那一段（模型的 leg），「其他」沒有圖、寫字；其餘每一種都要有圖（「哪幾種有圖」寫在測試這邊，不讀 legicons.js）。
+// 這一張應有的圖示：每天一張、色帶全部一張——那一天畫出來的站（站名數得到的前 n 站）裡，第 2 站起有 leg、而且不是「其他」的每一段，照順序；
+// 路線圖全部一張連的是天、不是站，一個都沒有。每一個圖示：種類照模型、至少 24 見方、不碰任何字、
+// 位置在那一段上（路線圖每天一張：在那一段的白色膠囊裡、上下在前後兩站中間；色帶：在那一天的色帶裡、不碰站卡與其他框、在前後兩張卡中間）
+export function legIconProblems(pg, days, kind, split) {
+  const bad = [];
+  const icons = pg.ops.filter((o) => o.op === 'legicon');
+  const want = [], others = [];
+  if (!(kind === 'route' && split === 'one')) {
+    for (const d of days) {
+      const n = texts(pg).filter((o) => o.role === 'stop' && o.day === d.day).length;
+      for (let i = 1; i < n; i++) {
+        const L = d.stops[i] && d.stops[i].leg;
+        if (L && L.mode !== 'other') want.push(`${d.day}:${i}:${L.mode}`);
+        else if (L) others.push(L.label);
+      }
+    }
+  }
+  const got = icons.map((o) => `${o.day}:${o.to}:${o.mode}`);
+  if (JSON.stringify(got) !== JSON.stringify(want)) bad.push(`圖示 ${got.length} 個（${got.join('、')}）≠應有 ${want.length} 個（${want.join('、')}）`);
+  // 色帶全部一張：箭頭上只有「其他」寫字（有圖的不再寫字）
+  if (kind === 'band' && split === 'one') {
+    const lt = texts(pg).filter((o) => o.role === 'leg').map((o) => o.full);
+    if (JSON.stringify(lt) !== JSON.stringify(others)) bad.push(`箭頭上的字（${lt.join('、')}）≠沒有圖的那幾段（${others.join('、')}）`);
+  }
+  for (const o of icons) {
+    const q = sq(o), c = mid(q), tag = `第 ${o.day} 天往第 ${o.to + 1} 站的 ${o.mode}`;
+    if (!(o.s >= 24)) bad.push(`${tag} 只有 ${o.s} 見方`);
+    if (q.x < M - EDGE || q.x + q.w > PW - M + EDGE || q.y < 0 || q.y + q.h > pg.h) bad.push(`${tag} 出界`);
+    for (const t of texts(pg)) if (overlap(q, textBox(t))) bad.push(`${tag} 碰到字「${t.text}」`);
+    const hostKind = kind === 'route' ? 'leg' : 'band';
+    const host = pg.boxes.find((b) => b.kind === hostKind && (hostKind === 'leg' || b.day === o.day) && inside(q, b));
+    if (!host) { bad.push(`${tag} 不在${hostKind === 'leg' ? '膠囊' : '那一天的色帶'}裡`); continue; }
+    for (const b of pg.boxes) if (b !== host && overlap(q, b)) bad.push(`${tag} 碰到 ${b.kind}`);
+    if (kind === 'route') {
+      const fr = pg.boxes.filter((b) => b.kind === 'frame' && b.day === o.day);
+      const P = fr[o.to - 1], Q = fr[o.to];
+      if (!P || !Q || !(mid(P).y < c.y && c.y < mid(Q).y)) bad.push(`${tag} 不在前後兩站中間`);
+    } else {
+      const sb = pg.boxes.filter((b) => b.kind === 'stopbox' && inside(b, host));
+      const P = sb[o.to - 1], Q = sb[o.to];
+      let ok = !!(P && Q);
+      if (ok && split === 'day') ok = P.y + P.h <= c.y && c.y <= Q.y;
+      else if (ok) ok = c.y >= Q.y - 30 && c.y <= Q.y + Q.h / 2 && (Math.abs(P.y - Q.y) < 1 ? P.x + P.w <= c.x && c.x <= Q.x : c.x <= Q.x);
+      if (!ok) bad.push(`${tag} 不在前後兩張卡中間`);
+    }
+  }
+  return bad;
+}
+// 路旁的裝飾：只有路線圖有（色帶不放）；只有星星、圓點、短線三種形狀、半徑不超過 12；不碰任何框、任何字、不出界；
+// 不壓在路上——路的中線從畫路的那一筆（46 寬的 path）照它的曲線另外算一次，裝飾離中線至少路寬一半＋半徑
+export const DECO_SHAPES = ['star', 'dot', 'dash'];
+function roadLine(pg) {
+  const road = pg.ops.find((o) => o.op === 'path' && o.lw === 46);
+  if (!road) return null;
+  const n = road.d.trim().split(/[\s,]+/);
+  if (n[0] !== 'M') return null;
+  let p = { x: Number(n[1]), y: Number(n[2]) };
+  const pts = [p];
+  for (let k = 3; k < n.length; k += 7) {
+    if (n[k] !== 'C') return null;
+    const [x1, y1, x2, y2, x, y] = n.slice(k + 1, k + 7).map(Number);
+    for (let s = 1; s <= 64; s++) {
+      const t = s / 64, u = 1 - t;
+      pts.push({ x: u * u * u * p.x + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x, y: u * u * u * p.y + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y });
+    }
+    p = { x, y };
+  }
+  return pts.every((q) => Number.isFinite(q.x) && Number.isFinite(q.y)) ? pts : null;
+}
+export function decoProblems(pg, kind) {
+  const bad = [];
+  const ds = pg.ops.filter((o) => o.op === 'deco');
+  if (kind === 'band') return ds.length ? [`色帶上有 ${ds.length} 個裝飾`] : [];
+  const line = ds.length ? roadLine(pg) : [];
+  if (!line) return ['找不到路（46 寬的那一筆）、量不了裝飾離路多遠'];
+  for (const o of ds) {
+    const q = { x: o.x - o.r, y: o.y - o.r, w: 2 * o.r, h: 2 * o.r }, tag = `裝飾 ${o.shape}（${Math.round(o.x)},${Math.round(o.y)}）`;
+    if (!DECO_SHAPES.includes(o.shape) || !(o.r > 0 && o.r <= 12)) bad.push(`${tag} 形狀或大小不對（r ${o.r}）`);
+    if (q.x < M - EDGE || q.x + q.w > PW - M + EDGE || q.y < 0 || q.y + q.h > pg.h) bad.push(`${tag} 出界`);
+    for (const b of pg.boxes) if (overlap(q, b)) bad.push(`${tag} 碰到 ${b.kind}`);
+    for (const t of texts(pg)) if (overlap(q, textBox(t))) bad.push(`${tag} 碰到字「${t.text}」`);
+    const dmin = Math.min(...line.map((p) => Math.hypot(p.x - o.x, p.y - o.y)));
+    if (dmin < 23 + o.r) bad.push(`${tag} 壓到路（離中線 ${dmin.toFixed(1)}）`);
+  }
+  return bad;
+}
+// 背景紋理：規則的小圓點格子（步距、半徑寫在測試這邊，不讀版面的常數）；點很淡（跟紙的對比 1.05～1.35）；
+// 每一個字都在不透明的底上（白框、膠囊、色帶、圓圈——在它前面畫、整個蓋住那個字），不然就在不鋪點的地方（標題區、頁尾）——
+// 所以每一個字的底跟沒有紋理時一模一樣；不鋪點的地方合計不到整張的 40%（不能整張都不鋪）。
+// 另外一道防護（假設哪天有字落在點上）：內文的字色 bodyColors（INK、SUB）以點的顏色當底，對比仍 ≥ 4.5。
+// 只算內文的兩種：標題區用天數色寫的那一行在不鋪點的地方，本來就碰不到點（v1.90 第一次跑時這道防護寫成「紙上每一個字」，
+// 把那一行算進來誤判，改成照版面檔頭寫的承諾——最淺的字色 SUB 壓在點上仍 ≥ 4.5）
+export const DOT_SPEC = { step: 36, r: 3 };
+const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+export function luminance(hex) { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); }
+export function contrast(a, b) { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+const HEX6 = /^#[0-9a-f]{6}$/i;
+export function bgProblems(pg, paper, bodyColors) {
+  const bg = pg.bg;
+  if (!bg) return ['沒有背景紋理'];
+  const bad = [];
+  const keys = Object.keys(bg).sort().join(',');
+  if (keys !== 'clear,color,kind,r,step') bad.push(`紋理的欄位不對（${keys}）`);
+  if (bg.kind !== 'dots' || bg.step !== DOT_SPEC.step || bg.r !== DOT_SPEC.r) bad.push(`不是規則的點格子（${bg.kind}、步距 ${bg.step}、半徑 ${bg.r}）`);
+  if (!HEX6.test(String(bg.color))) return [...bad, `點的顏色不是不透明的色碼（${bg.color}）`];
+  const k = contrast(bg.color, paper);
+  if (!(k >= 1.05 && k <= 1.35)) bad.push(`點跟紙的對比 ${k.toFixed(2)}（要 1.05～1.35）`);
+  for (const col of bodyColors) if (contrast(col, bg.color) < 4.5) bad.push(`內文的字色 ${col} 壓在點上對比 ${contrast(col, bg.color).toFixed(2)}`);
+  const clear = Array.isArray(bg.clear) ? bg.clear : [];
+  const area = clear.reduce((a, q) => a + q.w * q.h, 0);
+  if (!(area < 0.4 * pg.w * pg.h)) bad.push(`不鋪點的地方占 ${Math.round(area / (pg.w * pg.h) * 100)}%`);
+  const opaque = [];
+  for (const o of pg.ops) {
+    if ((o.op === 'rect' || o.op === 'circle') && HEX6.test(String(o.fill))) opaque.push(o.op === 'rect' ? { x: o.x, y: o.y, w: o.w, h: o.h } : { x: o.x - o.r, y: o.y - o.r, w: 2 * o.r, h: 2 * o.r });
+    if (o.op !== 'text') continue;
+    const tb = textBox(o);
+    if (opaque.some((r) => inside(tb, r))) continue;
+    if (!clear.some((r) => inside(tb, r))) bad.push(`字「${o.text}」壓在紋理上`);
   }
   return bad;
 }
@@ -218,11 +345,14 @@ export const PAGE_CHECKS = [
     panelPopulation(pg, 'tip', (x.split === 'one' ? x.m.tips : x.m.tips.filter((t) => t.day === x.m.days[i].day)).map((t) => t.text), '天')],
   ['B10', '字的來源：只有模型裡的字、固定的標題、從模型數出來的句子', (x, pg, i) =>
     unsourced(pg, allowedTexts(x.m, x.split === 'day' ? `第 ${i + 1}／${x.pages.length} 張` : ''), new Set(x.m.days.flatMap((d) => d.foods.map((f) => f.name))))],
-  ['B11', '沒有類別名、沒有類別或每站的 emoji（只准交通與天氣圖示）', (x, pg, i, o) => categoryLeak(pg, [...o.icons, ...x.m.tips.map((t) => t.icon).filter(Boolean)], o.labels)],
+  ['B11', '沒有類別名、沒有類別或每站的 emoji（只准天氣圖示；交通從 v1.90 起是畫的，emoji 也不准）', (x, pg, i, o) => categoryLeak(pg, x.m.tips.map((t) => t.icon).filter(Boolean), o.labels)],
   ['B12', '吉祥物不蓋到字（邊線以上那一塊、邊線以下伸進框裡那一條）', (x, pg) => peekCover(pg)],
   ['B13', '每天一隻吉祥物：種類照模型、扣在那一天的框上緣、畫的跟外框同一個位置；沒有角落那一隻', (x, pg, i) => peekProblems(pg, x.split === 'one' ? x.m.days : [x.m.days[i]])],
   ['B14', '每天一張的站卡寫真資料：時間、約幾點到、停留多久、車程，模型有的逐站畫出來、沒有的不畫', (x, pg, i) => (x.split === 'day' ? realDataProblems(pg, [x.m.days[i]]) : [])],
   ['B15', '吉祥物夠大：全部一張至少 150 高、每天一張至少 200 高（不是角落的小圖示）', (x, pg) => peekSizeProblems(pg, PEEK_FLOOR[x.split])],
+  ['B16', '交通圖示：只畫選過的那一段、種類照模型、「其他」不畫圖寫字；在那一段上、不碰字與別的框', (x, pg, i) => legIconProblems(pg, x.split === 'one' ? x.m.days : [x.m.days[i]], x.kind, x.split)],
+  ['B17', '路旁的裝飾：只有路線圖有、三種形狀、不碰框與字、不壓在路上', (x, pg) => decoProblems(pg, x.kind)],
+  ['B18', '背景紋理：規則的點格子、很淡；每一個字都在不透明的底上或不鋪點的地方（字的對比跟沒有紋理時一樣）', (x, pg) => bgProblems(pg, PAPER, [INK, SUB])],
 ];
 // 張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排
 export function pageListProblems(x) {
@@ -276,8 +406,9 @@ export function pdfProblems(u8, images) {
 
 // ---------------- 對照組 ----------------
 // ctl(label, got, want)：呼叫的測試給的斷言函式（印 ✓／✗、記下有沒有全過）
-// opts：{ measure, foodEmoji, foodLabel, legText（例「🚘 搭車」）, icons, labels }
-export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legText, icons, labels }) {
+// opts：{ measure, foodEmoji, foodLabel, legEmoji（交通的 emoji 接名稱，例「🚘 搭車」——v1.90 起要被抓到）, wxIcon（一個天氣圖示）, labels }
+export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legEmoji, wxIcon, labels }) {
+  const icons = [wxIcon];
   const tx = (text, x, y, size, extra = {}) => ({ op: 'text', text, full: text, x, y, size, w: measure(text, size), align: 'left', role: 'text', day: null, more: null, ...extra });
   const page = (ops, boxes, h = 600) => ({ w: PW, h, ops, boxes });
   const fakeDay = (day, names, foods = []) => ({ day, date: '', from: names[0], to: names[names.length - 1], stops: names.map((name) => ({ name, time: '', leg: null })), foods, placeCount: new Set(names).size });
@@ -308,7 +439,8 @@ export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legText, ic
   ctl('有來源的字放行（站名、固定標題、還有 N 站）', unsourced(page([tx('甲', 0, 0, 20), tx('START', 0, 0, 20), tx('還有 3 站', 0, 0, 20), tx('2天1夜，1 個地方！', 0, 0, 20)], []), allowedTexts(ctlModel, ''), new Set()), []);
   ctl('類別 emoji 接在站名前面', categoryLeak(page([tx(`${foodEmoji} 甲`, 0, 0, 20)], []), icons, labels), [`emoji「${foodEmoji} 甲」`]);
   ctl('類別名', categoryLeak(page([tx(foodLabel, 0, 0, 20)], []), icons, labels), [`類別名「${foodLabel}」`]);
-  ctl('交通圖示放行', categoryLeak(page([tx(legText, 0, 0, 20)], []), icons, labels), []);
+  ctl('交通的 emoji 不再放行（v1.90 起交通圖示是畫的）', categoryLeak(page([tx(legEmoji, 0, 0, 20)], []), icons, labels), [`emoji「${legEmoji}」`]);
+  ctl('天氣圖示放行', categoryLeak(page([tx(`${wxIcon} 18～25°C`, 0, 0, 20)], []), icons, labels), []);
   // v1.89 吉祥物（peekfoot 的三種擋法、蓋到字的兩種、每天一隻的五種、大小一種、站卡真資料的兩種，各一份要抓到的、一份要放行的）
   const band = { kind: 'band', x: 60, y: 100, w: 600, h: 300, day: 1 };
   const foot = (x, y) => ({ kind: 'peekfoot', x, y, w: 100, h: 15, peek: 'done', day: 1 });
@@ -337,6 +469,70 @@ export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legText, ic
   ctl('站卡少畫了約幾點到', realDataProblems(page(rOk.filter((o) => o.role !== 'eta'), []), [rday]), ['第 1 天 eta：畫 0 個、模型 1 個（｜約 12:25 到）']);
   ctl('站卡多畫了模型沒有的停留', realDataProblems(page([...rOk, rt('停留 1 小時', 'stay')], []), [rday]), ['第 1 天 stay：畫 2 個、模型 1 個（停留 2 小時、停留 1 小時｜停留 2 小時）']);
   ctl('站卡真資料都對的放行', realDataProblems(page(rOk, []), [rday]), []);
+
+  // v1.90 B16 交通圖示：每一個分支各一份要抓到的，加放行的（路線圖每天一張、色帶每天一張、色帶全部一張各一份）
+  const CAR = { mode: 'car', label: '搭車', dur: '' }, OTH = { mode: 'other', label: '其他', dur: '' };
+  const lday = (legs) => ({ ...fakeDay(1, legs.map((_, k) => '甲乙丙'[k])), stops: legs.map((leg, k) => ({ name: '甲乙丙'[k], time: '', leg })) });
+  const lstop = (k, x, y) => tx('甲乙丙'[k], x, y, 20, { role: 'stop', day: 1 });
+  const ic = (extra = {}) => ({ op: 'legicon', mode: 'car', x: 570, y: 286, s: 32, color: '#c9423c', day: 1, to: 1, ...extra });
+  const F1 = { kind: 'frame', x: 60, y: 100, w: 440, h: 100, day: 1 }, F2 = { kind: 'frame', x: 740, y: 400, w: 440, h: 100, day: 1 };
+  const LB = { kind: 'leg', x: 560, y: 280, w: 140, h: 44 };
+  const rStops = [lstop(0, 80, 150), lstop(1, 760, 450)];
+  const L1 = (ops, boxes = [F1, F2, LB], legs = [null, CAR]) => legIconProblems(page([...rStops, ...ops], boxes), [lday(legs)], 'route', 'day');
+  const T = '第 1 天往第 2 站的 car';
+  ctl('交通圖示：選過的那一段沒畫', L1([]), ['圖示 0 個（）≠應有 1 個（1:1:car）']);
+  ctl('交通圖示：「其他」配了圖', L1([ic({ mode: 'other' })], undefined, [null, OTH]), ['圖示 1 個（1:1:other）≠應有 0 個（）']);
+  ctl('交通圖示：太小（20 見方）', L1([ic({ s: 20 })]), [`${T} 只有 20 見方`]);
+  ctl('交通圖示：出界', L1([ic({ x: 30 })], [F1, F2, { ...LB, x: 20 }]), [`${T} 出界`]);
+  ctl('交通圖示：碰到字', L1([ic(), tx('丙丁', 575, 310, 20)]), [`${T} 碰到字「丙丁」`]);
+  ctl('交通圖示：不在膠囊裡', L1([ic({ y: 500 })]), [`${T} 不在膠囊裡`]);
+  ctl('交通圖示：碰到別的框', L1([ic()], [F1, F2, LB, { kind: 'peek', x: 590, y: 250, w: 50, h: 50 }]), [`${T} 碰到 peek`]);
+  ctl('交通圖示：路線圖不在前後兩站中間', L1([ic()], [F2, F1, LB]), [`${T} 不在前後兩站中間`]);
+  ctl('交通圖示：路線圖每天一張的放行', L1([ic()]), []);
+  const BB = { kind: 'band', x: 60, y: 100, w: 1120, h: 600, day: 1 };
+  const S1 = { kind: 'stopbox', x: 94, y: 130, w: 1052, h: 80 }, S2 = { kind: 'stopbox', x: 94, y: 268, w: 1052, h: 80 };
+  const bdStops = [lstop(0, 180, 180), lstop(1, 180, 318)];
+  const L2 = (boxes) => legIconProblems(page([...bdStops, ic({ x: 160, y: 224, s: 30 })], boxes), [lday([null, CAR])], 'band', 'day');
+  ctl('交通圖示：色帶每天一張不在前後兩張卡中間', L2([BB, S2, S1]), [`${T} 不在前後兩張卡中間`]);
+  ctl('交通圖示：色帶每天一張的放行', L2([BB, S1, S2]), []);
+  const R1 = { kind: 'stopbox', x: 258, y: 126, w: 100, h: 58 }, R2 = { kind: 'stopbox', x: 432, y: 126, w: 100, h: 58 };
+  const boStops = [lstop(0, 270, 170), lstop(1, 444, 170), lstop(2, 620, 170)];
+  const L3 = (ops, legs = [null, CAR]) => legIconProblems(page([...boStops.slice(0, legs.length), ...ops], [BB, R1, R2]), [lday(legs)], 'band', 'one');
+  ctl('交通圖示：色帶全部一張不在前後兩張卡中間', L3([ic({ x: 540, y: 119, s: 30 })]), [`${T} 不在前後兩張卡中間`]);
+  ctl('交通圖示：色帶全部一張「其他」沒寫字', L3([ic({ x: 380, y: 119, s: 30 })], [null, CAR, OTH]), ['箭頭上的字（）≠沒有圖的那幾段（其他）']);
+  ctl('交通圖示：色帶全部一張的放行（有圖的畫圖、「其他」寫字）', L3([ic({ x: 380, y: 119, s: 30 }), tx('其他', 560, 140, 18, { role: 'leg' })], [null, CAR, OTH]), []);
+
+  // v1.90 B17 路旁的裝飾
+  const road = { op: 'path', d: 'M 620 100 C 620 200 620 300 620 400', stroke: '#e0d3ba', lw: 46 };
+  const dc = (extra = {}) => ({ op: 'deco', shape: 'star', x: 700, y: 250, r: 10, color: '#c9423c', a: 0, ...extra });
+  const D = (ops, boxes = [], kind = 'route') => decoProblems(page(ops, boxes), kind);
+  ctl('裝飾：色帶上放了裝飾', D([dc()], [], 'band'), ['色帶上有 1 個裝飾']);
+  ctl('裝飾：找不到路', D([dc()]), ['找不到路（46 寬的那一筆）、量不了裝飾離路多遠']);
+  ctl('裝飾：形狀不在那三種裡', D([road, dc({ shape: 'heart' })]), ['裝飾 heart（700,250） 形狀或大小不對（r 10）']);
+  ctl('裝飾：出界', D([road, dc({ x: 50 })]), ['裝飾 star（50,250） 出界']);
+  ctl('裝飾：碰到框', D([road, dc()], [{ kind: 'frame', x: 690, y: 100, w: 440, h: 300, day: 1 }]), ['裝飾 star（700,250） 碰到 frame']);
+  ctl('裝飾：碰到字', D([road, dc(), tx('甲乙', 690, 260, 20)]), ['裝飾 star（700,250） 碰到字「甲乙」']);
+  ctl('裝飾：壓到路', D([road, dc({ x: 640 })]), ['裝飾 star（640,250） 壓到路（離中線 20.0）']);
+  ctl('裝飾：路旁、不碰框與字的放行', D([road, dc(), dc({ shape: 'dot', y: 330 }), dc({ shape: 'dash', x: 540 })]), []);
+
+  // v1.90 B18 背景紋理
+  const BG = (extra = {}) => ({ kind: 'dots', step: 36, r: 3, color: '#ede2cc', clear: [{ x: 42, y: 0, w: 1156, h: 120 }], ...extra });
+  const bgp = (bg, ops) => bgProblems({ w: PW, h: 600, ops, boxes: [], bg }, '#fbf6ec', ['#2f2c2a', '#6b6258']);
+  const onPaper = tx('標題', 100, 60, 30, { color: '#6b6258' });
+  const inWhite = [{ op: 'rect', x: 100, y: 200, w: 300, h: 100, r: 20, fill: '#ffffff' }, tx('站名', 120, 260, 30)];
+  const inCircle = [{ op: 'circle', x: 600, y: 400, r: 30, fill: '#c9423c' }, tx('1', 600, 411, 30, { align: 'center', color: '#ffffff' })];
+  const num = (arr) => arr.map((s) => s.replace(/\d+\.\d+/g, 'N'));   // 只換小數（對比的數字），色碼裡的數字不動
+  ctl('紋理：沒有', bgp(undefined, []), ['沒有背景紋理']);
+  ctl('紋理：多了欄位（例如亂數的種子）', bgp(BG({ seed: 7 }), []), ['紋理的欄位不對（clear,color,kind,r,seed,step）']);
+  ctl('紋理：步距不是規則的那一個', bgp(BG({ step: 30 }), []), ['不是規則的點格子（dots、步距 30、半徑 3）']);
+  ctl('紋理：點的顏色是半透明的', bgp(BG({ color: 'rgba(0,0,0,0.1)' }), []), ['點的顏色不是不透明的色碼（rgba(0,0,0,0.1)）']);
+  ctl('紋理：點太深（跟紙的對比超過 1.35）', num(bgp(BG({ color: '#d0c2a8' }), [])), ['點跟紙的對比 N（要 N～N）', '內文的字色 #6b6258 壓在點上對比 N']);
+  ctl('紋理：點跟紙一樣（看不出來）', num(bgp(BG({ color: '#fbf6ec' }), [])), ['點跟紙的對比 N（要 N～N）']);
+  ctl('紋理：整張都不鋪點', bgp(BG({ clear: [{ x: 0, y: 0, w: PW, h: 600 }] }), []), ['不鋪點的地方占 100%']);
+  ctl('紋理：字壓在點上（不在不透明的底上、也不在不鋪點的地方）', bgp(BG(), [tx('甲', 100, 400, 30)]), ['字「甲」壓在紋理上']);
+  ctl('紋理：字的底是半透明的（點會透上來）', bgp(BG(), [{ op: 'rect', x: 100, y: 200, w: 300, h: 100, fill: 'rgba(201,66,60,0.12)' }, tx('甲', 120, 260, 30)]), ['字「甲」壓在紋理上']);
+  ctl('紋理：點不算太深、但內文的灰字壓上去不到 4.5', num(bgp(BG({ color: '#e2d6bf' }), [onPaper])), ['內文的字色 #6b6258 壓在點上對比 N']);
+  ctl('紋理：規則、很淡、字都在底上或不鋪點的地方的放行', bgp(BG(), [onPaper, ...inWhite, ...inCircle]), []);
 }
 
 // 參考用的 PDF 產生器：測試自己另外寫一份，不用被測的 pdfFromJpegs——不然 pdf.js 改壞時，壞的會被當成好的樣本、對照組先倒

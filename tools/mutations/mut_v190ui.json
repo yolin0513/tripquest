@@ -1,0 +1,58 @@
+[
+  {
+    "name": "v190ui 紋理：點的位置加亂數抖動（畫的時候）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 9 條，跑前改：版面只給 step、r，抖動發生在 draw.js，B18 看不到，規劃表寫的 B18 拿掉）每一顆點的圓心各加 ±4 的亂數。P12：不一樣的像素離格點超過 r＋1.5 → 紅。點的顏色不變、字那幾格本來就被不透明的底蓋住或離不鋪點的地方夠遠，P13 不紅。預期只紅 P12。",
+    "expect": ["P12 背景紋理"],
+    "file": "js/itinposter/draw.js",
+    "find": "      ctx.moveTo(x + r, y);\n      ctx.arc(x, y, r, 0, Math.PI * 2);",
+    "replace": "      const jx = x + (Math.random() - 0.5) * 8, jy = y + (Math.random() - 0.5) * 8;\n      ctx.moveTo(jx + r, jy);\n      ctx.arc(jx, jy, r, 0, Math.PI * 2);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v190ui 紋理：點的顏色換深（瀏覽器）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 10 條的瀏覽器那一半）點的顏色換成 #d0c2a8。P13：量到的點顏色上，灰字對比約 3.41 → 紅；P4-B18（真的字寬排出來的版面跑同一條 B18）→ 紅。P12 量的是位置，不紅。預期紅 P13、P4-B18。",
+    "expect": ["P13 字的對比", "P4-B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "export const DOT = { step: 36, r: 3, color: '#ede2cc' };",
+    "replace": "export const DOT = { step: 36, r: 3, color: '#d0c2a8' };",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v190ui 紋理：畫在所有東西上面",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 11 條）draw.js 先畫 ops、最後才鋪點。P12：點落在白框、面板裡 → 紅；P13：拿掉字之後，白框裡字那幾格有點 → 跟沒紋理時不一樣 → 紅。點很淡，P11 的深色比例與顏色比例不受影響。預期紅 P12、P13。",
+    "expect": ["P12 背景紋理", "P13 字的對比"],
+    "file": "js/itinposter/draw.js",
+    "edits": [
+      { "find": "  drawBackground(ctx, page);\n  const pks", "replace": "  const pks" },
+      { "find": "      drawDeco(ctx, o);\n    }\n    ctx.restore();\n  }\n", "replace": "      drawDeco(ctx, o);\n    }\n    ctx.restore();\n  }\n  drawBackground(ctx, page);\n" }
+    ],
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v190ui 紋理：沒有紋理（瀏覽器）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 12 條的瀏覽器那一半，跑前補 P13）background() 回傳 null。P12：有、沒紋理兩張一模一樣（不一樣 0 個像素）→ 紅；P13：量不到點的顏色（「沒有」）→ 紅；P4-B18「沒有背景紋理」→ 紅。預期紅 P12、P13、P4-B18。",
+    "expect": ["P12 背景紋理", "P13 字的對比", "P4-B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear };",
+    "replace": "  return null;",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v190ui 交通圖示：版面有、畫的時候跳過",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 13 條）draw.js 碰到 legicon 什麼都不畫。P11：每一個圖示那一格量不到深色外框與那一天的顏色 → 紅。版面檢查（P4）照 ops 查，不紅。預期只紅 P11。",
+    "expect": ["P11 交通圖示"],
+    "file": "js/itinposter/draw.js",
+    "find": "      drawLegIcon(ctx, o);",
+    "replace": "      void o;",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v190ui 紋理：畫的時候不看不鋪點的地方",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；跑前新增）draw.js 不管 clear，標題區與頁尾也鋪點。P12：不一樣的像素落在標題區或頁尾 → 紅；P13：標題區的字那幾格有點 → 跟沒紋理時不一樣 → 紅。版面的 bg 沒變，P4-B18 不紅。預期紅 P12、P13。",
+    "expect": ["P12 背景紋理", "P13 字的對比"],
+    "file": "js/itinposter/draw.js",
+    "find": "      if (hit(x, y)) continue;",
+    "replace": "      if (false) continue;",
+    "cmd": "node scripts/itinpostertest.mjs"
+  }
+]

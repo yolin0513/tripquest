@@ -184,8 +184,8 @@
     "why": "（事前寫 2026-11-14 14:21，跑之前）畫的那支只照 ops 畫，不讀類別。多 import 一支沒登記的。預期只紅 D1。",
     "expect": ["D1 import 登記"],
     "file": "js/itinposter/draw.js",
-    "find": "import { PAPER } from './layout.js';",
-    "replace": "import { PAPER } from './layout.js';\nimport { themeMeta } from '../theme.js';",
+    "find": "import { PAPER, INK } from './layout.js';",
+    "replace": "import { PAPER, INK } from './layout.js';\nimport { themeMeta } from '../theme.js';",
     "cmd": "node scripts/itinposterlayouttest.mjs"
   },
   {

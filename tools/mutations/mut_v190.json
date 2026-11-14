@@ -1,0 +1,112 @@
+[
+  {
+    "name": "v190 交通圖示：沒選的那一段也畫（一律畫走路）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 1 條）色帶全部一張：沒有交通方式的那一段也在箭頭上方畫走路的圖（「其他」也畫成走路）。B16 的預期清單只收模型有 leg、而且不是「其他」的那幾段 → 多出來的圖示紅。圖示沒有外框，B4 不紅；B16b 數的是「有沒有」，多了照樣過。預期只紅 B16（前提：情境裡色帶全部一張有沒選交通方式的一段——沒有的話這條等於沒改，屆時照實回報）。",
+    "expect": ["B16 交通圖示"],
+    "file": "js/itinposter/layout.js",
+    "find": "      if (p.sp.leg && hasGlyph(p.sp.leg.mode)) c.legicon(p.sp.leg.mode, (ax0 + ax1) / 2",
+    "replace": "      if (true) c.legicon(p.sp.leg && hasGlyph(p.sp.leg.mode) ? p.sp.leg.mode : 'walk', (ax0 + ax1) / 2",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 交通圖示：「其他」配一個圖（搭車）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 2 條）色帶每天一張：「其他」那一段也畫搭車的圖（字的位置不跟著讓開）。B16：那一天的預期清單沒有「其他」→ 多一個圖示；圖示又壓到「其他」那幾個字 → 同一條再報一次。預期只紅 B16。",
+    "expect": ["B16 交通圖示"],
+    "file": "js/itinposter/layout.js",
+    "find": "        if (ic) c.legicon(sp.leg.mode, ax + 26,",
+    "replace": "        if (true) c.legicon(ic ? sp.leg.mode : 'car', ax + 26,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 交通圖示：種類對錯（鐵路畫成公車）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 3 條）路線圖每天一張的膠囊：鐵路那一段畫公車的圖。B16 照模型比 day:to:mode → 那一段對不上。B16b 數的是全部版型畫過的種類，色帶那兩種照樣畫鐵路，不紅。預期只紅 B16。",
+    "expect": ["B16 交通圖示"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (ic) c.legicon(leg.mode, x0 + LEG_PH * 0.4,",
+    "replace": "  if (ic) c.legicon(leg.mode === 'train' ? 'bus' : leg.mode, x0 + LEG_PH * 0.4,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 交通：模型留著 emoji、名稱前面接 emoji",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 4 條，A13 是跑前補的）模型的 leg 多一個 icon 欄位、label 改成「emoji 名稱」（「其他」沒有 emoji、照舊）。A18 驗欄位只有 dur,label,mode → 紅；A13 拿整個物件比 → 紅；海報上的交通字都帶 emoji → B11 紅。B10 的允許清單由模型的 label 組出來，跟著變，不紅。預期紅 A13、A18、B11。",
+    "expect": ["A13 交通", "A18 交通", "B11 沒有類別名"],
+    "file": "js/itinposter/model.js",
+    "edits": [
+      { "find": "import { legModeOf, LEG_LABEL, LEG_NO_DURATION } from '../legs.js';", "replace": "import { legModeOf, LEG_LABEL, LEG_ICON, LEG_NO_DURATION } from '../legs.js';" },
+      { "find": "        leg: mode ? { mode, label: LEG_LABEL[mode], dur: lt ? lt.text : '' } : null,", "replace": "        leg: mode ? { mode, icon: LEG_ICON[mode], label: [LEG_ICON[mode], LEG_LABEL[mode]].filter(Boolean).join(' '), dur: lt ? lt.text : '' } : null," }
+    ],
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 交通圖示：色帶全部一張的圖示壓到站卡上",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 5 條，跑前改：圖示沒有外框，B4 抓不到，規劃表寫的 B4 拿掉）圖示畫到這一站的卡片左上角。B16：不在那一天的色帶之間的空隙、碰到卡片的外框與卡片裡的字、不在兩張卡之間 → 紅。預期只紅 B16。",
+    "expect": ["B16 交通圖示"],
+    "file": "js/itinposter/layout.js",
+    "find": "c.legicon(p.sp.leg.mode, (ax0 + ax1) / 2 - BAND_IS / 2, ay - 6 - BAND_IS,",
+    "replace": "c.legicon(p.sp.leg.mode, p.x + 10, by + 10,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 裝飾：不看外框與字",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 6 條）裝飾照節奏放，不管碰不碰到框與字（邊界、路、站點高度那幾道照舊）。B17 逐一查每一個裝飾碰不碰框與字 → 紅。預期只紅 B17。",
+    "expect": ["B17 路旁的裝飾"],
+    "file": "js/itinposter/layout.js",
+    "find": "    if (taken.some((r) => hits(r, box))) continue;",
+    "replace": "    if (false) continue;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 裝飾：位置加亂數抖動",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 7 條）裝飾的 x 加 0～6 的亂數（抖完才算外框，所以照樣不碰框與字、離路也還夠遠）。B17b 把同一份模型排兩次、整份版面比 → 不一樣 → 紅。預期只紅 B17b。",
+    "expect": ["B17b 裝飾"],
+    "file": "js/itinposter/layout.js",
+    "find": "    const x = b.x - side * (b.y - a.y) / len * DECO_OFF, y =",
+    "replace": "    const x = b.x - side * (b.y - a.y) / len * DECO_OFF + Math.random() * 6, y =",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 裝飾：旁邊多寫一個字",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 8 條，跑前補 B18）每一個裝飾旁邊用 text 寫一個全形星號。B10：模型裡沒有這個字 → 紅；B17：裝飾碰到字 → 紅；B18：那個字直接在紙上、底下有紋理點 → 紅。全形星號不是 emoji，B11 不紅。預期紅 B10、B17、B18。",
+    "expect": ["B10 字的來源", "B17 路旁的裝飾", "B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "    c.deco(shape, x, y, DECO_R, shape === 'star' ? col : mix(col, shape === 'dot' ? 0.55 : 0.45), Math.atan2(b.y - a.y, b.x - a.x));",
+    "replace": "    c.deco(shape, x, y, DECO_R, shape === 'star' ? col : mix(col, shape === 'dot' ? 0.55 : 0.45), Math.atan2(b.y - a.y, b.x - a.x)); c.text('＊', x, y + 8, 22, { weight: 700, color: col, align: 'center', role: 'deco' });",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 紋理：點的顏色換深（版面）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 10 條的版面那一半）點的顏色換成 #d0c2a8（跟紙的對比約 1.63、灰字壓在上面約 3.41）。B18：跟紙的對比超過 1.35、內文字色壓在點上不到 4.5 → 紅。預期只紅 B18。",
+    "expect": ["B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "export const DOT = { step: 36, r: 3, color: '#ede2cc' };",
+    "replace": "export const DOT = { step: 36, r: 3, color: '#d0c2a8' };",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 紋理：沒有紋理（版面不給 bg）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 12 條的版面那一半）background() 回傳 null。B18 每一張報「沒有背景紋理」→ 紅。預期只紅 B18。",
+    "expect": ["B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear };",
+    "replace": "  return null;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 紋理：色帶的底改回半透明",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；跑前新增）色帶全部一張的底改回 v1.89 的 tint（半透明 rgba）。直接寫在色帶上的字（必吃那一行、「其他」）底下會透出紋理點；B18 只承認不透明（#rrggbb）的底 → 那幾個字報「壓在紋理上」→ 紅。預期只紅 B18。",
+    "expect": ["B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "  c.rect(M, y0, PW - 2 * M, h, { r: 26, fill: mix(col, 0.12), stroke: col, lw: 3 });",
+    "replace": "  c.rect(M, y0, PW - 2 * M, h, { r: 26, fill: tint(col, 0.12), stroke: col, lw: 3 });",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v190 紋理：標題區與頁尾也鋪點（版面 clear 清空）",
+    "why": "（事前寫 2026-11-14 22:27，跑之前；跑前新增）background() 的 clear 給空陣列。標題區的字直接在紙上、又不在不鋪點的地方 → B18 報「壓在紋理上」→ 紅。預期只紅 B18。",
+    "expect": ["B18 背景紋理"],
+    "file": "js/itinposter/layout.js",
+    "find": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear };",
+    "replace": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear: [] };",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  }
+]

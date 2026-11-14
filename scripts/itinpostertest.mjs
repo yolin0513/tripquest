@@ -21,19 +21,26 @@
 //   P7a 存圖片：手機分享得了檔案 → 一次分享全部 PNG；P7b 分享不了 → 下載；檔名、尺寸跟預覽那一份一樣
 //   P8a 存 PDF：xref、長度欄位、頁數、每頁比例；P8b 存檔的時候沒有任何對外請求、沒有上傳
 //   P9 整段頁面沒有丟出例外
+//   （v1.90）P11 交通圖示真的畫出來：每一個圖示那一格有深色外框與那一天的顏色（對照：同一張拿掉圖示再畫，那一格量不到）；
+//         六種都畫過一次（合成的一天：每一段一種方式）
+//   （v1.90）P12 背景紋理是規則的：同一張有紋理、沒紋理各畫一次，不一樣的像素全部落在格點上、格點很多；標題區與頁尾、
+//         白框與面板裡面一個都沒有（點被蓋住、沒有畫在框上面）。對照：合成的規則格子放行、亂數抖動的點抓到、點畫在白框上抓到
+//   （v1.90）P13 字的對比維持：拿掉字之後，有紋理、沒紋理兩張每一個字那一格的最深的底色一模一樣（紋理碰不到任何字的底）；
+//         畫出來的點（量像素）當底，內文的灰字、黑字對比仍 ≥ 4.5。對照：點落在字的那一格抓到、點換深抓到
 // 不打真網路（共用慣例 §5.6）：Open-Meteo 回自己造的預報，路線服務回自己造的秒數（照直線距離算），其餘外站 503 並記下來。
 // 分享與下載：手機的分享換成記錄用的替身（分享得了／分享不了兩種）；下載攔在 <a download>.click()，記下檔名與內容、
 //   不真的寫到磁碟（headless 的下載資料夾可能是使用者自己的「下載」）。這兩個是瀏覽器提供的，不是 App 的程式。
 // 時區撥到台北（emulateTimezone），日期照那個時區算，不靠今天是哪天。名字、行程都是造的。
 // 每一條斷言不管前面成不成都會印（等不到的畫面記成 ✗、不丟例外）：突變執行器要「項數跟原樣一樣」才算跑滿。
 // 從入口進不來時，直接開海報那一頁，讓後面的照樣量到（P1a 記成 ✗）——一條突變只紅它自己那一條。
-// 突變見 tools/mutations/mut_v188ui.json、tools/mutations/mut_v189.json。
+// 突變見 tools/mutations/mut_v188ui.json、tools/mutations/mut_v189.json、tools/mutations/mut_v190ui.json。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
 import { clickText, userClick } from './userclick.mjs';
-import { texts, PAGE_CHECKS, pageListProblems, pdfProblems, layoutControls, pdfControls } from './itinposterlib.mjs';
+import { texts, PAGE_CHECKS, pageListProblems, pdfProblems, layoutControls, pdfControls, contrast, DOT_SPEC } from './itinposterlib.mjs';
+import { INK, SUB } from '../js/itinposter/layout.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5861;
@@ -68,6 +75,9 @@ const LBL = Object.fromEntries([
   'P9 整段頁面沒有丟出例外',
   'P10a 沒開過行程分頁的一趟直接開海報：不連路線服務，車程與約幾點到留白（不猜）',
   'P10b 開過行程分頁再按進海報：每天一張的約幾點到、車程跟行程分頁畫面上寫的一樣',
+  'P11 交通圖示真的畫出來：每一個圖示那一格有深色外框與那一天的顏色、拿掉圖示就量不到；六種都畫過',
+  'P12 背景紋理是規則的：有、沒有紋理兩張不一樣的像素全部落在格點上；標題區與頁尾、白框與面板裡一個都沒有',
+  'P13 字的對比維持：每一個字那一格的底，有紋理跟沒紋理一模一樣；畫出來的點當底，內文的字對比仍 ≥ 4.5',
 ].map((s) => [s.slice(0, s.indexOf(' ')), s]));
 const B1_LABEL = '張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排';
 for (const [code, label] of [['B1', B1_LABEL], ...PAGE_CHECKS]) LBL[`P4-${code}`] = `P4-${code} ${label}（真的字寬）`;
@@ -212,6 +222,77 @@ function initHooks() {
       }
       return out;
     },
+    // （v1.90）一格裡深色（亮度 < 90）的像素占幾成：交通圖示的 INK 外框
+    darkRatio(cv, box) {
+      const x0 = Math.max(0, Math.round(box.x)), y0 = Math.max(0, Math.round(box.y));
+      const x1 = Math.min(cv.width, Math.round(box.x + box.w)), y1 = Math.min(cv.height, Math.round(box.y + box.h));
+      if (x1 <= x0 || y1 <= y0) return 0;
+      const d = cv.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 90) n++;
+      return n / (d.length / 4);
+    },
+    // （v1.90）一格裡接近某個顏色（三個顏色差的和 ≤ 30）的像素占幾成：交通圖示裡那一天的顏色
+    colorRatio(cv, box, color) {
+      const x0 = Math.max(0, Math.round(box.x)), y0 = Math.max(0, Math.round(box.y));
+      const x1 = Math.min(cv.width, Math.round(box.x + box.w)), y1 = Math.min(cv.height, Math.round(box.y + box.h));
+      if (x1 <= x0 || y1 <= y0) return 0;
+      const d = cv.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data;
+      const [r, g, b] = hex(color);
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - r) + Math.abs(d[i + 1] - g) + Math.abs(d[i + 2] - b) <= 30) n++;
+      return n / (d.length / 4);
+    },
+    // （v1.90）有紋理（a）、沒紋理（b）兩張比，不一樣的像素在哪裡。格點：第 j 列 y＝step/2＋j·step、x＝step/2＋i·step（奇數列再加 step/2）。
+    // 回傳 n（不一樣的像素）、pts（有不一樣的格點幾個）、off（離最近的格點超過 r＋1.5 的像素）、inClear、inCover（落在那幾塊裡的像素）、
+    // dot（b 那一張是純紙色、而且就在格點正中的像素，a 那一張最深的顏色——畫出來的點本身的顏色）
+    dotDiff(a, b, step, r, paper, clear = [], cover = []) {
+      const out = { n: 0, pts: 0, off: 0, inClear: 0, inCover: 0, dot: '', dotN: 0 };
+      if (a.width !== b.width || a.height !== b.height) { out.n = -1; return out; }
+      const W = a.width, H = a.height;
+      const x = a.getContext('2d').getImageData(0, 0, W, H).data, y = b.getContext('2d').getImageData(0, 0, W, H).data;
+      const [pr, pg, pb] = hex(paper);
+      const pts = new Set();
+      const inR = (q, px, py) => px >= q.x && px < q.x + q.w && py >= q.y && py < q.y + q.h;
+      let dl = 999;
+      for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+          const i = (py * W + px) * 4;
+          if (x[i] === y[i] && x[i + 1] === y[i + 1] && x[i + 2] === y[i + 2]) continue;
+          out.n++;
+          const cx = px + 0.5, cy = py + 0.5;
+          let best = Infinity, key = '';
+          const j0 = Math.round((cy - step / 2) / step);
+          for (let j = Math.max(0, j0 - 1); j <= j0 + 1; j++) {
+            const o = step / 2 + (j % 2 ? step / 2 : 0), k0 = Math.round((cx - o) / step);
+            for (let k = k0 - 1; k <= k0 + 1; k++) {
+              const d = Math.hypot(cx - (o + k * step), cy - (step / 2 + j * step));
+              if (d < best) { best = d; key = `${j}:${k}`; }
+            }
+          }
+          if (best > r + 1.5) out.off++; else pts.add(key);
+          if (clear.some((q) => inR(q, px, py))) out.inClear++;
+          if (cover.some((q) => inR(q, px, py))) out.inCover++;
+          if (best < 0.8 && y[i] === pr && y[i + 1] === pg && y[i + 2] === pb) {
+            out.dotN++;
+            const L = 0.299 * x[i] + 0.587 * x[i + 1] + 0.114 * x[i + 2];
+            if (L < dl) { dl = L; out.dot = '#' + [x[i], x[i + 1], x[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join(''); }
+          }
+        }
+      }
+      out.pts = pts.size;
+      return out;
+    },
+    // （v1.90）兩張在一格裡有幾個像素不一樣（P13：拿掉字之後，每一個字那一格的底）
+    diffIn(a, b, box) {
+      const x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y));
+      const x1 = Math.min(a.width, Math.ceil(box.x + box.w)), y1 = Math.min(a.height, Math.ceil(box.y + box.h));
+      if (x1 <= x0 || y1 <= y0) return 0;
+      const p = a.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data, q = b.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data;
+      let n = 0;
+      for (let i = 0; i < p.length; i += 4) if (p[i] !== q[i] || p[i + 1] !== q[i + 1] || p[i + 2] !== q[i + 2]) n++;
+      return n;
+    },
   };
 }
 
@@ -345,12 +426,13 @@ try {
   };
   const env = await page.evaluate(async () => {
     const { LEG_ICON, LEG_LABEL } = await import('./js/legs.js');
+    const { wxIcon } = await import('./js/weather.js');
     const th = await (await import('./js/theme.js')).loadThemes();
-    return { icons: Object.values(LEG_ICON).filter(Boolean), labels: Object.values(th.themes).map((t) => t.label),
-      foodEmoji: th.themes.food.emoji, foodLabel: th.themes.food.label, legText: `${LEG_ICON.car} ${LEG_LABEL.car}` };
+    return { labels: Object.values(th.themes).map((t) => t.label), wxIcon: wxIcon(63),
+      foodEmoji: th.themes.food.emoji, foodLabel: th.themes.food.label, legEmoji: `${LEG_ICON.car} ${LEG_LABEL.car}` };
   });
   const LABELS = new Set(env.labels);
-  layoutControls(ctl, { measure, foodEmoji: env.foodEmoji, foodLabel: env.foodLabel, legText: env.legText, icons: env.icons, labels: LABELS });
+  layoutControls(ctl, { measure, foodEmoji: env.foodEmoji, foodLabel: env.foodLabel, legEmoji: env.legEmoji, wxIcon: env.wxIcon, labels: LABELS });
   pdfControls(ctl);
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 1, 44, 0, 0, 0, 200, 8, 6, 0, 0, 0];
   ctl('PNG 尺寸：合成的 300×200 檔頭', pngDims(sig), { w: 300, h: 200 });
@@ -376,6 +458,45 @@ try {
     const onPaper = mk((x) => { x.fillStyle = '#ffffff'; x.fillRect(12, 9, 10, 1); });
     return { seam: window.__ck.seams(seam, 0, 40, 2, 18), solid: window.__ck.seams(solid, 0, 40, 2, 18), onPaper: window.__ck.seams(onPaper, 0, 40, 2, 18) };
   }), { seam: [[9, 10]], solid: [], onPaper: [] });
+  // v1.90：P11、P12、P13 用的量法。合成的畫布由這裡自己畫（不用被測的 draw.js），規則的格子照 dotDiff 註解寫的那一種
+  const ctl190 = await page.evaluate((step, r) => {
+    const P = '#fbf6ec', W = 360, H = 360;
+    const mk = (fn) => { const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); x.fillStyle = P; x.fillRect(0, 0, W, H); if (fn) fn(x); return c; };
+    const dots = (x, color, jitter = 0) => {
+      x.fillStyle = color;
+      let s = 7;
+      const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647 - 0.5; };
+      for (let j = 0, yy = step / 2; yy < H; j++, yy += step) for (let xx = step / 2 + (j % 2 ? step / 2 : 0); xx < W; xx += step) {
+        x.beginPath(); x.arc(xx + jitter * rnd(), yy + jitter * rnd(), r, 0, Math.PI * 2); x.fill();
+      }
+    };
+    const plain = mk();
+    const reg = window.__ck.dotDiff(mk((x) => dots(x, '#ede2cc')), plain, step, r, P, [], []);
+    const jit = window.__ck.dotDiff(mk((x) => dots(x, '#ede2cc', 14)), plain, step, r, P, [], []);
+    const white = { x: 100, y: 100, w: 150, h: 120 };
+    const under = mk((x) => { dots(x, '#ede2cc'); x.fillStyle = '#ffffff'; x.fillRect(white.x, white.y, white.w, white.h); });
+    const underRef = mk((x) => { x.fillStyle = '#ffffff'; x.fillRect(white.x, white.y, white.w, white.h); });
+    const over = mk((x) => { x.fillStyle = '#ffffff'; x.fillRect(white.x, white.y, white.w, white.h); dots(x, '#ede2cc'); });
+    const cov = [{ x: 108, y: 108, w: 134, h: 104 }];
+    const dark = window.__ck.dotDiff(mk((x) => dots(x, '#d0c2a8')), plain, step, r, P, [], []);
+    const tb = { x: 10, y: 10, w: 40, h: 20 };
+    return {
+      reg: { off: reg.off, many: reg.pts >= 80, dot: reg.dot },
+      jit: { off: jit.off > 0 },
+      under: { inCover: window.__ck.dotDiff(under, underRef, step, r, P, [], cov).inCover },
+      over: { inCover: window.__ck.dotDiff(over, underRef, step, r, P, [], cov).inCover > 0 },
+      dark: dark.dot,
+      textBg: { clean: window.__ck.diffIn(plain, plain, tb), dotted: window.__ck.diffIn(mk((x) => dots(x, '#ede2cc')), plain, tb) > 0 },
+      icon: { blank: window.__ck.darkRatio(plain, tb), inked: window.__ck.darkRatio(mk((x) => { x.strokeStyle = '#2f2c2a'; x.lineWidth = 4; x.strokeRect(14, 14, 30, 12); }), tb) > 0.04,
+        col: window.__ck.colorRatio(mk((x) => { x.fillStyle = '#c9423c'; x.fillRect(10, 10, 20, 20); }), tb, '#c9423c') },
+    };
+  }, DOT_SPEC.step, DOT_SPEC.r);
+  ctl('紋理量法：規則的格子不一樣的像素都在格點上、格點很多、點的顏色量得到', ctl190.reg, { off: 0, many: true, dot: '#ede2cc' });
+  ctl('紋理量法：亂數抖動的點抓到離格點太遠的像素', ctl190.jit, { off: true });
+  ctl('紋理量法：點被白框蓋住，白框裡 0 個不一樣；點畫在白框上面抓得到', { under: ctl190.under.inCover, over: ctl190.over.inCover }, { under: 0, over: true });
+  ctl('對比量法：點換深，量到的點顏色壓灰字不到 4.5；淡的那一種 ≥ 4.5', { dark: contrast(SUB, ctl190.dark || '#000000') < 4.5, light: contrast(SUB, ctl190.reg.dot || '#000000') >= 4.5 }, { dark: true, light: true });
+  ctl('字底量法：兩張一樣 0 個像素不同、點落在那一格抓到', ctl190.textBg, { clean: 0, dotted: true });
+  ctl('圖示量法：空白那一格沒有深色、畫了外框有、那一天的顏色量得到', { blank: ctl190.icon.blank, inked: ctl190.icon.inked, col: ctl190.icon.col }, { blank: 0, inked: true, col: 0.5 });
   await page.evaluate(() => Promise.allSettled([fetch('https://ctl.invalid/x'), fetch('/ctl-post', { method: 'POST', body: 'x' })]));
   await sleep(300);
   ctl('網路紀錄：外站與上傳都記得到', { outside: net.outside.filter((u) => u.includes('ctl.invalid')).length, writes: net.writes.filter((w) => /^POST .*\/ctl-post$/.test(w)).length }, { outside: 1, writes: 1 });
@@ -515,7 +636,7 @@ try {
     const where = `${sets.length} 組、${all.length} 張、${nText} 個字`;
     const b1 = sets.flatMap((x) => pageListProblems(x).map((b) => `${x.kind}/${x.split}：${b}`));
     say('P4-B1', all.length > 0 && b1.length === 0, where, b1.join('\n   '));
-    const OPTS = { icons: env.icons, labels: LABELS };
+    const OPTS = { labels: LABELS };
     for (const [code, , fn] of PAGE_CHECKS) {
       const bad = [];
       for (const p of all) {
@@ -525,6 +646,69 @@ try {
       }
       say(`P4-${code}`, all.length > 0 && nText > 0 && bad.length === 0, where, bad.slice(0, 8).join('\n   '));
     }
+  });
+
+  // ================= P11～P13 交通圖示、背景紋理（v1.90） =================
+  await section(['P11', 'P12', 'P13'], async () => {
+    const R = await page.evaluate(async (tid, step, r) => {
+      const ip = await import('./js/itinposter/index.js');
+      const { PAPER } = await import('./js/itinposter/layout.js');
+      const { LEG_LABEL } = await import('./js/legs.js');
+      const { DONE_PEEK } = await import('./js/peeks.js');
+      const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
+      const draw = async (pg) => { const cv = document.createElement('canvas'); await ip.drawPoster(cv, pg); return cv; };
+      const sets = [];
+      for (const [kind, split] of [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']]) ip.renderPages(m, { kind, split }).forEach((pg, i) => sets.push({ tag: `${kind}/${split} 第 ${i + 1} 張`, pg }));
+      // 合成的一天：每一段一種方式（六種有圖的＋「其他」），三種有交通的版面各一張——六種都要畫過一次
+      const modes = ['walk', 'train', 'bus', 'car', 'boat', 'plane', 'other'];
+      const names = ['子站', ...modes.map((md, k) => `第${k + 2}站`)];
+      const syn = { title: '合成', span: null, dateRange: '', people: 0, placeCount: names.length, foods: [], tips: [], tipsAsOf: '',
+        days: [{ day: 2, date: '', from: names[0], to: names[names.length - 1], foods: [], placeCount: names.length, peek: DONE_PEEK,
+          stops: names.map((name, k) => ({ name, time: '', eta: '', stay: '', leg: k ? { mode: modes[k - 1], label: LEG_LABEL[modes[k - 1]], dur: '' } : null })) }] };
+      const synSets = [['route', 'day'], ['band', 'one'], ['band', 'day']].map(([kind, split]) => ({ tag: `合成 ${kind}/${split}`, pg: ip.renderPages(syn, { kind, split })[0] }));
+      const out = { p11: [], p11n: 0, p11modes: [], p11ctl: [], p12: [], p13: [], p13n: 0, dots: [], pages: sets.length };
+      for (const s of [...sets, ...synSets]) {
+        const icons = s.pg.ops.filter((o) => o.op === 'legicon');
+        if (!icons.length) continue;
+        const a = await draw(s.pg), c = await draw({ ...s.pg, ops: s.pg.ops.filter((o) => o.op !== 'legicon') });
+        for (const o of icons) {
+          const box = { x: o.x, y: o.y, w: o.s, h: o.s };
+          const dk = window.__ck.darkRatio(a, box), col = window.__ck.colorRatio(a, box, o.color), none = window.__ck.darkRatio(c, box);
+          out.p11n++;
+          out.p11modes.push(o.mode);
+          if (!(dk > 0.04 && col > 0.03)) out.p11.push(`${s.tag} ${o.mode}：深色 ${dk.toFixed(3)}、那一天的顏色 ${col.toFixed(3)}`);
+          if (!(none < 0.01)) out.p11ctl.push(`${s.tag} ${o.mode}：拿掉圖示還有深色 ${none.toFixed(3)}`);
+        }
+      }
+      for (const s of sets) {
+        const pg = s.pg;
+        const a = await draw(pg), b = await draw({ ...pg, bg: null });
+        // 「框裡」：照實際畫的不透明方塊（白框、面板、對話框、色帶、膠囊、站卡），往內縮過圓角（0.3×圓角＋3）。
+        // 不拿版面的外框（boxes）來量：對話框的外框連尾巴旁邊的空白也包進去，那裡本來就是紙、就該有點（v1.90 第一次跑時誤判）
+        const cover = pg.ops.filter((o) => o.op === 'rect' && /^#[0-9a-f]{6}$/i.test(String(o.fill))).map((o) => { const k = Math.ceil((o.r || 0) * 0.3) + 3; return { x: o.x + k, y: o.y + k, w: o.w - 2 * k, h: o.h - 2 * k }; }).filter((q) => q.w > 0 && q.h > 0);
+        const d = window.__ck.dotDiff(a, b, step, r, PAPER, (pg.bg && pg.bg.clear) || [], cover);
+        if (!(d.n > 0 && d.pts >= 100 && d.off === 0 && d.inClear === 0 && d.inCover === 0 && d.dotN > 0)) out.p12.push(`${s.tag}：不一樣 ${d.n} 個像素、格點 ${d.pts} 個、離格點太遠 ${d.off}、在標題區或頁尾 ${d.inClear}、在框裡 ${d.inCover}、量到點的像素 ${d.dotN}`);
+        out.dots.push(d.dot);
+        // P13：拿掉字，兩張（有紋理、沒紋理）每一個字那一格（外擴 1）逐像素比
+        const noText = pg.ops.filter((o) => o.op !== 'text');
+        const a2 = await draw({ ...pg, ops: noText }), b2 = await draw({ ...pg, ops: noText, bg: null });
+        for (const o of pg.ops.filter((x) => x.op === 'text')) {
+          const left = o.align === 'center' ? o.x - o.w / 2 : o.align === 'right' ? o.x - o.w : o.x;
+          const n = window.__ck.diffIn(a2, b2, { x: left - 1, y: o.y - o.size * 0.88 - 1, w: o.w + 2, h: o.size * 1.1 + 2 });
+          out.p13n++;
+          if (n) out.p13.push(`${s.tag}「${o.text}」那一格有 ${n} 個像素跟沒紋理時不一樣`);
+        }
+      }
+      return out;
+    }, S.t, DOT_SPEC.step, DOT_SPEC.r);
+    const six = [...new Set(R.p11modes)].sort().join(',');
+    say('P11', R.p11n > 0 && R.p11.length === 0 && R.p11ctl.length === 0 && six === 'bus,car,plane,train,walk,boat'.split(',').sort().join(','),
+      `${R.p11n} 個圖示（種類 ${six}）；畫不出來的 ${R.p11.length} 個；對照（同一張拿掉圖示）還量得到的 ${R.p11ctl.length} 個`, [...R.p11, ...R.p11ctl].slice(0, 8).join('\n   '));
+    say('P12', R.pages >= 8 && R.p12.length === 0, `${R.pages} 張，不合的 ${R.p12.length} 張`, R.p12.slice(0, 8).join('\n   '));
+    const dotCols = [...new Set(R.dots)];
+    const worst = dotCols.filter(Boolean).map((c) => ({ c, sub: contrast(SUB, c), ink: contrast(INK, c) }));
+    say('P13', R.p13n > 0 && R.p13.length === 0 && worst.length > 0 && worst.length === dotCols.length && worst.every((w) => w.sub >= 4.5 && w.ink >= 4.5),
+      `${R.p13n} 個字，底被紋理改到的 ${R.p13.length} 個；量到的點顏色 ${worst.map((w) => `${w.c}（灰字 ${w.sub.toFixed(2)}、黑字 ${w.ink.toFixed(2)}）`).join('、') || '沒有'}`, R.p13.slice(0, 8).join('\n   '));
   });
 
   // ================= P5 天氣預報 =================

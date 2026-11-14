@@ -109,6 +109,7 @@ const SHELL_ASSETS = [
   './js/itinposter/model.js',
   './js/itinposter/layout.js',
   './js/itinposter/draw.js',
+  './js/itinposter/legicons.js',
   './js/itinposter/index.js',
   './js/pdf.js',
   './js/views/itinposter.js',
