@@ -122,6 +122,36 @@ console.log('\n— T1／T4 沒命中就留白 —');
   yes(frag.some((f) => curBlob.includes(f)), '對照組：策展景點的資料裡確實含得到句庫的句子');
 }
 
+// ---------- E1 對上景點庫的：表情符號只照景點庫的類型，不照名字配（v1.92.0，Yolin 2026-11-16） ----------
+// v1.91 以前 primaryEmoji 先走 nameEmoji(名字)、才輪到 primary；景點庫 135 筆都沒有 emoji 欄，
+// 所以「清水寺」（名字以「寺」結尾，primary 是 sight）存進行程的是 🛕、「梧棲漁港」（primary 是 food）是 🌊——照名字猜的。
+console.log('\n— E1 對上景點庫的表情符號只照類型 —');
+{
+  const TAG = { sight: '🏛️', food: '🍜', nightmarket: '🏮', snack: '🍢', checkin: '📸', culture: '🎎', nature: '🌄', shopping: '🛍️', view: '🌇' };
+  const kiyo = CURATED.find((p) => p.id === 'kyoto-kiyomizu'), wuqi = CURATED.find((p) => p.id === 'tc-wuqi');
+  yes(!!kiyo && kiyo.name === '清水寺' && kiyo.primary === 'sight' && !kiyo.emoji && /寺$/.test(kiyo.name)
+    && !!wuqi && wuqi.name === '梧棲漁港' && wuqi.primary === 'food' && !wuqi.emoji && wuqi.name.includes('漁港'),
+    `E1 前置：清水寺 primary sight、梧棲漁港 primary food，兩筆都沒有 emoji 欄，名字都會命中舊的照名字規則（寺、漁港）——照名字與照類型分得出來`,
+    JSON.stringify([kiyo && [kiyo.name, kiyo.primary, kiyo.emoji], wuqi && [wuqi.name, wuqi.primary, wuqi.emoji]]));
+  // 真實入口：建立行程時從景點庫挑（帶 placeId，跟 create.js 選景點同一條路）
+  const r = await gen.generateForTrip({ tripId: 't-emoji', region: '', items: [{ placeId: 'kyoto-kiyomizu', day: 1 }, { placeId: 'tc-wuqi', day: 1 }] });
+  const by = Object.fromEntries(r.spots.map((s) => [s.placeId, s]));
+  yes(by['kyoto-kiyomizu']?.source === 'curated' && by['kyoto-kiyomizu'].emoji === '🏛️',
+    `E1 清水寺（挑景點庫建立）存的是 sight 的 🏛️，不是照名字的 🛕（實得 ${by['kyoto-kiyomizu']?.emoji}）`);
+  yes(by['tc-wuqi']?.source === 'curated' && by['tc-wuqi'].emoji === '🍜',
+    `E1 梧棲漁港（挑景點庫建立）存的是 food 的 🍜，不是照名字的 🌊（實得 ${by['tc-wuqi']?.emoji}）`);
+  // 母體：景點庫每一筆，挑進行程時的表情符號都等於它類型的那一個
+  const L = await gen.loadPlaceLookup();
+  const off = CURATED.filter((p) => { const q = L.placeById(p.id); return !q || q.emoji !== (TAG[p.primary] || '📍'); });
+  yes(CURATED.length >= 100 && off.length === 0, `E1 景點庫 ${CURATED.length} 筆，每一筆的表情符號都只看類型（不合的 ${off.length} 筆）`,
+    off.slice(0, 5).map((p) => `${p.name}（${p.primary}）→ ${L.placeById(p.id)?.emoji}`).join('、'));
+  // 沒有類型、類型怪的：一律中性的 📍（景點庫現在每一筆都有 primary，這兩支只能用合成的一筆走到）
+  const e0 = gen.primaryEmoji({ name: '某某寺', tags: ['nature'] });
+  const e1 = gen.primaryEmoji({ name: '某某夜市', primary: 'toString' });
+  yes(e0 === '📍', `E1 沒有類型（名字以寺結尾、tags 有 nature）→ 📍，不照名字、也不拿 tags 頂替（實得 ${e0}）`);
+  yes(e1 === '📍', `E1 類型是物件本來就有的名字（toString）→ 📍（實得 ${typeof e1 === 'string' ? e1 : typeof e1}）`);
+}
+
 // ---------- R7 補齊任務只補策展地點 ----------
 console.log('\n— R7 補齊任務 —');
 {
@@ -200,4 +230,5 @@ console.log('\n— T8 照片任務不重複 —');
 // IndexedDB 快取，純 Node 跑不起來（實測 `indexedDB is not defined`），而 geotest 本來
 // 就有假的 Nominatim 端點。
 
-console.log(`\n${process.exitCode ? '✗ 有失敗' : '✓ 全部通過'}（${pass} 項）`);
+// 總結行用突變執行器預設認得的「N 項通過」（v1.92.0 改；原本是「✗ 有失敗（N 項）」，行首的 ✗ 會被當成一行非預期的紅）
+console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

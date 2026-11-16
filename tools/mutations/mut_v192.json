@@ -133,5 +133,32 @@
     "find": "      h('span', { class: 'pc-emoji' }, placeIconForEntry(p) ? placeIconImg(placeIconForEntry(p), p.emoji || '📍') : (p.emoji || '📍')),",
     "replace": "      h('span', { class: 'pc-emoji' }, p.emoji || '📍'),",
     "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "景點庫表情符號：照名字配排在類型前面",
+    "why": "（事前寫 2026-11-16 15:20，跑之前）放回 v1.91 的順序：名字命中規則就照名字給（這裡只放回寺、漁港兩條就夠分辨）。預期紅 curatedtest 的 E1 清水寺、E1 梧棲漁港、E1 景點庫（母體裡名字以寺結尾或含漁港的那幾筆）、E1 沒有類型（合成的某某寺）；E1 類型怪的那一條名字是某某夜市、不命中這兩條，不紅；前置不紅。",
+    "expect": ["E1 清水寺（挑景點庫建立）", "E1 梧棲漁港（挑景點庫建立）", "E1 景點庫", "E1 沒有類型"],
+    "file": "js/quests/generate.js",
+    "find": "  return Object.prototype.hasOwnProperty.call(TAG_EMOJI, place.primary) ? TAG_EMOJI[place.primary] : '📍';",
+    "replace": "  return (/寺$/.test(place.name || '') ? '🛕' : /漁港/.test(place.name || '') ? '🌊' : null) || (Object.prototype.hasOwnProperty.call(TAG_EMOJI, place.primary) ? TAG_EMOJI[place.primary] : '📍');",
+    "cmd": "node scripts/curatedtest.mjs"
+  },
+  {
+    "name": "景點庫表情符號：沒有類型時拿 tags 頂替",
+    "why": "（事前寫 2026-11-16 15:20，跑之前）沒有 primary 時拿 tags 的第一個。景點庫現在每一筆都有 primary，所以只有合成的那一筆走得到。預期只紅 E1 沒有類型。",
+    "expect": ["E1 沒有類型"],
+    "file": "js/quests/generate.js",
+    "find": "TAG_EMOJI[place.primary] : '📍';",
+    "replace": "TAG_EMOJI[place.primary] : (TAG_EMOJI[(place.tags || [])[0]] || '📍');",
+    "cmd": "node scripts/curatedtest.mjs"
+  },
+  {
+    "name": "景點庫表情符號：查表不擋物件本來就有的名字",
+    "why": "（事前寫 2026-11-16 15:20，跑之前）直接用 TAG_EMOJI[primary]，primary 是 toString 時拿到的是函式。預期只紅 E1 類型是物件本來就有的名字。",
+    "expect": ["E1 類型是物件本來就有的名字"],
+    "file": "js/quests/generate.js",
+    "find": "  return Object.prototype.hasOwnProperty.call(TAG_EMOJI, place.primary) ? TAG_EMOJI[place.primary] : '📍';",
+    "replace": "  return TAG_EMOJI[place.primary] || '📍';",
+    "cmd": "node scripts/curatedtest.mjs"
   }
 ]

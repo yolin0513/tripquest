@@ -271,7 +271,7 @@ export async function generateForTrip({ tripId, items, itineraryText, region = '
       if (input !== undefined) spot.matchInput = input;
     } else {
       // 沒對上策展資料庫：留白。不猜類型、不出題、不寫介紹，表情符號用中性的地點圖示
-      // （`nameEmoji()` 是照名字猜的 —— 牛排館「大佛牛排」會得到 🛕，那也是使用者看得到的猜測）。
+      // （v1.92.0 以前的 `nameEmoji()` 是照名字猜的 —— 牛排館「大佛牛排」會得到 🛕，那也是使用者看得到的猜測；已移除）。
       // `inferredType` 仍然留著，但只給「使用者看不到」的用途用（stayForSpot 推算停留分鐘數）。
       const name = it.name || '未命名景點';
       spot = {
@@ -350,24 +350,13 @@ export async function themedQuestsForSpot(spot, tripId) {
 }
 
 const TAG_EMOJI = { sight: '🏛️', food: '🍜', nightmarket: '🏮', snack: '🍢', checkin: '📸', culture: '🎎', nature: '🌄', shopping: '🛍️', view: '🌇' };
-const NAME_EMOJI = [
-  [/機場|机场|空港/, '✈️'], [/車站|车站|駅$|轉運站|转运站/, '🚉'],
-  [/夜市/, '🏮'], [/神社|大社|稻荷|稲荷|[^海]宮$|鳥居/, '⛩️'], [/[^醫眼]城$|城堡|天守|古堡|赤崁|砲台/, '🏯'],
-  [/寺$|寺院|大佛/, '🛕'], [/廟$|祠$|天后|媽祖/, '🀄'], [/塔$|101|晴空|鐵塔|tower/i, '🗼'],
-  [/步道|林道|古道|健行/, '🥾'],
-  [/牛肉麵|拉麵|[^泡]麵$|飯$|[^醫]粥$|火鍋|燒肉|小吃|食堂|餐廳|海鮮|豬心|蝦捲|肉圓|碗粿|米糕|肉羹|魚湯|水果店|冰店$|豆花|甜點|咖啡館|烘焙/, '🍜'],
-  [/公園|草原|牧場|農場|花海|花園|植物園/, '🌳'], [/山$|岳$|峰$|嶺$/, '⛰️'], [/湖$|潭$|運河|瀑布|溪$|海$|灘$|岬$|漁港|碼頭|龍洞|鼻頭|奇岩/, '🌊'],
-  [/溫泉|温泉/, '♨️'], [/水族館|美麗海|海生館/, '🐠'], [/教堂/, '⛪'], [/纜車/, '🚠'],
-  [/博物館|美術館|文物|故宮|紀念館/, '🖼️'], [/老街|商店街/, '🏘️'], [/瞭望|觀景|展望/, '🔭'],
-  [/百貨|購物|商場|outlet/i, '🛍️'], [/樂園|遊樂園|動物園/, '🎡'],
-];
-function nameEmoji(name) {
-  for (const [re, e] of NAME_EMOJI) if (re.test(name || '')) return e;
-  return null;
-}
-function primaryEmoji(place) {
+// 景點庫那一筆的表情符號：景點庫自己寫的 emoji → 照它的 primary（類型）→ 都沒有就中性的 📍。
+// v1.92.0（Yolin 2026-11-16）：拿掉「照名字配」（nameEmoji／NAME_EMOJI）——它排在 primary 前面，
+// 景點庫 135 筆都沒有 emoji 欄，於是名字命中規則的那幾筆（清水寺 → 🛕、梧棲漁港 → 🌊）存進行程的是照名字猜的，
+// 違反「猜的東西不准變成使用者看得到的字」。也不再拿 tags 的第一個頂替：沒有類型就是 📍。curatedtest 守。
+export function primaryEmoji(place) {
   if (place.emoji) return place.emoji;
-  return nameEmoji(place.name) || TAG_EMOJI[place.primary] || TAG_EMOJI[(place.tags || [])[0]] || '📍';
+  return Object.prototype.hasOwnProperty.call(TAG_EMOJI, place.primary) ? TAG_EMOJI[place.primary] : '📍';
 }
 
 // ---------- 自由輸入景點：關鍵字型別判斷 ----------
