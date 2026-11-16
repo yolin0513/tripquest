@@ -28,7 +28,10 @@
 //   （v1.89）A17 每天一張那一隻的大小：A4 放得下的最大那一個（200～440）；站多放不下就停在 200、頁面往下長；
 //             超過 A4 的頁面吉祥物一定是 200（放大過頭會讓頁面多出一截）
 //   （v1.90）A18 交通：模型只放代號與名稱（沒有 emoji 欄位）、認不得的代號不寫；畫的圖有六種、「其他」沒有，形狀只用 M L Q A Z 和數字
-// B 版面：8 種行程 × 2 版型 × 2 張數＝32 組，每一條檢查都跑過全部 32 組
+// B 版面：8 種行程 × 6 種（2 版型 × 2 張數，插圖載得到；加上插圖載不到的 2 種全部一張）＝48 組，每一條檢查都跑過全部 48 組
+//   （v1.93）B18 加像素分支：頁首插圖上的字，逐點量插圖（repo 裡那一張圖檔，sharp 讀）跟字色的對比 ≥ 4.5；B18c 量到的字數、長標題、最差的對比；
+//            B18d 真的圖檔走同一個讀法（當場寫一張全淺、一張在日期旅伴底下畫線）；B20 插圖放在哪（全部一張才有、第一筆、標題區在裡面、
+//            其餘在插圖底下）；B20b 插圖載得到跟載不到只差在頁首以下整份往下移（字、框、頁高）
 //   B0 每一組都排得出來；B1 張數與標籤；B2 寬固定、每天一張至少 A4；B3 字與框不出界；B4 框不疊框；B5 字不疊字；
 //   B6 站名與時間在站牌框裡；B7 站數母體（畫出來的站＋「還有 N 站」＝那天的站數，而且是前幾站、照順序）；
 //   B8 必吃母體；B9 天氣母體；B10 字的來源（只有模型裡的字與固定的幾個標題）；B11 沒有類別名、沒有類別 emoji；
@@ -43,7 +46,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { texts, PAGE_CHECKS, pageListProblems, pdfProblems, layoutControls, pdfControls, fakeJpeg, PDF_IMGS } from './itinposterlib.mjs';
+import { texts, PAGE_CHECKS, pageListProblems, pdfProblems, layoutControls, pdfControls, fakeJpeg, PDF_IMGS, readArtPix, bgProblems, textBox, artTextMin } from './itinposterlib.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // theme.js、generate.js 用 fetch 讀 data/；node 底下換成讀檔，只供應 data/ 底下的 .json，其餘照樣失敗
@@ -344,16 +347,17 @@ async function realScenario() {
   const m = tryDo('真資料 posterModel', () => MD.posterModel({ trip, spots, members: [{}], lookup: LK, forecast: fcFor('2026-05-10', 2), today: '2026-05-08', legTimes }), null);
   return { label: '真資料（時間、約幾點到、停留、車程）＋站少的一天', m };
 }
-const COMBOS = [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']];
+// v1.93：插圖載得到（App 平常的樣子）的四種，加上插圖載不到時退回的兩種全部一張（每天一張本來就不放插圖）——每一條檢查都跑過這 6 種
+const COMBOS = [['route', 'one', true], ['route', 'day', true], ['band', 'one', true], ['band', 'day', true], ['route', 'one', false], ['band', 'one', false]];
 const SETS = [];
-for (const s of SCEN) for (const [kind, split] of COMBOS) {
-  const pages = s.m ? tryDo(`${s.label} ${kind}/${split}`, () => L.posterPages(s.m, { kind, split }, measure), []) : [];
-  SETS.push({ tag: `${s.label}｜${kind}/${split}`, m: s.m, kind, split, pages });
+for (const s of SCEN) for (const [kind, split, art] of COMBOS) {
+  const pages = s.m ? tryDo(`${s.label} ${kind}/${split}`, () => L.posterPages(s.m, { kind, split, art }, measure), []) : [];
+  SETS.push({ tag: `${s.label}｜${kind}/${split}${art ? '' : '（插圖載不到）'}`, m: s.m, kind, split, art, pages });
 }
 const sixM = SCEN[5].m, realM = SCEN[6].m;
 const realStops = realM ? realM.days.flatMap((d) => d.stops) : [];
 const peekKinds = new Set(SCEN.flatMap((s) => (s.m ? s.m.days.map((d) => d.peek) : [])));
-yes(SETS.length === 32 && SETS.every((x) => x.m && x.pages.length > 0) && errs.length === 0
+yes(SETS.length === 48 && SETS.every((x) => x.m && x.pages.length > 0) && errs.length === 0
   && sixM && sixM.foods.length > L.FOOD_MAX && sixM.tips.length > L.TIP_MAX && SCEN[3].m && SCEN[3].m.days[0].stops.length > L.BAND_STOPS
   && realStops.some((s) => s.eta) && realStops.some((s) => s.stay) && realStops.some((s) => s.leg && s.leg.dur) && realStops.some((s) => s.time)
   && realM.days.some((d) => d.stops.length === 1) && peekKinds.size >= 4,
@@ -362,7 +366,7 @@ yes(SETS.length === 32 && SETS.every((x) => x.m && x.pages.length > 0) && errs.l
 // A17 每天一張那一隻的大小（fitPeek）：取 A4 放得下的最大那一個，200～440。15 站的那天縮到下限 200 就不再縮、頁面往下長；
 // 八站、沒有必吃的那天落在中間、整頁剛好 A4；一站的那天放大過 280；每一張每天一張的頁面：超過 A4 的，吉祥物一定是下限
 // （頁面已經超過 A4 還留著大吉祥物＝放大過頭）。從真的排版入口（posterPages）量吉祥物外框的高
-const dayPages = (s, kind) => (SETS.find((x) => x.tag === `${s.label}｜${kind}/day`) || { pages: [] }).pages;
+const dayPages = (s, kind) => (SETS.find((x) => x.m === s.m && x.kind === kind && x.split === 'day') || { pages: [] }).pages;
 const riseOf = (pg) => { const b = pg && pg.boxes.find((x) => x.kind === 'peek'); return b ? Math.round(b.h * 10) / 10 : NaN; };
 const r15 = ['route', 'band'].map((k) => dayPages(SCEN[3], k)[0]);
 const r8 = ['route', 'band'].map((k) => dayPages(SCEN[7], k)[0]);
@@ -390,8 +394,76 @@ const report = (code, label, bad) => yes(allPages.length > 0 && nText > 0 && bad
 
 const b1 = SETS.filter((x) => x.m).flatMap((x) => pageListProblems(x).map((b) => `${x.tag}：${b}`));
 yes(b1.length === 0, `B1 張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排（${SETS.length} 組）`, b1.join('\n   '));
-const OPTS = { labels: LABELS };
+// 頁首插圖的像素（v1.93）：從 repo 裡的那一張圖檔讀（跟 App 畫的是同一個檔）
+const ART_FILE = path.join(ROOT, L.HEADER_ART.src);
+const artPix = await readArtPix(ART_FILE).catch((e) => { errs.push(`讀插圖：${e.message}`); return null; });
+const OPTS = { labels: LABELS, artPix: artPix ? { [L.HEADER_ART.src]: artPix } : {} };
 for (const [code, label, fn] of PAGE_CHECKS) report(code, label, run(({ x, pg, i }) => fn(x, pg, i, OPTS)));
+
+// B18c（v1.93）插圖上的字量了幾個、最差多少：每一張有插圖的頁都量到字（母體），長標題那一張的標題字框幾乎整條寬
+const artPages = allPages.filter((p) => p.pg.ops.some((o) => o.op === 'art'));
+const artTexts = artPages.flatMap((p) => texts(p.pg).filter((o) => { const b = textBox(o); return b.y < L.HEADER_ART.h; }).map((o) => ({ p, o })));
+const worstOf = (role) => {
+  const r = artTexts.filter(({ o }) => o.role === role).map(({ p, o }) => artTextMin(o, p.pg.ops[0], artPix));
+  return r.length ? `${Math.min(...r.map((x) => x.min)).toFixed(2)}（${r.length} 個）` : '（沒有）';
+};
+const longTitle = artPages.find((p) => p.x.m === SCEN[4].m);
+const ltBox = longTitle && texts(longTitle.pg).find((o) => o.role === 'title');
+yes(!!artPix && artPix.w === L.HEADER_ART.w && artPix.h === L.HEADER_ART.h && artPages.length === SCEN.length * 2 && artTexts.length >= artPages.length
+  && !!ltBox && ltBox.text.endsWith('…') && ltBox.w > L.PW - 2 * L.M - 80,
+  `B18c 插圖上的字有量到：插圖 ${artPix && `${artPix.w}×${artPix.h}、${artPix.ch} 通道`}；有插圖的 ${artPages.length} 張（${SCEN.length} 種行程 × 2 版型）、插圖上的字 ${artTexts.length} 個；`
+  + `長標題截成「…」、字寬 ${ltBox && Math.round(ltBox.w)}（整條 ${L.PW - 2 * L.M}）；最差的對比：標題 ${artPix ? worstOf('title') : '-'}、日期旅伴 ${artPix ? worstOf('sub') : '-'}（近似字寬）`, errs.join('；'));
+
+// B20b（v1.93）插圖載得到 vs 載不到：標題區的字一模一樣；頁首以下的每一個字、每一個框都往下移同一段（插圖底＋gap－原本的標題區底），頁高也是
+const shiftBad = [];
+let shiftN = 0;
+for (const s of SCEN) for (const kind of ['route', 'band']) {
+  const a = SETS.find((x) => x.m === s.m && x.kind === kind && x.split === 'one' && x.art), b = SETS.find((x) => x.m === s.m && x.kind === kind && x.split === 'one' && !x.art);
+  const pa = a && a.pages[0], pb = b && b.pages[0];
+  if (!pa || !pb) { shiftBad.push(`${s.label} ${kind}：排不出來`); continue; }
+  const hb = pb.boxes.find((x) => x.kind === 'header');
+  const delta = L.HEADER_ART.h + L.HEADER_ART.gap - (hb.y + hb.h);
+  const ta = texts(pa), tb = texts(pb);
+  const moved = (o, d) => JSON.stringify({ ...o, y: Math.round((o.y + d) * 1000) / 1000 });
+  const isHead = (o) => o.y < hb.y + hb.h;
+  if (ta.length !== tb.length) shiftBad.push(`${s.label} ${kind}：字 ${ta.length}≠${tb.length}`);
+  else tb.forEach((o, i) => { shiftN++; if (moved(ta[i], 0) !== moved(o, isHead(o) ? 0 : delta)) shiftBad.push(`${s.label} ${kind}：字「${o.text}」`); });
+  const ba = pa.boxes, bb = pb.boxes;
+  if (ba.length !== bb.length) shiftBad.push(`${s.label} ${kind}：框 ${ba.length}≠${bb.length}`);
+  else bb.forEach((o, i) => { shiftN++; if (moved(ba[i], 0) !== moved(o, o.kind === 'header' ? 0 : delta)) shiftBad.push(`${s.label} ${kind}：框 ${o.kind}`); });
+  if (pa.h !== pb.h + delta) shiftBad.push(`${s.label} ${kind}：頁高 ${pa.h}≠${pb.h}＋${delta}`);
+  if (!(delta > 0)) shiftBad.push(`${s.label} ${kind}：往下移 ${delta}（不是正的）`);
+}
+yes(shiftN > 0 && shiftBad.length === 0, `B20b 插圖載得到跟載不到只差在頁首以下整份往下移（${SCEN.length} 種行程 × 2 版型、比了 ${shiftN} 個字與框）`, shiftBad.slice(0, 8).join('\n   '));
+
+// B18d（v1.93）真的圖檔走同一個讀法：當場寫兩張 1240×620 的圖（全淺色；同一張在日期旅伴那一行的字框中間畫一條深色橫線），
+// 從檔案讀回來、量真的版面（三天那一趟的路線圖全部一張）——淺的放行、有線的抓到日期旅伴那一行、只抓到那一行
+const CTL2 = path.join(ROOT, '.logs', 'itinposter-artctl');
+const b18d = await (async () => {
+  const { default: sharp } = await import('sharp');
+  fs.rmSync(CTL2, { recursive: true, force: true });
+  fs.mkdirSync(CTL2, { recursive: true });
+  const pg = (SETS.find((x) => x.m === M0 && x.kind === 'route' && x.split === 'one' && x.art) || { pages: [] }).pages[0];
+  const sub = pg && texts(pg).find((o) => o.role === 'sub');
+  if (!sub) return { why: '找不到日期旅伴那一行' };
+  const sb = textBox(sub), W = L.HEADER_ART.w, H = L.HEADER_ART.h;
+  const raw = (line) => {
+    const d = Buffer.alloc(W * H * 3);
+    for (let i = 0; i < d.length; i += 3) { d[i] = 250; d[i + 1] = 246; d[i + 2] = 236; }
+    if (line) { const y = Math.round(sb.y + sb.h / 2); for (let x = Math.round(sb.x); x < sb.x + sb.w; x++) { const i = (y * W + x) * 3; d[i] = d[i + 1] = d[i + 2] = 110; } }
+    return d;
+  };
+  const out = {};
+  for (const [name, line] of [['light', false], ['line', true]]) {
+    const f = path.join(CTL2, `${name}.png`);
+    await sharp(raw(line), { raw: { width: W, height: H, channels: 3 } }).png().toFile(f);
+    out[name] = bgProblems(pg, L.PAPER, [L.INK, L.SUB], { [L.HEADER_ART.src]: await readArtPix(f) });
+  }
+  fs.rmSync(CTL2, { recursive: true, force: true });
+  return { sub: sub.text, ...out };
+})().catch((e) => ({ why: e.message }));
+yes(!b18d.why && b18d.light.length === 0 && b18d.line.length === 1 && b18d.line[0].startsWith(`字「${b18d.sub}」壓在插圖上對比`),
+  `B18d 真的圖檔：全淺色的放行、日期旅伴那一行底下畫一條線的抓到那一行（${b18d.why || `淺 ${b18d.light.length} 條、有線 ${b18d.line.length} 條：${(b18d.line || []).join('；')}`}）`);
 // B16b、B17b（v1.90）母體：上面兩條逐張查的「每一個圖示、每一個裝飾都對」，在一個都沒有的時候也會過——這裡數有幾個
 const opsOf = (kind, split, op) => SETS.filter((x) => x.kind === kind && x.split === split).flatMap((x) => x.pages).flatMap((pg) => pg.ops.filter((o) => o.op === op));
 const iconModes = new Set(['route', 'band'].flatMap((k) => ['one', 'day'].flatMap((s) => opsOf(k, s, 'legicon').map((o) => o.mode))));
@@ -400,7 +472,7 @@ const nIc = (k, s) => opsOf(k, s, 'legicon').length;
 yes(nIc('route', 'day') > 0 && nIc('band', 'one') > 0 && nIc('band', 'day') > 0 && nIc('route', 'one') === 0
   && [...iconModes].sort().join(',') === LEG_MODES.filter((m) => m !== 'other').sort().join(',') && otherLegs,
   `B16b 交通圖示的母體：路線圖每天一張 ${nIc('route', 'day')} 個、色帶全部一張 ${nIc('band', 'one')} 個、色帶每天一張 ${nIc('band', 'day')} 個、路線圖全部一張 ${nIc('route', 'one')} 個；畫過的種類 ${[...iconModes].join('、')}；有「其他」的那一段 ${otherLegs}`);
-const again = SETS.map((x) => (x.m ? tryDo(`${x.tag} 再排一次`, () => L.posterPages(x.m, { kind: x.kind, split: x.split }, measure), []) : []));
+const again = SETS.map((x) => (x.m ? tryDo(`${x.tag} 再排一次`, () => L.posterPages(x.m, { kind: x.kind, split: x.split, art: x.art }, measure), []) : []));
 const notSame = SETS.filter((x, i) => !same(x.pages, again[i])).map((x) => x.tag);
 const nDc = (k, s) => opsOf(k, s, 'deco').length;
 yes(nDc('route', 'one') > 0 && nDc('route', 'day') > 0 && notSame.length === 0,
@@ -422,7 +494,7 @@ export const IMPORTS = {
   'js/itinposter/model.js': ['../theme.js', '../spottime.js', '../legs.js', '../tripday.js', '../weather.js', '../poster/layout.js', '../peeks.js'],
   'js/itinposter/layout.js': ['../peeks.js', './legicons.js'],
   'js/itinposter/legicons.js': [],
-  'js/itinposter/draw.js': ['../poster/presets.js', '../peeks.js', './layout.js', './legicons.js'],
+  'js/itinposter/draw.js': ['../poster/presets.js', '../peeks.js', './layout.js', './legicons.js'],   // v1.93 頁首插圖用 Image 載（同源、不是 fetch）
   'js/itinposter/index.js': ['../store.js', '../quests/generate.js', '../theme.js', './model.js', './layout.js', './draw.js', '../pdf.js', '../route.js', '../legs.js', '../views/weather.js', '../weather.js'],
   'js/pdf.js': [],
   'js/views/itinposter.js': ['../store.js', '../ui.js', '../router.js', '../share.js', '../itinposter/index.js'],

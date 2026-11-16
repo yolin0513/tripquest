@@ -3,11 +3,13 @@
 // 吉祥物（v1.89 起每天一隻、從框的上緣探頭；v1.88.0 角落那一隻拿掉了）用 js/peeks.js 的 peekFlat()——跟 App 的 peek()
 // 同一份圖，只是不分上下兩層、不套白邊（理由在 peekFlat 那裡）；照 layout.js 算好的大小（k）產生、轉成圖片再畫，不另外畫一份。
 // 全部在手機上畫，不上傳。
+// v1.93：頁首插圖（op 'art'）：同源的圖檔（離線清單裡有），排版前由 index.js 的 headerArtReady 先載好（loadArt），
+// 畫的時候從同一份快取拿；底邊 fade 那一段疊一層由透明到紙色的漸層（不烤進圖檔：JPEG 壓縮會讓底邊偏離紙色、出現接縫）。
 // v1.90：先鋪背景紋理（page.bg：規則的小圓點格子，標題區與頁尾不鋪），再照 ops 畫——框、膠囊、色帶都蓋在點的上面；
 // 交通圖示（legicon）照 legicons.js 的形狀畫（不是字、不是 emoji）；路旁的裝飾（deco）只有星星、圓點、短線三種形狀。
 import { CJK_STACK } from '../poster/presets.js';
 import { peekFlat } from '../peeks.js';
-import { PAPER, INK } from './layout.js';
+import { PAPER, INK, tint } from './layout.js';
 import { LEG_GLYPH } from './legicons.js';
 
 export const font = (weight, size) => `${weight} ${size}px ${CJK_STACK}`;
@@ -46,6 +48,31 @@ function peekImage(kind, k) {
     }));
   }
   return _peeks.get(key);
+}
+
+// 頁首插圖（v1.93）：同一個網址只載一次；載不到回 null、從快取拿掉（下次打開海報再試）
+const _arts = new Map();
+export function loadArt(src) {
+  if (!_arts.has(src)) {
+    _arts.set(src, new Promise((res) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => { _arts.delete(src); res(null); };
+      im.src = src;
+    }));
+  }
+  return _arts.get(src);
+}
+function drawArt(ctx, o, im) {
+  if (!im) return;
+  ctx.drawImage(im, o.x, o.y, o.w, o.h);
+  if (o.fade > 0) {
+    const g = ctx.createLinearGradient(0, o.y + o.h - o.fade, 0, o.y + o.h);
+    g.addColorStop(0, tint(PAPER, 0));
+    g.addColorStop(1, PAPER);
+    ctx.fillStyle = g;
+    ctx.fillRect(o.x, o.y + o.h - o.fade, o.w, o.fade);
+  }
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -126,7 +153,7 @@ function drawDeco(ctx, o) {
   }
 }
 
-// 一張：底色 → 背景紋理 → ops 照順序畫
+// 一張：底色 → 背景紋理 → ops 照順序畫（有頁首插圖的話它是第一筆，蓋住插圖範圍裡的點）
 export async function drawPoster(canvas, page) {
   canvas.width = page.w;
   canvas.height = page.h;
@@ -136,9 +163,13 @@ export async function drawPoster(canvas, page) {
   drawBackground(ctx, page);
   const pks = page.ops.filter((o) => o.op === 'peek');
   const pimgs = await Promise.all(pks.map((o) => peekImage(o.kind, o.k)));
+  const arts = page.ops.filter((o) => o.op === 'art');
+  const aimgs = await Promise.all(arts.map((o) => loadArt(o.src)));
   for (const o of page.ops) {
     ctx.save();
-    if (o.op === 'rect') {
+    if (o.op === 'art') {
+      drawArt(ctx, o, aimgs[arts.indexOf(o)]);
+    } else if (o.op === 'rect') {
       roundRect(ctx, o.x, o.y, o.w, o.h, o.r || 0);
       if (o.fill) { ctx.fillStyle = o.fill; ctx.fill(); }
       strokeIt(ctx, o);

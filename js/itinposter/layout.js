@@ -25,6 +25,13 @@
 //      路線圖兩種的路旁加不帶內容的裝飾（小星星、小圓點、短線；decorate）——位置照固定算法、不用亂數，碰到框、字、路就不放。
 //   ③ 背景淡紋理：錯位的小圓點格子（規則的花樣、不用雜訊；每一張的 bg）。標題區與頁尾留白不鋪點；色帶的底改成不透明的
 //      （跟原本半透明疊在紙上看起來一樣），所以每一個字底下都不會有點——字的對比跟沒有紋理時一樣。
+//
+// v1.93（Yolin 頁首選甲：照樣品 A 正式排；決定見 docs/STATUS.md 的 v1.93.0）：
+//   「全部一張」最上面墊一張頁首插圖（HEADER_ART，生圖素材組 D，登記在 media/art/manifest.json、只准海報用）：
+//   插圖在 (0,0) 滿版，頁首的字照原位疊在插圖上半部的空白天空裡，頁首以下整份往下移到插圖底下 24。
+//   插圖底邊 fade 那一段由 draw.js 淡出成紙色（不烤進圖檔）。「每天一張」不放（要塞進 A4；可推翻）。
+//   插圖要排版前先確定載得到（index.js 的 headerArtReady），載不到就照舊版面（posterPages 的 art 是 false）——不留一塊空白。
+//   字壓在插圖上的對比由測試逐點量（B18 的像素分支）。
 
 import { peekGeom } from '../peeks.js';
 import { hasGlyph } from './legicons.js';
@@ -44,6 +51,8 @@ export const INK = '#2f2c2a';
 export const SUB = '#6b6258';
 export const PAPER = '#fbf6ec';
 export const ROAD = '#e0d3ba';
+// 頁首插圖（v1.93）：圖檔剛好 1240×620、1:1 畫；fade＝底邊淡出成紙色的高度；gap＝插圖底到頁首以下第一樣東西的距離
+export const HEADER_ART = { src: './media/art/d/poster-header.jpg', w: PW, h: 620, fade: 56, gap: 24 };
 // 探頭的吉祥物多大（px）：rise＝邊線以上最多多高、w＝最寬多寬（每一張圖的比例不同，同一個高度下烤串那張最寬，兩個上限取先碰到的）
 export const PEEK_ALL = { rise: 170, w: 250 };        // 全部一張：每天的站牌框、色帶上那一隻
 export const PEEK_DAY = { min: 200, max: 440 };      // 每天一張：放得進 A4 的最大那一個，介於 min 與 max 之間
@@ -133,6 +142,8 @@ function canvasOps(measure) {
       return { ...s, x: x0 };
     },
     box(kind, x, y, w, h, extra = {}) { boxes.push({ kind, x, y, w, h, ...extra }); },
+    // 頁首插圖（v1.93）：一定是這一張的第一筆（蓋在背景紋理上、在所有東西底下）
+    art(a) { ops.push({ op: 'art', src: a.src, x: 0, y: 0, w: a.w, h: a.h, fade: a.fade }); },
     // 交通圖示（v1.90）：mode＝模型那一段的代號（有畫的圖才會叫到這裡）；(x, y) 左上角、s 邊長；day、to＝第幾天、到第幾站（0 起算）
     legicon(mode, x, y, s, color, day, to) { ops.push({ op: 'legicon', mode, x, y, s, color, day, to }); },
     // 路旁的裝飾（v1.90）：shape＝star｜dot｜dash，(x, y) 中心、r 半徑、a 短線的角度；不帶字
@@ -163,6 +174,13 @@ function bigHeader(c, model, y0) {
   if (sub) { c.text(sub, PW / 2, y + 30, 30, { weight: 600, color: SUB, align: 'center', maxW: PW - 2 * M, role: 'sub' }); y += 48; }
   c.box('header', M, y0, PW - 2 * M, y - y0);
   return y;
+}
+// 全部一張的頁首（v1.93）：有插圖就先墊插圖（第一筆）、標題區照原位疊上去；回傳的底改成插圖底下 gap——
+// 頁首以下整份往下移同一段（樣品 A 的做法），排法本身不變
+function topHeader(c, model, art) {
+  if (art) c.art(HEADER_ART);
+  const y = bigHeader(c, model, 36);
+  return art ? Math.max(y, HEADER_ART.h + HEADER_ART.gap) : y;
 }
 
 // 每天一張的標題區：行程名（小）、DAY N＋日期、第一站 → 最後一站。回傳底部的 y
@@ -335,9 +353,9 @@ function frameH(d) {
   return 124 + rows * 38 + (d.stops.length > FRAME_STOPS ? 38 : 0) + 20;
 }
 
-function routeAll(model, measure) {
+function routeAll(model, measure, art) {
   const c = canvasOps(measure);
-  let y = bigHeader(c, model, 36);
+  let y = topHeader(c, model, art);
   const n = model.days.length;
   const sz = model.days.map((d) => peekSize(d.peek, PEEK_ALL.rise, PEEK_ALL.w));
   // 同一邊上下兩個框相隔 2G：中間要放得下下面那一框上的吉祥物（邊線以上那一塊），再留 40
@@ -547,12 +565,12 @@ function band(c, d, y0, { tab = true, nameSize = 28 } = {}) {
   return y0 + h;
 }
 
-function bandAll(model, measure) {
+function bandAll(model, measure, art) {
   const c = canvasOps(measure);
   const n = model.days.length;
   const sz = model.days.map((d) => peekSize(d.peek, PEEK_ALL.rise, PEEK_ALL.w));
   // 每一條色帶右上角站一隻（那一天的吉祥物），上面要留牠的高度；第一天那一隻旁邊講一句（只講數得出來的）
-  let y = bigHeader(c, model, 36) + 24 + Math.ceil(sz[0].rise);
+  let y = topHeader(c, model, art) + 24 + Math.ceil(sz[0].rise);
   const line = model.span ? `${model.span.label}，${model.placeCount} 個地方！` : `${model.placeCount} 個地方！`;
   const PX = PW - M - 40;   // 吉祥物的右緣
   bubble(c, line, PX - sz[0].w - 16, y - Math.min(sz[0].rise, BUBBLE_H + 40) / 2 - 10);
@@ -645,7 +663,8 @@ function bandDay(model, d, idx, total, measure) {
 }
 
 // 對外：每一張的 { w, h, ops, boxes, bg, label, day }。kind：'route'｜'band'；split：'one'｜'day'；bg：背景紋理（background()）
-export function posterPages(model, { kind = 'route', split = 'one' } = {}, measure) {
+// art（v1.93）：頁首插圖載得到才傳 true（只用在全部一張；每天一張不放）
+export function posterPages(model, { kind = 'route', split = 'one', art = false } = {}, measure) {
   if (!model || !model.days.length) return [];
   if (split === 'day') {
     const total = model.days.length;
@@ -654,5 +673,5 @@ export function posterPages(model, { kind = 'route', split = 'one' } = {}, measu
       label: `第${d.day}天`, day: d.day,
     }));
   }
-  return [{ ...(kind === 'band' ? bandAll(model, measure) : routeAll(model, measure)), label: '全部', day: 0 }];
+  return [{ ...(kind === 'band' ? bandAll(model, measure, art === true) : routeAll(model, measure, art === true)), label: '全部', day: 0 }];
 }

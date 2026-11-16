@@ -4,7 +4,7 @@
  * - 維基百科等跨網域請求：不快取、直接 network（失敗就失敗，非關鍵路徑）
  * - 例外：OpenStreetMap 地圖圖磚進獨立的 TILE_CACHE（只存看過的，見 tile()）
  */
-const VERSION = 'tripquest-v1.92.0';
+const VERSION = 'tripquest-v1.93.0';
 const SHELL = `${VERSION}-shell`;
 // 內建配樂：獨立快取、跨版本保留（檔名即版本，內容不會變）—— 15MB 不進 SHELL，
 // 不預快取、點了才下載；升版不重抓。
@@ -154,6 +154,8 @@ const SHELL_ASSETS = [
   './media/art/a/nature.png',
   './media/art/a/shopping.png',
   './media/art/a/view.png',
+  // v1.93.0 行程海報「全部一張」的頁首插圖（組 D；1240×620 JPEG 約 68 KB；同樣由 placeicontest 驗）
+  './media/art/d/poster-header.jpg',
 ];
 
 // SHELL 清單的路徑集合（fetch handler 用：這些檔案只從本版快取拿，不半路換檔）

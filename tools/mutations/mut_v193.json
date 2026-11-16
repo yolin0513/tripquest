@@ -1,0 +1,110 @@
+[
+  {
+    "name": "v193 版面：有插圖時頁首以下不往下移",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 有插圖也照原本的標題區底往下排。內容（路線、站卡、框）疊在插圖上：B20 報框伸進插圖或插圖底下 gap 以內；B20b 頁首以下沒有往下移 388 → 每一個字、框、頁高都對不上；B18 插圖範圍裡多了內容的字——不在不透明白框裡的那幾個走插圖分支，只有一部分在插圖上或壓在插圖上對比不夠。B18c 只看「有量到字、長標題」，字變多照樣過，不紅。預期紅 B18、B20、B20b。",
+    "expect": ["B18 背景紋理", "B20 頁首插圖", "B20b 插圖載得到"],
+    "file": "js/itinposter/layout.js",
+    "find": "  return art ? Math.max(y, HEADER_ART.h + HEADER_ART.gap) : y;",
+    "replace": "  return y;",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v193 版面：插圖排在頁首的字後面",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 先排標題區、再墊插圖——畫的時候插圖蓋住標題與日期旅伴。B20 報「插圖不是第一筆」；B18 走 ops 的順序，字在插圖之前、當時還沒有插圖，插圖之後一個字都沒有 → 「有插圖、卻一個字都沒量到」。B20b 比的是字與框的位置（不看順序），不紅；B18c 拿 ops[0] 當插圖，算出來的數字不對，但它的判定不看數字，不紅。預期紅 B18、B20。",
+    "expect": ["B18 背景紋理", "B20 頁首插圖"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (art) c.art(HEADER_ART);\n  const y = bigHeader(c, model, 36);",
+    "replace": "  const y = bigHeader(c, model, 36);\n  if (art) c.art(HEADER_ART);",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v193 資產：離線清單漏了頁首插圖",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）sw.js 的 SHELL_ASSETS 拿掉 poster-header.jpg：沒網路時「全部一張」載不到插圖。A7 報程式畫的海報頁首不在 SHELL_ASSETS。其餘各條看的是登記與圖檔，不紅。預期只紅 A7。",
+    "expect": ["A7 表上每一張都在 sw.js"],
+    "file": "sw.js",
+    "find": "  './media/art/d/poster-header.jpg',\n];",
+    "replace": "];",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v193 資產：頁首插圖的登記雜湊對不上",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）manifest 裡 poster-header 那一筆的 sha256 第一個字改掉（圖被換了卻沒重新登記的樣子）。A3 報雜湊不同。預期只紅 A3。",
+    "expect": ["A3 每一張的雜湊都跟登記一樣"],
+    "file": "media/art/manifest.json",
+    "find": "\"sha256\": \"94924d1856f56640a5cca5f05558ad6d781c8c0cf0117f81607a61159944fbba\"",
+    "replace": "\"sha256\": \"04924d1856f56640a5cca5f05558ad6d781c8c0cf0117f81607a61159944fbba\"",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v193 資產：程式畫的頁首大小跟圖檔不同",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）layout.js 的 HEADER_ART 高改成 600（圖檔是 1240×620，畫上去會被壓扁）。A4 報圖檔是 1240×620、程式畫成 1240×600。三段的登記比對的是 src 那一段，不受影響。預期只紅 A4。",
+    "expect": ["A4 組 A"],
+    "file": "js/itinposter/layout.js",
+    "find": "export const HEADER_ART = { src: './media/art/d/poster-header.jpg', w: PW, h: 620,",
+    "replace": "export const HEADER_ART = { src: './media/art/d/poster-header.jpg', w: PW, h: 600,",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v193 畫面：預覽沒照有插圖的版面排（標的卻是有插圖）",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）海報那一頁 relayout 不傳 art：預覽一律是沒插圖的版面，canvas 卻照舊標 data-art=\"1\"。P3a 照標的（有插圖）另外畫一張、逐像素比 → 兩份都不同；P3b、P5a 都要先認出是哪一份 → 跟著紅；P14a 要預覽跟有插圖那一份相同 → 紅。P6、P7、P8 在每天一張（本來就沒插圖），不紅；P15 插圖載不到時本來就排沒插圖的，不紅；P16 兩種主題一樣錯、逐像素仍相同，不紅。預期紅 P3a、P3b、P5a、P14a。",
+    "expect": ["P3a 預覽跟成品", "P3b 吉祥物", "P5a 天氣預報", "P14a 頁首插圖"],
+    "file": "js/views/itinposter.js",
+    "find": "  function relayout() { pages = renderPages(model, { ...pref, art }); ",
+    "replace": "  function relayout() { pages = renderPages(model, { ...pref }); ",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 畫面：canvas 一律標有插圖",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）canvas.dataset.art 一律寫 '1'。插圖載得到時標的跟實際一樣，前面各條不紅；P15 插圖載不到、實際排的是沒插圖的版面，標的卻是有插圖 → 照標的另外畫的一張對不上、data-art 也不是 0 → 紅。預期只紅 P15。",
+    "expect": ["P15 插圖載不到"],
+    "file": "js/views/itinposter.js",
+    "find": "      canvas.dataset.art = art ? '1' : '0';",
+    "replace": "      canvas.dataset.art = '1';",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 畫面：插圖載不到也當成載得到",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）headerArtReady 不看載入結果、一律回 true：插圖載不到時照樣排有插圖的版面，畫的時候圖是空的——頁首留一大塊 620 高的空白（Dispatch 要擋的「不留空白」）。P15：data-art 是 1、高是有插圖那一份 → 紅。載得到時結果一樣，其餘各條不紅。預期只紅 P15。",
+    "expect": ["P15 插圖載不到"],
+    "file": "js/itinposter/index.js",
+    "find": "export async function headerArtReady() { return !!(await loadArt(HEADER_ART.src)); }",
+    "replace": "export async function headerArtReady() { await loadArt(HEADER_ART.src); return true; }",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 繪製：插圖沒畫上去（只剩淡出）",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）drawArt 不畫圖，只畫底邊的淡出。P14a：插圖那一塊跟拿掉插圖的那一張幾乎一樣 → 紅；P14c 的對照（不淡出時最後一列大半不是紙色）不成立——沒有圖，最後一列就是紙 → 紅。P14b 量的是字底下：沒有圖就是紙，對比夠，不紅；預覽與另外畫的同一份照樣相同，P3a 不紅。插圖範圍裡不在標題區的點這時露出來，但點在格點上、標題區照樣不鋪，P12、P13 預計不紅。預期紅 P14a、P14c。",
+    "expect": ["P14a 頁首插圖", "P14c 插圖底邊"],
+    "file": "js/itinposter/draw.js",
+    "find": "  if (!im) return;\n  ctx.drawImage(im, o.x, o.y, o.w, o.h);",
+    "replace": "  if (!im) return;\n  void im;",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 繪製：插圖底邊不淡出",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）drawArt 不畫淡出：插圖底邊跟紙之間一條硬邊。P14c：最後一列跟紙色差很多、淡出中間那一列兩張一樣 → 紅。其餘各條不看底邊，不紅。預期只紅 P14c。",
+    "expect": ["P14c 插圖底邊"],
+    "file": "js/itinposter/draw.js",
+    "find": "  if (o.fade > 0) {",
+    "replace": "  if (false) {",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 版面：插圖上面疊一層半透明的深色（版面檢查看不到）",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 墊完插圖再疊一塊 0～360 高、半透明深棕色的方塊。B18 的插圖分支量的是圖檔的像素，看不到畫上去的半透明層；這個方塊不是不透明色碼，也不算字的底——所以 B18（含 P4-B18）照樣過。P14b 量的是 canvas 真的畫出來的像素：標題的黑字疊在變暗的天空上 → 對比不到 4.5 → 紅。這條證明 P14b 擋得到版面那一層看不到的東西。預期只紅 P14b。",
+    "expect": ["P14b 插圖上的字"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (art) c.art(HEADER_ART);\n  const y = bigHeader(c, model, 36);",
+    "replace": "  if (art) { c.art(HEADER_ART); c.rect(0, 0, PW, 360, { fill: 'rgba(40,30,20,0.55)' }); }\n  const y = bigHeader(c, model, 36);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 繪製：海報的紙色跟著畫面主題變",
+    "why": "（事前寫 2026-11-16 21:50，跑之前）drawPoster 的底色在深色主題下換成灰白。前面各條都在淺色主題跑，不紅；P16 換成深色後同一張海報有列不一樣 → 紅。預期只紅 P16。",
+    "expect": ["P16 深色、淺色主題"],
+    "file": "js/itinposter/draw.js",
+    "find": "  ctx.fillStyle = PAPER;\n  ctx.fillRect(0, 0, page.w, page.h);\n  drawBackground(ctx, page);",
+    "replace": "  ctx.fillStyle = document.documentElement.dataset.theme === 'washi' ? PAPER : '#f2f0ee';\n  ctx.fillRect(0, 0, page.w, page.h);\n  drawBackground(ctx, page);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  }
+]

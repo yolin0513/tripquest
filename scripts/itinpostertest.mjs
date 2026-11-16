@@ -27,20 +27,32 @@
 //         白框與面板裡面一個都沒有（點被蓋住、沒有畫在框上面）。對照：合成的規則格子放行、亂數抖動的點抓到、點畫在白框上抓到
 //   （v1.90）P13 字的對比維持：拿掉字之後，有紋理、沒紋理兩張每一個字那一格的最深的底色一模一樣（紋理碰不到任何字的底）；
 //         畫出來的點（量像素）當底，內文的灰字、黑字對比仍 ≥ 4.5。對照：點落在字的那一格抓到、點換深抓到
+//   （v1.93）P14a 頁首插圖真的畫出來：全部一張的預覽用的是有插圖的版面（canvas 標 data-art="1"，跟有插圖那一份逐像素相同）；
+//         插圖那一塊跟同一張拿掉插圖再畫的大半不同（路線圖、分天色帶各一張）
+//   （v1.93）P14b 插圖上的字看得清楚：拿掉字再畫（真的畫出來的像素），每一個壓在插圖上的字那一格，每個像素對字色的對比都 ≥ 4.5；
+//         量到的字不能是 0 個。版面那一層（插圖檔的像素）是 B18，這一條量 canvas 真的畫出來的
+//   （v1.93）P14c 插圖底邊淡進紙色：最後一列跟紙色每個顏色差不到 3；對照：同一張不淡出，最後一列大半不是紙色；
+//         淡出只在最下面 56 列（再往上一列，淡出與不淡出兩張一樣）
+//   （v1.93）P15 插圖載不到（伺服器回 404）：退回沒有插圖的版面——預覽標 data-art="0"、跟沒插圖那一份逐像素相同、
+//         高度是沒插圖那一份（跟有插圖那一份不同）；前置：插圖的請求真的被擋到
+//   （v1.93）P16 深色、淺色主題下，海報（全部一張、有插圖）畫出來逐像素相同；前置：主題真的換了（<html> 的 data-theme 與底色都變了）。
+//         兩種主題的截圖（頁面最上面那一個畫面＋海報原尺寸）存在 .logs/itinposter-shots/（被 .gitignore 擋掉；只給人看，判定不看它）
 // 不打真網路（共用慣例 §5.6）：Open-Meteo 回自己造的預報，路線服務回自己造的秒數（照直線距離算），其餘外站 503 並記下來。
 // 分享與下載：手機的分享換成記錄用的替身（分享得了／分享不了兩種）；下載攔在 <a download>.click()，記下檔名與內容、
 //   不真的寫到磁碟（headless 的下載資料夾可能是使用者自己的「下載」）。這兩個是瀏覽器提供的，不是 App 的程式。
 // 時區撥到台北（emulateTimezone），日期照那個時區算，不靠今天是哪天。名字、行程都是造的。
 // 每一條斷言不管前面成不成都會印（等不到的畫面記成 ✗、不丟例外）：突變執行器要「項數跟原樣一樣」才算跑滿。
 // 從入口進不來時，直接開海報那一頁，讓後面的照樣量到（P1a 記成 ✗）——一條突變只紅它自己那一條。
-// 突變見 tools/mutations/mut_v188ui.json、tools/mutations/mut_v189.json、tools/mutations/mut_v190ui.json。
+// 突變見 tools/mutations/mut_v188ui.json、tools/mutations/mut_v189.json、tools/mutations/mut_v190ui.json、tools/mutations/mut_v193.json。
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
 import { clickText, userClick } from './userclick.mjs';
-import { texts, PAGE_CHECKS, pageListProblems, pdfProblems, layoutControls, pdfControls, contrast, DOT_SPEC } from './itinposterlib.mjs';
-import { INK, SUB } from '../js/itinposter/layout.js';
+import { texts, textBox, PAGE_CHECKS, pageListProblems, pdfProblems, layoutControls, pdfControls, contrast, DOT_SPEC, readArtPix, ART_MIN } from './itinposterlib.mjs';
+import { INK, SUB, PAPER, HEADER_ART } from '../js/itinposter/layout.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5861;
@@ -78,6 +90,11 @@ const LBL = Object.fromEntries([
   'P11 交通圖示真的畫出來：每一個圖示那一格有深色外框與那一天的顏色、拿掉圖示就量不到；六種都畫過',
   'P12 背景紋理是規則的：有、沒有紋理兩張不一樣的像素全部落在格點上；標題區與頁尾、白框與面板裡一個都沒有',
   'P13 字的對比維持：每一個字那一格的底，有紋理跟沒紋理一模一樣；畫出來的點當底，內文的字對比仍 ≥ 4.5',
+  'P14a 頁首插圖真的畫出來：全部一張的預覽用有插圖的版面；插圖那一塊跟拿掉插圖再畫的一張大半不同（路線圖、分天色帶各一張）',
+  'P14b 插圖上的字看得清楚：拿掉字再畫，壓在插圖上的每一個字那一格，每個像素對字色的對比都 ≥ 4.5（量到的字不是 0 個）',
+  'P14c 插圖底邊淡進紙色：最後一列跟紙色差不到 3（對照：不淡出時大半不是紙色）；淡出只在最下面那幾列',
+  'P15 插圖載不到：退回沒有插圖的版面（預覽標沒插圖、跟沒插圖那一份逐像素相同、高度是沒插圖那一份），不留空白',
+  'P16 深色、淺色主題下，海報（全部一張、有插圖）畫出來逐像素相同（前置：主題真的換了）',
 ].map((s) => [s.slice(0, s.indexOf(' ')), s]));
 const B1_LABEL = '張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排';
 for (const [code, label] of [['B1', B1_LABEL], ...PAGE_CHECKS]) LBL[`P4-${code}`] = `P4-${code} ${label}（真的字寬）`;
@@ -293,10 +310,55 @@ function initHooks() {
       for (let i = 0; i < p.length; i += 4) if (p[i] !== q[i] || p[i + 1] !== q[i + 1] || p[i + 2] !== q[i + 2]) n++;
       return n;
     },
+    // （v1.93）一格裡每個像素對某個字色的對比，最差的那一個（WCAG 相對亮度，跟 itinposterlib 的 luminance 同一條公式）；n＝量了幾個像素
+    minContrast(cv, box, color) {
+      const x0 = Math.max(0, Math.floor(box.x)), y0 = Math.max(0, Math.floor(box.y));
+      const x1 = Math.min(cv.width, Math.ceil(box.x + box.w)), y1 = Math.min(cv.height, Math.ceil(box.y + box.h));
+      if (x1 <= x0 || y1 <= y0) return { min: null, n: 0 };
+      const d = cv.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data;
+      const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+      const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      const [cr, cg, cb] = hex(color), lt = lum(cr, cg, cb);
+      let min = Infinity, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const l = lum(d[i], d[i + 1], d[i + 2]);
+        const c = (Math.max(l, lt) + 0.05) / (Math.min(l, lt) + 0.05);
+        n++;
+        if (c < min) min = c;
+      }
+      return { min, n };
+    },
+    // （v1.93）每一列的雜湊（只算 RGB）：P16 跨頁面比兩張海報（換主題要整頁重開，canvas 留不住，只帶得走這個）
+    rowHashes(cv) {
+      if (!cv || !cv.width || !cv.height) return [];
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      const rows = [];
+      for (let y = 0; y < cv.height; y++) {
+        let h = 0x811c9dc5;
+        for (let i = y * cv.width * 4, e = i + cv.width * 4; i < e; i++) { if ((i & 3) === 3) continue; h ^= d[i]; h = Math.imul(h, 16777619) >>> 0; }
+        rows.push(h);
+      }
+      return rows;
+    },
+    // （v1.93）第 y 列跟某個顏色差多少：max＝每個像素三個顏色差裡最大的那一個，取全列最大；far＝三個顏色差的和 > 40 的像素占幾成
+    rowDev(cv, y, color) {
+      const yy = Math.round(y);
+      if (yy < 0 || yy >= cv.height || !cv.width) return { max: -1, far: -1 };
+      const d = cv.getContext('2d').getImageData(0, yy, cv.width, 1).data;
+      const [r, g, b] = hex(color);
+      let max = 0, far = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const dr = Math.abs(d[i] - r), dg = Math.abs(d[i + 1] - g), db = Math.abs(d[i + 2] - b);
+        max = Math.max(max, dr, dg, db);
+        if (dr + dg + db > 40) far++;
+      }
+      return { max, far: far / cv.width };
+    },
   };
 }
 
-const net = { outside: [], writes: [], meteo: [], osrm: [] };
+// art：頁首插圖的請求（v1.93；有 SW 在控制時插圖從 SW 的快取拿、這裡看不到——P15 先繞過 SW）；artBlock 開著時回 404（P15「載不到」）
+const net = { outside: [], writes: [], meteo: [], osrm: [], art: [], artBlock: false };
 const pageErrors = [];
 async function open() {
   const ctx = await browser.createBrowserContext();
@@ -309,6 +371,10 @@ async function open() {
   page.on('request', (req) => {
     const u = req.url(), m = req.method();
     if (!/^(GET|HEAD|OPTIONS)$/.test(m)) net.writes.push(`${m} ${u}`);
+    if (u.startsWith(ORIGIN) && u.includes('/media/art/d/')) {
+      net.art.push(net.artBlock ? `擋 ${u}` : u);
+      if (net.artBlock) { req.respond({ status: 404, contentType: 'text/plain', body: '' }).catch(() => {}); return; }
+    }
     if (u.startsWith(ORIGIN) || /^(data|blob):/.test(u)) { req.continue().catch(() => {}); return; }
     if (/^https:\/\/api\.open-meteo\.com\/v1\/forecast\?/.test(u)) {
       net.meteo.push(u);
@@ -383,11 +449,13 @@ const matchShown = (page, tid) => page.evaluate(async (tid) => {
   const { PAPER } = await import('./js/itinposter/layout.js');
   const cv = document.querySelector('.poster-canvas');
   const kind = cv.dataset.kind, split = cv.dataset.split, idx = Number(cv.dataset.page);
+  // v1.93：畫面標了有沒有頁首插圖（data-art），另外畫的那一張照它排——標的跟實際排的不一樣，就認不出是哪一份
+  const art = cv.dataset.art === '1';
   const f = await ip.tripForecast(tid);
-  const out = { kind, split, idx, w: cv.width, h: cv.height, variants: [] };
+  const out = { kind, split, idx, art: cv.dataset.art, w: cv.width, h: cv.height, variants: [] };
   for (const [name, fc] of [['有預報', f], ['沒預報', null]]) {
     const m = await ip.gatherModel(tid, { forecast: fc });
-    const pages = ip.renderPages(m, { kind, split });
+    const pages = ip.renderPages(m, { kind, split, art });
     const pg = pages[idx];
     const off = document.createElement('canvas');
     if (pg) await ip.drawPoster(off, pg);
@@ -408,6 +476,24 @@ const matchShown = (page, tid) => page.evaluate(async (tid) => {
   return out;
 }, tid);
 const variantOf = (c) => (c && c.variants.find((v) => v.name === c.match)) || null;
+
+// 等天氣預報到了、重畫完：預覽的高變成「有預報、照畫面標的有沒有插圖」那一份的高；等不到就照當下的比（P5a 會記）
+async function settle(page, tid) {
+  const wantH = await page.evaluate(async (tid) => {
+    const ip = await import('./js/itinposter/index.js');
+    const cv = document.querySelector('.poster-canvas');
+    const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
+    return ip.renderPages(m, { kind: cv.dataset.kind, split: cv.dataset.split, art: cv.dataset.art === '1' })[Number(cv.dataset.page)].h;
+  }, tid);
+  const ok = await soft(page.waitForFunction((h) => { const c = document.querySelector('.poster-canvas'); return !!c && c.height === h; }, { timeout: 12000 }, wantH));
+  await sleep(400);
+  return ok;
+}
+// 開海報那一頁、等畫出來（canvas 有 data-page、有寬）
+const waitDrawn = (page, ms = 20000) => soft(page.waitForFunction(() => {
+  const c = document.querySelector('.poster-canvas');
+  return !!c && c.dataset.page != null && c.width > 0;
+}, { timeout: ms }));
 
 let S = null;            // 造好的資料
 let P3 = null;           // 第一次進來時預覽是哪一份（P5a 用）
@@ -497,6 +583,29 @@ try {
   ctl('對比量法：點換深，量到的點顏色壓灰字不到 4.5；淡的那一種 ≥ 4.5', { dark: contrast(SUB, ctl190.dark || '#000000') < 4.5, light: contrast(SUB, ctl190.reg.dot || '#000000') >= 4.5 }, { dark: true, light: true });
   ctl('字底量法：兩張一樣 0 個像素不同、點落在那一格抓到', ctl190.textBg, { clean: 0, dotted: true });
   ctl('圖示量法：空白那一格沒有深色、畫了外框有、那一天的顏色量得到', { blank: ctl190.icon.blank, inked: ctl190.icon.inked, col: ctl190.icon.col }, { blank: 0, inked: true, col: 0.5 });
+  // v1.93：P14、P16 用的量法。合成的畫布由這裡自己畫（不用被測的 draw.js）
+  const ctl193 = await page.evaluate((ink, paper) => {
+    const mk = (w, h, bg, fn) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, w, h); if (fn) fn(x); return c; };
+    const box = { x: 5, y: 5, w: 20, h: 10 };
+    const white = window.__ck.minContrast(mk(40, 20, '#ffffff'), box, ink);
+    const dot = window.__ck.minContrast(mk(40, 20, '#ffffff', (x) => { x.fillStyle = ink; x.fillRect(12, 8, 1, 1); }), box, ink);
+    const outside = window.__ck.minContrast(mk(40, 20, '#ffffff'), { x: 50, y: 5, w: 10, h: 10 }, ink);
+    const clean = window.__ck.rowDev(mk(40, 4, paper), 1, paper);
+    const part = window.__ck.rowDev(mk(40, 4, paper, (x) => { x.fillStyle = '#2f2c2a'; x.fillRect(0, 1, 10, 1); }), 1, paper);
+    const off = window.__ck.rowDev(mk(40, 4, paper), 9, paper);
+    const ra = window.__ck.rowHashes(mk(30, 6, paper)), rb = window.__ck.rowHashes(mk(30, 6, paper));
+    const rc = window.__ck.rowHashes(mk(30, 6, paper, (x) => { x.fillStyle = '#fbf6ed'; x.fillRect(17, 4, 1, 1); }));
+    return {
+      contrast: { white: { n: white.n, min: +white.min.toFixed(2) }, dot: { n: dot.n, min: dot.min }, outside: outside.n },
+      row: { clean, part, off: off.max },
+      hash: { rows: ra.length, same: ra.filter((h, i) => h !== rb[i]).length, one: ra.map((h, i) => (h !== rc[i] ? i : -1)).filter((i) => i >= 0) },
+    };
+  }, INK, PAPER);
+  ctl('對比量法（插圖上的字）：白底對黑字跟公式算的一樣、一格裡有一個字色的像素就是 1、格子在畫布外量不到', ctl193.contrast,
+    { white: { n: 200, min: +contrast('#ffffff', INK).toFixed(2) }, dot: { n: 200, min: 1 }, outside: 0 });
+  ctl('紙色量法（插圖底邊）：整列紙色差 0、一列裡 10/40 是深色抓到四分之一、列在畫布外回 -1', ctl193.row,
+    { clean: { max: 0, far: 0 }, part: { max: 204, far: 0.25 }, off: -1 });
+  ctl('列雜湊（兩種主題比）：一樣的兩張 0 列不同、改一個像素（只差 1）抓到那一列', ctl193.hash, { rows: 6, same: 0, one: [4] });
   await page.evaluate(() => Promise.allSettled([fetch('https://ctl.invalid/x'), fetch('/ctl-post', { method: 'POST', body: 'x' })]));
   await sleep(300);
   ctl('網路紀錄：外站與上傳都記得到', { outside: net.outside.filter((u) => u.includes('ctl.invalid')).length, writes: net.writes.filter((w) => /^POST .*\/ctl-post$/.test(w)).length }, { outside: 1, writes: 1 });
@@ -556,15 +665,7 @@ try {
 
   // ================= P3 預覽＝成品、吉祥物 =================
   await section(['P3a', 'P3b'], async () => {
-    // 等天氣預報到了、重畫完（預覽的高變成有預報那一份的高）；等不到就照當下的比（P5a 會記）
-    const wantH = await page.evaluate(async (tid) => {
-      const ip = await import('./js/itinposter/index.js');
-      const cv = document.querySelector('.poster-canvas');
-      const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
-      return ip.renderPages(m, { kind: cv.dataset.kind, split: cv.dataset.split })[Number(cv.dataset.page)].h;
-    }, S.t);
-    await soft(page.waitForFunction((h) => { const c = document.querySelector('.poster-canvas'); return !!c && c.height === h; }, { timeout: 12000 }, wantH));
-    await sleep(400);
+    await settle(page, S.t);
     const c = await matchShown(page, S.t);
     say('P3a', c.match !== '' && c.ink > 0.05,
       `${c.kind}/${c.split} 第 ${c.idx + 1} 張 ${c.w}×${c.h}；${c.match ? `跟「${c.match}」那一份逐像素相同` : `兩份都不同：${c.variants.map((v) => `${v.name} ${v.diff}${v.where.length ? `〔另畫≠預覽：${v.where.join('；')}〕` : ''}`).join('、')}`}；跟底色不同的占 ${c.ink.toFixed(2)}`);
@@ -583,9 +684,10 @@ try {
       // 不量更上面：烤串那張在邊線往上約 4 個單位，扣子與吊帶的外框之間本來就有一條細縫（peekFlat 與 peek 都有，
       // 2026-11-14 量過：k 1.39 時同一列 8 個像素，兩種畫法一樣），那是圖本身，不是接縫
       const band = (edge, k) => [edge - k - 2, edge + 2];
-      // 海報真的畫出來的每一張：每一隻吉祥物
+      // 海報真的畫出來的每一張：每一隻吉祥物（v1.93：全部一張照畫面那樣帶頁首插圖）
+      const art = await ip.headerArtReady();
       for (const [kind, split] of [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']]) {
-        for (const pg of ip.renderPages(m, { kind, split })) {
+        for (const pg of ip.renderPages(m, { kind, split, art })) {
           const cv = document.createElement('canvas');
           await ip.drawPoster(cv, pg);
           out.pages++;
@@ -628,15 +730,18 @@ try {
     const R = await page.evaluate(async (tid) => {
       const ip = await import('./js/itinposter/index.js');
       const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
-      return { m, sets: [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']].map(([kind, split]) => ({ kind, split, pages: ip.renderPages(m, { kind, split }) })) };
+      // v1.93：插圖載得到時照畫面那樣排（全部一張帶頁首插圖）；載不到 art 是 false，下面每一條都記成 ✗（前置不成立）
+      const art = await ip.headerArtReady();
+      return { m, art, sets: [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']].map(([kind, split]) => ({ kind, split, art, pages: ip.renderPages(m, { kind, split, art }) })) };
     }, S.t);
     const sets = R.sets.map((x) => ({ ...x, m: R.m }));
     const all = sets.flatMap((x) => x.pages.map((pg, i) => ({ x, pg, i })));
     const nText = all.reduce((a, p) => a + texts(p.pg).length, 0);
-    const where = `${sets.length} 組、${all.length} 張、${nText} 個字`;
+    const where = `${sets.length} 組、${all.length} 張、${nText} 個字；頁首插圖${R.art === true ? '載得到' : '載不到（前置不成立）'}`;
     const b1 = sets.flatMap((x) => pageListProblems(x).map((b) => `${x.kind}/${x.split}：${b}`));
-    say('P4-B1', all.length > 0 && b1.length === 0, where, b1.join('\n   '));
-    const OPTS = { labels: LABELS };
+    say('P4-B1', all.length > 0 && R.art === true && b1.length === 0, where, b1.join('\n   '));
+    // B18 的插圖分支量插圖檔的像素：讀 repo 裡那一張（跟瀏覽器載的是同一個檔）
+    const OPTS = { labels: LABELS, artPix: { [HEADER_ART.src]: await readArtPix(path.join(ROOT, HEADER_ART.src)) } };
     for (const [code, , fn] of PAGE_CHECKS) {
       const bad = [];
       for (const p of all) {
@@ -644,7 +749,7 @@ try {
         try { r = fn(p.x, p.pg, p.i, OPTS); } catch (e) { r = [`檢查時例外：${e.message}`]; }
         for (const b of r) bad.push(`${p.x.kind}/${p.x.split} 第 ${p.i + 1} 張：${b}`);
       }
-      say(`P4-${code}`, all.length > 0 && nText > 0 && bad.length === 0, where, bad.slice(0, 8).join('\n   '));
+      say(`P4-${code}`, all.length > 0 && nText > 0 && R.art === true && bad.length === 0, where, bad.slice(0, 8).join('\n   '));
     }
   });
 
@@ -658,7 +763,8 @@ try {
       const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
       const draw = async (pg) => { const cv = document.createElement('canvas'); await ip.drawPoster(cv, pg); return cv; };
       const sets = [];
-      for (const [kind, split] of [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']]) ip.renderPages(m, { kind, split }).forEach((pg, i) => sets.push({ tag: `${kind}/${split} 第 ${i + 1} 張`, pg }));
+      const art = await ip.headerArtReady();   // v1.93：全部一張照畫面那樣帶頁首插圖
+      for (const [kind, split] of [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']]) ip.renderPages(m, { kind, split, art }).forEach((pg, i) => sets.push({ tag: `${kind}/${split} 第 ${i + 1} 張`, pg }));
       // 合成的一天：每一段一種方式（六種有圖的＋「其他」），三種有交通的版面各一張——六種都要畫過一次
       const modes = ['walk', 'train', 'bus', 'car', 'boat', 'plane', 'other'];
       const names = ['子站', ...modes.map((md, k) => `第${k + 2}站`)];
@@ -709,6 +815,137 @@ try {
     const worst = dotCols.filter(Boolean).map((c) => ({ c, sub: contrast(SUB, c), ink: contrast(INK, c) }));
     say('P13', R.p13n > 0 && R.p13.length === 0 && worst.length > 0 && worst.length === dotCols.length && worst.every((w) => w.sub >= 4.5 && w.ink >= 4.5),
       `${R.p13n} 個字，底被紋理改到的 ${R.p13.length} 個；量到的點顏色 ${worst.map((w) => `${w.c}（灰字 ${w.sub.toFixed(2)}、黑字 ${w.ink.toFixed(2)}）`).join('、') || '沒有'}`, R.p13.slice(0, 8).join('\n   '));
+  });
+
+  // ================= P14 頁首插圖畫出來、字看得清楚、底邊淡出（v1.93） =================
+  await section(['P14a', 'P14b', 'P14c'], async () => {
+    const R = await page.evaluate(async (tid) => {
+      const ip = await import('./js/itinposter/index.js');
+      const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
+      const art = await ip.headerArtReady();
+      return { art, pages: ['route', 'band'].map((kind) => ({ kind, pg: ip.renderPages(m, { kind, split: 'one', art: true })[0] })) };
+    }, S.t);
+    // 壓在插圖上的字：字框（跟 B18 同一個 textBox）跟插圖那一塊重疊
+    const ov = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 1;
+    const jobs = R.pages.map(({ kind, pg }) => {
+      const a = pg.ops.find((o) => o.op === 'art') || null;
+      return { kind, pg, a, on: a ? texts(pg).filter((o) => ov(textBox(o), a)).map((o) => ({ text: o.text, role: o.role, color: o.color, box: textBox(o) })) : [] };
+    });
+    const M = await page.evaluate(async (jobs, paper) => {
+      const ip = await import('./js/itinposter/index.js');
+      const draw = async (pg) => { const cv = document.createElement('canvas'); await ip.drawPoster(cv, pg); return cv; };
+      const out = [];
+      for (const j of jobs) {
+        const r = { kind: j.kind, has: !!j.a, ratio: 0, txt: [], last: null, lastNoFade: null, above: -1, inFade: -1 };
+        out.push(r);
+        if (!j.a) continue;
+        const a = j.a;
+        // P14a：同一張拿掉插圖再畫，插圖那一塊有幾成不一樣
+        const full = await draw(j.pg), bare = await draw({ ...j.pg, ops: j.pg.ops.filter((o) => o.op !== 'art') });
+        r.ratio = window.__ck.diffIn(full, bare, { x: a.x, y: a.y, w: a.w, h: a.h }) / (a.w * a.h);
+        // P14b：拿掉字再畫，每一個壓在插圖上的字那一格，每個像素對字色的對比
+        const noText = j.pg.ops.filter((o) => o.op !== 'text');
+        const nt = await draw({ ...j.pg, ops: noText });
+        for (const t of j.on) { const q = window.__ck.minContrast(nt, t.box, t.color); r.txt.push({ text: t.text, role: t.role, min: q.min, n: q.n }); }
+        // P14c：淡出與不淡出（fade 0）兩張：最後一列、淡出開始前一列、淡出中間一列
+        const nf = await draw({ ...j.pg, ops: noText.map((o) => (o.op === 'art' ? { ...o, fade: 0 } : o)) });
+        const yl = a.y + a.h - 1;
+        r.last = window.__ck.rowDev(nt, yl, paper);
+        r.lastNoFade = window.__ck.rowDev(nf, yl, paper);
+        r.above = window.__ck.diffIn(nt, nf, { x: a.x, y: a.y + a.h - a.fade - 1, w: a.w, h: 1 });
+        r.inFade = window.__ck.diffIn(nt, nf, { x: a.x, y: a.y + a.h - Math.round(a.fade / 2), w: a.w, h: 1 });
+      }
+      return out;
+    }, jobs, PAPER);
+    const c = P3 || {};
+    say('P14a', R.art === true && c.art === '1' && c.match !== '' && c.kind === 'route' && c.split === 'one' && M.length === 2 && M.every((r) => r.has && r.ratio > 0.5),
+      `插圖${R.art === true ? '載得到' : '載不到'}；預覽 ${c.kind}/${c.split} 標 data-art="${c.art}"、${c.match ? `跟有插圖的「${c.match}」那一份相同` : '認不出是哪一份'}；插圖那一塊跟拿掉插圖時不一樣的占 ${M.map((r) => `${r.kind} ${r.has ? r.ratio.toFixed(2) : '沒有插圖'}`).join('、')}`);
+    const tx = M.flatMap((r) => r.txt.map((t) => ({ ...t, kind: r.kind })));
+    const lowT = tx.filter((t) => !(t.n > 0 && t.min >= ART_MIN));
+    const worst = (k) => { const a = tx.filter((t) => t.kind === k && t.min != null); return a.length ? Math.min(...a.map((t) => t.min)).toFixed(2) : '沒有'; };
+    say('P14b', M.length === 2 && M.every((r) => r.txt.length > 0) && lowT.length === 0,
+      `壓在插圖上的字 ${M.map((r) => `${r.kind} ${r.txt.length} 個（最差 ${worst(r.kind)}）`).join('、')}；不到 ${ART_MIN} 的 ${lowT.length} 個`,
+      lowT.slice(0, 8).map((t) => `${t.kind}「${t.text}」（${t.role}）${t.n ? t.min.toFixed(2) : '一個像素都沒量到'}`).join('\n   '));
+    say('P14c', M.length === 2 && M.every((r) => r.has && r.last.max >= 0 && r.last.max <= 3 && r.lastNoFade.far >= 0.2 && r.above === 0 && r.inFade > 0),
+      M.map((r) => (r.has ? `${r.kind}：最後一列跟紙色最多差 ${r.last.max}（不淡出時 ${(r.lastNoFade.far * 100).toFixed(0)}% 不是紙色）、淡出前一列兩張差 ${r.above} 個像素、淡出中間一列差 ${r.inFade} 個` : `${r.kind}：沒有插圖`)).join('；'));
+  });
+
+  // ================= P15 插圖載不到 → 沒有插圖的版面（v1.93） =================
+  await section(['P15'], async () => {
+    let r = null, blocked = 0, drawn = false;
+    try {
+      // 有 SW 在控制時，插圖從 SW 的快取拿、請求不出來——繞過 SW、關掉 HTTP 快取，伺服器那一頭回 404（像檔案不見了）
+      await page.setBypassServiceWorker(true);
+      await page.setCacheEnabled(false);
+      net.art.length = 0; net.artBlock = true;
+      await page.reload({ waitUntil: 'networkidle0' });   // 重開才會重載插圖（載過的那一份留在模組裡）
+      drawn = await waitDrawn(page);
+      await settle(page, S.t);
+      blocked = net.art.filter((u) => u.startsWith('擋 ')).length;
+      const c = await matchShown(page, S.t);
+      const hs = await page.evaluate(async (tid) => {
+        const ip = await import('./js/itinposter/index.js');
+        const cv = document.querySelector('.poster-canvas');
+        const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
+        const at = (art) => ip.renderPages(m, { kind: cv.dataset.kind, split: cv.dataset.split, art })[Number(cv.dataset.page)].h;
+        return { no: at(false), yes: at(true) };
+      }, S.t);
+      r = { c, hs };
+    } finally {
+      net.artBlock = false;
+      await page.setBypassServiceWorker(false).catch(() => {});
+      await page.setCacheEnabled(true).catch(() => {});
+    }
+    const c = r.c;
+    say('P15', blocked > 0 && drawn && c.art === '0' && c.match === '有預報' && c.kind === 'route' && c.split === 'one' && c.h === r.hs.no && r.hs.no !== r.hs.yes,
+      `插圖的請求被擋 ${blocked} 次；預覽 ${c.kind}/${c.split} 標 data-art="${c.art}"、${c.match ? `跟「${c.match}」那一份（照標的排）逐像素相同` : '認不出是哪一份'}；高 ${c.h}（沒插圖 ${r.hs.no}、有插圖 ${r.hs.yes}）`);
+  });
+
+  // ================= P16 深色、淺色主題下海報一樣（v1.93） =================
+  await section(['P16'], async () => {
+    const shotDir = path.join(ROOT, '.logs', 'itinposter-shots');
+    fs.mkdirSync(shotDir, { recursive: true });
+    const theme = () => page.evaluate(() => ({ attr: document.documentElement.dataset.theme || '', bg: getComputedStyle(document.body).backgroundColor }));
+    const snap = () => page.evaluate(() => {
+      const c = document.querySelector('.poster-canvas');
+      return c && c.width ? { w: c.width, h: c.height, art: c.dataset.art, kind: c.dataset.kind, split: c.dataset.split, rows: window.__ck.rowHashes(c) } : null;
+    });
+    // 使用者的路：首頁（旅程外面才有「設定」那一格）→ 底部「設定」→「畫面顏色」那一格
+    const pick = async (k, label) => {
+      await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
+      if (!await soft(page.waitForSelector('.trip-card', { timeout: 15000 }))) return false;
+      if (!await tap(page, '#tabbar a.tab', '設定')) return false;
+      if (!await soft(page.waitForSelector(`[data-theme-pick="${k}"]`, { timeout: 15000 }))) return false;
+      const r = await userClick(page, await page.$(`[data-theme-pick="${k}"]`), label);
+      await sleep(500);
+      return r.ok;
+    };
+    // 截圖（只給人看）：頁面最上面那一個畫面（固定在底部的分頁列不會疊到海報中間）＋海報本身原尺寸。寫不了不影響判定
+    const shoot = async (name) => {
+      await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+      await sleep(200);
+      await page.screenshot({ path: path.join(shotDir, `${name}.png`) }).catch(() => {});
+      const url = await page.evaluate(() => { const c = document.querySelector('.poster-canvas'); return c && c.width ? c.toDataURL('image/png') : ''; }).catch(() => '');
+      if (url) fs.writeFileSync(path.join(shotDir, `poster-${name}.png`), Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'));
+    };
+    const e0 = await enterPoster(page, TITLE, S.t);   // P15 之後插圖檔回來了：重新從入口進來
+    await settle(page, S.t);
+    const t0 = await theme(), s0 = await snap();
+    await shoot('washi');
+    const okDark = await pick('dark', '「深色」');
+    const t1 = await theme();
+    const e1 = await enterPoster(page, TITLE, S.t);
+    await settle(page, S.t);
+    const s1 = await snap();
+    await shoot('dark');
+    const okBack = await pick('washi', '「淺色」');
+    const t2 = await theme();
+    await enterPoster(page, TITLE, S.t);   // 回海報那一頁（P6 從這裡換版型）
+    await settle(page, S.t);
+    const diffRows = s0 && s1 && s0.w === s1.w && s0.h === s1.h ? s0.rows.filter((h, i) => h !== s1.rows[i]).length : -1;
+    const pre = okDark && okBack && t0.attr === 'washi' && t1.attr === '' && t0.bg !== t1.bg && t2.attr === 'washi';
+    say('P16', pre && !!s0 && s0.art === '1' && s0.kind === 'route' && s0.split === 'one' && s0.rows.length === s0.h && !!s1 && s1.art === '1' && diffRows === 0,
+      `主題 淺色「${t0.attr}」${t0.bg} → 深色「${t1.attr}」${t1.bg} → 換回「${t2.attr}」（點得到 ${okDark}、${okBack}）；海報 淺色 ${s0 ? `${s0.kind}/${s0.split} ${s0.w}×${s0.h} data-art="${s0.art}"` : '沒畫出來'}、深色 ${s1 ? `${s1.w}×${s1.h} data-art="${s1.art}"` : '沒畫出來'}；不一樣的列 ${diffRows}${e0.ok && e1.ok ? '' : `；（從入口進不來：${e0.why || e1.why}）`}`);
   });
 
   // ================= P5 天氣預報 =================

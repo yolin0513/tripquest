@@ -6,8 +6,8 @@ import * as store from '../store.js';
 import { loadPlaceLookup } from '../quests/generate.js';
 import { loadThemes } from '../theme.js';
 import { posterModel } from './model.js';
-import { posterPages } from './layout.js';
-import { drawPoster, canvasMeasure } from './draw.js';
+import { posterPages, HEADER_ART } from './layout.js';
+import { drawPoster, canvasMeasure, loadArt } from './draw.js';
 import { pdfFromJpegs } from '../pdf.js';
 import { cachedMatrix, LEG_ROUTE_MODE, legUsable, legMinutes, fmtDur } from '../route.js';
 import { legModeOf } from '../legs.js';
@@ -70,6 +70,8 @@ export function renderPages(model, opts) {
   return posterPages(model, opts, _measure);
 }
 export { drawPoster };
+// 頁首插圖（v1.93）載得到嗎：排版前先問，載得到才把 art: true 傳給 renderPages（載不到照舊版面，不留空白）
+export async function headerArtReady() { return !!(await loadArt(HEADER_ART.src)); }
 
 function canvasBlob(canvas, type, quality) {
   return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('圖存不出來'))), type, quality));

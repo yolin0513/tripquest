@@ -6,7 +6,7 @@ import * as store from '../store.js';
 import { h, toast, qty } from '../ui.js';
 import { navigate } from '../router.js';
 import { downloadBlob, nativeShare } from '../share.js';
-import { gatherModel, tripForecast, renderPages, drawPoster, pngFiles, pdfFile, safeName } from '../itinposter/index.js';
+import { gatherModel, tripForecast, renderPages, drawPoster, pngFiles, pdfFile, safeName, headerArtReady } from '../itinposter/index.js';
 
 const PREF = 'tripquest.itinPoster.';
 const KINDS = [['route', '路線圖'], ['band', '分天色帶']];
@@ -32,7 +32,7 @@ export default async function itinposter(tripId, { drawPage, setTop }) {
   }
 
   const pref = loadPref(tripId);
-  let forecast = null, model = null, pages = [], page = 0;
+  let forecast = null, model = null, pages = [], page = 0, art = false;   // art：頁首插圖載得到（v1.93；第一次排版前問一次）
   const canvas = h('canvas', { class: 'poster-canvas', role: 'img', 'aria-label': '行程海報預覽' });
   const frame = h('div', { class: 'poster-frame ip-frame' }, canvas);
   const busy = h('div', { class: 'form-hint center', hidden: true });
@@ -67,7 +67,7 @@ export default async function itinposter(tripId, { drawPage, setTop }) {
   syncSegs();
 
   async function rebuild() { model = await gatherModel(tripId, { forecast }); }
-  function relayout() { pages = renderPages(model, pref); page = Math.max(0, Math.min(page, pages.length - 1)); show(0); }
+  function relayout() { pages = renderPages(model, { ...pref, art }); page = Math.max(0, Math.min(page, pages.length - 1)); show(0); }
 
   // dir：-1 往前翻、+1 往後翻、0 換版型或第一次。翻頁動畫只動 transform（舊的滑出、新的滑入），減少動態效果就不動。
   async function show(dir) {
@@ -83,6 +83,7 @@ export default async function itinposter(tripId, { drawPage, setTop }) {
       canvas.dataset.page = String(page);
       canvas.dataset.kind = pref.kind;
       canvas.dataset.split = pref.split;
+      canvas.dataset.art = art ? '1' : '0';
       const many = pages.length > 1;
       pager.hidden = !many;
       frame.classList.toggle('paged', many);
@@ -140,7 +141,7 @@ export default async function itinposter(tripId, { drawPage, setTop }) {
     h('p', { class: 'form-hint center' }, '必吃清單只列景點資料庫整理過的；沒對上資料庫的地點只寫名字。天氣預報查得到的日子（大約兩週內）才會寫在「小提醒」。'),
   ));
 
-  await rebuild();
+  [art] = await Promise.all([headerArtReady().catch(() => false), rebuild()]);
   relayout();
   // 天氣預報在背景查；查到新的（不是舊快取）才放進小提醒、重畫一次
   tripForecast(tripId).then(async (f) => {

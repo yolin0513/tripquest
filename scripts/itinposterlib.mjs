@@ -2,7 +2,7 @@
 // 兩支用同一組檢查：node 那支用近似字寬排版，瀏覽器那支用 canvas 的 measureText 排版——同一個檢查器、兩種字寬。
 // 每一個檢查器都有對照組（layoutControls、pdfControls）：一份一定要被抓到的樣本、一份一定要放行的；
 // 用到它的測試**每次先跑對照組**，沒過就停、不採信後面的結果（共用慣例 §5.3）。
-import { M, PW, A4H, PAPER, INK, SUB } from '../js/itinposter/layout.js';
+import { M, PW, A4H, PAPER, INK, SUB, HEADER_ART } from '../js/itinposter/layout.js';
 import { A4_WIDTH_PT } from '../js/pdf.js';
 
 const EDGE = 2;
@@ -303,7 +303,30 @@ const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 
 export function luminance(hex) { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); }
 export function contrast(a, b) { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
 const HEX6 = /^#[0-9a-f]{6}$/i;
-export function bgProblems(pg, paper, bodyColors) {
+// ---- v1.93 B18 的像素分支：頁首插圖（op 'art'）上的字 ----
+// 插圖範圍裡的字一律走這一支——就算它也在不鋪點的地方（標題區本來就是）：「在不鋪點的地方」只保證底下沒有點，不保證底下是紙。
+// 字框（textBox，跟其餘檢查同一個字框）整個要在插圖裡；字框蓋到的插圖像素逐點量，跟字色的對比取最小的那一點，要 ≥ 4.5。
+// 插圖之前畫的不透明底被插圖蓋住、不算底（遇到插圖就把底的清單清空）。
+// artPix：{ [src]: { w, h, ch, data } }（圖檔的原始像素：node 那支用 sharp 讀、瀏覽器那支也從同一個檔讀）；讀不到 → 報（不當成過）。
+// 這一張有插圖、卻一個字都沒量到 → 報（量了個空的母體）。第一版 D（v1.92 量到日期旅伴 3.36）那種就是要擋的
+export const ART_MIN = 4.5;
+export function artTextMin(o, a, pix) {
+  const tb = textBox(o);
+  const sx = pix.w / a.w, sy = pix.h / a.h;
+  const x0 = Math.max(0, Math.floor((tb.x - a.x) * sx)), x1 = Math.min(pix.w, Math.ceil((tb.x + tb.w - a.x) * sx));
+  const y0 = Math.max(0, Math.floor((tb.y - a.y) * sy)), y1 = Math.min(pix.h, Math.ceil((tb.y + tb.h - a.y) * sy));
+  const L = luminance(o.color);
+  let min = Infinity, at = null, n = 0;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const i = (y * pix.w + x) * pix.ch;
+    const p = 0.2126 * lin(pix.data[i]) + 0.7152 * lin(pix.data[i + 1]) + 0.0722 * lin(pix.data[i + 2]);
+    const k = (Math.max(L, p) + 0.05) / (Math.min(L, p) + 0.05);
+    n++;
+    if (k < min) { min = k; at = [x, y]; }
+  }
+  return { min, at, n };
+}
+export function bgProblems(pg, paper, bodyColors, artPix = {}) {
   const bg = pg.bg;
   if (!bg) return ['沒有背景紋理'];
   const bad = [];
@@ -317,14 +340,53 @@ export function bgProblems(pg, paper, bodyColors) {
   const clear = Array.isArray(bg.clear) ? bg.clear : [];
   const area = clear.reduce((a, q) => a + q.w * q.h, 0);
   if (!(area < 0.4 * pg.w * pg.h)) bad.push(`不鋪點的地方占 ${Math.round(area / (pg.w * pg.h) * 100)}%`);
-  const opaque = [];
+  let opaque = [];
+  let art = null, onArt = 0;
   for (const o of pg.ops) {
+    if (o.op === 'art') {
+      art = o; opaque = [];
+      if (!artPix[o.src]) bad.push(`讀不到插圖 ${o.src} 的像素，量不了字底下的對比`);
+      continue;
+    }
     if ((o.op === 'rect' || o.op === 'circle') && HEX6.test(String(o.fill))) opaque.push(o.op === 'rect' ? { x: o.x, y: o.y, w: o.w, h: o.h } : { x: o.x - o.r, y: o.y - o.r, w: 2 * o.r, h: 2 * o.r });
     if (o.op !== 'text') continue;
     const tb = textBox(o);
     if (opaque.some((r) => inside(tb, r))) continue;
+    if (art && overlap(tb, art)) {
+      if (!inside(tb, art)) { bad.push(`字「${o.text}」只有一部分在插圖上`); continue; }
+      const pix = artPix[art.src];
+      if (!pix) continue;   // 上面已經報過讀不到
+      const r = artTextMin(o, art, pix);
+      onArt++;
+      if (!(r.n > 0 && r.min >= ART_MIN)) bad.push(`字「${o.text}」壓在插圖上對比 ${r.min.toFixed(2)}（${r.n} 點裡最差的在 ${r.at && r.at.join(',')}）`);
+      continue;
+    }
     if (!clear.some((r) => inside(tb, r))) bad.push(`字「${o.text}」壓在紋理上`);
   }
+  if (art && artPix[art.src] && onArt === 0) bad.push('這一張有插圖、卻一個字都沒量到（母體是空的）');
+  return bad;
+}
+
+// 頁首插圖的原始像素（v1.93）：root＋src（'./media/art/…'）→ { w, h, ch, data }；兩支測試都用這一個讀法（sharp，去掉透明通道）
+export async function readArtPix(file) {
+  const { default: sharp } = await import('sharp');
+  const { data, info } = await sharp(file).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { w: info.width, h: info.height, ch: info.channels, data };
+}
+
+// ---- v1.93 B20 頁首插圖放在哪 ----
+// want：這一張該不該有（全部一張、而且 art 有傳 true 才有；每天一張一律沒有）。有的話：剛好一筆、是第一筆、
+// 在 (0,0)、大小與網址照 headerArt（layout.js 的 HEADER_ART）；標題區（header 框）整個在插圖裡；其餘的框都在插圖底下 gap 以外
+export function artPlaceProblems(pg, want, headerArt) {
+  const arts = pg.ops.filter((o) => o.op === 'art');
+  if (!want) return arts.length ? [`不該有插圖、卻有 ${arts.length} 筆`] : [];
+  if (arts.length !== 1) return [`插圖 ${arts.length} 筆（要剛好 1 筆）`];
+  const a = arts[0], bad = [];
+  if (pg.ops[0] !== a) bad.push('插圖不是第一筆（會蓋到前面畫的東西）');
+  if (a.x !== 0 || a.y !== 0 || a.w !== headerArt.w || a.h !== headerArt.h || a.src !== headerArt.src || a.fade !== headerArt.fade) bad.push(`插圖的位置或大小不對（${a.src} ${a.x},${a.y} ${a.w}×${a.h} 淡出 ${a.fade}）`);
+  const hd = pg.boxes.filter((b) => b.kind === 'header');
+  if (hd.length !== 1 || !inside(hd[0], a)) bad.push('標題區不在插圖裡');
+  for (const b of pg.boxes) if (b.kind !== 'header' && b.y < a.y + a.h + headerArt.gap - 0.5) bad.push(`框 ${b.kind} 伸進插圖或插圖底下 ${headerArt.gap} 以內（y ${Math.round(b.y)}）`);
   return bad;
 }
 
@@ -380,8 +442,9 @@ export const PAGE_CHECKS = [
   ['B15', '吉祥物夠大：全部一張至少 150 高、每天一張至少 200 高（不是角落的小圖示）', (x, pg) => peekSizeProblems(pg, PEEK_FLOOR[x.split])],
   ['B16', '交通圖示：只畫選過的那一段、種類照模型、「其他」不畫圖寫字；在那一段上、不碰字與別的框', (x, pg, i) => legIconProblems(pg, x.split === 'one' ? x.m.days : [x.m.days[i]], x.kind, x.split)],
   ['B17', '路旁的裝飾：只有路線圖有、三種形狀、不碰框與字、不壓在路上', (x, pg) => decoProblems(pg, x.kind)],
-  ['B18', '背景紋理：規則的點格子、很淡；每一個字都在不透明的底上或不鋪點的地方（字的對比跟沒有紋理時一樣）', (x, pg) => bgProblems(pg, PAPER, [INK, SUB])],
+  ['B18', '背景紋理：規則的點格子、很淡；每一個字都在不透明的底上或不鋪點的地方（字的對比跟沒有紋理時一樣）；頁首插圖上的字逐點量，對比 ≥ 4.5（v1.93）', (x, pg, i, o) => bgProblems(pg, PAPER, [INK, SUB], o.artPix)],
   ['B19', '白字的底：每一個白字底下最上層的不透明底，對比 ≥ 4.5（天數色）；找不到底、整張沒有白字都算錯', (x, pg) => whiteTextProblems(pg)],
+  ['B20', '頁首插圖：全部一張（插圖載得到）最上面墊插圖、標題區在插圖裡、其餘的框都在插圖底下；每天一張或插圖載不到就沒有', (x, pg) => artPlaceProblems(pg, x.split === 'one' && x.art === true, HEADER_ART)],
 ];
 // 張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排
 export function pageListProblems(x) {
@@ -576,6 +639,48 @@ export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legEmoji, w
   ctl('白字：取最上層那一個（天數色圓圈上又蓋白框，白字壓在白框上）', wp([dot('#c9423c'), whiteCard, wnum()]), ['白字「1」壓在 #ffffff 上對比 N']);
   ctl('白字：整張一個白字都沒有', wp([whiteCard, tx('站名', 520, 360, 30)]), ['這一張一個白字都沒有（母體是空的）']);
   ctl('白字：剛好 4.5 以上的放行（藍綠 #1b8282 4.60）', wp([dot('#1b8282'), wnum()]), []);
+
+  // v1.93 B18 的像素分支（頁首插圖上的字）：合成的插圖像素（PW×200、淺紙色），每一個分支各一份要抓到的，加放行的。
+  // 這裡驗的是判斷的邏輯；「從真的圖檔讀進來」那一道由各測試自己用真的檔走同一個讀法再驗（node 那支用 sharp 讀它當場寫的檔）
+  const AH = 200, ART = { op: 'art', src: 'x.jpg', x: 0, y: 0, w: PW, h: AH, fade: 20 };
+  const mkPix = (paint) => {
+    const data = new Uint8Array(PW * AH * 3);
+    for (let i = 0; i < data.length; i += 3) { data[i] = 250; data[i + 1] = 246; data[i + 2] = 236; }
+    const put = (x, y) => { const i = (y * PW + x) * 3; data[i] = 90; data[i + 1] = 90; data[i + 2] = 90; };
+    if (paint) paint(put);
+    return { 'x.jpg': { w: PW, h: AH, ch: 3, data } };
+  };
+  const TA = tx('甲乙丙丁', 100, 100, 40, { color: '#2f2c2a' });   // 字框：x 100～260、y 64.8～108.8
+  const tbTA = textBox(TA);
+  const xL = Math.ceil(tbTA.x) + 1, yB = Math.floor(tbTA.y + tbTA.h) - 1;
+  const ap = (ops, pix, bg = BG()) => bgProblems({ w: PW, h: 600, ops, boxes: [], bg }, '#fbf6ec', ['#2f2c2a', '#6b6258'], pix)
+    .map((s) => s.replace(/（\d+ 點裡最差的在 [\d,]+）$/, '').replace(/\d+\.\d+/g, 'N'));
+  const light = mkPix();
+  ctl('插圖：字底下都是淺色的放行', ap([ART, TA], light), []);
+  ctl('插圖：字框靠左邊的一欄底下有一條深色直線（只量中間看不到）', ap([ART, TA], mkPix((put) => { for (let y = 0; y < AH; y++) put(xL, y); })), ['字「甲乙丙丁」壓在插圖上對比 N']);
+  ctl('插圖：字框靠下緣的一列底下有一條深色橫線（只量中間看不到）', ap([ART, TA], mkPix((put) => { for (let x = 0; x < PW; x++) put(x, yB); })), ['字「甲乙丙丁」壓在插圖上對比 N']);
+  ctl('插圖：字只有一部分在插圖上', ap([ART, tx('甲乙丙丁', 100, AH + 10, 40)], light), ['字「甲乙丙丁」只有一部分在插圖上', '這一張有插圖、卻一個字都沒量到（母體是空的）']);
+  ctl('插圖：讀不到像素（不當成過）', ap([ART, TA], {}), ['讀不到插圖 x.jpg 的像素，量不了字底下的對比']);
+  const card = { op: 'rect', x: 80, y: 40, w: 300, h: 100, r: 10, fill: '#ffffff' };
+  ctl('插圖：有插圖、一個字都沒量到（字都在白框裡）', ap([ART, card, TA], light), ['這一張有插圖、卻一個字都沒量到（母體是空的）']);
+  const darkAll = mkPix((put) => { for (let y = 0; y < AH; y++) for (let x = 0; x < PW; x++) put(x, y); });
+  ctl('插圖：插圖前面畫的白框被插圖蓋住、不算底', ap([card, ART, TA], darkAll), ['字「甲乙丙丁」壓在插圖上對比 N']);
+  ctl('插圖：字在不鋪點的地方（標題區）也照樣量', ap([ART, TA], darkAll, BG({ clear: [{ x: 42, y: 0, w: 1156, h: 160 }] })), ['字「甲乙丙丁」壓在插圖上對比 N']);
+  ctl('插圖：插圖上的不透明膠囊裡的字不量像素、其餘的字量（放行）', ap([ART, { op: 'rect', x: 400, y: 50, w: 200, h: 70, fill: '#2f2c2a' }, tx('膠囊', 420, 100, 40, { color: '#fbf6ec' }), TA],
+    mkPix((put) => { for (let y = 40; y < 130; y++) for (let x = 400; x < 600; x++) put(x, y); })), []);
+
+  // v1.93 B20 頁首插圖放在哪（合成的 headerArt：PW×200、淡出 20、gap 24）
+  const HA = { src: 'x.jpg', w: PW, h: AH, fade: 20, gap: 24 };
+  const hdr = { kind: 'header', x: M, y: 36, w: PW - 2 * M, h: 120 };
+  const below = { kind: 'frame', x: M, y: AH + 24, w: 400, h: 200, day: 1 };
+  const AP = (ops, boxes, want = true) => artPlaceProblems({ w: PW, h: 800, ops, boxes }, want, HA).map((s) => s.replace(/（y \d+）$/, ''));
+  ctl('插圖位置：全部一張、插圖在最上面、標題區在插圖裡、其餘在插圖底下的放行', AP([ART, TA], [hdr, below]), []);
+  ctl('插圖位置：每天一張（不該有）卻有', AP([ART, TA], [hdr, below], false), ['不該有插圖、卻有 1 筆']);
+  ctl('插圖位置：該有卻沒有', AP([TA],[hdr, below]), ['插圖 0 筆（要剛好 1 筆）']);
+  ctl('插圖位置：不是第一筆', AP([TA, ART],[hdr, below]), ['插圖不是第一筆（會蓋到前面畫的東西）']);
+  ctl('插圖位置：大小不對', AP([{ ...ART, h: AH - 40 }, TA], [hdr, below]), ['插圖的位置或大小不對（x.jpg 0,0 1240×160 淡出 20）']);
+  ctl('插圖位置：標題區超出插圖', AP([ART, TA], [{ ...hdr, h: AH }, below]), ['標題區不在插圖裡']);
+  ctl('插圖位置：別的框伸進插圖底下 gap 以內', AP([ART, TA], [hdr, { ...below, y: AH + 10 }]), ['框 frame 伸進插圖或插圖底下 24 以內']);
 }
 
 // 參考用的 PDF 產生器：測試自己另外寫一份，不用被測的 pdfFromJpegs——不然 pdf.js 改壞時，壞的會被當成好的樣本、對照組先倒

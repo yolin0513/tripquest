@@ -1,5 +1,5 @@
 {
-  "about": "生圖素材登記（v1.92.0 起）。media/art/ 底下每一個圖檔都要在這裡登記，沒登記的不准用；scripts/placeicontest.mjs 驗兩邊一致（檔案有、登記沒有，或登記有、檔案沒有，都紅）。流程與規則見 docs/ART_生圖素材.md 第 9、10 節。",
+  "about": "生圖素材登記（v1.92.0 起）。media/art/ 底下每一個圖檔都要在這裡登記，沒登記的不准用；scripts/placeicontest.mjs 驗兩邊一致（檔案有、登記沒有，或登記有、檔案沒有，都紅）。kind 兩種：place-type（組 A 景點類型圖示，只准 App 畫面）、poster-header（組 D 行程海報頁首插圖，只准海報，v1.93.0 起）。最外層的 source、process 是組 A 的；組 D 的寫在那一筆自己的 source、process。流程與規則見 docs/ART_生圖素材.md 第 9、10 節。",
   "items": [
     { "file": "a/sight.png", "group": "A", "kind": "place-type", "primary": "sight", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "59108222eeea9ae889d9697c38e4aced4accf588bb10323c51370963233e7bb8" },
     { "file": "a/food.png", "group": "A", "kind": "place-type", "primary": "food", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "5d74d4bb1b5208aebf02e4d20fdb1377a0b039623e2dd04b466fc9136f271e7f", "note": "熱氣原本是白色、沒有墨線，在淺色底上看不見；補了一圈 5px 墨線（只描熱氣、碗一個像素都沒動）" },
@@ -9,7 +9,11 @@
     { "file": "a/culture.png", "group": "A", "kind": "place-type", "primary": "culture", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "c895a0f3b219c4c14e0d209624ef7a2e6944eb5f97196fd62e50ffe15905a7e7" },
     { "file": "a/nature.png", "group": "A", "kind": "place-type", "primary": "nature", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "bb2f7f4441e50dffb81c8785a8590558d50310b6a971e828b4e49429a14aac92" },
     { "file": "a/shopping.png", "group": "A", "kind": "place-type", "primary": "shopping", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "75c2e66b8d30b873e6319d9bc95ef23019721a8ce25d8b01d8d9572db15fd249" },
-    { "file": "a/view.png", "group": "A", "kind": "place-type", "primary": "view", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "04e298a5d4ee6a61fda2086bfb8e1f8ca883639bbe006b47ad295b00192e158f", "note": "2026-11-16 景點庫沒有 primary 是 view 的景點，這張目前不會出現在畫面上" }
+    { "file": "a/view.png", "group": "A", "kind": "place-type", "primary": "view", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "04e298a5d4ee6a61fda2086bfb8e1f8ca883639bbe006b47ad295b00192e158f", "note": "2026-11-16 景點庫沒有 primary 是 view 的景點，這張目前不會出現在畫面上" },
+    { "file": "d/poster-header.jpg", "group": "D", "kind": "poster-header", "allowedIn": ["poster"], "notIn": ["app"], "sha256": "94924d1856f56640a5cca5f05558ad6d781c8c0cf0117f81607a61159944fbba",
+      "source": { "tool": "ChatGPT（OpenAI）生圖，Yolin 手動操作", "date": "2026-11-16", "prompt": "docs/ART_生圖素材.md 第 7b 節「單張 D 第二版：豐富版＋吉祥物入景」", "original": { "file": "D-豐富版-第一次.png（不進版控，在 art-inbox/）", "size": "1774×887", "sha256": "fa53a5033b25b365513e74b9fea20ca253ec0408a1c469b1c19f90fa6e011cde" } },
+      "process": "scripts/art-recolor.mjs 配方 d2-huhu（鬍鬍灰毛改白、白眉毛改灰；輸出 sha256 b391d5d4383e59e7c98afd4db6077ad93c69a242b0ba8efa333af6d004957e58，重跑逐位元組相同）→ sharp 等比縮成 1240×620（lanczos3）、去掉透明通道、JPEG quality 85 mozjpeg。輸出只有 DQT、SOF2、DHT、SOS、EOI 區段，沒有 APP0～APP15（含 EXIF／XMP 的 APP1、C2PA 的 APP11）與註解區段。底邊淡出由海報程式畫，不在圖檔裡。",
+      "note": "Yolin 2026-11-16 頁首選甲（照樣品 A 正式排、小差異先接受）；已知差異：阿灰的比例與望遠鏡、北北多畫胸前口袋、鬍鬍耳朵改色後是白的（參考圖很淡的米灰）、鬍子跟臉的分界變淡。只用在行程海報「全部一張」的頁首。" }
   ],
   "source": {
     "tool": "ChatGPT（OpenAI）生圖，Yolin 手動操作",
