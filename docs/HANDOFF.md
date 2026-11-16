@@ -150,7 +150,8 @@
 - 回傳值：0 推完且遠端＝本機；1 自查有命中；4 自查的檢查器壞了；2 push 失敗；3 推了但遠端沒更新；5 推送閘本身沒驗過；6 F8 的驗法沒驗過；7 HEAD 不在 main 上（或自查後 HEAD 又動了）。
 - **推的是當下 checkout 的 HEAD、寫成遠端的 main**。所以 main 上有什麼就推什麼——不想推的東西不要放進 main。
 - **新 clone、或動過推送閘那四支（safe-push.sh、prepush-scan.mjs、pushgatetest.mjs、verified-reg.mjs）**：commit 之後先跑 `npm run pushgatetest`，否則回 5。動到 build-places.mjs／importshots.mjs／f8verify.mjs／verified-reg.mjs：先跑 `npm run f8verify`，否則回 6。登記檔在 `.logs/`，不進版控，新 clone 沒有。
-- 自查掃「遠端還沒有的**每一個** commit」，含 commit 訊息與作者欄；範圍照遠端實際狀態算。
+- **新 clone 還要先建 `.private/pii-terms.txt`**（v1.91 起）：自查第五類「家人與真實行程」的名單，被 .gitignore 擋掉、不進 repo；不在、是空的、有不到 2 個字的詞都回 4。格式見 STATUS「v1.91.0」那一節，內容向 Yolin 要（Session 不知道、也不猜家人的名字）。
+- 自查掃「遠端還沒有的**每一個** commit」，含 commit 訊息與作者欄；範圍照遠端實際狀態算。自查五類：金鑰、email、本機使用者名稱、路徑、名單上的詞；名單沒列的家人資料、「日期＋地點」的組合、照片說明裡的私事**抓不到**，新增的文件行還是要自己看一遍。
 - 推完讀線上 `sw.js` 的 VERSION 確認（11-05～11-11 這台曾連不到 github.io，11-12 起又連得到；連不到不代表線上掛了）。
 - **撤掉內容不等於撤掉歷史**：推送前把還沒推的整段 commit 掃過一遍（訊息、增刪行、整檔）；有不該公開的，先合併本機歷史再推。
 

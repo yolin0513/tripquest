@@ -25,6 +25,9 @@ screenshots/_out/
 # 本機開發設定（不影響部署）
 .claude/settings.local.json
 
+# 推送前自查的「家人與真實行程」名單（v1.91；scripts/prepush-scan.mjs 讀它，名單本身絕不進 repo——怎麼建見 docs/STATUS.md）
+.private/
+
 # Puppeteer 本地下載的瀏覽器（若下載到專案內）
 .pptr-cache/
 

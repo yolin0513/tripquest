@@ -36,7 +36,10 @@ export const FRAME_STOPS = 4;     // 路線圖・全部一張：一個站牌框�
 export const BAND_STOPS = 12;     // 色帶：一天最多畫幾站
 export const FOOD_MAX = 12;       // 必吃清單最多幾項
 export const TIP_MAX = 6;         // 小提醒最多幾天
-export const DAY_COLORS = ['#c9423c', '#d06a1c', '#a87a08', '#36884a', '#1b8282', '#3566b8', '#7350b8', '#b8467f'];
+// 天數色：上面壓白字（天數圓圈、站號、DAY 膠囊），白字對每一個都要 ≥ 4.5（測試 B19 量的是實際畫出來的白字跟它底下那一層）。
+// v1.91 調深三個：橘 #d06a1c→#b55c18（白字 3.65→4.66）、芥末黃 #a87a08→#976e07（3.85→4.62）、綠 #36884a→#358448（4.40→4.62）；
+// 色相不變、RGB 等比例往黑拉，調到跟最淺的那一個（藍綠 4.60）差不多
+export const DAY_COLORS = ['#c9423c', '#b55c18', '#976e07', '#358448', '#1b8282', '#3566b8', '#7350b8', '#b8467f'];
 export const INK = '#2f2c2a';
 export const SUB = '#6b6258';
 export const PAPER = '#fbf6ec';

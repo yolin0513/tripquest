@@ -1,0 +1,56 @@
+[
+  {
+    "name": "v191 名單：不擋一個字的詞",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）readTerms 不檢查詞長。PL3 的名單多一個一個字的詞，推的內容裡沒有那個字 → 自查通過、推上去（回 0，不是 4）。預期只紅 PL3。（當場驗證用 PUSHGATE_ONLY 只跑 PL1～PL6、Z、RV1、RV2，在暫存 clone 裡跑）",
+    "expect": ["PL3 名單裡有一個字的詞"],
+    "file": "scripts/prepush-scan.mjs",
+    "find": "  if (short.length) return { error:",
+    "replace": "  if (false && short.length) return { error:",
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "照 mut_gate.json 同一個時限（2900 秒；改壞後 pushgatetest 實測最長 1443.3 秒 × 2）"
+  },
+  {
+    "name": "v191 名單：讀不到檔當成空檔",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）讀檔失敗時不回「讀不到名單檔」，改當成內容是空的。照樣回 4（變成「名單是空的」），但理由錯了——PL1 比對的是理由，紅。預期只紅 PL1。另外推論：改成「讀不到就回空名單 terms: []」不會紅，因為 makeChecks 沒拿到原因時預設也寫「讀不到名單檔」、而且照樣回 4（兩道互為備援，那種改法是等價突變，不列）。",
+    "expect": ["PL1 名單檔不在"],
+    "file": "scripts/prepush-scan.mjs",
+    "find": "  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return { error: `讀不到名單檔 ${PRIVATE_LIST}（${e.code || e.message}）` }; }",
+    "replace": "  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { text = ''; }",
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "照 mut_gate.json 同一個時限（2900 秒；改壞後 pushgatetest 實測最長 1443.3 秒 × 2）"
+  },
+  {
+    "name": "v191 名單：註解也當成詞",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）# 開頭的行不濾掉。PL2 的名單只有註解 → 變成有一個詞（那一行註解）、推的內容裡沒有它 → 回 0、不是 4。其他情境的合成名單第一行也是註解，但推的內容裡沒有那句，照常。預期只紅 PL2。",
+    "expect": ["PL2 名單只有註解與空行"],
+    "file": "scripts/prepush-scan.mjs",
+    "find": ".filter((r) => r.t && !r.t.startsWith('#'));",
+    "replace": ".filter((r) => r.t);",
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "照 mut_gate.json 同一個時限（2900 秒；改壞後 pushgatetest 實測最長 1443.3 秒 × 2）"
+  },
+  {
+    "name": "v191 名單：命中時印出原文",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）private 那一類不設 hide，命中的那一行照原文印出來（詞本身出現在輸出裡）。預期紅 PL4 第二條「只印檔名與第 2 個詞」；PL4 第一條、PL5 只看回傳值與來源，不紅。RV1、RV2 若也比對輸出裡不准有詞，會多紅（跑之前沒讀到那段，照實回報）。",
+    "expect": ["PL4 命中那一行只印檔名"],
+    "file": "scripts/prepush-scan.mjs",
+    "find": "      hide: true, missing: termsError",
+    "replace": "      hide: false, missing: termsError",
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "照 mut_gate.json 同一個時限（2900 秒；改壞後 pushgatetest 實測最長 1443.3 秒 × 2）"
+  },
+  {
+    "name": "v191 名單：被包含的詞照樣另算",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）不濾掉被別的詞整個包含的詞。PL6 的名單是兩個合成詞＋一個包含第一個詞的長詞 → 變成 3 個詞、不印「另有 1 個」。自查本身照樣通過（長詞的樣本也命中、短詞的分支也命中），所以只紅 PL6 的輸出比對。預期只紅 PL6。",
+    "expect": ["PL6 名單裡一個詞整個包含另一個"],
+    "file": "scripts/prepush-scan.mjs",
+    "find": "  const terms = uniq.filter((t) => !uniq.some((u) => u !== t && t.toLowerCase().includes(u.toLowerCase())));",
+    "replace": "  const terms = uniq;",
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "照 mut_gate.json 同一個時限（2900 秒；改壞後 pushgatetest 實測最長 1443.3 秒 × 2）"
+  },
+  {
+    "name": "v191 名單：沒有對照樣本",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）private 的對照樣本清單改成空的。預期紅 Z 的前置「private 有 N 個分支、0 個樣本（一一對應）」。真的推送閘那一邊：對照組是空的，scan 怎麼判沒讀到，可能另外多紅一批情境（照實回報、逐行看）。",
+    "expect": ["Z 前置：private"],
+    "file": "scripts/prepush-scan.mjs",
+    "find": "      ctrl: (terms || []).map((t) => '前' + t + '後'), ctrlNot:",
+    "replace": "      ctrl: [], ctrlNot:",
+    "cmd": "node scripts/pushgatetest.mjs", "timeoutMs": 2900000, "timeoutBasis": "照 mut_gate.json 同一個時限（2900 秒；改壞後 pushgatetest 實測最長 1443.3 秒 × 2）"
+  }
+]

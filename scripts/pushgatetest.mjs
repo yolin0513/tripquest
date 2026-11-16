@@ -54,6 +54,11 @@
 //   （抓不到遠端＝G，用不存在的網址，本來就是真的失敗）
 //   V1–V4 登記前的檢查（verified-reg.mjs）：乾淨 → 可登記；工作區有沒 commit 的改動、還沒 commit、工作區沒有 → 不登記、
 //     點名那一支、舊的登記一起刪掉
+//   （v1.91 第五類 private：家人與真實行程。暫存 repo 裡放**合成的**名單 .private/pii-terms.txt（被它自己的 .gitignore 擋掉，
+//    有空行、詞前後有空白——讀名單要濾掉）；這支不讀真的名單。直接呼叫 scan() 的情境用 mk() 傳同一份合成詞）
+//   PL1 名單檔不在 → 4「讀不到名單檔」；PL2 只有註解與空行 → 4「名單是空的」；PL3 有一個字的詞 → 4「不到 2 個字」
+//   PL4 新增行帶第 2 個詞 → 1、private、來源新增行；命中那一行只印檔名與「第 2 個詞」，詞本身不出現在輸出裡
+//   PL5 詞只寫在 commit 訊息 → 1、來源 commit 訊息；PL6 一個詞整個包含另一個 → 長的不另算、照常放行；RV1–RV2 每個詞一個真 commit 經推送閘入口 → 1；Z 也逐一拿掉 private 的每一個分支
 // 每個情境開始前 reset() 回到同一個起點；PUSHGATE_ORDER=reverse 或 shuffle:<種子> 換順序跑，結果要不變。
 // 全部通過（而且是預設順序）才把四支閘門檔 HEAD 裡的雜湊寫進 .logs/pushgate.verified（不進版控）——safe-push.sh 推送前拿它比對；
 // 有任何失敗就刪掉它。登記前先確認這四支的工作區跟 HEAD 一模一樣，有改動就不登記（F9：驗到的要是推出去的那一份）。
@@ -100,6 +105,13 @@ const remoteHead = () => sh('git rev-parse main', bare).trim();
 const localHead = () => sh('git rev-parse HEAD').trim();
 const commit = (file, text, msg) => { fs.writeFileSync(path.join(work, file), text); sh(`git add ${file}`); sh(`git commit -q -m ${msg}`); };
 const fakeMail = () => ['zz', 'fake'].join('.') + '@' + 'example-test' + '.org';   // 當場組的合成假信箱（不寫進任何檔）
+// v1.91 第五類 private 的合成名單（當場組出；真的名單在 repo 被擋掉的 .private/，這支不讀它）。
+// 寫進暫存 repo 的那一份故意夾空行、詞前後留空白：讀名單要濾掉（不濾的話空字串會變成「什麼都命中」或一個字的詞）
+const SYN_TERMS = ['合成' + '私名甲', '合成' + '私地乙'];
+const SYN_LIST = '# pushgatetest 的合成名單\n\n' + SYN_TERMS.map((t) => `  ${t}  `).join('\n\n') + '\n';
+const mk = () => makeChecks(realUser(), SYN_TERMS);
+const LIST = () => path.join(work, '.private', 'pii-terms.txt');
+const writeList = (text = SYN_LIST) => { fs.mkdirSync(path.join(work, '.private'), { recursive: true }); fs.writeFileSync(LIST(), text); };
 const hook = (name, body) => { const p = path.join(bare, 'hooks', name); fs.writeFileSync(p, '#!/bin/sh\n' + body + '\n'); fs.chmodSync(p, 0o755); return p; };
 
 // 比對「是誰擋的」用的樣式（§5.11 第二層：擷取程式本身也要有對照組）
@@ -121,6 +133,9 @@ const WHO = {
   unverified: /^擋下：閘門沒有驗過（/m,
   f8: /^擋下：F8 驗法沒有驗過（/m,
   f8File: (f) => new RegExp(`^擋下：F8 驗法沒有驗過（scripts/${f.replace(/\./g, '\\.')} 改過`, 'm'),
+  // v1.91：任一類的命中（不只 email），與那一類命中的來源
+  hitOf: (cls) => new RegExp(`^擋下：有命中（(?:[^\\n]*、)?${cls}（\\d+ 行`, 'm'),
+  hitFromOf: (cls, src) => new RegExp(`^擋下：有命中（(?:[^\\n]*、)?${cls}（\\d+ 行；來源：(?:[^）、]*、)*${src}(?=[）、])`, 'm'),
 };
 
 try {
@@ -139,6 +154,9 @@ try {
       mismatch: '✗ 推完了但遠端（a）不等於本機（b）——停',
       unverified: '✗ scripts/safe-push.sh 改過了（登記 a、現在 b）\n擋下：閘門沒有驗過（scripts/safe-push.sh 改過、驗法還沒重跑）',
       f8: '✗ scripts/importshots.mjs 跟 .logs/f8.verified 登記的不一樣（登記 a、HEAD 裡是 b）\n擋下：F8 驗法沒有驗過（scripts/importshots.mjs 改過、驗法還沒重跑）',
+      hitPriv: 'private：對照組命中=true，命中=1\n擋下：有命中（private（1 行；來源：commit 訊息））\n✗ 公開前自查有命中——不推',
+      hitPrivX: '擋下：有命中（privatex（1 行；來源：新增行））',
+      hitPrivMix: '擋下：有命中（email（1 行；來源：新增行）、private（2 行；來源：新增行、commit 訊息））',
     };
     {
       const NOISE = ['email：對照組命中=true，命中=0',
@@ -193,6 +211,13 @@ try {
     }
     yes(WHO.pushFail.test(R(SAMPLE.push)) && !WHO.pushFail.test(R(SAMPLE.mismatch)) && WHO.mismatch.test(R(SAMPLE.mismatch)) && !WHO.mismatch.test(R(SAMPLE.push)),
       '對照（擷取樣式）：「推送失敗」與「遠端不等於本機」分得開');
+    // v1.91 hitOf／hitFromOf：抓得到 private 的命中與來源；不會把 email 的命中、privatex、檢查器壞了算成 private
+    yes(WHO.hitOf('private').test(R(SAMPLE.hitPriv)) && WHO.hitOf('private').test(R(SAMPLE.hitPrivMix)) && WHO.hitOf('email').test(R(SAMPLE.hitPrivMix))
+      && !WHO.hitOf('private').test(R(SAMPLE.hit)) && !WHO.hitOf('private').test(R(SAMPLE.hitPrivX)) && !WHO.hitOf('private').test(R(SAMPLE.broken)),
+      '對照（擷取樣式）：「private 命中」抓得到（單獨或排在別類後面），email 的命中、privatex、檢查器壞了都不算');
+    yes(WHO.hitFromOf('private', 'commit 訊息').test(R(SAMPLE.hitPriv)) && !WHO.hitFromOf('private', '新增行').test(R(SAMPLE.hitPriv))
+      && WHO.hitFromOf('private', '新增行').test(R(SAMPLE.hitPrivMix)) && WHO.hitFromOf('private', 'commit 訊息').test(R(SAMPLE.hitPrivMix)),
+      '對照（擷取樣式）：private 命中的來源分得出新增行與 commit 訊息');
     yes(WHO.hitFrom('commit 訊息').test(R(SAMPLE.hitMsg)) && !WHO.hitFrom('新增行').test(R(SAMPLE.hitMsg))
       && WHO.hitFrom('新增行').test(R(SAMPLE.hit)) && !WHO.hitFrom('commit 訊息').test(R(SAMPLE.hit))
       && WHO.hitFrom('作者欄').test(R(SAMPLE.hitMix)) && !WHO.hitFrom('commit 訊息').test(R(SAMPLE.hitMix)),
@@ -218,7 +243,9 @@ try {
     else fs.writeFileSync(path.join(work, 'scripts', f), `// ${f} 的替身（pushgatetest）\n`);
   }
   // 登記放在不進版控的 .logs/（跟真的 repo 一樣）；.gitignore 擋掉它，reset() 的 git clean 才不會把它清掉
-  fs.writeFileSync(path.join(work, '.gitignore'), '.logs/\n');
+  // 合成名單放在被擋掉的 .private/（跟真的 repo 一樣；git clean 不會清它，PL1～PL3 改壞的由 reset() 寫回）
+  fs.writeFileSync(path.join(work, '.gitignore'), '.logs/\n.private/\n');
+  writeList();
   fs.mkdirSync(path.join(work, '.logs'));
   fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
   sh('git add scripts .gitignore');
@@ -244,6 +271,7 @@ try {
     sh('git fetch -q origin');
     // 登記檔在被 .gitignore 擋掉的 .logs/，git clean 不會動它：每次都寫回起點的樣子（閘門登記相符、沒有 F8 登記）
     fs.writeFileSync(path.join(work, '.logs', 'pushgate.verified'), regText(work));
+    writeList();   // 合成名單寫回起點的樣子（PL1 刪掉、PL2／PL3 改壞過）
     // 起點：F8 登記有效（跟 base 相符）。沒登記的情境（P1、P4、P5、P7）自己刪——這樣「不管有沒有動到都要登記」這種突變
     // 只會紅 P4（第 5 條），不會讓所有沒動到 F8 的情境一起紅
     f8Reg();
@@ -327,7 +355,7 @@ try {
   const scanWith = ({ wrap, checks } = {}) => {
     const lines = [];
     const real = makeRun(work);
-    const code = scan({ range: `${BASE}..HEAD`, run: wrap ? wrap(real) : real, checks: checks || makeChecks(realUser()), log: (l) => lines.push(l) });
+    const code = scan({ range: `${BASE}..HEAD`, run: wrap ? wrap(real) : real, checks: checks || mk(), log: (l) => lines.push(l) });
     return { code, out: lines.join('\n') };
   };
   const dropF8 = () => { if (fs.existsSync(F8REG)) fs.unlinkSync(F8REG); };
@@ -368,7 +396,7 @@ try {
       const u0 = c ? plus('--unified=0') : NaN;
       yes(!!c && ns > 0 && u0 !== ns, `N2 前置：撞到過的那個真 commit 在 repo 裡（${c ? c.slice(0, 7) : '找不到'}），而且 -U0 抽 ${u0} 行、numstat 算 ${ns} 行——兩種 diff 真的對不上`);
       const lines = [];
-      const code = scan({ range: R2, run: makeRun(ROOT), checks: makeChecks(realUser()), log: (l) => lines.push(l) });
+      const code = scan({ range: R2, run: makeRun(ROOT), checks: mk(), log: (l) => lines.push(l) });
       const out = lines.join('\n');
       yes(code === 0 && !/^擋下：檢查器壞了（新增行抽取）/m.test(R(out)) && /^新增行核對：抽出 (\d+) 行，git 算 \1 行$/m.test(out),
         `N2 那個 commit 掃起來通過、新增行核對兩邊相等（實得 ${code}；${(out.match(/^新增行核對：.*$/m) || ['沒印核對那一行'])[0]}）`, out.slice(-300));
@@ -407,7 +435,7 @@ try {
     // 改成直接呼叫 prepush-scan 的 scan()、把壞掉的檢查表或 git 函式當參數傳進去
     ['C2', () => {
       commit('d.txt', 'clean2\n', 'clean2');
-      const checks = makeChecks(realUser());
+      const checks = mk();
       checks.email.re = /(?!)/g;   // email 的搜尋式壞了：永遠不命中
       const r = scanWith({ checks });
       yes(r.code === 4 && WHO.broken('email').test(R(r.out)) && /^email：對照組命中=false/m.test(r.out),
@@ -522,12 +550,12 @@ try {
       untouched('H3');
     }],
     ['Z', () => {
-      // 對照樣本要打到每一個分支（補充說明十一）：逐一拿掉金鑰、路徑的每一個分支，以及 email 的每一條放行規則，
+      // 對照樣本要打到每一個分支（補充說明十一）：逐一拿掉金鑰、路徑、名單（v1.91 private）的每一個分支，以及 email 的每一條放行規則，
       // 自查都必須判「檢查器壞了」而且點名那一類——拿掉哪一個都擋得下，才證明每一個分支都有自己的樣本
       commit('d.txt', 'clean2\n', 'clean2');
-      const base = makeChecks(realUser());
+      const base = mk();
       const cases = [];
-      for (const cls of ['secret', 'path']) {
+      for (const cls of ['secret', 'path', 'private']) {
         yes(base[cls].parts.length === base[cls].ctrl.length && base[cls].parts.length >= 2,
           `Z 前置：${cls} 有 ${base[cls].parts.length} 個分支、${base[cls].ctrl.length} 個樣本（一一對應）`);
         base[cls].parts.forEach((_, i) => cases.push([`${cls} 第 ${i + 1} 個分支`, cls, (c) => {
@@ -542,7 +570,7 @@ try {
       }]));
       const bad = [];
       for (const [label, cls, breakIt] of cases) {
-        const c = makeChecks(realUser());
+        const c = mk();
         breakIt(c);
         const r = scanWith({ checks: c });
         if (!(r.code === 4 && WHO.broken(cls).test(R(r.out)))) bad.push(`${label}（回 ${r.code}）`);
@@ -550,6 +578,64 @@ try {
       yes(cases.length >= 12 && bad.length === 0, `Z 逐一拿掉 ${cases.length} 個分支／放行規則，每一個都被判成「檢查器壞了」並點名那一類`, '沒擋下的：' + bad.join('、'));
       const ok0 = scanWith();
       yes(ok0.code === 0, `Z 對照：同一個起點、什麼都不拿掉 → 通過（實得 ${ok0.code}）`, ok0.out.slice(-300));
+    }],
+    // ---- v1.91 第五類 private（家人與真實行程）：名單檔在被擋掉的 .private/；讀不到、是空的、有一個字的詞 → 4；命中時不印詞 ----
+    ['PL1', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      fs.unlinkSync(LIST());   // 檔不在時 unlinkSync 會丟例外——走得過這一行就表示刪之前它在
+      const r = gate();
+      yes(r.code === 4 && WHO.broken('private').test(R(r.out)) && /^private：無法檢查（讀不到名單檔/m.test(r.out) && !WHO.hit.test(R(r.out)),
+        `PL1 名單檔不在 → 回 4、private 那一類「讀不到名單檔」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('PL1');
+    }],
+    ['PL2', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      writeList('# 只有註解\n\n   \n');
+      const r = gate();
+      yes(r.code === 4 && WHO.broken('private').test(R(r.out)) && /^private：無法檢查（名單是空的/m.test(r.out),
+        `PL2 名單只有註解與空行 → 回 4、「名單是空的」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('PL2');
+    }],
+    ['PL3', () => {
+      commit('d.txt', 'clean2\n', 'clean2');
+      writeList(SYN_LIST + '甲\n');
+      const r = gate();
+      yes(r.code === 4 && WHO.broken('private').test(R(r.out)) && /^private：無法檢查（名單裡有不到 2 個字的詞/m.test(r.out),
+        `PL3 名單裡有一個字的詞 → 回 4、「不到 2 個字」（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('PL3');
+    }],
+    ['PL4', () => {
+      const term = SYN_TERMS[1];
+      fs.writeFileSync(path.join(work, 'p.txt'), `去了${term}一趟\n`);
+      const back = fs.readFileSync(path.join(work, 'p.txt'), 'utf8');
+      sh('git add p.txt'); sh('git commit -q -m pl4');
+      const r = gate();
+      yes(back.includes(term) && r.code === 1 && WHO.hitFromOf('private', '新增行').test(R(r.out)) && !WHO.anyBroken.test(R(r.out)),
+        `PL4 新增行帶名單上的第 2 個詞 → 回 1、private 那一類、來源是新增行（實得 ${r.code}）`, r.out.slice(-300));
+      yes(back.includes(term) && /^\s+\[新增行 p\.txt\] （不印出；第 2 個詞）$/m.test(r.out) && !r.out.includes(term),
+        'PL4 命中那一行只印檔名與「第 2 個詞」，詞本身不出現在輸出裡（寫進 commit 的那一行確實有那個詞）', r.out.slice(-300));
+      untouched('PL4');
+    }],
+    ['PL5', () => {
+      const term = SYN_TERMS[0];
+      fs.writeFileSync(path.join(work, 'd.txt'), 'clean2\n'); sh('git add d.txt');
+      // 訊息寫進 .git 底下的檔再 -F（中文經 cmd.exe 的指令列可能走樣；.git 底下不會被 commit、也不會被 git clean 動到）
+      fs.writeFileSync(path.join(work, '.git', 'PL5_MSG'), `pl5 ${term}\n`);
+      sh('git commit -q -F .git/PL5_MSG');
+      const r = gate();
+      yes(sh('git log -1 --format=%B').includes(term) && r.code === 1 && WHO.hitFromOf('private', 'commit 訊息').test(R(r.out)) && !WHO.hitFromOf('private', '新增行').test(R(r.out)),
+        `PL5 名單上的詞只寫在 commit 訊息 → 回 1、private 那一類、來源是 commit 訊息（實得 ${r.code}）`, r.out.slice(-300));
+      untouched('PL5');
+    }],
+    ['PL6', () => {
+      // 一個詞整個包含另一個詞時，長的那個不另算（不然「逐一拿掉每個分支」時，長詞的樣本會被短詞的分支順便抓到，分不出每一支有沒有自己的樣本）
+      commit('d.txt', 'clean2\n', 'clean2');
+      const longer = SYN_TERMS[0] + '丙';
+      writeList(SYN_LIST + longer + '\n');
+      const back = fs.readFileSync(LIST(), 'utf8');
+      const r = gate();
+      yes(back.includes(longer) && r.code === 0 && remoteHead() === localHead() && /^名單：2 個詞（另有 1 個被別的詞整個包含、不另算）$/m.test(r.out),
+        `PL6 名單裡一個詞整個包含另一個 → 長的不另算、印「另有 1 個」、照常放行（實得 ${r.code}）`, r.out.slice(-300));
     }],
     ['F', () => {
       // 本機以為已經推上去、遠端其實沒有：帶命中的 commit 繞過閘門推上去（本機追蹤分支跟著前進），
@@ -875,7 +961,7 @@ try {
   // **讀回確認那個分支的正規式真的命中檔案內容**（拆字串相接可能寫出不含違規字串的行——v11.2 的實例），經 gate() 跑，斷言回 1、點名那一類、遠端沒被動到。
   // email 的兩條放行規則各一個「該放行」的真 commit：回 0、推上去。分支樣本互不重疊由 Z 證明（拿掉哪一個分支都只有它自己的樣本漏掉）。
   {
-    const base0 = makeChecks(realUser());
+    const base0 = mk();
     const hitCls = (cls) => new RegExp(`^擋下：有命中（(?:[^\\n]*、)?${cls}（\\d+ 行`, 'm');
     const branchCase = (id, cls, i, sample, partRe) => [id, () => {
       fs.writeFileSync(path.join(work, 'branch.txt'), `sample: ${sample}\n`);
@@ -889,6 +975,8 @@ try {
     base0.secret.parts.forEach((re, i) => SCENARIOS.push(branchCase(`RS${i + 1}`, 'secret', i, base0.secret.ctrl[i], new RegExp(re.source, base0.secret.flags))));
     base0.path.parts.forEach((re, i) => SCENARIOS.push(branchCase(`RP${i + 1}`, 'path', i, base0.path.ctrl[i], new RegExp(re.source, base0.path.flags))));
     SCENARIOS.push(branchCase('RU1', 'user', 0, base0.user.ctrl[0], base0.user.re));
+    // v1.91 private：合成名單的每一個詞一個真 commit（樣本是那一類自己的對照樣本「前＋詞＋後」）
+    base0.private.parts.forEach((re, i) => SCENARIOS.push(branchCase(`RV${i + 1}`, 'private', i, base0.private.ctrl[i], new RegExp(re.source, base0.private.flags))));
     base0.email.ctrlNot.forEach((sample, i) => SCENARIOS.push([`RE${i + 1}`, () => {
       fs.writeFileSync(path.join(work, 'branch.txt'), `${sample}\n`);
       const back = fs.readFileSync(path.join(work, 'branch.txt'), 'utf8');

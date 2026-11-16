@@ -328,6 +328,34 @@ export function bgProblems(pg, paper, bodyColors) {
   return bad;
 }
 
+// ---- v1.91 B19 白字的底 ----
+// 每一個白字（天數圓圈、站號、DAY 膠囊與色帶標籤上的字）找它底下最上層的不透明底：在它之前畫、字框整個在裡面的
+// rect／circle（fill 是不透明色碼）裡最後畫的那一個。白字對那個底的對比 ≥ 4.5，不分大字小字（v1.90 以前橘 3.65、芥末黃 3.85、
+// 綠 4.40 不到，v1.91 調深）。找不到底的白字也報（直接壓在紙上幾乎看不見）；這一張一個白字都沒有也報（每一種版型都有白字，
+// 數到 0 就是這條量了個空的母體）。門檻寫在測試這邊，不讀版面的常數。
+export const WHITE_MIN = 4.5;
+const WHITE = /^#ffffff$/i;
+export function whiteTextProblems(pg) {
+  const bad = [];
+  const bases = [];
+  let n = 0;
+  for (const o of pg.ops) {
+    if ((o.op === 'rect' || o.op === 'circle') && HEX6.test(String(o.fill))) {
+      bases.push({ fill: o.fill, box: o.op === 'rect' ? { x: o.x, y: o.y, w: o.w, h: o.h } : { x: o.x - o.r, y: o.y - o.r, w: 2 * o.r, h: 2 * o.r } });
+    }
+    if (o.op !== 'text' || !WHITE.test(String(o.color))) continue;
+    n++;
+    const tb = textBox(o);
+    let base = null;
+    for (let k = bases.length - 1; k >= 0; k--) if (inside(tb, bases[k].box)) { base = bases[k]; break; }
+    if (!base) { bad.push(`白字「${o.text}」底下找不到不透明的底`); continue; }
+    const k = contrast('#ffffff', base.fill);
+    if (k < WHITE_MIN) bad.push(`白字「${o.text}」壓在 ${base.fill} 上對比 ${k.toFixed(2)}`);
+  }
+  if (n === 0) bad.push('這一張一個白字都沒有（母體是空的）');
+  return bad;
+}
+
 // 一組（一份模型 × 一種版型 × 一種張數）的每一張都跑這幾條；B1、B2 是整組的，其餘逐張。
 // x：{ m（模型）, kind, split, pages }；opts：{ icons（交通圖示）, labels（類別名） }
 export const PAGE_CHECKS = [
@@ -353,6 +381,7 @@ export const PAGE_CHECKS = [
   ['B16', '交通圖示：只畫選過的那一段、種類照模型、「其他」不畫圖寫字；在那一段上、不碰字與別的框', (x, pg, i) => legIconProblems(pg, x.split === 'one' ? x.m.days : [x.m.days[i]], x.kind, x.split)],
   ['B17', '路旁的裝飾：只有路線圖有、三種形狀、不碰框與字、不壓在路上', (x, pg) => decoProblems(pg, x.kind)],
   ['B18', '背景紋理：規則的點格子、很淡；每一個字都在不透明的底上或不鋪點的地方（字的對比跟沒有紋理時一樣）', (x, pg) => bgProblems(pg, PAPER, [INK, SUB])],
+  ['B19', '白字的底：每一個白字底下最上層的不透明底，對比 ≥ 4.5（天數色）；找不到底、整張沒有白字都算錯', (x, pg) => whiteTextProblems(pg)],
 ];
 // 張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排
 export function pageListProblems(x) {
@@ -533,6 +562,20 @@ export function layoutControls(ctl, { measure, foodEmoji, foodLabel, legEmoji, w
   ctl('紋理：字的底是半透明的（點會透上來）', bgp(BG(), [{ op: 'rect', x: 100, y: 200, w: 300, h: 100, fill: 'rgba(201,66,60,0.12)' }, tx('甲', 120, 260, 30)]), ['字「甲」壓在紋理上']);
   ctl('紋理：點不算太深、但內文的灰字壓上去不到 4.5', num(bgp(BG({ color: '#e2d6bf' }), [onPaper])), ['內文的字色 #6b6258 壓在點上對比 N']);
   ctl('紋理：規則、很淡、字都在底上或不鋪點的地方的放行', bgp(BG(), [onPaper, ...inWhite, ...inCircle]), []);
+
+  // v1.91 B19 白字的底（每一個分支各一份要抓到的，加放行的；色碼直接寫，不讀版面的 DAY_COLORS）
+  const wp = (ops) => num(whiteTextProblems({ w: PW, h: 600, ops, boxes: [] }));
+  const dot = (fill, x = 600, y = 400) => ({ op: 'circle', x, y, r: 30, fill });
+  const wnum = (t = '1', x = 600, y = 411) => tx(t, x, y, 30, { align: 'center', color: '#ffffff' });
+  const whiteCard = { op: 'rect', x: 500, y: 300, w: 300, h: 200, r: 20, fill: '#ffffff' };
+  ctl('白字：壓在對比不夠的天數色上（v1.90 的橘 #d06a1c）', wp([dot('#d06a1c'), wnum()]), ['白字「1」壓在 #d06a1c 上對比 N']);
+  ctl('白字：底下找不到不透明的底（半透明的不算）', wp([{ op: 'circle', x: 600, y: 400, r: 30, fill: 'rgba(201,66,60,0.5)' }, wnum()]), ['白字「1」底下找不到不透明的底']);
+  ctl('白字：底比字小（字框沒整個在底裡）', wp([{ op: 'circle', x: 600, y: 400, r: 8, fill: '#c9423c' }, wnum()]), ['白字「1」底下找不到不透明的底']);
+  ctl('白字：底畫在字的後面（蓋在字上面的不算底）', wp([wnum(), dot('#c9423c')]), ['白字「1」底下找不到不透明的底']);
+  ctl('白字：取最上層那一個（白框上的天數色圓圈放行）', wp([whiteCard, dot('#c9423c'), wnum()]), []);
+  ctl('白字：取最上層那一個（天數色圓圈上又蓋白框，白字壓在白框上）', wp([dot('#c9423c'), whiteCard, wnum()]), ['白字「1」壓在 #ffffff 上對比 N']);
+  ctl('白字：整張一個白字都沒有', wp([whiteCard, tx('站名', 520, 360, 30)]), ['這一張一個白字都沒有（母體是空的）']);
+  ctl('白字：剛好 4.5 以上的放行（藍綠 #1b8282 4.60）', wp([dot('#1b8282'), wnum()]), []);
 }
 
 // 參考用的 PDF 產生器：測試自己另外寫一份，不用被測的 pdfFromJpegs——不然 pdf.js 改壞時，壞的會被當成好的樣本、對照組先倒

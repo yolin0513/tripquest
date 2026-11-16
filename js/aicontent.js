@@ -173,7 +173,7 @@ export async function ensureTripText(tripId) {
     const dayList = tripTextDayList(d);
     const obj = await aiJSON(tripId, {
       feature: 'narrate', maxTokens: 700,
-      system: '你在幫一份給長輩看的家庭旅遊「行程表海報」與「回憶影片」寫文案。\n'
+      system: '你在幫一份家庭旅遊「行程表海報」與「回憶影片」寫文案。\n'
         + ZH_STYLE
         + '嚴格回一個 JSON 物件，不要多餘文字。',
       prompt:
@@ -222,7 +222,7 @@ export async function ensureSpotBlurbs(tripId) {
     const list = targets.map((s, i) => `${i + 1}. ${s.name}${s.region ? '（' + s.region + '）' : ''}`).join('\n');
     const arr = await aiJSON(tripId, {
       feature: 'recommend', maxTokens: 900,
-      system: '你是台灣在地旅遊小幫手，正在幫一份給長輩看的行程表寫每個地點的一句介紹。'
+      system: '你是台灣在地旅遊小幫手，正在幫一份行程表寫每個地點的一句介紹。'
         + '每句約 25～40 字，講最有代表性的東西或必拍必吃。同一趟裡句型不要重複。\n'
         + ZH_STYLE
         + '嚴格回一個 JSON 字串陣列，長度與清單相同，順序對應。',
@@ -271,7 +271,7 @@ export async function ensureSpotQuests(tripId) {
     const obj = await aiJSON(tripId, {
       feature: 'recommend', maxTokens: 1100,
       system: '你在幫一個家庭旅遊拍照 App 出「拍照任務」。每個任務有標題（約 6～12 字，像闖關）'
-        + '與提示（一句完整的話，說要拍成怎樣算完成，給長輩看）。要具體。\n'
+        + '與提示（一句完整的話，說要拍成怎樣算完成，一看就懂）。要具體。\n'
         + ZH_STYLE
         + '嚴格回 JSON 物件：{"1":[{"title":"…","hint":"…"}],"2":[...]}，數字對應清單編號，每個地點的任務數與清單一致。',
       prompt: `地點與需要的任務數：\n${blocks}`,
@@ -356,7 +356,7 @@ export async function ensureRecapText(tripId, facts) {
   return ensure(tripId, 'recapText', sig, async () => {
     const obj = await aiJSON(tripId, {
       feature: 'narrate', maxTokens: 500,
-      system: '你在幫一份家庭旅遊「成果回顧」寫文案，給長輩看。溫暖、具體帶到數字。\n'
+      system: '你在幫一份家庭旅遊「成果回顧」寫文案。溫暖、具體帶到數字。\n'
         + ZH_STYLE
         + '嚴格回一個 JSON 物件，不要多餘文字。',
       prompt:

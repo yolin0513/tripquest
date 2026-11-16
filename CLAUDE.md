@@ -31,6 +31,8 @@ STATUS.md 開頭有「目前進行中／交接」一節，先看那節掌握現�
    先部署、客戶端後推**（反過來會造成永久分歧，v1.73.2 實測）。**動到推送閘（`safe-push.sh`／`prepush-scan.mjs`／
    `pushgatetest.mjs`／`verified-reg.mjs`）或新 clone：commit 之後先跑 `npm run pushgatetest`；動到 `build-places.mjs`／
    `importshots.mjs`／`f8verify.mjs`／`verified-reg.mjs`：commit 之後先跑 `npm run f8verify`**——不然推送閘回 5／6（F9）。
+   **新 clone 還要先建 `.private/pii-terms.txt`**（推送前自查第五類「家人與真實行程」的名單，被 .gitignore 擋掉；不在就回 4。
+   格式見 STATUS「v1.91.0」那一節，內容向 Yolin 要；詞本身不准寫進 repo、commit、回報）。
 
 ## 授權邊界
 
@@ -52,7 +54,7 @@ STATUS.md 開頭有「目前進行中／交接」一節，先看那節掌握現�
 
 原生 JS ESM PWA，無框架無打包；IndexedDB；版本化 Service Worker（每版 bump `VERSION`）。
 前端 GitHub Pages（`yolin0513/tripquest`，push main 即部署），後端 Cloudflare Worker + D1 +
-R2。繁體中文、手機優先。原本是為長輩家庭設計；**2026-11-12 Yolin 放棄長輩路線、改做年輕人會喜歡的介面**（特大字、高對比已拿掉；文字對比 4.5、觸控 44px 兩條底線等他決定，見 STATUS）。**含中文的 patch 腳本一律寫進 scratchpad
+R2。繁體中文、手機優先。原本是為長輩家庭設計；**2026-11-12 Yolin 放棄長輩路線、改做年輕人會喜歡的介面**（特大字、高對比已拿掉；文字對比 ≥ 4.5、觸控 ≥ 44px 兩條底線 **2026-11-16 Yolin 拍板留著**，見 STATUS）。**含中文的 patch 腳本一律寫進 scratchpad
 檔案再執行**（Windows python heredoc 帶中文會 cp950 走樣）。
 
 ## 共用慣例

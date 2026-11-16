@@ -223,6 +223,16 @@ try {
   const rMap = M.within(mapBtn ? [mapBtn.w, mapBtn.h] : null, '>=', 44, 'px', '地圖小圖示');
   yes(mapBtn && rMap.ok, `地圖小圖示 ${mapBtn && mapBtn.w}×${mapBtn && mapBtn.h}px，仍是可點的大小${rMap.tail}`);
   yes(mapBtn && /導航/.test(mapBtn.label), '地圖按鈕的說明是「導航」');
+  // v1.91：🆘 緊急求助鈕改小（52 → 46），不得低於 44px 門檻（Yolin 2026-11-16 拍板留著）。
+  // layouttest 的「觸控區 < 44」量不到它：固定定位的元素 offsetParent 是 null，那一段會整個跳過——所以在這裡量畫出來的大小。
+  const sos = await page.evaluate(() => {
+    const a = document.getElementById('sosFab');
+    if (!a) return null;
+    const b = a.getBoundingClientRect(), cs = getComputedStyle(a);
+    return { w: Math.round(b.width * 10) / 10, h: Math.round(b.height * 10) / 10, shown: !a.hidden && cs.display !== 'none' && cs.visibility !== 'hidden' && b.width > 0 };
+  });
+  const rSos = M.within(sos && sos.shown ? [sos.w, sos.h] : null, '>=', 44, 'px', '🆘 緊急求助鈕');
+  yes(sos && sos.shown && rSos.ok, `🆘 緊急求助鈕 ${sos && sos.w}×${sos && sos.h}px、這一頁看得到（${sos && sos.shown}），不低於 44px 門檻${rSos.tail}`);
   const mapTxt = await page.$eval('.qc-map', (e) => e.innerText.replace(/\s+/g, ''));
   yes(/導航/.test(mapTxt), '地圖按鈕上看得到「導航」兩個字 —— 只有圖示很多人不知道那是什麼');
 

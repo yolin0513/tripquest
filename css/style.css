@@ -1806,10 +1806,11 @@ textarea.field { resize: vertical; line-height: 1.6; }
   position: fixed;
   right: 12px;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
-  width: 52px; height: 52px; border-radius: 50%;
+  /* v1.91（Yolin：🆘 留著、改小一點、不得低於 44px 門檻）：52 → 46，留 2px 餘裕；字跟著縮。densitytest 量畫出來的大小 ≥ 44 */
+  width: 46px; height: 46px; border-radius: 50%;
   border: 3px solid color-mix(in srgb, var(--danger) 60%, #fff);
   background: var(--danger); color: var(--danger-ink);
-  font-size: 1.3rem; font-weight: 800; cursor: pointer;
+  font-size: 1.15rem; font-weight: 800; cursor: pointer;
   z-index: 60; opacity: 0.82;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   display: grid; place-items: center;

@@ -1,0 +1,29 @@
+[
+  {
+    "name": "v191 天數色：橘改回 v1.90 的 #d06a1c",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）白字壓在橘上對比 3.65、不到 4.5。第 2 天起的每一張、站號圓圈與天數標籤的白字都壓在它上面。預期只紅 B19；對照組的色碼是直接寫的、不讀 DAY_COLORS，不受影響。",
+    "expect": ["B19 白字的底"],
+    "file": "js/itinposter/layout.js",
+    "find": "export const DAY_COLORS = ['#c9423c', '#b55c18',",
+    "replace": "export const DAY_COLORS = ['#c9423c', '#d06a1c',",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v191 天數色：芥末黃改回 v1.90 的 #a87a08",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）第 3 天的顏色，白字對比 3.85。預期只紅 B19（情境裡要有到第 3 天的行程；沒有的話這條不紅，照實回報）。",
+    "expect": ["B19 白字的底"],
+    "file": "js/itinposter/layout.js",
+    "find": "'#b55c18', '#976e07', '#358448',",
+    "replace": "'#b55c18', '#a87a08', '#358448',",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v191 天數色：綠改回 v1.90 的 #36884a",
+    "why": "（事前寫 2026-11-16 10:1x，跑之前）第 4 天的顏色，白字對比 4.40（差一點點）。預期只紅 B19（情境裡要有到第 4 天的行程；沒有的話這條不紅——那就是 B19 量不到第 4 天，照實回報）。",
+    "expect": ["B19 白字的底"],
+    "file": "js/itinposter/layout.js",
+    "find": "'#976e07', '#358448', '#1b8282',",
+    "replace": "'#976e07', '#36884a', '#1b8282',",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  }
+]

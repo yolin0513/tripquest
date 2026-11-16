@@ -79,6 +79,8 @@ export const EXCEPTIONS = [
     why: '位置對照組的正向那一半：收集「出現在錯誤訊息裡卻沒被抓到」的樣式，下一行斷言這個清單是空的——不是在斷言不存在' },
   { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /const notX = !WHO\.broken\('email'\)\.test\(B\.brokenX\)/,
     why: '邊界對照組「不能被湊到」那一半；下一行用同樣的樣式證明清單中的每一項都認得出來（兩個方向成對）' },
+  { file: 'scripts/pushgatetest.mjs', kind: 'absent', match: /yes\(back\.includes\(term\) && .*（不印出；第 2 個詞）.* && !r\.out\.includes\(term\),$/,
+    why: 'PL4（v1.91）：同一條斷言先確認那個詞真的寫進了 commit 的檔（back.includes(term)，讀回檔案），再斷言閘門的輸出裡沒有它（命中時不印詞）' },
   { file: 'scripts/safe-push.sh', kind: 'absent', match: /^echo "✗ 沒有 \$REG（閘門從沒驗過、或登記檔不見了）/,
     why: '給人看的錯誤訊息裡剛好有「不見了」三個字，不是斷言' },
   // ---- F9（2026-09-24）----

@@ -16,6 +16,9 @@ const bad = (m) => { console.error('✗ ' + m); process.exitCode = 1; };
 
 let mode = 'good';                 // good | fail
 let calls = 0;
+// v1.91：App 實際送出去的每一個 AI 請求（system＋第一則訊息），最後一節驗「給長輩看」那種口吻沒有回來。
+// 在「失敗模式回 429」之前收，所以失敗那幾節送出的請求也算（成果回顧的文案只在失敗那一節送）。
+const sentPrompts = [];
 async function newPage() {
   // 每個「裝置」要用獨立的瀏覽器 context——用 b.newPage() 的話所有分頁共用同一份
   // IndexedDB（同一個 origin），前面幾節測試建立的行程會一直留著，後面用
@@ -32,6 +35,12 @@ async function newPage() {
       const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
       if (req.method() === 'OPTIONS') return req.respond({ status: 204, headers: CORS });
       calls++;
+      {
+        const raw = req.postData() || '{}';
+        let bd = null;
+        try { bd = JSON.parse(raw); } catch { sentPrompts.push({ system: '（請求內容解析失敗）' + raw.slice(0, 40), prompt: '' }); }
+        if (bd && bd.system != null) sentPrompts.push({ system: String(bd.system), prompt: String(bd.messages?.[0]?.content ?? '') });
+      }
       if (mode === 'fail') return req.respond({ status: 429, headers: CORS, contentType: 'application/json', body: JSON.stringify({ error: { message: 'overloaded, key sk-ant-should-be-scrubbed' } }) });
       const body = JSON.parse(req.postData() || '{}');
       if (!body.messages || !body.messages[0]) return req.respond({ status: 200, headers: CORS, contentType: 'application/json', body: JSON.stringify({ content: [{ text: '{}' }], usage: {} }) });
@@ -403,6 +412,18 @@ try {
   if (conc.five === 5000) ok(c6); else bad(c6);
   const c7 = `地圖次數同樣不漏（addMapsCalls 是同一個形狀）：${conc.maps}/5`;
   if (conc.maps === 5) ok(c7); else bad(c7);
+
+  // ---------- v1.91 口吻：送出去的提示詞不再寫「給長輩看」 ----------
+  // 2026-11-12 Yolin 放棄長輩路線；v1.91 把 js/aicontent.js 四段提示詞裡的「給長輩看」改成一般口吻。
+  // 母體：這支前面各節實際攔到的請求，四種改過的提示詞各至少攔到一次（攔不到就是這條沒量到東西，算紅）。
+  {
+    const KINDS = [['行程表海報', /行程表海報/], ['景點介紹', /在地旅遊小幫手/], ['拍照任務', /拍照任務/], ['成果回顧', /成果回顧/]];
+    const seen = KINDS.map(([name, re]) => [name, sentPrompts.filter((x) => re.test(x.system)).length]);
+    const elder = sentPrompts.filter((x) => /長輩/.test(x.system + '\n' + x.prompt));
+    const msg = `口吻：攔到 ${sentPrompts.length} 個 AI 請求（${seen.map(([n, c]) => `${n} ${c}`).join('、')}），提到「長輩」的 ${elder.length} 個`
+      + (elder.length ? `：${elder.map((x) => x.system.slice(0, 30)).join('｜')}` : '');
+    if (sentPrompts.length > 0 && seen.every(([, c]) => c > 0) && elder.length === 0) ok(msg); else bad(msg);
+  }
 
   console.log('\nAI 文案測試結束');
 } catch (e) {
