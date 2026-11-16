@@ -233,6 +233,37 @@ These are 9 small food-type icons for a travel app. Items, left to right, top ro
 Wide landscape image (wider than tall). A very light, calm, simple landscape illustration to sit behind the title at the top of a travel poster: gentle rolling hills, one winding dotted path, a few simple round trees, a few small soft clouds. Flat solid fills, no gradients, no textures, no shading. Thick dark charcoal outlines (#2F2C2A) only on the nearest hills and trees; farther shapes have thin light outlines or none. Every fill color is very pale — pale cream #FBF6EC, pale beige #EFE4D2, very light matcha green, very light sky blue, very light coral — nothing darker than #EFE4D2 except the outlines. The upper half of the image is mostly empty pale cream sky so a dark title can sit on it. No sun, no moon, no rain, no snow, no umbrella. No buildings, no landmarks, no people, no animals, no vehicles, no food. No text, no letters, no numbers, no signature, no border, no frame. Original design, not resembling any existing artwork, brand or franchise.
 ```
 
+### 7b. 單張 D 第二版：豐富版＋吉祥物入景（2026-11-16，Yolin 經 Dispatch）
+
+Yolin 看了第一版樣品：「要更豐富，最好把我們的吉祥物融進去」，他願意把吉祥物圖交給 ChatGPT 當參考。給 Yolin 的完整版（怎麼生、看到什麼要重生、只放三隻的備案）在 Dispatch 的 outputs `TripQuest_D頁首插圖_豐富版提示詞.md`；**本節是正本**，那份是副本。
+
+**跟第一版的差別：**
+- **上半部 45% 什麼都不畫，連雲都不畫**：第一版的雲飄進字的位置，日期那一行的灰字（`SUB`）壓到雲的外框只剩約 3.4（見第 11 節）。海報頁首的字在 1240×620 的 y 45～245，也就是上面 40%；留 45% 多一點餘裕。
+- **下半部要豐富、色彩多**：層層山丘（三種綠）、沙色小路、小溪、花田、圓樹、石頭；不准很深的填色（外框除外）。
+- **吉祥物可以出現，但只准我們的六隻**，照參考圖（`TripQuest_吉祥物參考圖/00_六隻總表.png`，App 的 `glyphs.js` 匯出、1400 方圖）畫：不改造型與配色、不加帽子背包、不變成別的角色。第一版「不畫人、動物」的那條仍然擋其他的人和動物。
+- **吉祥物手上不拿會被讀成資訊的東西**（雨傘、食物、相機、雪板）；只照參考圖原本的樣子（阿灰本來就拿望遠鏡）。
+- 第 10 節「不畫會被讀成資訊的東西」照守：天氣、建築與地標（含雪頂山）、交通工具、食物、招牌與地圖、季節特有的東西（櫻花、楓葉）、字。
+
+```
+Use the uploaded reference image of six original cute characters. Draw them exactly as they look in the reference: same body shape and proportions, same face, same colors, same outfits and accessories. Do not redesign them, do not change any color, do not add or remove anything (no new hats, bags, backpacks, clothes or props), and do not turn them into other characters or realistic animals. Do not add any other characters, people or animals.
+
+The six characters (as in the reference): 棉棉 = white bunny with pink inner ears and a lilac scarf with white dots; 北北 = white bear with a beige muzzle and light blue overalls with yellow buttons; 鬍鬍 = white miniature schnauzer with grey eyebrows, white beard and a coral bandana; 湯圓 = round white long-tailed tit with a green knit beanie with a yellow pom-pom, black wings and a long black tail; 阿灰 = grey hawk with a cream belly and light blue binoculars; 小鳳 = cockatiel with a yellow head and crest, orange cheeks, grey body, lilac bow tie and long grey tail.
+
+Wide landscape image, about 2:1 (much wider than tall). A rich, colorful, cheerful countryside illustration to sit behind the title at the top of a travel poster.
+
+TOP HALF — keep it empty for the title: the upper 45% of the image is one single flat, plain, very pale cream sky color (#FBF6EC). Nothing at all in the upper 45%: no clouds, no birds, no hilltops, no trees, no character ears or crests, no shapes, no texture.
+
+BOTTOM HALF — rich and colorful: below that, layered rolling hills in several fresh greens (#CFE6B8, #A9D18E, #8CC084), with a soft blue-green line of far hills at the horizon; one winding sandy path (#EBD3A8) curving from the front toward the hills; a small stream with light blue water (#9FD0E8); patches of small round generic flowers in coral, butter yellow, lilac and white; round simple trees and bushes; a few smooth rocks. Bright, warm, friendly colors, but no very dark fills.
+
+The characters in the scene (all of them fully inside the bottom half, small, about one sixth of the image height): 棉棉 and 北北 walking side by side on the path; 鬍鬍 trotting a little ahead of them on the path; 湯圓 and 小鳳 sitting together on top of a small hill; 阿灰 standing on a rock, looking through his binoculars. Their hands hold nothing except what the reference already shows.
+
+Style: flat sticker-style illustration that matches the characters: thick, even, dark charcoal outlines (#2F2C2A) with rounded ends on the characters and on the nearest hills, trees and rocks; farther shapes have thinner outlines. Flat solid fills only — no gradients, no textures, no shading, no drop shadows.
+
+Do not draw anything that could be read as information: no sun, no moon, no rain, no snow, no rainbow, no umbrella; no buildings, houses, towers, temples, bridges, landmarks or snow-capped peaks; no vehicles; no food; no signs, no maps; nothing season-specific (no cherry blossoms, no autumn leaves). No text, no letters, no numbers, no signature, no border, no frame. Original artwork, not resembling any existing artwork, brand or franchise.
+```
+
+收到圖之後：量上半部（標題、日期那一行壓上去 ≥ 4.5）、逐隻對參考圖、看有沒有偷畫字或天氣建築食物；正式墊進海報仍要先做 B18 的新檢查並另排一版。
+
 ---
 
 ## 8. 尺寸：每格大概多少像素、在 App 裡夠不夠
