@@ -305,6 +305,64 @@ Absolutely no text of any kind: no letters, no words, no numbers, no Chinese or 
 - 舊圖的字散在 8 個框、標題、美食清單、便利貼、旗子裡。我們的框蓋得住它的框，蓋不掉美食清單和便利貼。
 - 它畫錯位置的那段路線和矛盾的箭頭也會留在底下，跟我們的路線疊成兩條。做不乾淨。
 
+### 7d. 北海道測試用 4×4 插圖（美食 8＋景色 8；2026-11-16 晚，Dispatch 交辦；**還沒生**）
+
+**是什麼**：一次性測試。Yolin 生一張，Session 切成 16 格、去背，疊進樣品 B 看效果：美食圖放在美食清單那一行旁邊，景色圖放在那一天的框旁邊並標「示意」。**不進 App**——必吃分類 Yolin 選了先不做、景點插圖先不做（見 `docs/VOTE_2026-11-16_美食景點插圖.md`）。這 16 格也不是將來 App 的類別清單。
+
+給 Yolin 的副本（怎麼生、看到什麼要重生）在 Dispatch 的 outputs `TripQuest_北海道4x4插圖_測試提示詞.md`；**本節是正本**。Yolin 的 GPT 額度用完了，之後才生。
+
+**每一格都要有依據**（模擬行程表＝交 Dispatch 的那份，不在 repo）：
+
+| 格 | 畫什麼 | 依據 |
+|---|---|---|
+| 1 | 拉麵 | 美食欄第 1、4 天（兩天共用） |
+| 2 | 海鮮丼 | 美食欄第 2 天 |
+| 3 | 哈密瓜 | 美食欄第 3 天 |
+| 4 | 炸雞 | 美食欄第 5 天 |
+| 5 | 烤玉米 | 美食欄第 6 天 |
+| 6 | 豬肉丼 | 美食欄第 7 天 |
+| 7 | 霜淇淋 | 美食欄第 8 天 |
+| 8 | 起司蛋糕 | 景點庫 `jp-sapporo.json` 的必吃；只放總表、不疊進樣品 B |
+| 9～15 | 山、湖、溫泉、瀑布、峽谷、公園、農場 | 景點欄原字裡有「峠」「湖／池」「溫泉」「瀑布」「峽」「公園」「農場」 |
+| 16 | 城市 | Dispatch 點名的通用類型；依據較弱（第 1 天的起訖是城市，是地名知識） |
+
+- 景點欄裡的塔、動物園、車站、村落不畫：分別是地標、動物、交通工具，村落畫錯就是錯的資訊。港口、花田沒有一行寫到，不畫。
+- 提示詞不寫地名（寫了容易招來真實地標）；品牌品項只寫泛稱、不畫包裝。
+- 第 11 節的教訓照用：寫肯定句（否定句模型常不照做）；白色的部分要有墨線；顏色只用調色盤的名字。
+- 景色格最容易被切圖腳本整列標壞（零件之間露出洋紅、看起來像直向間隔），所以要求每一格站在一塊實心的圓地面上、零件互相碰到。
+
+```
+Flat sticker-style illustration. Thick, even, dark charcoal outlines (#2F2C2A) with rounded ends and rounded corners. Flat solid fills only — no gradients, no textures, no shading, no drop shadows. Pastel palette only: cream white #FBF9F5, light warm grey #ECE6DE, coral #F2A497, butter yellow #F6D27A, matcha green #B9DAA5, sky blue #AAD3E7, lilac #D2C3E7, plus the charcoal outline color. Chunky, rounded, simple shapes with very little detail, friendly and cute. Original design: not based on or resembling any existing character, mascot, brand, logo or franchise. No people, no animals, no faces on objects or food. No text, no letters, no numbers, no symbols that look like writing.
+
+Square image, 1:1. Exactly 16 separate items arranged in a 4×4 grid of equal square cells: 4 rows, 4 items in each row. The entire background is one flat, solid, pure magenta color #FF00FF — no gradient, no texture, no noise, no shadow, no vignette, no floor, no scenery behind the items. Leave wide, clearly empty magenta gaps between neighboring cells (each gap at least 3% of the image width), and an empty magenta margin around the outside of the whole grid. Each item is centered in its own cell and fully inside it, with generous empty space on every side; no item crosses into another cell or touches the image edge. Each item is one single compact connected shape — not long and thin, not made of several separate small pieces. Every white or very light part of an item has a charcoal outline. Do not draw grid lines, borders, frames, boxes, labels, captions or any text. Do not use magenta, purple-pink or hot pink anywhere in the items.
+
+These are 16 small illustrations for a travel poster: 8 dishes, then 8 kinds of scenery. Each scenery item is a small, compact, rounded sticker-like vignette that sits on one single solid rounded ground patch; all of its parts touch each other and the ground patch, and no magenta shows anywhere inside it. Items, left to right, top row first:
+1. A round bowl of ramen noodle soup: wavy butter-yellow noodles, one slice of pork, half a boiled egg and a few green onion pieces on top; two small steam curls with charcoal outlines touching the bowl.
+2. A round bowl of rice topped with simple slices of raw fish and a few round coral fish eggs.
+3. One wedge-shaped slice of melon with coral flesh and a matcha-green rind.
+4. Three pieces of crispy butter-yellow fried chicken in a small plain paper tray; the pieces touch each other and the tray, so the whole item is one connected shape.
+5. One short, chunky grilled corn cob in butter yellow, drawn diagonally, with a few short charcoal grill marks and its matcha-green husk leaves folded back at one end.
+6. A round bowl of rice topped with overlapping slices of grilled pork in coral, with short charcoal grill lines.
+7. A soft-serve ice cream cone with a tall cream-white swirl and a butter-yellow waffle cone.
+8. One triangular slice of plain baked cheesecake with a butter-yellow top, standing on its own.
+9. A mountain: one large rounded mountain with a smaller one overlapping it, matcha green and light warm grey all the way to the top, and a little winding path.
+10. A lake: a small oval of calm sky-blue water with a grassy matcha-green shore and two round trees.
+11. A hot spring: a small round pool of sky-blue water edged with rounded light grey stones, with three soft steam curls with charcoal outlines rising from it and touching the pool.
+12. A waterfall: a short waterfall pouring down one rounded green rocky cliff into a small sky-blue pool, with the falling water drawn as sky-blue stripes with charcoal outlines.
+13. A gorge: two steep rounded green cliffs close together with a narrow sky-blue river running between them.
+14. A park: a small round lawn with a curved path, one plain wooden bench and two round trees.
+15. A farm: one small plain barn in coral with a short wooden fence and one round hay bale.
+16. A city: a tight cluster of four simple low buildings of different heights with plain square windows.
+
+For all items: no packaging, boxes with logos, shop signs or brand shapes; no real or famous buildings, towers, bridges, warehouses or landmarks; no boats, no vehicles; no snow-capped peaks, no sun, no moon, no clouds, no rain; no hot-spring symbol; no people, no animals, no faces.
+```
+
+**收到之後**：
+1. `art-slice.mjs --grid 4`（16 個名稱）——**第一張真的 4×4**，切圖腳本只在合成樣本驗過。
+2. 去背、出總表給 Yolin 逐格看：格子順序不可信、逐格認；看有沒有偷畫字、臉、真實地標、品牌包裝。
+3. 量每格主體大小，算縮到海報上 40～60px 時拉麵與兩種丼分不分得出來。
+4. 疊進樣品 B（一次性腳本、不進 repo）：美食圖在美食清單那一行旁邊；景色圖在那一天的框旁邊、標題列寫「景色圖是示意」。景點庫的北海道只有札幌一檔，大多數站 App 對不到——照實寫。
+
 ---
 
 ## 8. 尺寸：每格大概多少像素、在 App 裡夠不夠
