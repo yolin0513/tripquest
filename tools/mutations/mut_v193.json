@@ -1,8 +1,8 @@
 [
   {
     "name": "v193 版面：有插圖時頁首以下不往下移",
-    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 有插圖也照原本的標題區底往下排。內容（路線、站卡、框）疊在插圖上：B20 報框伸進插圖或插圖底下 gap 以內；B20b 頁首以下沒有往下移 388 → 每一個字、框、頁高都對不上；B18 插圖範圍裡多了內容的字——不在不透明白框裡的那幾個走插圖分支，只有一部分在插圖上或壓在插圖上對比不夠。B18c 只看「有量到字、長標題」，字變多照樣過，不紅。預期紅 B18、B20、B20b。",
-    "expect": ["B18 背景紋理", "B20 頁首插圖", "B20b 插圖載得到"],
+    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 有插圖也照原本的標題區底往下排。內容（路線、站卡、框）疊在插圖上：B20 報框伸進插圖或插圖底下 gap 以內；B20b 頁首以下沒有往下移 388 → 每一個字、框、頁高都對不上；B18 插圖範圍裡多了內容的字——不在不透明白框裡的那幾個走插圖分支，只有一部分在插圖上或壓在插圖上對比不夠。B18c 只看「有量到字、長標題」，字變多照樣過，不紅。預期紅 B18、B20、B20b。（事後註 2026-11-16 22:0x，實跑帳本 1356：B18 沒紅——插圖範圍裡的字從 46 個變 184 個，多出來的都在插圖之後畫的不透明卡片裡，B18 照規則當成有底；B20、B20b 紅。expect 改成實際紅的兩條，事前寫的預期留在這段文字裡。）",
+    "expect": ["B20 頁首插圖", "B20b 插圖載得到"],
     "file": "js/itinposter/layout.js",
     "find": "  return art ? Math.max(y, HEADER_ART.h + HEADER_ART.gap) : y;",
     "replace": "  return y;",
@@ -10,8 +10,8 @@
   },
   {
     "name": "v193 版面：插圖排在頁首的字後面",
-    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 先排標題區、再墊插圖——畫的時候插圖蓋住標題與日期旅伴。B20 報「插圖不是第一筆」；B18 走 ops 的順序，字在插圖之前、當時還沒有插圖，插圖之後一個字都沒有 → 「有插圖、卻一個字都沒量到」。B20b 比的是字與框的位置（不看順序），不紅；B18c 拿 ops[0] 當插圖，算出來的數字不對，但它的判定不看數字，不紅。預期紅 B18、B20。",
-    "expect": ["B18 背景紋理", "B20 頁首插圖"],
+    "why": "（事前寫 2026-11-16 21:50，跑之前）topHeader 先排標題區、再墊插圖——畫的時候插圖蓋住標題與日期旅伴。B20 報「插圖不是第一筆」；B18 走 ops 的順序，字在插圖之前、當時還沒有插圖，插圖之後一個字都沒有 → 「有插圖、卻一個字都沒量到」。B20b 比的是字與框的位置（不看順序），不紅；B18c 拿 ops[0] 當插圖，算出來的數字不對，但它的判定不看數字，不紅。預期紅 B18、B20。（事後註 2026-11-16 22:0x，實跑帳本 1357：另外多紅 B18d——它也用真的版面，同樣量到「有插圖、一個字都沒量到」的空母體，是另一道防線、不是紅錯地方。expect 補上 B18d，事前寫的預期留在這段文字裡。）",
+    "expect": ["B18 背景紋理", "B20 頁首插圖", "B18d 真的圖檔"],
     "file": "js/itinposter/layout.js",
     "find": "  if (art) c.art(HEADER_ART);\n  const y = bigHeader(c, model, 36);",
     "replace": "  const y = bigHeader(c, model, 36);\n  if (art) c.art(HEADER_ART);",
@@ -105,6 +105,24 @@
     "file": "js/itinposter/draw.js",
     "find": "  ctx.fillStyle = PAPER;\n  ctx.fillRect(0, 0, page.w, page.h);\n  drawBackground(ctx, page);",
     "replace": "  ctx.fillStyle = document.documentElement.dataset.theme === 'washi' ? PAPER : '#f2f0ee';\n  ctx.fillRect(0, 0, page.w, page.h);\n  drawBackground(ctx, page);",
+    "cmd": "node scripts/itinpostertest.mjs"
+  },
+  {
+    "name": "v193 版面：有插圖時標題區往下移到山丘上",
+    "why": "（事前寫 2026-11-16 22:3x，跑之前）topHeader 有插圖時標題區從 y 300 開始排（原本 36）：標題、天數、日期旅伴壓到插圖下半部的山丘、吉祥物與墨線上。B18 逐點量插圖像素，墨線對墨色字的對比約 1 → 紅；B20b 比插圖載得到與載不到，標題區的字不再一模一樣 → 紅。B20 看插圖第一筆、標題區框在插圖裡（300～520 仍在 620 以內）、其餘的框在 644 以下 → 不紅；B18c 只看有量到字、長標題的字框寬，不看對比的數字 → 不紅；B18d 照真的版面在日期旅伴那一行畫線，那一行搬到哪就畫到哪 → 不紅。預期紅 B18、B20b。",
+    "expect": ["B18 背景紋理", "B20b 插圖載得到"],
+    "file": "js/itinposter/layout.js",
+    "find": "  if (art) c.art(HEADER_ART);\n  const y = bigHeader(c, model, 36);",
+    "replace": "  if (art) c.art(HEADER_ART);\n  const y = bigHeader(c, model, art ? 300 : 36);",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v193 畫面：存成圖片沒照有插圖的版面排",
+    "why": "（事前寫 2026-11-16 22:3x，跑之前）存成圖片改成用沒插圖的版面重排（renderPages(model, { ...pref })），預覽照舊有插圖。P17 在路線圖・全部一張、有插圖時存 PNG，下載的那一張高度是沒插圖那一份（矮 388）→ 紅。P7、P8 在分天色帶・每天一張（本來就沒插圖），存出來一樣 → 不紅；PDF 那一行沒改；其餘各條不碰存檔 → 不紅。預期只紅 P17。",
+    "expect": ["P17 有插圖時存下來的圖"],
+    "file": "js/views/itinposter.js",
+    "find": "        : await pngFiles(pages, base, (m) => { pct.textContent = m; });",
+    "replace": "        : await pngFiles(renderPages(model, { ...pref }), base, (m) => { pct.textContent = m; });",
     "cmd": "node scripts/itinpostertest.mjs"
   }
 ]

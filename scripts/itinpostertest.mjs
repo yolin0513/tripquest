@@ -37,6 +37,8 @@
 //         高度是沒插圖那一份（跟有插圖那一份不同）；前置：插圖的請求真的被擋到
 //   （v1.93）P16 深色、淺色主題下，海報（全部一張、有插圖）畫出來逐像素相同；前置：主題真的換了（<html> 的 data-theme 與底色都變了）。
 //         兩種主題的截圖（頁面最上面那一個畫面＋海報原尺寸）存在 .logs/itinposter-shots/（被 .gitignore 擋掉；只給人看，判定不看它）
+//   （v1.93）P17 有插圖時存成圖片：路線圖・全部一張按「存成圖片」（不分享、走下載），下載的那一張寬高＝有插圖那一份＝預覽畫布；
+//         前置：預覽標 data-art="1"、有插圖跟沒插圖那一份高度不同（不然量不出來）。P7、P8 在每天一張（本來就沒插圖），驗不到這件
 // 不打真網路（共用慣例 §5.6）：Open-Meteo 回自己造的預報，路線服務回自己造的秒數（照直線距離算），其餘外站 503 並記下來。
 // 分享與下載：手機的分享換成記錄用的替身（分享得了／分享不了兩種）；下載攔在 <a download>.click()，記下檔名與內容、
 //   不真的寫到磁碟（headless 的下載資料夾可能是使用者自己的「下載」）。這兩個是瀏覽器提供的，不是 App 的程式。
@@ -95,6 +97,7 @@ const LBL = Object.fromEntries([
   'P14c 插圖底邊淡進紙色：最後一列跟紙色差不到 3（對照：不淡出時大半不是紙色）；淡出只在最下面那幾列',
   'P15 插圖載不到：退回沒有插圖的版面（預覽標沒插圖、跟沒插圖那一份逐像素相同、高度是沒插圖那一份），不留空白',
   'P16 深色、淺色主題下，海報（全部一張、有插圖）畫出來逐像素相同（前置：主題真的換了）',
+  'P17 有插圖時存下來的圖：路線圖・全部一張存成圖片，下載的那一張就是有插圖的版面（寬高＝有插圖那一份＝預覽；前置：有插圖跟沒插圖高度不同）',
 ].map((s) => [s.slice(0, s.indexOf(' ')), s]));
 const B1_LABEL = '張數與標籤：全部一張 → 1 張；每天一張 → 天數張、照天排';
 for (const [code, label] of [['B1', B1_LABEL], ...PAGE_CHECKS]) LBL[`P4-${code}`] = `P4-${code} ${label}（真的字寬）`;
@@ -946,6 +949,28 @@ try {
     const pre = okDark && okBack && t0.attr === 'washi' && t1.attr === '' && t0.bg !== t1.bg && t2.attr === 'washi';
     say('P16', pre && !!s0 && s0.art === '1' && s0.kind === 'route' && s0.split === 'one' && s0.rows.length === s0.h && !!s1 && s1.art === '1' && diffRows === 0,
       `主題 淺色「${t0.attr}」${t0.bg} → 深色「${t1.attr}」${t1.bg} → 換回「${t2.attr}」（點得到 ${okDark}、${okBack}）；海報 淺色 ${s0 ? `${s0.kind}/${s0.split} ${s0.w}×${s0.h} data-art="${s0.art}"` : '沒畫出來'}、深色 ${s1 ? `${s1.w}×${s1.h} data-art="${s1.art}"` : '沒畫出來'}；不一樣的列 ${diffRows}${e0.ok && e1.ok ? '' : `；（從入口進不來：${e0.why || e1.why}）`}`);
+  });
+
+  // ================= P17 有插圖時，存下來的圖就是有插圖的那一份（v1.93） =================
+  await section(['P17'], async () => {
+    await settle(page, S.t);
+    const hs = await page.evaluate(async (tid) => {
+      const ip = await import('./js/itinposter/index.js');
+      const cv = document.querySelector('.poster-canvas');
+      const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
+      const at = (art) => ip.renderPages(m, { kind: cv.dataset.kind, split: cv.dataset.split, art }).map((p) => ({ w: p.w, h: p.h }));
+      return { kind: cv.dataset.kind, split: cv.dataset.split, art: cv.dataset.art, w: cv.width, h: cv.height, yes: at(true), no: at(false) };
+    }, S.t);
+    await page.evaluate(() => { window.__shareMode = 'none'; window.__shared = []; window.__dl = []; });
+    await tap(page, '.ip-png', '存成圖片');
+    await soft(page.waitForFunction(() => window.__dl.length >= 1 && window.__dl.every((d) => d.done), { timeout: 60000 }));
+    await sleep(500);
+    const d = await page.evaluate(() => { const r = window.__dl.map((x) => ({ name: x.name, type: x.type, head: x.head, err: x.err })); window.__dl = []; return r; });
+    const dims = d.map((f) => pngDims(f.head));
+    const y = hs.yes[0] || null, n = hs.no[0] || null;
+    const pre = hs.art === '1' && hs.kind === 'route' && hs.split === 'one' && hs.yes.length === 1 && hs.no.length === 1 && !!y && !!n && y.h !== n.h;
+    say('P17', pre && d.length === 1 && d[0].name === `${BASE}-行程海報.png` && d[0].type === 'image/png' && same(dims[0], y) && hs.w === y.w && hs.h === y.h,
+      `預覽 ${hs.kind}/${hs.split} data-art="${hs.art}" ${hs.w}×${hs.h}；下載 ${d.length} 個：${d.map((f, i) => `${f.name}（${f.type}）${dims[i] ? `${dims[i].w}×${dims[i].h}` : '不是 PNG'}${f.err ? `、${f.err}` : ''}`).join('、') || '沒有'}；有插圖那一份 ${y ? `${y.w}×${y.h}` : '-'}、沒插圖 ${n ? `${n.w}×${n.h}` : '-'}`);
   });
 
   // ================= P5 天氣預報 =================
