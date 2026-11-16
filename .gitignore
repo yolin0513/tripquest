@@ -28,6 +28,10 @@ screenshots/_out/
 # 推送前自查的「家人與真實行程」名單（v1.91；scripts/prepush-scan.mjs 讀它，名單本身絕不進 repo——怎麼建見 docs/STATUS.md）
 .private/
 
+# 生圖素材的收件資料夾（2026-11-16；Yolin 從 ChatGPT 下載的原圖丟這裡，切圖、去背的中間產物也在這裡；
+# 確認要用的才複製進 media/art/ 進版控——流程見 docs/ART_生圖素材.md）
+art-inbox/
+
 # Puppeteer 本地下載的瀏覽器（若下載到專案內）
 .pptr-cache/
 
