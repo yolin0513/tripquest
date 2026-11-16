@@ -1,7 +1,7 @@
 [
   {
     "name": "類型圖示：看可信類別的 key 不看 recheck",
-    "why": "（事前寫 2026-11-16 14:40，跑之前）景點、打卡兩類換出來是中性的 journey（key 是 null），改成看 key 就整類沒圖示。預期只紅 placeicontest 的 B2（清水寺）；B1 的梧棲漁港 key 是 food，不紅。",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）「景點」sight 換出來是中性的 journey（key 是 null），改成看 key 就整類沒圖示（2026-11-16 15:3x 更正：原本寫「景點、打卡兩類」，打卡換成的是都市、key 不是 null；預期不變）。預期只紅 placeicontest 的 B2（清水寺）；B1 的梧棲漁港 key 是 food，不紅。",
     "expect": ["B2 類別中性、複核通過"],
     "file": "js/placeicon.js",
     "find": "  if (!v.recheck) return null;",

@@ -4,7 +4,8 @@
 // 只有兩種來源拿得到圖示：
 //   1. 行程裡的一站：要對得回景點庫——跟可信類別同一套檢查（js/theme.js 的 trustedTheme：curated＋placeId、那一筆還在、
 //      拿名字再比一次是同一筆、建立時打的字再比一次也是同一筆）。看的是 recheck（這幾步都過了），**不是 key**：
-//      景點、打卡兩類在 themes.json 換成中性的 journey，key 是 null，可是景點庫那一筆的 primary 一樣是人工整理的，照樣給圖示。
+//      「景點」（sight）在 themes.json 換成中性的 journey，key 是 null（景點庫 135 筆裡 17 筆），可是景點庫那一筆的 primary
+//      一樣是人工整理的，照樣給圖示。（v1.92.0 初稿寫成「景點、打卡兩類」是錯的：打卡 checkin 換成的是 urban，key 不是 null。）
 //      圖示照景點庫那一筆的 primary 挑，**不看存著的 spot.emoji／spot.theme**（存著的有的是照名字猜的，見 theme.js 的說明）。
 //   2. 景點庫本身的一筆（建立行程時選景點的清單）：本來就是景點庫，直接看它的 primary。
 // 對不上（自己打字新增的、改過名字的、景點庫那筆不見了、景點庫還沒載好）→ null：呼叫端照原本的畫法，不照名字猜。
