@@ -2,11 +2,14 @@
 // 涵蓋的程式：scripts/art-slice.mjs、scripts/art-keyout.mjs、scripts/art-lib.mjs（三支都在這裡直接點名，run-affected 從引用認得到——
 // scripts/ 底下不沿 import 往下展開，所以 art-lib 也要寫出來）。在 test:chain 裡、不在底線：改到這三支才挑這一支。
 // 兩支腳本平常只在收到圖時手動跑；這支讓「改了腳本、自帶對照組壞了」在測試鏈上就紅，不等到下一次收圖（Dispatch 2026-11-16 定）。
-//   AS1 切圖自帶對照組：從命令列入口跑，對照行剛好 13 個、全是 ✓（數目寫死：少跑一個樣本也紅；加樣本要一起改 N_SLICE）
+//   AS1 切圖自帶對照組：從命令列入口跑，對照行剛好 16 個、全是 ✓（數目寫死：少跑一個樣本也紅；加樣本要一起改 N_SLICE）
 //   AS2 去背自帶對照組：同上，剛好 9 個（N_KEYOUT）
 //   AS3 一張合成九宮格走完切圖→去背（只用預設參數，就是 Yolin 會打的那一行）：a 切圖回 0、9 格＋總表；b 去背回 0、9 張＋總表；
 //       c 讀回寫出去的檔，每張四角透明；d 甜甜圈那格的洞透明（預設 --holes auto）。b 紅時 c、d 沒東西可讀，印一行說明、不另算紅
 //   AS4 失敗路徑：切圖餵單格的圖 → 回 3、點名「列數不對」、輸出資料夾不存在（不對就一個檔都不寫）
+//   AS5 好格照切、壞格點名：第 9 格碰到圖邊的 3×3 → 回 4、輸出 8 格＋總表＋_missing.txt、c9 沒寫、_missing.txt 點名 c9「碰到邊」
+//   AS6 格數：800×800 的 4×4 用 --grid 4 與 16 個名稱 → 回 0、輸出 16 格＋總表
+//   AS7 全部壞：9 格都只有一條細線（每格都「空格」）→ 回 3、點名「全部不能切」、輸出資料夾不存在
 // 不連網、不開瀏覽器；暫存檔寫在系統暫存目錄，收尾刪掉。
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,7 +21,7 @@ import { testedLine } from './probe-hash.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SLICE = 'scripts/art-slice.mjs', KEYOUT = 'scripts/art-keyout.mjs', LIB = 'scripts/art-lib.mjs';
-const N_SLICE = 13, N_KEYOUT = 9;
+const N_SLICE = 16, N_KEYOUT = 9;
 let pass = 0;
 const yes = (c, m, extra = '') => {
   if (c) { pass++; console.log('✓ ' + m); }
@@ -32,9 +35,10 @@ const controls = (out) => (out || '').split(/\r?\n/).map((l) => l.match(/^([✓�
 const run = (script, args) => spawnSync(process.execPath, [path.join(ROOT, script), ...args], { cwd: ROOT, encoding: 'utf8', timeout: 120000 });
 
 // 合成九宮格：600×600 洋紅底、九個墨線圓（不整齊的位置與大小），第 5 格是甜甜圈（中間的洞是被圍住的洋紅）
-function grid() {
+// edge＝第 9 格移到碰到右邊圖邊（AS5 用）
+function grid({ edge = false } = {}) {
   const W = 600, d = Buffer.alloc(W * W * 4);
-  const cells = [[95, 100, 60], [300, 110, 50], [505, 95, 55], [100, 300, 55], [300, 300, 62], [500, 310, 50], [105, 500, 58], [300, 495, 45], [495, 500, 60]];
+  const cells = [[95, 100, 60], [300, 110, 50], [505, 95, 55], [100, 300, 55], [300, 300, 62], [500, 310, 50], [105, 500, 58], [300, 495, 45], edge ? [560, 500, 60] : [495, 500, 60]];
   const fills = [[242, 164, 151], [246, 210, 122], [185, 218, 165], [170, 211, 231], [210, 195, 231], [236, 230, 222], [251, 249, 245], [242, 164, 151], [185, 218, 165]];
   for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
     let c = [255, 0, 255];
@@ -50,8 +54,29 @@ function grid() {
   }
   return { w: W, h: W, d };
 }
+// 4×4：800×800 洋紅底、16 個實心圓（AS6 用）
+function grid4() {
+  const W = 800, d = Buffer.alloc(W * W * 4);
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    const cx = 100 + 200 * Math.min(3, Math.floor(x / 200)), cy = 100 + 200 * Math.min(3, Math.floor(y / 200)), dd = Math.hypot(x - cx, y - cy);
+    const c = dd > 55 ? [255, 0, 255] : dd > 49 ? [47, 44, 42] : [246, 210, 122];
+    const o = (y * W + x) * 4;
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  return { w: W, h: W, d };
+}
+// 9 格都只有一條 2×40 的細線（AS7 用：每一格都是「空格」）
+function lines() {
+  const W = 600, d = Buffer.alloc(W * W * 4);
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    const near = [100, 300, 500].some((cx) => x >= cx && x < cx + 2) && [100, 300, 500].some((cy) => y >= cy - 20 && y < cy + 20);
+    const c = near ? [47, 44, 42] : [255, 0, 255], o = (y * W + x) * 4;
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  return { w: W, h: W, d };
+}
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'artselftest-'));
+const tmp =fs.mkdtempSync(path.join(os.tmpdir(), 'artselftest-'));
 try {
   const sharp = await loadSharp();
   const gridFile = path.join(tmp, 'grid.png'), sliced = path.join(tmp, 'sliced'), keyed = path.join(tmp, 'keyed');
@@ -91,6 +116,32 @@ try {
   const why = (f.stdout || '').split(/\r?\n/).filter((l) => l.startsWith('✗ ') && !l.startsWith('✗ 對照'));
   yes(f.status === 3 && why.some((l) => l.startsWith('✗ 列數不對')) && !fs.existsSync(loneOut),
     `AS4 切圖餵單格的圖：回 ${f.status}（應 3）、理由「${why.join(' / ')}」、輸出資料夾${fs.existsSync(loneOut) ? '存在' : '不存在'}`, f.stdout);
+
+  // AS5：第 9 格碰到圖邊 → 其他 8 格照切、c9 點名
+  const edgeFile = path.join(tmp, 'edge.png'), edgeOut = path.join(tmp, 'edge-out');
+  await writePNG(sharp, grid({ edge: true }), edgeFile);
+  const p = run(SLICE, [edgeFile, edgeOut, '--names', names.join(',')]);
+  const wantPartial = [...names.filter((n) => n !== 'c9').map((n) => `${n}.png`), '_missing.txt', '_sheet.png'].sort().join(',');
+  const miss = fs.existsSync(path.join(edgeOut, '_missing.txt')) ? fs.readFileSync(path.join(edgeOut, '_missing.txt'), 'utf8') : '';
+  const missLines = miss.split(/\r?\n/).filter((l) => /^\d+\. /.test(l));
+  yes(p.status === 4 && ls(edgeOut) === wantPartial && missLines.length === 1 && missLines[0].startsWith('9. c9（第 3 列第 3 格）：碰到邊：'),
+    `AS5 一格碰到圖邊：回 ${p.status}（應 4）、輸出（${ls(edgeOut)}）、_missing.txt 點名 ${missLines.length} 格「${missLines.join(' / ').slice(0, 80)}」`, p.stdout);
+
+  // AS6：4×4 用 --grid 4
+  const g4File = path.join(tmp, 'g4.png'), g4Out = path.join(tmp, 'g4-out');
+  await writePNG(sharp, grid4(), g4File);
+  const names16 = Array.from({ length: 16 }, (_, i) => `d${i + 1}`);
+  const q = run(SLICE, [g4File, g4Out, '--grid', '4', '--names', names16.join(',')]);
+  const want16 = [...names16.map((n) => `${n}.png`), '_sheet.png'].sort().join(',');
+  yes(q.status === 0 && ls(g4Out) === want16, `AS6 4×4 用 --grid 4：回 ${q.status}（應 0）、輸出 ${fs.existsSync(g4Out) ? fs.readdirSync(g4Out).length : 0} 個檔（應 17）`, q.stdout);
+
+  // AS7：9 格全部壞 → 一個檔都不寫
+  const linesFile = path.join(tmp, 'lines.png'), linesOut = path.join(tmp, 'lines-out');
+  await writePNG(sharp, lines(), linesFile);
+  const z = run(SLICE, [linesFile, linesOut]);
+  const zWhy = (z.stdout || '').split(/\r?\n/).filter((l) => l.startsWith('✗ ') && !l.startsWith('✗ 對照'));
+  yes(z.status === 3 && zWhy.some((l) => l.startsWith('✗ 9 格全部不能切')) && !fs.existsSync(linesOut),
+    `AS7 9 格全部空格：回 ${z.status}（應 3）、理由「${zWhy.join(' / ')}」、輸出資料夾${fs.existsSync(linesOut) ? '存在' : '不存在'}`, z.stdout);
 } finally {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`✗ 收尾刪不掉暫存資料夾：${e.code || e.message}`); process.exitCode = 1; }
 }

@@ -62,7 +62,8 @@ export function commitDir(tmp, dir) {
 }
 
 // 總表：每一張縮到 box 見方排成一張，下面寫編號與暫定名（只用英數字，避免字型缺字）；checker＝透明處畫棋盤格；
-// numbered＝寫不寫編號（切圖的編號是九宮格裡的位置；去背照檔名排序，編號沒有意思、會跟位置搞混，所以不寫）
+// numbered＝寫不寫編號（切圖的編號是格子裡的位置；去背照檔名排序，編號沒有意思、會跟位置搞混，所以不寫）；
+// items[k].missing＝這一格沒切出來（切圖的壞格）：畫一個打叉的灰格、名稱後面標 BAD，位置照樣佔住
 export async function makeSheet(sharp, items, out, { box = 200, cols = 3, checker = false, numbered = true } = {}) {
   const padX = 16, labelH = 30, cw = box + padX * 2, ch = box + labelH + padX;
   const rows = Math.ceil(items.length / cols), W = cw * cols, H = ch * rows;
@@ -74,9 +75,11 @@ export async function makeSheet(sharp, items, out, { box = 200, cols = 3, checke
       for (let yy = 0; yy < box; yy += s) for (let xx = 0; xx < box; xx += s) if (((xx + yy) / s) % 2 === 0) rects.push(`<rect x="${xx}" y="${yy}" width="${s}" height="${s}" fill="#d9d9d9"/>`);
       layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${box}" height="${box}"><rect width="100%" height="100%" fill="#ffffff"/>${rects.join('')}</svg>`), left: x, top: y });
     }
-    const img = await sharp(items[k].file).resize(box, box, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+    const img = items[k].missing
+      ? Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${box}" height="${box}"><rect width="100%" height="100%" fill="#e6e1d8"/><path d="M 30 30 L ${box - 30} ${box - 30} M ${box - 30} 30 L 30 ${box - 30}" stroke="#b5463c" stroke-width="12" stroke-linecap="round"/></svg>`)
+      : await sharp(items[k].file).resize(box, box, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
     layers.push({ input: img, left: x, top: y });
-    const label = `${numbered ? `${k + 1}. ` : ''}${items[k].name}`.replace(/[^\x20-\x7e]/g, '?').replace(/[<&>]/g, '_');
+    const label = `${numbered ? `${k + 1}. ` : ''}${items[k].name}${items[k].missing ? ' - BAD' : ''}`.replace(/[^\x20-\x7e]/g, '?').replace(/[<&>]/g, '_');
     layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${labelH}"><text x="${padX}" y="21" font-family="Arial, sans-serif" font-size="18" fill="#2f2c2a">${label}</text></svg>`), left: x - padX, top: y + box + 2 });
   }
   await sharp({ create: { width: W, height: H, channels: 4, background: { r: 250, g: 247, b: 240, alpha: 1 } } }).composite(layers).png().toFile(out);
