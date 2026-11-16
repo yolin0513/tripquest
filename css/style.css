@@ -1705,6 +1705,10 @@ textarea.field { resize: vertical; line-height: 1.6; }
 /* 基準寬 4em：一列排不下「表情＋4 個字＋進度與箭頭」時，進度與箭頭整組換行，名字拿回這一列。
    基準寬再大（試過 5.5em），320px 特大字時連表情都會被擠到名字上面自己一行。 */
 .qc-name { font-size: 1.1rem; font-weight: 800; flex: 1 1 4em; min-width: 0; line-height: 1.25; }
+/* v1.92.0 景點類型圖示（js/placeicon.js）：放在原本表情符號那一格，跟著那一格的字級走。
+   保持 inline（不改 block）：那一格的行高照舊由字撐（任務頁 1.5rem × 1.6），圖比行高矮，列高跟旁邊用表情符號的列一樣 */
+.place-icon { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: middle; object-fit: contain; }
+.itin-stop .place-icon { width: 1.4em; height: 1.4em; margin-right: 0.1em; }
 .qc-side { flex: none; display: flex; align-items: center; gap: 10px; margin-left: auto; }   /* 折到第二行時靠右 */
 .qc-prog {
   flex: none; font-size: 0.9rem; font-weight: 800; padding: 4px 12px; border-radius: 999px;

@@ -1,0 +1,21 @@
+{
+  "about": "生圖素材登記（v1.92.0 起）。media/art/ 底下每一個圖檔都要在這裡登記，沒登記的不准用；scripts/placeicontest.mjs 驗兩邊一致（檔案有、登記沒有，或登記有、檔案沒有，都紅）。流程與規則見 docs/ART_生圖素材.md 第 9、10 節。",
+  "items": [
+    { "file": "a/sight.png", "group": "A", "kind": "place-type", "primary": "sight", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "59108222eeea9ae889d9697c38e4aced4accf588bb10323c51370963233e7bb8" },
+    { "file": "a/food.png", "group": "A", "kind": "place-type", "primary": "food", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "5d74d4bb1b5208aebf02e4d20fdb1377a0b039623e2dd04b466fc9136f271e7f", "note": "熱氣原本是白色、沒有墨線，在淺色底上看不見；補了一圈 5px 墨線（只描熱氣、碗一個像素都沒動）" },
+    { "file": "a/nightmarket.png", "group": "A", "kind": "place-type", "primary": "nightmarket", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "95179ddb857991f639400692c48dd4f119e1c472252c761b93bb988a51d1ba3e" },
+    { "file": "a/snack.png", "group": "A", "kind": "place-type", "primary": "snack", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "4b72c4625b4c413a7c822323508e66df35e3be9e7ac2209d131f5d7de802413b", "note": "杯子露出內容物（提示詞寫看不到內容）；Yolin 2026-11-16 決定照用、不重生" },
+    { "file": "a/checkin.png", "group": "A", "kind": "place-type", "primary": "checkin", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "51e5bb15481de4313aabc2d42cdeeaf57ed70584d8d11a2e331f7b22e66bd225" },
+    { "file": "a/culture.png", "group": "A", "kind": "place-type", "primary": "culture", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "c895a0f3b219c4c14e0d209624ef7a2e6944eb5f97196fd62e50ffe15905a7e7" },
+    { "file": "a/nature.png", "group": "A", "kind": "place-type", "primary": "nature", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "bb2f7f4441e50dffb81c8785a8590558d50310b6a971e828b4e49429a14aac92" },
+    { "file": "a/shopping.png", "group": "A", "kind": "place-type", "primary": "shopping", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "75c2e66b8d30b873e6319d9bc95ef23019721a8ce25d8b01d8d9572db15fd249" },
+    { "file": "a/view.png", "group": "A", "kind": "place-type", "primary": "view", "allowedIn": ["app"], "notIn": ["poster"], "sha256": "04e298a5d4ee6a61fda2086bfb8e1f8ca883639bbe006b47ad295b00192e158f", "note": "2026-11-16 景點庫沒有 primary 是 view 的景點，這張目前不會出現在畫面上" }
+  ],
+  "source": {
+    "tool": "ChatGPT（OpenAI）生圖，Yolin 手動操作",
+    "date": "2026-11-16",
+    "prompt": "docs/ART_生圖素材.md 第 4 節「組 A：景點類型圖示」",
+    "original": { "file": "A-第一次.png（不進版控，在 art-inbox/）", "size": "1254×1254", "sha256": "b2c1bc996c359fe945c82d14076c4fa1bc1b1f6361d716113a515b9c69a91bc8" }
+  },
+  "process": "scripts/art-slice.mjs 切九格 → scripts/art-keyout.mjs 去背（預設參數）→ 修掉四周全透明的邊 → 等比放進 128×128（四周留 6px）→ 調色盤 PNG（sharp，quality 95）。輸出只有影像區塊（IHDR、PLTE、tRNS、pHYs、IDAT、IEND），沒有文字或中繼資料區塊。"
+}

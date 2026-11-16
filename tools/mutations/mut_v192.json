@@ -1,0 +1,137 @@
+[
+  {
+    "name": "類型圖示：看可信類別的 key 不看 recheck",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）景點、打卡兩類換出來是中性的 journey（key 是 null），改成看 key 就整類沒圖示。預期只紅 placeicontest 的 B2（清水寺）；B1 的梧棲漁港 key 是 food，不紅。",
+    "expect": ["B2 類別中性、複核通過"],
+    "file": "js/placeicon.js",
+    "find": "  if (!v.recheck) return null;",
+    "replace": "  if (!v.key) return null;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：對不回景點庫時照名字補",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）複核沒過就拿名字去比景點庫、比得到就給圖示——正是「使用者自己打字新增的景點留白」要擋的那條路。預期紅 B3（打字新增的士林夜市）、B5（景點庫那筆不見了，名字還是梧棲漁港）、B6（建立時打的字比錯，名字還是梧棲漁港）；B4（改名成阿嬤家巷口，比不到任何一筆）不紅；B0（景點庫沒載好，lookup 是 null）不紅。",
+    "expect": ["B3 使用者自己打字新增的", "B5 景點庫那一筆不見了", "B6 建立時打的字比不回同一筆"],
+    "file": "js/placeicon.js",
+    "find": "  if (!v.recheck) return null;",
+    "replace": "  if (!v.recheck) { const m = lookup && lookup.matchPlace(spot.name || '', spot.region || ''); return m ? placeIconForEntry(m) : null; }",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：先看存著的 spot.primary",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）景點自己帶著 primary 就用它（存著的值不可信）。預期只紅 B1（存著的寫 nature，景點庫是 food）。",
+    "expect": ["B1 對得回景點庫"],
+    "file": "js/placeicon.js",
+    "find": "  return placeIconForEntry(lookup.placeById(v.placeId));",
+    "replace": "  return placeIconForEntry(spot.primary ? spot : lookup.placeById(v.placeId));",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：查表不擋物件本來就有的名字",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）拿掉 hasOwnProperty，primary 是 toString 之類就拿到函式。預期只紅 B8。",
+    "expect": ["B8 不在表上的 primary"],
+    "file": "js/placeicon.js",
+    "find": "  return typeof p === 'string' && Object.prototype.hasOwnProperty.call(PLACE_ICON, p) ? PLACE_ICON[p] : null;",
+    "replace": "  return p ? PLACE_ICON[p] || null : null;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：程式的表少一類",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）表上拿掉 shopping。預期紅 A6（登記有、表沒有）、A7（離線清單有一張表上沒有的）、A9（景點庫的 shopping 1 筆沒有圖示）；B7 不紅（拿掉之後查表與 placeIconForEntry 都是 null）。",
+    "expect": ["A6 程式的表", "A7 表上每一張都在", "A9 景點庫的"],
+    "file": "js/placeicon.js",
+    "find": "  shopping: './media/art/a/shopping.png',\n",
+    "replace": "",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：表上的路徑大小寫寫錯",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）Windows 不分大小寫、GitHub Pages 分——本機照樣顯示，線上 404、離線清單整批裝不上。預期紅 A6（跟登記不同）、A7（不在離線清單）、A8（跟 git 的大小寫不同）。A8 單獨的那一支由對照組「git 裡的大小寫不同」證明（一條突變只能改一個檔）。",
+    "expect": ["A6 程式的表", "A7 表上每一張都在", "A8 每一張與登記檔"],
+    "file": "js/placeicon.js",
+    "find": "  food: './media/art/a/food.png',",
+    "replace": "  food: './media/art/a/Food.png',",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：離線清單漏一張",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）sw.js 的 SHELL_ASSETS 拿掉 snack。預期只紅 A7。",
+    "expect": ["A7 表上每一張都在"],
+    "file": "sw.js",
+    "find": "  './media/art/a/snack.png',\n",
+    "replace": "",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：登記的雜湊跟檔不同",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）圖檔換了、登記沒跟著換的樣子。預期只紅 A3。",
+    "expect": ["A3 每一張的雜湊"],
+    "file": "media/art/manifest.json",
+    "find": "\"sha256\": \"4b72c4625b4c413a7c822323508e66df35e3be9e7ac2209d131f5d7de802413b\"",
+    "replace": "\"sha256\": \"0b72c4625b4c413a7c822323508e66df35e3be9e7ac2209d131f5d7de802413b\"",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：登記少一筆",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）manifest 拿掉 checkin 那一筆（中間那幾行，拿掉後 JSON 還是合法的）。預期紅 A2（有檔沒登記）、A6（表上有、登記沒有）；A1 不紅。",
+    "expect": ["A2 圖檔", "A6 程式的表"],
+    "file": "media/art/manifest.json",
+    "find": "    { \"file\": \"a/checkin.png\", \"group\": \"A\", \"kind\": \"place-type\", \"primary\": \"checkin\", \"allowedIn\": [\"app\"], \"notIn\": [\"poster\"], \"sha256\": \"51e5bb15481de4313aabc2d42cdeeaf57ed70584d8d11a2e331f7b22e66bd225\" },\n",
+    "replace": "",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：海報偷用表（沒登記）",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）海報模型照存著的 primary 直接查表（B11 不改、海報不放圖示）。預期只紅 C2（沒登記）。",
+    "expect": ["C2 每一處都登記了"],
+    "file": "js/itinposter/model.js",
+    "find": "  return v.recheck ? lookup.placeById(v.placeId) : null;",
+    "replace": "  const icon = PLACE_ICON[spot.primary];\n  return v.recheck ? lookup.placeById(v.placeId) : null;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示：任務頁不再取圖（登記過期）",
+    "why": "（事前寫 2026-11-16 14:40，跑之前）trip.js 的取圖改成永遠 null。預期只紅 C2（那一條登記對不到任何一行）。畫面上少了圖示由 guesstruthtest 的 H4 抓（下面那幾條）。",
+    "expect": ["C2 每一處都登記了"],
+    "file": "js/views/trip.js",
+    "find": "const spotIconSrc = (s) => placeIconForSpot(s, placeLookupSync());",
+    "replace": "const spotIconSrc = (s) => null;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "類型圖示畫面：任務頁那一格不畫圖",
+    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）任務頁每一站標題列永遠用存著的表情符號。預期只紅 guesstruthtest 的 H4-2；行程分頁（H4-3、H4-4）與選景點（H4-5）不紅。",
+    "expect": ["H4-2 反向"],
+    "file": "js/views/trip.js",
+    "find": "  return src ? placeIconImg(src, s.emoji || '📍') : (s.emoji || '📍');",
+    "replace": "  return s.emoji || '📍';",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "類型圖示畫面：行程分頁站卡不畫圖",
+    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）站卡第一行永遠是「表情符號 名字」。預期紅 H4-3、H4-4；任務頁（H4-2）不紅。",
+    "expect": ["H4-3 行程分頁", "H4-4 在行程分頁重新整理"],
+    "file": "js/views/trip.js",
+    "find": "  return src ? [placeIconImg(src, s.emoji || '📍'), ' ', name] : [`${s.emoji || '📍'} ${name}`];",
+    "replace": "  return [`${s.emoji || '📍'} ${name}`];",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "類型圖示畫面：行程分頁自己不載景點庫",
+    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）拿掉 itinerary() 開頭那兩行載入。從任務頁點底部分頁進去時景點庫已經載好（同一個頁面），所以 H4-3 不紅；在行程分頁重新整理時沒人載，預期只紅 H4-4。",
+    "expect": ["H4-4 在行程分頁重新整理"],
+    "file": "js/views/trip.js",
+    "find": "  await loadThemes().catch(() => {});\n  await loadPlaceLookup().catch(() => {});\n  setTop({ title: t.title,",
+    "replace": "  setTop({ title: t.title,",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "類型圖示畫面：選景點卡片不畫圖",
+    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）建立行程的景點卡片退回原本的表情符號。預期只紅 H4-5。",
+    "expect": ["H4-5 建立行程搜"],
+    "file": "js/views/create.js",
+    "find": "      h('span', { class: 'pc-emoji' }, placeIconForEntry(p) ? placeIconImg(placeIconForEntry(p), p.emoji || '📍') : (p.emoji || '📍')),",
+    "replace": "      h('span', { class: 'pc-emoji' }, p.emoji || '📍'),",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  }
+]

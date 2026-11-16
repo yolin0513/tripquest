@@ -35,6 +35,8 @@ export const SCAN_ONLY = ['shelltest', 'guesscensustest', 'themetrusttest', 'vie
 SCAN_ONLY.push('matchinputtest');
 // nullinserttest：掃整個 js/ 找原生插入收到可能是空的值（v1.87.1；同上，算涵蓋會悶住放大器 D）
 SCAN_ONLY.push('nullinserttest');
+// placeicontest：掃整個 js/ 找誰用到景點類型圖示（v1.92.0；同上，算涵蓋會悶住放大器 D）
+SCAN_ONLY.push('placeicontest');
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 

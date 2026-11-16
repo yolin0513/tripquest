@@ -14,7 +14,10 @@
 //        ——證明讀得到 body、帶著的主題照樣送（只驗 H2-1 的話，「什麼主題都不送」也會過）
 //   H3-1 匯入的那趟：行程頁三個景點標題列上看得到的字裡，沒有任何類別名（以前印「🌿 山林自然」之類）
 //   H3-2 反向：可信的那一站，標題列看得到景點庫的「美食」
-// 突變見 tools/mutations/mut_guesstruth.json。
+//   H4（v1.92.0 景點類型圖示，js/placeicon.js）：匯入那趟三站都沒有圖示（名字猜得出類別也不給）；可信的梧棲漁港有 food 的圖示、
+//      而且圖真的載入了（naturalWidth > 0，檔案路徑寫錯或沒部署會抓到）——任務頁、行程分頁（點底部分頁進去、在那一頁重新整理）、
+//      建立行程搜景點的卡片，三個畫面各讀一次
+// 突變見 tools/mutations/mut_guesstruth.json、mut_v192.json。
 
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -94,7 +97,27 @@ try {
       const sec = [...document.querySelectorAll('.qcollapse')].find((x) => (x.querySelector('.qc-name')?.textContent || '').startsWith(n));
       return sec ? sec.querySelector('.qc-name').textContent : null;
     }), spots.map((s) => s.name));
-    return { body: sent.join('\n'), heads };
+    // v1.92.0 標題列最前面那一格（類型圖示或原本的表情符號）
+    const icons = await iconCells('.qcollapse', '.qc-name', '.qc-emoji', spots.map((s) => s.name));
+    return { body: sent.join('\n'), heads, icons, tid };
+  };
+  // 每一站那一格：有沒有 <img>、src、真的載入了沒（等到 complete，最多 6 秒）、那一格的字
+  const iconCells = async (cardSel, nameSel, cellSel, names) => {
+    for (let i = 0; i < 30; i++) {
+      const pending = await page.evaluate((sel) => [...document.querySelectorAll(sel + ' img.place-icon')].some((im) => !im.complete), cardSel);
+      if (!pending) break;
+      await sleep(200);
+    }
+    return page.evaluate((cardSel, nameSel, cellSel, names) => names.map((n) => {
+      const card = [...document.querySelectorAll(cardSel)].find((x) => {
+        const nm = nameSel ? x.querySelector(nameSel) : x;
+        return (nm?.textContent || '').trim().replace(/^\S+\s/, '').startsWith(n) || (nm?.textContent || '').trim().startsWith(n);
+      });
+      if (!card) return null;
+      const cell = cellSel ? card.querySelector(cellSel) : card;
+      const img = cell && cell.querySelector('img.place-icon');
+      return { img: img ? img.getAttribute('src') : null, loaded: !!img && img.complete && img.naturalWidth > 0, text: (cell?.textContent || '').trim(), all: card.textContent.trim() };
+    }), cardSel, nameSel, cellSel, names);
   };
 
   const BASELINE = [
@@ -141,6 +164,40 @@ try {
     `H3-1 匯入的行程：三個景點標題列都找到了，字裡沒有任何類別名（實得 ${guessed.heads.map((t) => t === null ? '找不到' : `「${t}」`).join('、')}）`);
   yes(carried.heads[0] !== null && labelsIn(carried.heads[0]).join(',') === food,
     `H3-2 反向：可信的「梧棲漁港」標題列看得到景點庫的「${food}」、不是存著的「${coast}」（實得「${carried.heads[0]}」）`);
+
+  // ---------- H4 景點類型圖示（v1.92.0；js/placeicon.js）：只給對得回景點庫的那一站，從使用者會走的三個畫面讀 ----------
+  const FOOD_IMG = './media/art/a/food.png';
+  const noImg = (c) => !!c && c.img === null;
+  const foodOk = (c) => !!c && c.img === FOOD_IMG && c.loaded;
+  const show4 = (cs) => JSON.stringify(cs);
+  yes(guessed.icons.every((c) => c !== null) && guessed.icons.every((c) => noImg(c) && c.text === '📍'),
+    `H4-1 匯入的行程（甲山／乙寺／丙海，名字猜得出類別）：任務頁三站都沒有類型圖示，那一格照舊是「📍」`, show4(guessed.icons));
+  yes(foodOk(carried.icons[0]) && noImg(carried.icons[1]) && noImg(carried.icons[2]),
+    `H4-2 反向：可信的「梧棲漁港」任務頁那一格是景點庫 food 的圖示、真的載入了；同一趟另兩站沒有`, show4(carried.icons));
+
+  // 行程分頁：點底部「行程」→ 切到「行程」那一格（結束日已過，預設落在回顧）
+  await page.click(`#tabbar a.tab[href="#/trip/${carried.tid}/itinerary"]`);
+  await page.waitForSelector('.itin-seg button[data-tab="plan"]', { timeout: 8000 });
+  await page.click('.itin-seg button[data-tab="plan"]');
+  await page.waitForSelector('#itin-pane-plan .itin-stop', { timeout: 8000 });
+  const ITIN = ['#itin-pane-plan .itin-stop', null, null];
+  const it1 = await iconCells(...ITIN, ['梧棲漁港', '乙寺', '丙海']);
+  yes(foodOk(it1[0]) && noImg(it1[1]) && noImg(it1[2]) && it1[1].all.startsWith('📍 乙寺') && it1[2].all.startsWith('📍 丙海'),
+    `H4-3 行程分頁（從底部「行程」點進去）：梧棲漁港站卡有 food 圖示、真的載入了；乙寺、丙海站卡照舊是「📍 名字」`, show4(it1));
+  // 在行程分頁重新整理：模組重新載入，景點庫要由行程分頁自己載（任務頁沒先跑過）
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('#itin-pane-plan .itin-stop', { timeout: 8000 });
+  const it2 = await iconCells(...ITIN, ['梧棲漁港', '乙寺', '丙海']);
+  yes(foodOk(it2[0]) && noImg(it2[1]) && noImg(it2[2]),
+    `H4-4 在行程分頁重新整理（景點庫由行程分頁自己載）：梧棲漁港站卡照樣有 food 圖示、另兩站沒有`, show4(it2));
+
+  // 建立行程選景點：搜「梧棲」→ 景點庫那一筆的卡片
+  await page.evaluate(() => { location.hash = '#/new'; });
+  await page.waitForSelector('input[type="search"]', { timeout: 8000 });
+  await page.type('input[type="search"]', '梧棲');
+  await page.waitForFunction(() => [...document.querySelectorAll('.place-card .pc-name')].some((x) => x.textContent.startsWith('梧棲漁港')), { timeout: 8000 });
+  const pk = await iconCells('.place-card', '.pc-name', '.pc-emoji', ['梧棲漁港']);
+  yes(foodOk(pk[0]), `H4-5 建立行程搜「梧棲」：梧棲漁港那張卡是景點庫 food 的圖示、真的載入了`, show4(pk));
 } catch (e) {
   yes(false, '例外：' + ((e && e.stack) || e));
 } finally {

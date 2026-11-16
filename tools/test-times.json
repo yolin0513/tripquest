@@ -216,11 +216,11 @@
     "at": "2026-11-14"
   },
   "mutcmdtest": {
-    "sec": 9.3,
+    "sec": 9.7,
     "at": "2026-11-16"
   },
   "mutlint": {
-    "sec": 2.6,
+    "sec": 2.1,
     "at": "2026-11-16"
   },
   "predicttest": {
@@ -276,11 +276,11 @@
     "at": "2026-11-14"
   },
   "guesscensustest": {
-    "sec": 0.2,
+    "sec": 0.1,
     "at": "2026-11-16"
   },
   "themetrusttest": {
-    "sec": 0.2,
+    "sec": 0.1,
     "at": "2026-11-16"
   },
   "posterlayouttest": {
@@ -336,8 +336,8 @@
     "at": "2026-11-14"
   },
   "mutexpecttest": {
-    "sec": 2.5,
-    "at": "2026-11-14"
+    "sec": 3.5,
+    "at": "2026-11-16"
   },
   "loadsampletest": {
     "sec": 5.6,
@@ -368,7 +368,7 @@
     "at": "2026-11-14"
   },
   "nullinserttest": {
-    "sec": 5.3,
+    "sec": 5.1,
     "at": "2026-11-16"
   },
   "itinposterlayouttest": {
@@ -381,6 +381,10 @@
   },
   "artselftest": {
     "sec": 4,
+    "at": "2026-11-16"
+  },
+  "placeicontest": {
+    "sec": 1.4,
     "at": "2026-11-16"
   }
 }

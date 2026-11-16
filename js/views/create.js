@@ -6,6 +6,7 @@ import { generateForTrip, placeHierarchy, placesOfCity, searchPlaces } from '../
 import { enrichTrip } from '../enrich.js';
 import { dateRangeField } from '../daterange.js';
 import { myDeviceId } from '../identity.js';
+import { placeIconForEntry, placeIconImg } from '../placeicon.js';
 
 export default async function create({ drawPage, setTop }) {
   setTop({ title: '建立新旅程' });
@@ -135,7 +136,8 @@ export default async function create({ drawPage, setTop }) {
         drawSearch();
       },
     },
-      h('span', { class: 'pc-emoji' }, p.emoji || '📍'),
+      // v1.92.0 景點庫的一筆照它的 primary 畫類型圖示（js/placeicon.js）；primary 不在表上照原本的表情符號
+      h('span', { class: 'pc-emoji' }, placeIconForEntry(p) ? placeIconImg(placeIconForEntry(p), p.emoji || '📍') : (p.emoji || '📍')),
       h('span', { class: 'pc-main' },
         h('span', { class: 'pc-name' }, p.name, p.hot ? h('span', { class: 'tag tag-hot' }, '熱門') : null),
         p.blurb ? h('span', { class: 'pc-blurb' }, p.blurb) : null,

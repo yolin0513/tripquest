@@ -198,6 +198,8 @@ export default async function settings({ drawPage, setTop }) {
       h('div', { class: 'about-mascot' }, mascot(MASCOT_SPOT.settings, 96)),
       h('p', { class: 'sm' }, 'TripQuest 旅圖任務 — 純前端 App，不需帳號密碼。單機可用；設定同步後照片會存一份到旅伴共用的伺服器。'),
       h('p', { class: 'form-hint' }, '任務來源：內建景點資料庫 + 規則模板；景點示意圖來自 zh.wikipedia.org（只送景點名稱）。AI 加值功能預設關閉，開了也只用建立者自己的金鑰。'),
+      // v1.92.0（Yolin 2026-11-16，功能研究的建議）：景點類型圖示是 ChatGPT 生的，照實寫
+      h('p', { class: 'form-hint' }, '部分插圖以 ChatGPT 生成。'),
     ),
 
     h('div', { class: 'danger-zone' },

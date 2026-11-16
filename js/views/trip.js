@@ -15,6 +15,7 @@ import { activeMemberId, ensureMember } from '../claim.js';
 import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder, trustedTheme } from '../theme.js';
+import { placeIconForSpot, placeIconImg } from '../placeicon.js';
 import { loadEmergency } from '../emergency.js';
 import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
@@ -1003,6 +1004,21 @@ function fillEta(ol, daySpots, mins) {
   });
 }
 
+// v1.92.0 景點類型圖示（js/placeicon.js）：對得回景點庫的那一站畫圖示；對不上（自己打字新增的、改過名字的……）
+// 照原本的表情符號，不照名字猜。圖載不到時 placeIconImg 自己換回同一個表情符號。
+const spotIconSrc = (s) => placeIconForSpot(s, placeLookupSync());
+// 任務頁每一站標題列最前面那一格
+function spotIcon(s) {
+  const src = spotIconSrc(s);
+  return src ? placeIconImg(src, s.emoji || '📍') : (s.emoji || '📍');
+}
+// 行程分頁站卡的第一行：有圖示 → [圖, 空格, 名字]；沒有 → 跟 v1.92.0 以前一字不差的「表情符號 名字」
+function itinStopHead(s) {
+  const name = s.name || '（沒有名字）';
+  const src = spotIconSrc(s);
+  return src ? [placeIconImg(src, s.emoji || '📍'), ' ', name] : [`${s.emoji || '📍'} ${name}`];
+}
+
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，
 // 做完的自動讓位。使用者自己點過的展開／收合永遠優先（存 localStorage）。
 function spotSection(s, tripId, focusId, hereId) {
@@ -1049,7 +1065,7 @@ function spotSection(s, tripId, focusId, hereId) {
           try { localStorage.setItem(openKey, nowOpen ? '1' : '0'); } catch { /* noop */ }
         },
       },
-        h('span', { class: 'qc-emoji' }, s.emoji || '📍'),
+        h('span', { class: 'qc-emoji' }, spotIcon(s)),
         h('span', { class: 'qc-name' }, s.name,
           isHere ? h('span', { class: 'qc-here' }, '📍 現在這一站') : null,
           // 從行程表匯入的才有時間；時間與類別都沒有就整行不放
@@ -1756,6 +1772,9 @@ function memoriesCard(tripId, t, ended) {
 export async function itinerary(tripId, { drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
+  // v1.92.0 站卡的類型圖示要從景點庫重算（js/placeicon.js）；載不到 → placeLookupSync 回 null → 不畫圖示、照原本的表情符號
+  await loadThemes().catch(() => {});
+  await loadPlaceLookup().catch(() => {});
   setTop({ title: t.title, action: { icon: '⚙️', label: '旅程設定', short: '設定', onClick: () => navigate(`/trip/${tripId}/settings`) } });
   const spots = store.spotsOf(tripId);
   const byDay = new Map();
@@ -1866,7 +1885,7 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
           legTimeline(ds, (s) => h('li', { class: 'tl-item' },
             h('span', { class: 'tl-time' }, spotTimes(s).startTime || ''),
             h('span', { class: 'tl-dot', 'aria-hidden': 'true' }),
-            h('div', { class: 'itin-stop' }, `${s.emoji || '📍'} ${s.name || '（沒有名字）'}`,
+            h('div', { class: 'itin-stop' }, itinStopHead(s),
               spotTimes(s).stayMin ? h('span', { class: 'itin-stay' }, stayText(spotTimes(s).stayMin)) : null))),
           dayMap(ds, tripId, day))));
       secs.set(day, sec);

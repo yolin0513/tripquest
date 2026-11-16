@@ -47,6 +47,7 @@ const SHELL_ASSETS = [
   './js/aikeys.js',
   './js/aicontent.js',
   './js/theme.js',
+  './js/placeicon.js',
   './js/places.js',
   './js/plancheck.js',
   './js/transit.js',
@@ -143,6 +144,16 @@ const SHELL_ASSETS = [
   './data/places/tw-chiayi.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  // v1.92.0 景點類型圖示（登記在 media/art/manifest.json；9 張合計約 60 KB；scripts/placeicontest.mjs 驗每一張都在這裡、大小寫跟 git 一致）
+  './media/art/a/sight.png',
+  './media/art/a/food.png',
+  './media/art/a/nightmarket.png',
+  './media/art/a/snack.png',
+  './media/art/a/checkin.png',
+  './media/art/a/culture.png',
+  './media/art/a/nature.png',
+  './media/art/a/shopping.png',
+  './media/art/a/view.png',
 ];
 
 // SHELL 清單的路徑集合（fetch handler 用：這些檔案只從本版快取拿，不半路換檔）
