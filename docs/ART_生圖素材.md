@@ -264,6 +264,47 @@ Do not draw anything that could be read as information: no sun, no moon, no rain
 
 收到圖之後：量上半部（標題、日期那一行壓上去 ≥ 4.5）、逐隻對參考圖、看有沒有偷畫字或天氣建築食物；正式墊進海報仍要先做 B18 的新檢查並另排一版。
 
+**2026-11-16 晚第一張回來之後**：
+- 鬍鬍被畫成淺灰毛、白眉毛。Yolin 選乙案，由程式改色：`scripts/art-recolor.mjs` 的內建配方 `d2-huhu`，見第 9 節第 6 點。
+- 改好的圖在 `art-inbox/D-豐富版-鬍鬍改色.png`（不進版控）。正式進海報那一版才複製進 `media/art/` 並登記。
+- 阿灰的比例與望遠鏡、北北多的口袋改不了色，還在。
+
+### 7c. 北海道無字底圖（樣品 B；2026-11-16 晚，Dispatch 轉 Yolin）
+
+**是什麼**：
+- 整張含字的北海道海報實測錯 6 個字，而且人工逐字核對會漏。所以改成生圖只畫「沒有字的手繪水彩北海道地圖」。
+- 標題、日期、路線、每天的框、吉祥物由 App 疊。
+- 這張是樣品：給 Yolin 看效果、實測對位用。**不是正式功能**。
+- 3 代理投票（`docs/VOTE_2026-11-16_生圖只畫底圖.md`）一致說地理底圖不在這次範圍，要先實測對位再另外決定。
+
+**給 Yolin**：
+- 新對話、不附舊圖（附了容易把字、框、角色照抄），直式 2:3。
+- 存進 `art-inbox`，檔名例如 `北海道無字底圖-第一次.png`。
+- 看得到字、數字、框、角色、路線、箭頭、道路、建築、食物的，直接重生。
+
+```
+A soft hand-drawn watercolor illustrated map of the island of Hokkaido, Japan, seen from directly above, with north at the top. Portrait orientation, 2:3.
+
+Layout: the island sits in the middle of the picture and fills only about 60% of the width. Leave wide, calm, empty sea all around it, at least one fifth of the picture on every side (left, right, top and bottom), because labels and boxes will be placed on top of the sea later.
+
+Style: gentle pastel watercolor on warm cream paper, soft edges, light colors, low contrast, a cozy picture-book feeling. Sea: a pale blue-green watercolor wash with very faint soft waves, almost flat. Land: soft light-green lowlands, pale yellow-green fields, light grey-green shading for the inland mountains, and a few small rounded watercolor tree clusters. Draw the coastline with a thin, soft brown line.
+
+Absolutely no text of any kind: no letters, no words, no numbers, no Chinese or Japanese characters, no place names, no labels, no title, no legend, no compass rose, no scale bar, no signature, no watermark. No boxes, frames, banners, ribbons, sticky notes, flags, pins, markers or icons. No route lines, no dotted paths, no arrows, no roads, no railways. No buildings, no landmarks, no towers, no bridges, no food, no weather symbols, no animals, no people, no characters. No land other than Hokkaido. Keep the whole picture light and uncluttered.
+```
+
+**為什麼這樣寫**：
+- 島只佔中間六成、四周留海：框放在海上，用線指到島上。
+- 不畫道路：模型畫的路位置不準，會被看成「我們的路線」。
+- 不畫地標、建築、食物：畫錯的東西會被當成資訊。
+
+**收到之後（推論，還沒實測）**：
+- 模型畫的海岸線不會完全準。在圖上找幾個海岬當對位點，把 App 的路線、框對上去，量能對多準。
+- 對不準就退回「地圖只當背景、路線用示意畫法」。
+
+**先用舊圖做粗略示意：跳過**。
+- 舊圖的字散在 8 個框、標題、美食清單、便利貼、旗子裡。我們的框蓋得住它的框，蓋不掉美食清單和便利貼。
+- 它畫錯位置的那段路線和矛盾的箭頭也會留在底下，跟我們的路線疊成兩條。做不乾淨。
+
 ---
 
 ## 8. 尺寸：每格大概多少像素、在 App 裡夠不夠
@@ -316,6 +357,23 @@ Do not draw anything that could be read as information: no sun, no moon, no rain
 4. 確認要用的才複製進正式素材目錄 `media/art/<組>/`（進版控），同時在 `media/art/manifest.json` 登記：檔名、類別、准用在哪、來源（ChatGPT、日期、第幾組提示詞）。
    - **組 A 已進（v1.92.0，2026-11-16）**：去背後每張修掉四周全透明的邊 → 等比放進 128×128（四周留 6px；畫面上最大 32 CSS px，4 倍密度剛好）→ 調色盤 PNG。9 張合計 62150 位元組（每張 5～9 KB），只有影像區塊。碗那張的熱氣補了 5px 墨線（原本白色、沒墨線，淺色底上看不見；只描熱氣，碗一個像素都沒動）。登記與處理步驟寫在 manifest 裡，`scripts/placeicontest.mjs` 驗登記跟檔案、程式的表、離線清單、git 的大小寫一致。
 5. 兩支腳本每次執行都會先跑自己的合成對照組（切圖 16 個——其中 3 個是 4×4——去背 9 個；該放行的要放行，該擋的要擋在對的那一關，只標壞格的要標對是哪幾格；放行的格逐格核對顏色，確認切出來的位置沒有錯開）。對照組沒有全部判對，就不處理真的圖。
+6. **角色改色** `node scripts/art-recolor.mjs <輸入圖> <輸出圖（要不存在）> <配方>`（2026-11-16 晚加；第一個用途是 D 豐富版的鬍鬍）：
+   - 配方寫：圖的尺寸與 sha256（拿錯圖就停）、角色所在的方塊、毛的種子點、眉毛方塊、目標色（從 App 匯出的參考圖量）。內建 `d2-huhu`，也可以給 `.json`。
+   - 做法：
+     - 從方塊四邊往內填色找出角色的範圍，所以外框要閉合；有缺口就停。
+     - 只改「像毛」的點：低彩度、不是墨線、不是本來就白的。領巾、臉頰、鬍子、墨線不動。
+     - 眉毛方塊裡越白越接近眉毛色。
+     - 角色外面逐點比對，有一點不同就停、不寫檔。
+     - 改完驗收毛與眉毛在目標色附近；寫出去再讀回來比一次。
+   - 自帶合成對照組 10 個，每次先跑；artselftest 的 AS8、AS9 從命令列入口驗。
+   - **d2-huhu 的實測（2026-11-16）**：
+     - 毛 rgb(228,223,218) → rgb(251,249,245)，眉毛 → rgb(195,189,183)。
+     - 改到的點 14963 個，都在鬍鬍身上。另寫一支不 import 改色腳本的比對程式，逐點核對方塊外 0 點（另外五隻都在方塊外，不另算一項），附對照組。
+     - 方塊裡面也查了：被改的點逐點看改之前的顏色，全部是灰白（彩度 ≤ 26），沒有一點是背景的綠或黃（頭頂那塊綠背景的彩度 67）；頭頂、肚子下面兩處放大 7 倍前後對看，背景沒變。對照組：在綠背景改一個點，數得到。
+   - **做不到的**：
+     - 參考圖的耳朵是很淡的米灰。這張耳朵內側那條線是開口的，耳朵跟頭連成一塊，程式分不出來，所以耳朵跟毛一起改白。
+     - 參考圖的鬍子有墨線圍著；這張的鬍子沒有墨線，毛改白之後，鬍子跟臉的分界變淡。
+     - 方塊、種子點、眉毛方塊是人看圖填的，填錯程式分不出來，所以改完一定要出前後對照圖、人眼看一次。
 
 ---
 

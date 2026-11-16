@@ -276,11 +276,11 @@
     "at": "2026-11-16"
   },
   "guesscensustest": {
-    "sec": 0.1,
+    "sec": 0.2,
     "at": "2026-11-16"
   },
   "themetrusttest": {
-    "sec": 0.1,
+    "sec": 0.2,
     "at": "2026-11-16"
   },
   "posterlayouttest": {
@@ -288,7 +288,7 @@
     "at": "2026-11-16"
   },
   "viewentrytest": {
-    "sec": 1.9,
+    "sec": 2,
     "at": "2026-11-16"
   },
   "dayjumptest": {
@@ -368,7 +368,7 @@
     "at": "2026-11-16"
   },
   "nullinserttest": {
-    "sec": 4.8,
+    "sec": 5.1,
     "at": "2026-11-16"
   },
   "itinposterlayouttest": {
@@ -380,7 +380,7 @@
     "at": "2026-11-16"
   },
   "artselftest": {
-    "sec": 8.8,
+    "sec": 10,
     "at": "2026-11-16"
   },
   "placeicontest": {
