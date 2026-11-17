@@ -373,6 +373,8 @@ For all items: no packaging, boxes with logos, shop signs or brand shapes; no re
 
 ### 7e. 這趟旅程專屬的整張無字背景（北海道 8 天 7 夜樣品；2026-11-17，Yolin 經 Dispatch）
 
+**整套流程（逐步、三份提示詞範本、將來接 GPT API 的規劃、腳本位置）寫在 `docs/ART_行程海報生圖流程.md`**（2026-11-17 立）。本節保留版面與寫法規則的正本。
+
 **流程**：每趟行程人工跑一次。
 1. Claude 照行程表寫一份這趟專屬的提示詞。
 2. Yolin 用 GPT 生整張無字背景。
