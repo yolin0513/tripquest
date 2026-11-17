@@ -128,7 +128,9 @@
 - **實測驗證過的**：
   - 一次性差異比對（`.logs/v194/diff.mjs`，不進版控；拿 HEAD 的 js／data 跟工作區各跑一次）：159 站完成任務的探頭圖**舊＝新、0 個不同**；`trustedTheme` 的類別**正好 61 個不同、全是打卡 urban → null**；456 天行程海報每天的探頭圖**舊＝新**。對照組：舊對舊 0 個不同；故意把打卡改成帽子的版本 61 站、245 天不同。
   - node 測試（15:3x～15:4x）：placeicontest 104 項、themetrusttest 21 項、curatedtest 48、postertruthtest 20、guesscensustest 11、posterlayouttest 34、matchinputtest 13、itinposterlayouttest 175，全部通過。E9：景點庫 135 筆都複核得回自己；`.emoji` 掃到 31 行、登記 30 筆（sos.js 兩行一樣，那筆寫 `n: 2`）。
-  - mutlint：721 條的 `find` 都對得到、0 條失效。改動讓 7 條突變的 `find` 失效（mut_themetrust 1、mut_v189 2、mut_v192 4），照原意改寫、預期在跑之前寫好。新的 `tools/mutations/mut_v194.json` 26 條（guesstruthtest 15、placeicontest 7、themetrusttest 3、itinposterlayouttest 1），39 個 expect 都在對應測試的原始碼裡找得到（一次性 `.logs/v194/expcheck.mjs`，帶對照組）。**突變一條都還沒跑。**
+  - mutlint：721 條的 `find` 都對得到、0 條失效。改動讓 7 條突變的 `find` 失效（mut_themetrust 1、mut_v189 2、mut_v192 4），照原意改寫、預期在跑之前寫好。新的 `tools/mutations/mut_v194.json` 26 條（guesstruthtest 15、placeicontest 7、themetrusttest 3、itinposterlayouttest 1），39 個 expect 都在對應測試的原始碼裡找得到（一次性 `.logs/v194/expcheck.mjs`，帶對照組）。
+  - **秒級突變（commit `f09abf7` 之後、嚴格模式，16:0x；一次性挑選腳本 `.logs/v194/runnode.mjs`）39 條：紅 35、沒有結果 4。** mut_v194 的 11 條、mut_v192 的 11 條、mut_v193 的 3 條、mut_v189 改寫的 2 條**全部紅、全部紅在預期、沒有別的紅**（27 條）。mut_themetrust 12 條：紅 8——改寫的那條紅在預期（R6、R8）；另 7 條是 10-27 寫的、沒有 `expect` 欄，拿 `why` 逐條對：6 條剛好紅在 `why` 寫的那幾條，「多數決：退回存著的 theme」除了 R7 另紅「每一處都登記了」（突變多讀一處 `.theme`，被登記制也擋下——另一道防線，跟這版無關）。
+  - **沒有結果的 4 條（這版之前就有的洞，不是這版造成的）**：mut_themetrust 的「漏認 storedThemeOf」「註解也算」「類別不檢查」「過期的登記不報」都判「⊘ 沒跑完 19/21」。原因（讀程式＋看輸出）：這 4 條故意弄壞掃描器、讓對照組紅；themetrusttest 對照組沒過就**不印後面 2 項真實結果**、回 4（設計如此：掃描器壞了不採信）；執行器 2026-11-11 起要求項數等於原樣的母體，少 2 項就判沒跑完。帳本：這 4 條上次跑是 10-27（舊執行器、判紅），之後沒跑過——**11-11 之後第一次跑就是今天**。guesscensustest 的同一種突變（mut_guesscensus 的對照組那幾條）推論也一樣，今天沒跑。修法要 Dispatch 定（見交回的待決）。
 - **推論、還沒驗**：畫面上的行為（H5 那一組）；主題表、景點庫載入讓主頁多等多久；hometest、mascottest 會不會受影響（主頁先等載入）——這些都要開瀏覽器。「主頁自己不載景點庫」那條突變**可能不紅**（主頁上別的東西若已經載過景點庫）——跑了才知道，不紅就照 §5.12 分辨是等價還是測試沒力。景點庫裡「看景」類目前 0 筆，P1 蓋不到它（`CAT_PEEK` 有寫，沒有資料驗）。
 - **照實記**：
   - 這段在指令列用了 `node -e ""`（本輪第 3 次，空的佔位）與 `node -p "1"`（夾在語法檢查那一行），都沒寫檔、沒讀資料，但照樣違反本專案「不用 `node -e`」的規矩（§5.5）。
