@@ -1,0 +1,236 @@
+[
+  {
+    "name": "v194 符號：對不回景點庫時退回存著的",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）trustedPlaceEmoji 複核沒過時回存著的 spot.emoji——正是「舊行程照名字配的符號」露出來的那條路。預期紅 E0（景點庫沒載好 → 🌊）、E3（自己打字的 → 🌃）、E4（改名／不見／當年比錯 → 🌊）、E8（改過名字、自己打字的不是 null）。",
+    "expect": ["E0 景點庫沒載好", "E3 使用者自己打字新增的", "E4 改過名字", "E8 trustedPlaceEmoji"],
+    "file": "js/placeicon.js",
+    "find": "  if (!v.recheck) return null;\n  const e = lookup.placeById(v.placeId)?.emoji;",
+    "replace": "  if (!v.recheck) return (spot && spot.emoji) || null;\n  const e = lookup.placeById(v.placeId)?.emoji;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 符號：對得回時也先看存著的",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）複核通過時先拿存著的 spot.emoji、沒有才用景點庫的。預期紅 E1（🌊）、E2（🛕）、E7（🏯）、E8（梧棲漁港回 🌊）、E9（景點庫每一筆都回存著的 🌊）；E10 的假景點沒存符號，不紅。",
+    "expect": ["E1 對得回景點庫", "E2 類別中性", "E7 打卡換成中性之後", "E8 trustedPlaceEmoji", "E9 景點庫每一筆"],
+    "file": "js/placeicon.js",
+    "find": "  const e = lookup.placeById(v.placeId)?.emoji;",
+    "replace": "  const e = (spot && spot.emoji) || lookup.placeById(v.placeId)?.emoji;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 符號：景點庫的符號不檢查型別",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）景點庫那一筆的符號不檢查是不是字串，數字 3 會原樣傳到畫面。預期只紅 E10（空字串、null 照樣被 || 擋掉，只有數字露出來）。",
+    "expect": ["E10 景點庫那一筆的符號"],
+    "file": "js/placeicon.js",
+    "find": "  return typeof e === 'string' && e ? e : null;",
+    "replace": "  return e || null;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 探頭圖：打卡不再是相機",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）CAT_PEEK 拿掉打卡那一筆＝Dispatch 選丙之前的甲（相機那張再也不出現）。預期紅 P1（打卡 61 筆期望 cam、實得 null）、P4（打卡那站完成任務 → 打領結）。",
+    "expect": ["P1 景點庫每一筆", "P4 完成任務"],
+    "file": "js/peeks.js",
+    "find": "  checkin: 'cam',",
+    "replace": "  checkin: null,",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 探頭圖：打卡不再是相機（行程海報）",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）同上一條的壞法，從行程海報每天那一隻驗。預期只紅 A15b（第 2 天只有九份老街——打卡 → 相機，壞了變打領結）；A15a、A15e 那幾天沒有打卡，不紅。",
+    "expect": ["A15b 沒有預報"],
+    "file": "js/peeks.js",
+    "find": "  checkin: 'cam',",
+    "replace": "  checkin: null,",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "v194 探頭圖：物件本來就有的名字也對得到",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）peekForVerdict 不用 hasOwnProperty、直接查表：類型 toString、constructor、hasOwnProperty 會查到函式、__proto__ 查到 Object.prototype。預期只紅 P3。",
+    "expect": ["P3 類型是 toString"],
+    "file": "js/peeks.js",
+    "find": "  return Object.prototype.hasOwnProperty.call(CAT_PEEK, v.cat) ? CAT_PEEK[v.cat] : null;",
+    "replace": "  return CAT_PEEK[v.cat] || null;",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 類別：複核沒過也帶 cat",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）trustedTheme 每一種回傳都帶景點庫那一筆的 primary 當 cat（複核沒過也帶）——探頭圖只看 cat，會讓改過名字的那一站照樣拿到圖。預期只紅 R2（改過名字 cat 不是 null）；R5 沒有 lookup、拿不到那一筆，不紅。",
+    "expect": ["R2 對上但複核不通過"],
+    "file": "js/theme.js",
+    "find": "  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, cat: null, ...extra });",
+    "replace": "  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, cat: (lookup && placeId && lookup.placeById(placeId) && lookup.placeById(placeId).primary) || null, ...extra });",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "v194 類別：複核沒過也帶 cat（探頭圖）",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）同上一條的壞法，從探頭圖驗。預期紅 P2（打卡那一筆改過名字 → 相機）、P4（打卡改過名字完成任務 → 相機、不是打領結）；P2 的另兩種（沒有 lookup、自己打字沒有 placeId）拿不到那一筆，不影響。",
+    "expect": ["P2 打卡那一筆改過名字", "P4 完成任務"],
+    "file": "js/theme.js",
+    "find": "  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, cat: null, ...extra });",
+    "replace": "  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, cat: (lookup && placeId && lookup.placeById(placeId) && lookup.placeById(placeId).primary) || null, ...extra });",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 類別：cat 沒寫",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）trustedTheme 不寫 cat（探頭圖從此拿不到類型）。預期紅 R1（cat 應是 food）、R8（cat 應是 checkin）。",
+    "expect": ["R1 對上、複核通過", "R8 打卡換成中性"],
+    "file": "js/theme.js",
+    "find": "  const cat = src[1];",
+    "replace": "  const cat = null;",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "v194 打卡：對照表改回都市",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）data/themes.json 的打卡改回 urban（v1.94.0 以前）。預期只紅 R8（key 變 urban、reason 不是 neutral）。",
+    "expect": ["R8 打卡換成中性"],
+    "file": "data/themes.json",
+    "find": "      \"checkin\": \"journey\",",
+    "replace": "      \"checkin\": \"urban\",",
+    "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "v194 打卡：對照表改回都市（圖示）",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前）同上一條的壞法，從 placeicontest 驗。預期只紅 B9 的前置（key 變 urban、不是 null）；圖示、符號、探頭圖都看 recheck 與 cat，不受影響——B9 本身、E7、P1、P4 不紅。",
+    "expect": ["B9 前置"],
+    "file": "data/themes.json",
+    "find": "      \"checkin\": \"journey\",",
+    "replace": "      \"checkin\": \"urban\",",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 打卡：對照表改回都市（任務頁小標）",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）同上的壞法，從畫面驗：任務頁打卡那站又印「都市」小標。預期只紅 H5-7。",
+    "expect": ["H5-7 任務頁主題小標"],
+    "file": "data/themes.json",
+    "find": "      \"checkin\": \"journey\",",
+    "replace": "      \"checkin\": \"urban\",",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：主頁下一站卡用存著的符號",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）下一站卡改回 v1.94.0 以前的「存著的符號 名字」。預期只紅 H5-2（沒有圖示、露出 🌊）。",
+    "expect": ["H5-2 主頁下一站卡"],
+    "file": "js/views/trip.js",
+    "find": "  const nameEl = h('span', { class: 'nextstn-name' }, spotMark(next, placeLookupSync()), ' ', next.name);",
+    "replace": "  const nameEl = h('span', { class: 'nextstn-name' }, `${next.emoji || '📍'} ${next.name}`);",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：今天接下來用存著的符號",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）「今天接下來」改回存著的符號。預期只紅 H5-3（乙寺露出 🛕、打卡那站沒有圖示）。",
+    "expect": ["H5-3 主頁「今天接下來」"],
+    "file": "js/views/trip.js",
+    "find": "          h('span', { class: 'tn-name' }, spotMark(s, placeLookupSync()), ' ', s.name));",
+    "replace": "          h('span', { class: 'tn-name' }, `${s.emoji || '📍'} ${s.name}`));",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：主頁自己不載景點庫",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）tripHome 不先載景點庫——重新整理直接打開主頁時 placeLookupSync 是 null，一律 📍。預期紅 H5-2、H5-3（對得回的兩站沒有圖示）。若主頁另有別的東西先載了景點庫、這條不紅，照實回報（代表這兩行是多餘的）。",
+    "expect": ["H5-2 主頁下一站卡", "H5-3 主頁「今天接下來」"],
+    "file": "js/views/trip.js",
+    "find": "  // 載不到就是 📍（placeLookupSync 回 null），不露出存著的、可能是照名字猜的符號\n  await loadThemes().catch(() => {});\n  await loadPlaceLookup().catch(() => {});",
+    "replace": "  // （突變：不載）",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：換一站用存著的符號",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）「換一站」那一格改回存著的符號。預期只紅 H5-4。",
+    "expect": ["H5-4 換一站"],
+    "file": "js/views/trip.js",
+    "find": "          h('span', { class: 'here-pick-emoji' }, spotMark(s, lookup)),",
+    "replace": "          h('span', { class: 'here-pick-emoji' }, s.emoji || '📍'),",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：調整行程用存著的符號",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）調整行程每一列改回存著的符號。預期只紅 H5-5。",
+    "expect": ["H5-5 調整行程"],
+    "file": "js/views/plan.js",
+    "find": "            h('div', { class: 'plan-name' }, spotMark(s, placeLookupSync()), ' ', s.name),",
+    "replace": "            h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：調整行程自己不載景點庫",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）plan() 不先載景點庫——重新整理直接打開時一律 📍。預期只紅 H5-5。",
+    "expect": ["H5-5 調整行程"],
+    "file": "js/views/plan.js",
+    "find": "  // 每一站名字前面的符號／圖示從景點庫重算（v1.94.0，js/placeicon.js）：先載好再畫；載不到就是 📍，不露出存著的、可能是照名字猜的符號\n  await loadThemes().catch(() => {});\n  await loadPlaceLookup().catch(() => {});",
+    "replace": "  // （突變：不載）",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：照片牆篩選用存著的符號",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）照片牆「要看哪些照片？」改回存著的符號。預期只紅 H5-6（乙寺露出 🛕、打卡那站露出 🏯）。",
+    "expect": ["H5-6 照片牆篩選"],
+    "file": "js/views/people.js",
+    "find": "        options.push({ value: s.id, label: `${placeEmojiForSpot(s, lookup)} ${s.name}`, tag: String(counts.get(s.id)) });",
+    "replace": "        options.push({ value: s.id, label: `${s.emoji || '📍'} ${s.name}`, tag: String(counts.get(s.id)) });",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：照片牆篩選自己不載景點庫",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）openFilter 不先載景點庫——重新整理直接打開照片牆時一律 📍。預期只紅 H5-6（打卡那站變成 📍）。若照片牆另有別的東西先載了景點庫、這條不紅，照實回報。",
+    "expect": ["H5-6 照片牆篩選"],
+    "file": "js/views/people.js",
+    "find": "      await loadThemes().catch(() => {});\n      await loadPlaceLookup().catch(() => {});\n      const lookup = placeLookupSync();",
+    "replace": "      const lookup = placeLookupSync();",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：回顧影片地圖標籤用存著的符號",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）computeMapLayout 改回 s.emoji。預期只紅 H5-8（露出 🌊、🛕、🏯）。",
+    "expect": ["H5-8 回顧影片的地圖標籤"],
+    "file": "js/memory.js",
+    "find": "    i, name: s.name, emoji: trustedPlaceEmoji(s, lookup) || '', region: s.region || '',",
+    "replace": "    i, name: s.name, emoji: s.emoji || '', region: s.region || '',",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：回顧影片自己不載景點庫",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）buildTimeline 不等景點庫載好、直接拿 placeLookupSync()——重新整理後呼叫時是 null，標籤一律不放符號。預期只紅 H5-8。",
+    "expect": ["H5-8 回顧影片的地圖標籤"],
+    "file": "js/memory.js",
+    "find": "    const lookup = await loadPlaceLookup().catch(() => null);",
+    "replace": "    const lookup = placeLookupSync();",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：已選小標籤不畫圖",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）已選小標籤改回 v1.94.0 以前的「符號 名字」。預期只紅 H5-1。",
+    "expect": ["H5-1 建立行程「已選」小標籤"],
+    "file": "js/views/create.js",
+    "find": "        h('span', { class: 'chip chip-sm' }, placeIconForEntry(v) ? [placeIconImg(placeIconForEntry(v), v.emoji || '📍'), ' ', v.name] : `${v.emoji || '📍'} ${v.name}`,",
+    "replace": "        h('span', { class: 'chip chip-sm' }, `${v.emoji || '📍'} ${v.name}`,",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：點選時沒存類型",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）點選景點時不存 primary——已選小標籤挑不到圖示、退回符號。預期只紅 H5-1。",
+    "expect": ["H5-1 建立行程「已選」小標籤"],
+    "file": "js/views/create.js",
+    "find": "blurb: p.blurb, emoji: p.emoji, primary: p.primary });",
+    "replace": "blurb: p.blurb, emoji: p.emoji });",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：節點放進樣板字串",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）「今天接下來」把 spotMark 放進樣板字串——打卡那站印出「[object HTMLImageElement]」。預期紅 H5-3（打卡那站找不到圖示）、H5-9（主頁有「[object」）。",
+    "expect": ["H5-3 主頁「今天接下來」", "H5-9 上面每一頁都沒有印出"],
+    "file": "js/views/trip.js",
+    "find": "          h('span', { class: 'tn-name' }, spotMark(s, placeLookupSync()), ' ', s.name));",
+    "replace": "          h('span', { class: 'tn-name' }, `${spotMark(s, placeLookupSync())} ${s.name}`));",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：任務頁與行程分頁的符號用存著的",
+    "why": "（事前寫 2026-11-17 15:4x，跑之前；開瀏覽器）spotEmoji 改回存著的 s.emoji（沒有圖示的那幾站、或圖載不到時用）。預期紅 H4-1（乙寺、丙海露出 🛕、🌊）、H4-3（乙寺、丙海站卡不是「📍 名字」）；H4-4 只驗有沒有圖、不紅。",
+    "expect": ["H4-1 匯入的行程", "H4-3 行程分頁"],
+    "file": "js/views/trip.js",
+    "find": "const spotEmoji = (s) => placeEmojiForSpot(s, placeLookupSync());",
+    "replace": "const spotEmoji = (s) => s.emoji || '📍';",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  }
+]

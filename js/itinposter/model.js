@@ -21,19 +21,22 @@
 //             只用使用者填的「幾點到」「停留多久」與路線服務真的算出來的車程；車程由呼叫的一方從快取拿來給 legTimes，
 //             這支不打網路）；兩站之間的車程「約 N 分」（同一份 legTimes，行程分頁畫面上那一句）
 //   （v1.89）每一天一隻探頭的吉祥物（day.peek）：跟完成任務、天氣卡同一套只看可信資料的規則——
-//             那天的預報下雪／下雨 → 雪板／撐傘；不然看那天的站的可信類別（theme.js 的 trustedTheme，不看存著的 spot.theme、
-//             不照名字猜），對得上圖的那幾站多數決（平手取先出現的，theme.js 的 trustedThemeOf）；一個都沒有 → 打領結揮手
+//             那天的預報下雪／下雨 → 雪板／撐傘；不然看那天的站對得回景點庫的類型（theme.js 的 trustedTheme 複核通過才算，
+//             不看存著的 spot.theme、不照名字猜；類型 → 圖是 js/peeks.js 的 peekForVerdict），對得上圖的那幾站對「圖」多數決
+//             （平手取先出現的，theme.js 的 pickMajority）；一個都沒有 → 打領結揮手。
+//             v1.94.0 以前是對可信類別多數決、再換成圖；打卡改中性之後類別拿不到打卡，改成直接對圖——類型 → 圖跟舊的
+//             類型 → 類別 → 圖逐項一樣、類別 → 圖是一對一，所以票數與先後跟舊的相同（推論；一次性腳本拿舊版比過，見 STATUS）
 // 不放：類別（名稱、插圖、每站 emoji）、景點介紹、AI 文案、住宿與航班（海報會傳出去：哪幾晚住哪裡、哪一班飛機不印）、
 //       Check Point（App 裡沒有讓使用者標「重點」的地方，不替他挑）、食物插圖（沒有對得上的圖，不畫猜的）。
 // 決定與替代方案見 docs/STATUS.md 的 v1.88.0、v1.89。
 
-import { trustedTheme, trustedThemeOf } from '../theme.js';
+import { trustedTheme, pickMajority } from '../theme.js';
 import { spotTimes, stayText, etaChain, fmtHHMM } from '../spottime.js';
 import { legModeOf, LEG_LABEL, LEG_NO_DURATION } from '../legs.js';
 import { weekdayLabel } from '../tripday.js';
 import { isRainDay, isSnowDay, wxIcon } from '../weather.js';
 import { dayDateLabel } from '../poster/layout.js';
-import { THEME_PEEK, WEATHER_PEEK, DONE_PEEK } from '../peeks.js';
+import { peekForVerdict, WEATHER_PEEK, DONE_PEEK } from '../peeks.js';
 
 export const MUST_PER_SPOT = 3;   // 一站最多列幾項必吃（景點庫一筆有 3～5 項；海報放不下全部，取前面的）
 
@@ -97,13 +100,12 @@ function tipOf(w) {
   return { day: w.day, date: md(w.date), icon: wxIcon(w.code), text: [temp, warn].filter(Boolean).join('，'), warn: !!warn };
 }
 
-// 一天的吉祥物：預報（這一天的那一筆，沒有就 null）→ 可信類別 → 打領結（規則見檔頭）
+// 一天的吉祥物：預報（這一天的那一筆，沒有就 null）→ 景點庫的類型 → 打領結（規則見檔頭）
 function dayPeek(list, wx, lookup) {
   if (wx && isSnowDay(wx)) return WEATHER_PEEK.snow;
   if (wx && isRainDay(wx)) return WEATHER_PEEK.rain;
-  const mapped = lookup ? list.filter((s) => THEME_PEEK[trustedTheme(s, lookup).key]) : [];
-  const key = mapped.length ? trustedThemeOf(mapped, lookup) : null;
-  return THEME_PEEK[key] || DONE_PEEK;
+  const kinds = lookup ? list.map((s) => peekForVerdict(trustedTheme(s, lookup))).filter(Boolean) : [];
+  return kinds.length ? pickMajority(kinds) : DONE_PEEK;
 }
 
 // trip、spots（store.spotsOf 的順序：第幾天、order）、members、lookup（generate.js 的 loadPlaceLookup；沒載好給 null → 必吃一項都沒有）、

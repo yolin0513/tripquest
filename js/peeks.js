@@ -22,14 +22,32 @@ let seq = 0;
 
 // 天氣：那一天會下雨／下雪 → 哪一張
 export const WEATHER_PEEK = Object.freeze({ rain: 'rain', snow: 'snow' });
-// 完成任務：景點的可信類別 → 哪一張（沒列的類別＝沒有對得上的圖 → DONE_PEEK）
-export const THEME_PEEK = Object.freeze({
+// 完成任務：景點庫那一筆的類型 → 哪一張（沒列的類型＝沒有對得上的圖 → DONE_PEEK）
+// v1.94.0 以前看的是可信類別（THEME_PEEK：food／nightmarket／nature／urban）。打卡在 data/themes.json 改成中性
+// （Dispatch 2026-11-16「打卡改成中性、不顯示主題小標」）之後，沒有任何類型會換成 urban，相機那張就再也不會出現；
+// Dispatch 2026-11-17 定丙：類別改中性，探頭圖改看景點庫的類型（trustedTheme 回傳的 cat），打卡照樣是相機。
+// 這張表跟舊的逐項一樣（舊：類型 →〔themes.json 的 byTag〕→ 類別 →〔THEME_PEEK〕→ 圖；food、snack → food → eat；
+// nightmarket → grill；nature、view → nature → hat；checkin → urban → cam；culture、shopping、sight 沒有圖）——v1.94.0 用一次性腳本
+// 拿舊版程式逐筆比過景點庫每一筆（結果記在 STATUS）。
+export const CAT_PEEK = Object.freeze({
   food: 'eat',          // 美食：小鳳圍著圍兜捧一碗麵
+  snack: 'eat',         // 小吃：同上
   nightmarket: 'grill', // 夜市：北北綁頭巾舉烤串
-  nature: 'hat',        // 自然（山、島、溫泉街、觀景台）：北北戴遮陽帽揮手——不畫成健行，免得跟一大半對不上
-  urban: 'cam',         // 打卡（景點庫的 checkin）：鬍鬍把相機擱在照片上
+  nature: 'hat',        // 自然（山、島、溫泉街）：北北戴遮陽帽揮手——不畫成健行，免得跟一大半對不上
+  view: 'hat',          // 觀景台：同上
+  checkin: 'cam',       // 打卡：鬍鬍把相機擱在照片上（拿相機拍照本來就是「打卡」的意思，跟都不都市無關）
 });
 export const DONE_PEEK = 'done';
+
+// 一站的探頭圖：v 是 theme.js 的 trustedTheme(spot, lookup) 回傳值。複核通過、類型在表上 → 那一張；其餘 → null（呼叫端自己決定退回哪一張）。
+// 收的是回傳值、不自己呼叫 trustedTheme：這支檔用到時才載入，不為了這一行多 import 一支檔。
+// 「複核通過才算」靠 cat：trustedTheme 只在複核通過時寫 cat，其餘一律 null（themetrusttest R1、R2、R5、R8 驗）——這裡不再另看 recheck，
+// 免得兩道守同一件事、拿掉一道不會有測試紅。
+// 用 hasOwnProperty：cat 是景點庫的字串，'toString' 這種物件本來就有的名字不准對到東西。
+export function peekForVerdict(v) {
+  if (!v || typeof v.cat !== 'string') return null;
+  return Object.prototype.hasOwnProperty.call(CAT_PEEK, v.cat) ? CAT_PEEK[v.cat] : null;
+}
 
 // 深色主題的白邊：跟 glyphs.js 的吉祥物同一個濾鏡（和紙主題由 CSS 關掉：html[data-theme="washi"] .gl-peek .mc-fig）。
 // 只有範圍不一樣：這裡用整張圖的座標（userSpaceOnUse）、四邊各多留 30——裁切框（peek() 裡的 -up／-dn）只到 20，
@@ -179,11 +197,10 @@ export function cheer(el, { soft = false } = {}) {
 // 夜市主題的範本任務 kind 也是 food，但題目多半是「拍最有氣勢的攤位」「人潮的縱深」，不是在吃；那些照景點類別走（夜市＝烤串）。
 export async function completionPeekKind(quest, spot) {
   if (!spot || spot.source !== 'curated') return DONE_PEEK;      // 自己打字的地點：沒有可信的類別
-  if (quest && (quest.source === 'must' || (quest.source === 'curated' && quest.kind === 'food'))) return THEME_PEEK.food;
+  if (quest && (quest.source === 'must' || (quest.source === 'curated' && quest.kind === 'food'))) return CAT_PEEK.food;
   const [{ loadPlaceLookup }, th] = await Promise.all([import('./quests/generate.js'), import('./theme.js')]);
   await th.loadThemes();
-  const key = th.trustedTheme(spot, await loadPlaceLookup()).key;
-  return THEME_PEEK[key] || DONE_PEEK;
+  return peekForVerdict(th.trustedTheme(spot, await loadPlaceLookup())) || DONE_PEEK;
 }
 
 // 圖：每張五段——vb（畫布）、edge（邊線的 y）、fig（邊線以上的身體）、front（跨在邊線上的前景）、extra（動作線）。

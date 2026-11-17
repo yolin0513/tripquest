@@ -13,7 +13,8 @@ import { h, mount, toast, promptDialog, confirmDialog, modal, nth } from '../ui.
 import { navigate, refreshPage } from '../router.js';
 import { uuid } from '../ids.js';
 import { toISO, parseISO } from '../daterange.js';
-import { generateForTrip } from '../quests/generate.js';
+import { generateForTrip, loadPlaceLookup, placeLookupSync } from '../quests/generate.js';
+import { spotMark } from '../placeicon.js';
 import { enrichTrip } from '../enrich.js';
 import { transitLeg, tzOffsetFor, rfc3339, VEHICLE_EMOJI } from '../transit.js';
 import { dayIssues, MAX_SHOWN, issueSig } from '../plancheck.js';
@@ -52,6 +53,9 @@ export default async function plan(tripId, { drawPage, setTop }) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '調整行程' });
+  // 每一站名字前面的符號／圖示從景點庫重算（v1.94.0，js/placeicon.js）：先載好再畫；載不到就是 📍，不露出存著的、可能是照名字猜的符號
+  await loadThemes().catch(() => {});
+  await loadPlaceLookup().catch(() => {});
 
   // 明確天數：先用日期推算，之後由「加一天 / 減一天」直接調整
   let explicitDays = 1;
@@ -215,7 +219,7 @@ export default async function plan(tripId, { drawPage, setTop }) {
         h('button', { class: 'plan-handle', 'aria-label': '拖曳排序' }, '☰'),
         h('div', { class: 'plan-main' },
           h('div', { class: 'plan-name-row' },
-            h('div', { class: 'plan-name' }, `${s.emoji || '📍'} ${s.name}`),
+            h('div', { class: 'plan-name' }, spotMark(s, placeLookupSync()), ' ', s.name),
             pinBtn),
           timeTxt ? h('div', { class: 'plan-time' }, `🕘 ${timeTxt}`) : null,
           h('div', { class: 'plan-eta', hidden: true }),
@@ -757,7 +761,7 @@ export default async function plan(tripId, { drawPage, setTop }) {
         sa.far ? h('p', { class: 'plan-eta warn', style: 'margin:0 0 8px' },
           '⚠ 這一天有跨區移動，可能安排得太滿 —— 交通方式與時間請自行確認。') : null,
         h('ol', { class: 'opt-list' }, ...seq.map((sp) => h('li', {},
-          `${sp.pinned ? '📌 ' : ''}${sp.emoji || '📍'} ${sp.name}`))),
+          sp.pinned ? '📌 ' : '', spotMark(sp, placeLookupSync()), ' ', sp.name))),
         h('p', { class: 'form-hint' }, '📌 釘住的位置不會動。套用後還是可以拖拉調整。'),
       ),
       actions: [

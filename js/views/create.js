@@ -13,7 +13,7 @@ export default async function create({ drawPage, setTop }) {
 
   const state = {
     members: ['我'],
-    picked: new Map(),          // placeId -> { name, cityId, blurb, emoji }
+    picked: new Map(),          // placeId -> { name, cityId, blurb, emoji, primary }（都是景點庫那一筆的；primary 給已選小標籤挑圖示）
     nav: { country: null, region: null, city: null, district: null },
     dates: { start: '', end: '' },
   };
@@ -129,7 +129,7 @@ export default async function create({ drawPage, setTop }) {
       class: 'place-card' + (on ? ' on' : ''),
       onclick: () => {
         if (state.picked.has(p.id)) state.picked.delete(p.id);
-        else state.picked.set(p.id, { name: p.name, cityId, cityName: p.cityName || cget3(state.nav.country, state.nav.region, state.nav.city)?.name || '', blurb: p.blurb, emoji: p.emoji });
+        else state.picked.set(p.id, { name: p.name, cityId, cityName: p.cityName || cget3(state.nav.country, state.nav.region, state.nav.city)?.name || '', blurb: p.blurb, emoji: p.emoji, primary: p.primary });
         card.classList.toggle('on');
         card.querySelector('.pc-add').textContent = state.picked.has(p.id) ? '✓ 已選' : '＋';
         drawPickedBar();
@@ -177,7 +177,8 @@ export default async function create({ drawPage, setTop }) {
     pickedBar.replaceChildren(
       h('span', { class: 'pb-count' }, `已選 ${state.picked.size} 個`),
       h('div', { class: 'pb-chips' }, ...[...state.picked.entries()].map(([id, v]) =>
-        h('span', { class: 'chip chip-sm' }, `${v.emoji || '📍'} ${v.name}`,
+        // v1.94.0 已選小標籤也接類型圖示：v 是景點庫本身的一筆（上面 place-card 點選時存的 primary），跟清單同一支 placeIconForEntry
+        h('span', { class: 'chip chip-sm' }, placeIconForEntry(v) ? [placeIconImg(placeIconForEntry(v), v.emoji || '📍'), ' ', v.name] : `${v.emoji || '📍'} ${v.name}`,
           h('button', { class: 'chip-x', type: 'button', onclick: () => {
             if (Date.now() - lastPickDel < 350) return;
             lastPickDel = Date.now();

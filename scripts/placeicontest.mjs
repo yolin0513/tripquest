@@ -16,7 +16,12 @@
 //       poster-header 是 JPEG、尺寸等於程式畫的大小（layout.js 的 HEADER_ART）、一張 100 KB、沒有 APP0 以外的 APPn 與註解區段
 //       （EXIF／XMP 在 APP1、C2PA 在 APP11——生圖服務可能把來源紀錄寫在這兩處）、對 HEADER_ART、在離線清單、進版控。
 //   三：類別多一種「poster-art」，只准 js/itinposter/ 底下；js/itinposter/ 底下也只准 poster-art；poster-art 那一行不准用景點類型圖示。
-// 一、三兩段先跑對照組（.logs/placeicon-ctl 底下造真的檔，走同一個讀檔與檢查），沒過就停（回 4）、不採信真實結果。
+// v1.94.0（Dispatch 2026-11-16 三件＋2026-11-17 定丙）：
+//   二：B9 打卡換成中性之後照樣有圖示；二之二 E0～E10 一站顯示用的符號（placeEmojiForSpot／trustedPlaceEmoji：對得回景點庫給景點庫那一筆的，
+//       其餘 📍／null，不看存著的 spot.emoji）；二之三 P1～P4 探頭圖看景點庫的類型（peeks.js 的 peekForVerdict、完成任務的 completionPeekKind）。
+//   三：spotMark 也算用到圖示，新接的畫面（主頁、換一站、調整行程、已選小標籤）各自登記。
+//   五（新）：js/ 底下讀 .emoji 的每一處都要登記用途，沒有「顯示存著的 spot.emoji」這一種（C3、C4）。
+// 一、三、五段先跑對照組（.logs/placeicon-ctl 底下造真的檔，走同一個讀檔與檢查），沒過就停（回 4）、不採信真實結果。
 // 已知限制：git 讀的是目前目錄的 repo；環境裡設了 GIT_DIR 之類的變數，A8 會去讀別的 repo（這支不是推送閘，不另外擋；推送閘自己擋）。
 //   三的掃描是逐行比字：解構（const { PLACE_ICON: X } = …）、拼出來的路徑（'media/' + 'art'）掃不到——在這個樣式範圍內未見，不是證明沒有。
 // 突變見 tools/mutations/mut_v192.json。
@@ -39,6 +44,7 @@ globalThis.fetch = async (u) => {
 const theme = await import('../js/theme.js');
 const gen = await import('../js/quests/generate.js');
 const icon = await import('../js/placeicon.js');
+const peeks = await import('../js/peeks.js');
 const { HEADER_ART } = await import('../js/itinposter/layout.js');
 await theme.loadThemes();
 
@@ -308,6 +314,10 @@ const sight = icon.PLACE_ICON.sight, food = icon.PLACE_ICON.food;
 yes(gen.placeLookupSync() === null, 'B0 前置：景點庫還沒載 → placeLookupSync() 是 null');
 const b0 = icon.placeIconForSpot({ name: '梧棲漁港', region: '台中市', source: 'curated', placeId: 'tc-wuqi' }, gen.placeLookupSync());
 yes(b0 === null, `B0 景點庫沒載好 → 沒有圖示（實得 ${b0}）`);
+// E0（v1.94.0）：景點庫沒載好 → 顯示用的符號是 📍，不退回存著的（存著的 🌊 是照名字猜的）
+const E0S = { name: '梧棲漁港', region: '台中市', source: 'curated', placeId: 'tc-wuqi', emoji: '🌊' };
+const e0 = icon.placeEmojiForSpot(E0S, gen.placeLookupSync()), e0t = icon.trustedPlaceEmoji(E0S, gen.placeLookupSync());
+yes(e0 === '📍' && e0t === null, `E0 景點庫沒載好 → 顯示的符號是 📍、trustedPlaceEmoji 是 null，存著的 🌊 不看（實得 ${e0}、${e0t}）`);
 
 const L = await gen.loadPlaceLookup();
 const wuqi = L && L.placeById('tc-wuqi');
@@ -361,17 +371,107 @@ const noIcon = Object.keys(byPrimary).filter((k) => !icon.PLACE_ICON[k] && NO_IC
 console.log(`說明：景點庫各類筆數 ${Object.entries(byPrimary).map(([k, n]) => `${k} ${n}`).join('、')}；表上有、景點庫 0 筆的：${Object.keys(icon.PLACE_ICON).filter((k) => !byPrimary[k]).join('、') || '無'}`);
 yes(Object.keys(byPrimary).length > 0 && noIcon.length === 0, `A9 景點庫的 ${Object.keys(byPrimary).length} 種 primary 都有圖示`, '沒有圖示的：' + noIcon.join('、'));
 
+// B9（v1.94.0）：打卡在 themes.json 換成中性（key 是 null）之後照樣有圖示——看的是 recheck（同 B2）
+const gion = L.placeById('kyoto-gion');
+const S9 = gion && { name: gion.name, region: gion.cityName, source: 'curated', placeId: gion.id, emoji: '🏯', theme: 'urban' };
+const t9 = S9 && theme.trustedTheme(S9, L);
+yes(!!gion && gion.primary === 'checkin' && t9.key === null && t9.recheck === true && t9.cat === 'checkin',
+  `B9 前置：景點庫 kyoto-gion 是打卡（checkin），可信類別換出來是中性（key 是 null）、複核通過、cat 是 checkin（實得 ${gion && gion.primary}、${t9 && JSON.stringify({ key: t9.key, recheck: t9.recheck, cat: t9.cat })}）`);
+const b9 = S9 && icon.placeIconForSpot(S9, L);
+yes(b9 === icon.PLACE_ICON.checkin, `B9 打卡換成中性、複核通過 → 照樣給 checkin 的圖示（實得 ${b9}）`);
+
+// ---------- 二之二、一站顯示用的符號（v1.94.0，js/placeicon.js 的 placeEmojiForSpot／trustedPlaceEmoji） ----------
+// Dispatch 2026-11-16「舊行程存著的照名字配符號——顯示時重算（甲）、不改寫存著的資料」。存著的符號每一站都故意寫成別的。
+const wuqiEmo = wuqi && wuqi.emoji;
+yes(typeof wuqiEmo === 'string' && wuqiEmo !== '' && wuqiEmo !== '🌊' && wuqiEmo !== '📍',
+  `E1 前置：景點庫 tc-wuqi 的符號（${wuqiEmo}）跟存著的 🌊、中性的 📍 都不一樣——分得出用的是哪一個`);
+const e1 = icon.placeEmojiForSpot(B1, L);
+yes(e1 === wuqiEmo, `E1 對得回景點庫 → 景點庫那一筆的符號，存著的 🌊 不看（實得 ${e1}）`);
+const e2 = S2 && icon.placeEmojiForSpot({ ...S2, emoji: '🛕' }, L);
+yes(!!kyo && typeof kyo.emoji === 'string' && kyo.emoji !== '🛕' && kyo.emoji !== '📍' && e2 === kyo.emoji,
+  `E2 類別中性（sight）、複核通過 → 照樣是景點庫的符號（${kyo && kyo.emoji}），存著照名字猜的 🛕 不看（實得 ${e2}）`);
+const e3 = icon.placeEmojiForSpot({ name: '士林夜市', region: '台北市', source: 'auto', emoji: '🌃' }, L);
+yes(e3 === '📍', `E3 使用者自己打字新增的 → 📍：存著的 🌃 不看，也不照名字補（照名字比得到的那一筆是 ${shilin && shilin.emoji}；實得 ${e3}）`);
+const e4 = [{ ...B1, name: '阿嬤家巷口' }, { ...B1, placeId: 'no-such-place' }, B6].map((s) => icon.placeEmojiForSpot(s, L));
+yes(e4.every((v) => v === '📍'), `E4 改過名字、景點庫那一筆不見了、建立時打的字比不回 → 都是 📍，存著的 🌊 不看（實得 ${e4.join('、')}）`);
+const e7 = S9 && icon.placeEmojiForSpot(S9, L);
+yes(!!gion && typeof gion.emoji === 'string' && gion.emoji !== '🏯' && gion.emoji !== '📍' && e7 === gion.emoji,
+  `E7 打卡換成中性之後 → 照樣是景點庫的符號（${gion && gion.emoji}），存著的 🏯 不看（實得 ${e7}）`);
+const e8 = [icon.trustedPlaceEmoji(B1, L), icon.trustedPlaceEmoji({ ...B1, name: '阿嬤家巷口' }, L), icon.trustedPlaceEmoji({ name: '士林夜市', region: '台北市', source: 'auto', emoji: '🌃' }, L)];
+yes(e8[0] === wuqiEmo && e8[1] === null && e8[2] === null,
+  `E8 trustedPlaceEmoji（回顧影片的地圖標籤用）：對得回 → 景點庫的符號；改過名字、自己打字的 → null（不是 📍、也不是存著的；實得 ${JSON.stringify(e8)}）`);
+// E9：景點庫每一筆當成「建立時對上景點庫的一站」（存著的符號都寫成 🌊）——複核通過的，顯示的符號都是景點庫那一筆的
+let e9ok = 0, e9skip = 0;
+const e9bad = [];
+for (const p of all) {
+  const lp = L.placeById(p.id);
+  const sp = { name: p.name, region: lp ? lp.cityName : '', source: 'curated', placeId: p.id, emoji: '🌊' };
+  if (!theme.trustedTheme(sp, L).recheck) { e9skip++; continue; }
+  const got = icon.placeEmojiForSpot(sp, L);
+  if (got === lp.emoji && got !== '🌊') e9ok++; else e9bad.push(`${p.id}：${got}≠${lp.emoji}`);
+}
+console.log(`說明：E9 景點庫 ${all.length} 筆，複核通過 ${e9ok + e9bad.length} 筆、沒通過 ${e9skip} 筆（同名之類，比回別的那一筆；那幾筆本來就是 📍、不在這條的範圍）`);
+yes(e9ok > 0 && e9bad.length === 0, `E9 景點庫每一筆（複核通過的 ${e9ok + e9bad.length} 筆）顯示的符號都是景點庫那一筆的，存著的 🌊 一筆都沒露出來`, e9bad.slice(0, 5).join('；'));
+// E10：景點庫那一筆的符號不是非空字串（空字串、數字）→ 📍（假的 lookup，只供應一筆）
+const fakeL = (emoji) => ({ placeById: (id) => (id === 'x' ? { id: 'x', primary: 'food', emoji } : null), matchPlace: () => ({ id: 'x' }) });
+const e10 = ['', 3, null].map((em) => icon.placeEmojiForSpot({ name: '某處', source: 'curated', placeId: 'x' }, fakeL(em)));
+const e10ok = icon.placeEmojiForSpot({ name: '某處', source: 'curated', placeId: 'x' }, fakeL('🍣'));
+yes(e10ok === '🍣' && e10.every((v) => v === '📍'), `E10 景點庫那一筆的符號是空字串、數字、null → 📍；是字串照用（實得 ${JSON.stringify(e10)}、${e10ok}）`);
+
+// ---------- 二之三、探頭圖看景點庫的類型（v1.94.0，js/peeks.js 的 CAT_PEEK／peekForVerdict；Dispatch 2026-11-17 定丙） ----------
+// 期望寫死成圖名，不從 CAT_PEEK 算：那張表本身也在被驗的範圍裡。打卡換成中性之後照樣是相機。
+const WANT_PEEK = { food: 'eat', snack: 'eat', nightmarket: 'grill', nature: 'hat', view: 'hat', checkin: 'cam', sight: null, culture: null, shopping: null };
+const p1bad = [], p1seen = {};
+let p1n = 0;
+for (const p of all) {
+  const lp = L.placeById(p.id);
+  const v = theme.trustedTheme({ name: p.name, region: lp ? lp.cityName : '', source: 'curated', placeId: p.id }, L);
+  if (!v.recheck) continue;
+  p1n++;
+  const got = peeks.peekForVerdict(v);
+  p1seen[v.cat] = (p1seen[v.cat] || 0) + 1;
+  if (!Object.prototype.hasOwnProperty.call(WANT_PEEK, v.cat)) p1bad.push(`${p.id}：類型 ${v.cat} 沒有寫期望`);
+  else if (got !== WANT_PEEK[v.cat]) p1bad.push(`${p.id}（${v.cat}）：${got}≠${WANT_PEEK[v.cat]}`);
+}
+const p1miss = Object.keys(WANT_PEEK).filter((k) => byPrimary[k] && !p1seen[k]);
+console.log(`說明：P1 複核通過 ${p1n} 筆，各類型 ${Object.entries(p1seen).map(([k, n]) => `${k} ${n}`).join('、')}；景點庫有、這裡一筆都沒抽到的類型：${p1miss.join('、') || '無'}`);
+yes(p1n > 0 && p1bad.length === 0 && p1miss.length === 0 && p1seen.checkin > 0,
+  `P1 景點庫每一筆（複核通過的 ${p1n} 筆）的探頭圖都照類型：美食、小吃 → 吃麵；夜市 → 烤串；自然、觀景 → 遮陽帽；打卡 → 相機；景點、文化、購物 → 沒有`, [...p1bad.slice(0, 5), ...p1miss.map((k) => '沒抽到 ' + k)].join('；'));
+const p2 = [theme.trustedTheme({ ...S9, name: '阿嬤家巷口' }, L), theme.trustedTheme(S9, null), theme.trustedTheme({ name: gion.name, region: gion.cityName, source: 'auto' }, L)].map((v) => peeks.peekForVerdict(v));
+yes(p2.every((v) => v === null), `P2 打卡那一筆改過名字、景點庫沒載好、自己打字新增的同名地點 → 沒有探頭圖（呼叫端退回打領結；實得 ${JSON.stringify(p2)}）`);
+const p3 = ['toString', '__proto__', 'constructor', 'hasOwnProperty', '', 3].map((c) => peeks.peekForVerdict({ recheck: true, cat: c }));
+const p3b = [null, undefined, {}].map((v) => peeks.peekForVerdict(v));
+yes([...p3, ...p3b].every((v) => v === null), `P3 類型是 toString、__proto__ 這種物件本來就有的名字、空字串、非字串，或根本沒有回傳值 → 沒有探頭圖（實得 ${JSON.stringify([...p3, ...p3b].map((v) => typeof v))}）`);
+// P4：完成任務的真入口（completionPeekKind）
+const p4 = [
+  await peeks.completionPeekKind(null, S9),
+  await peeks.completionPeekKind(null, B1),
+  await peeks.completionPeekKind(null, S2),
+  await peeks.completionPeekKind(null, { ...S9, name: '阿嬤家巷口' }),
+  await peeks.completionPeekKind({ source: 'must' }, S2),
+];
+yes(JSON.stringify(p4) === JSON.stringify(['cam', 'eat', 'done', 'done', 'eat']),
+  `P4 完成任務（completionPeekKind）：打卡 → 相機、美食 → 吃麵、景點 → 打領結、打卡改過名字 → 打領結、必吃任務 → 吃麵（實得 ${p4.join('、')}）`);
+
 // ---------- 三、登記制 ----------
-export const USE_RE = /media\/art\/|\bPLACE_ICON\b|\bplaceIconFor(?:Spot|Entry)\s*\(|\bplaceIconImg\s*\(/;
-export const KINDS = ['trip-spot', 'task', 'itin', 'pick', 'poster-art'];   // 前四個是 App 畫面；poster-art（v1.93.0）只准海報頁首插圖
+// v1.94.0：spotMark（placeicon.js，一站名字前面那一格：圖示或重算的符號）也算用到圖示
+export const USE_RE = /media\/art\/|\bPLACE_ICON\b|\bplaceIconFor(?:Spot|Entry)\s*\(|\bplaceIconImg\s*\(|\bspotMark\s*\(/;
+// 前面幾個是 App 畫面（v1.94.0 加 home、here、plan）；poster-art（v1.93.0）只准海報頁首插圖
+export const KINDS = ['trip-spot', 'task', 'itin', 'pick', 'home', 'here', 'plan', 'poster-art'];
 export const POSTER_DIR = 'js/itinposter/';                   // 海報：只准 poster-art，poster-art 也只准在這裡
-const PLACE_USE_RE = /\bPLACE_ICON\b|\bplaceIconFor(?:Spot|Entry)\s*\(|\bplaceIconImg\s*\(/;   // 景點類型圖示（B11：海報不准）
+const PLACE_USE_RE = /\bPLACE_ICON\b|\bplaceIconFor(?:Spot|Entry)\s*\(|\bplaceIconImg\s*\(|\bspotMark\s*\(/;   // 景點類型圖示（B11：海報不准）
 export const DEF_FILE = 'js/placeicon.js';                    // 定義本身（一、二段驗它）
 export const REGISTRY = [
   { file: 'js/views/trip.js', needle: 'const spotIconSrc = (s) => placeIconForSpot(s, placeLookupSync());', kind: 'trip-spot', why: '任務頁與行程分頁共用的取圖：經 placeIconForSpot（對得回景點庫才有）' },
-  { file: 'js/views/trip.js', needle: "return src ? placeIconImg(src, s.emoji || '📍') : (s.emoji || '📍');", kind: 'task', why: '任務頁每一站標題列最前面那一格' },
-  { file: 'js/views/trip.js', needle: "return src ? [placeIconImg(src, s.emoji || '📍'), ' ', name] : [", kind: 'itin', why: '行程分頁站卡第一行' },
+  { file: 'js/views/trip.js', needle: 'return src ? placeIconImg(src, spotEmoji(s)) : spotEmoji(s);', kind: 'task', why: '任務頁每一站標題列最前面那一格（v1.94.0 退回的符號是重算的）' },
+  { file: 'js/views/trip.js', needle: "return src ? [placeIconImg(src, spotEmoji(s)), ' ', name] : [", kind: 'itin', why: '行程分頁站卡第一行（v1.94.0 退回的符號是重算的）' },
+  { file: 'js/views/trip.js', needle: "const nameEl = h('span', { class: 'nextstn-name' }, spotMark(next, placeLookupSync()), ' ', next.name);", kind: 'home', why: '主頁下一站卡（v1.94.0；tripHome 先載好景點庫）' },
+  { file: 'js/views/trip.js', needle: "h('span', { class: 'tn-name' }, spotMark(s, placeLookupSync()), ' ', s.name));", kind: 'home', why: '主頁「今天接下來」（v1.94.0）' },
+  { file: 'js/views/trip.js', needle: "h('span', { class: 'here-pick-emoji' }, spotMark(s, lookup)),", kind: 'here', why: '「換一站」選現在在哪一站（v1.94.0；pickHereSpot 先載好景點庫）' },
+  { file: 'js/views/plan.js', needle: "h('div', { class: 'plan-name' }, spotMark(s, placeLookupSync()), ' ', s.name),", kind: 'plan', why: '調整行程每一列（v1.94.0；plan() 先載好景點庫）' },
+  { file: 'js/views/plan.js', needle: "sp.pinned ? '📌 ' : '', spotMark(sp, placeLookupSync()), ' ', sp.name))),", kind: 'plan', why: '調整行程「建議順序」對話框（v1.94.0）' },
   { file: 'js/views/create.js', needle: "h('span', { class: 'pc-emoji' }, placeIconForEntry(p) ? placeIconImg(placeIconForEntry(p)", kind: 'pick', why: '建立行程選景點的清單（景點庫本身的一筆）' },
+  { file: 'js/views/create.js', needle: "h('span', { class: 'chip chip-sm' }, placeIconForEntry(v) ? [placeIconImg(placeIconForEntry(v)", kind: 'pick', why: '建立行程「已選」小標籤（v1.94.0；v 是點選時存的景點庫那一筆）' },
   { file: 'js/itinposter/layout.js', needle: "export const HEADER_ART = { src: './media/art/d/poster-header.jpg'", kind: 'poster-art', why: '行程海報「全部一張」的頁首插圖（v1.93.0；登記在 manifest 的組 D、只准海報）' },
 ];
 
@@ -380,12 +480,12 @@ const listJs = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d)
   return d.isDirectory() ? listJs(p) : d.name.endsWith('.js') ? [p] : [];
 });
 // 區塊註解換成等量空白（行號不變），整行註解跳過
-export function sitesIn(text) {
+export function sitesIn(text, re = USE_RE) {
   const clean = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
   const out = [];
   clean.split('\n').forEach((line, i) => {
     if (line.trim().startsWith('//')) return;
-    if (USE_RE.test(line)) out.push({ line: i + 1, text: line.trim() });
+    if (re.test(line)) out.push({ line: i + 1, text: line.trim() });
   });
   return out;
 }
@@ -447,6 +547,95 @@ ctlOk = scanCtl('poster-art 登記在海報以外的檔', { 'js/j.js': ART_LINE 
 ctlOk = scanCtl('海報的檔登記成 App 畫面的類別', { 'js/itinposter/k.js': ART_LINE }, [{ file: 'js/itinposter/k.js', needle: "src: './media/art/d/p.jpg'", kind: 'task' }], (r) => one(r, `海報（${POSTER_DIR}）只准登記 poster-art`)) && ctlOk;
 ctlOk = scanCtl('poster-art 那一行用了景點類型圖示', { 'js/itinposter/l.js': 'const a = PLACE_ICON.food;\n' }, [{ file: 'js/itinposter/l.js', needle: 'PLACE_ICON.food', kind: 'poster-art' }], (r) => one(r, 'poster-art 那一行用了景點類型圖示')) && ctlOk;
 ctlOk = scanCtl('poster-art 在海報裡、只寫頁首插圖的路徑（放行）', { 'js/itinposter/m.js': ART_LINE }, [{ file: 'js/itinposter/m.js', needle: "src: './media/art/d/p.jpg'", kind: 'poster-art' }], (r) => r.sites.length === 1 && r.problems.length === 0) && ctlOk;
+// v1.94.0 spotMark：USE_RE 與 PLACE_USE_RE 新分支各一份
+ctlOk = scanCtl('沒登記：呼叫 spotMark', { 'js/n.js': 'el.append(spotMark(s, L));\n' }, [], (r) => r.sites.length === 1 && one(r, '沒登記：js/n.js:1')) && ctlOk;
+ctlOk = scanCtl('poster-art 那一行用了 spotMark', { 'js/itinposter/o.js': 'const a = spotMark(s, L);\n' }, [{ file: 'js/itinposter/o.js', needle: 'spotMark(s, L)', kind: 'poster-art' }], (r) => one(r, 'poster-art 那一行用了景點類型圖示')) && ctlOk;
+
+// ---------- 五、登記制：js/ 底下讀 .emoji 的每一處（v1.94.0） ----------
+// 為什麼：存著的 spot.emoji 有的是照名字猜的（v1.92.0 以前建的行程），v1.94.0 把畫面上直接顯示它的 7 處改成從景點庫重算；
+// 以後有人再寫 `${s.emoji} ${s.name}` 這種直接顯示存著的值，沒有任何測試會紅——所以用登記制（照 themetrusttest 守 .theme 的做法）：
+// 每一處讀 .emoji 都要登記用途，只准這幾種：
+//   other     讀的不是行程裡一站的符號（徽章、花費類別、附近與求救的類別、按讚的表情、主題表、國家城市）
+//   place-db  讀的是景點庫那一筆（generate.js 的 primaryEmoji、建立行程選景點、匯入行程表比對到的那一筆）——景點庫是人工整理的
+//   fresh     讀的是同一支檔裡剛由 js/placeicon.js 重算的值（回顧影片地圖標籤）
+//   sig       只拿來判斷有沒有改動（不顯示）
+// **沒有「顯示存著的 spot.emoji」這一種**：要顯示一站的符號，一律走 placeicon.js 的 placeEmojiForSpot／spotMark／trustedPlaceEmoji。
+// 一條登記只准對到一行；n 寫明幾行時照 n（只有 sos.js 那兩行一模一樣，寫 2）。
+// 已知限制：解構（const { emoji } = s）、方括號（s['emoji']）、整個物件傳出去再讀掃不到——在這個樣式範圍內未見，不是證明沒有。
+// js/placeicon.js（定義本身）不掃（二之二段驗它）。
+export const EMO_RE = /\.emoji\b/;
+export const EMO_KINDS = ['other', 'place-db', 'fresh', 'sig'];
+export const EMO_REGISTRY = [
+  { file: 'js/addphoto.js', needle: 'lines: [`${b.emoji}　${b.name}`', kind: 'other', why: '徽章' },
+  { file: 'js/itinerary.js', needle: "it.emoji = hit.emoji || '📍';", kind: 'place-db', why: '匯入行程表：hit 是 matchPlace 比到的景點庫那一筆' },
+  { file: 'js/likes.js', needle: '!isEmoji(r.emoji)', kind: 'other', why: '按讚的表情' },
+  { file: 'js/likes.js', needle: 'mine = r.emoji;', kind: 'other', why: '按讚的表情' },
+  { file: 'js/memory.js', needle: 'const items = pts.filter((p) => !cluster?.inSet.has(p.i)).map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`', kind: 'fresh', why: '回顧影片地圖全景標籤：p.emoji 是 computeMapLayout 用 trustedPlaceEmoji 剛算的' },
+  { file: 'js/memory.js', needle: 'zVisible.map((p) => ({ x: p.x, y: p.y, text: `${p.emoji}${p.name}`', kind: 'fresh', why: '回顧影片地圖特寫標籤：同上' },
+  { file: 'js/quests/generate.js', needle: 'if (place.emoji) return place.emoji;', kind: 'place-db', why: 'primaryEmoji：景點庫那一筆自己寫的符號' },
+  { file: 'js/recap.js', needle: "typeof r.emoji === 'string'", kind: 'other', why: '按讚的表情' },
+  { file: 'js/recap.js', needle: 'tripBadges.map((b) => ({ emoji: b.emoji, name: b.name }))', kind: 'other', why: '徽章' },
+  { file: 'js/store.js', needle: 'nextEmoji(prev ? prev.emoji : null, emoji)', kind: 'other', why: '按讚的表情' },
+  { file: 'js/theme.js', needle: 'return `${m.emoji} ${m.label}`;', kind: 'other', why: '主題表的符號（themeLabel）' },
+  { file: 'js/views/badges.js', needle: "got ? b.emoji : '🔒'", kind: 'other', why: '徽章' },
+  { file: 'js/views/expenses.js', needle: "h('span', { class: 'exp-item-cat' }, cat.emoji)", kind: 'other', why: '花費類別' },
+  { file: 'js/views/expenses.js', needle: 'drawCat(); } }, `${c.emoji} ${c.label}`', kind: 'other', why: '花費類別' },
+  { file: 'js/views/create.js', needle: 'cget(0, n.country).emoji', kind: 'other', why: '國家' },
+  { file: 'js/views/create.js', needle: 'bigBtn(`${c.emoji} ${c.name}`', kind: 'other', why: '國家' },
+  { file: 'js/views/create.js', needle: 'bigBtn(`${ci.emoji} ${ci.name}`', kind: 'other', why: '城市' },
+  { file: 'js/views/create.js', needle: 'blurb: p.blurb, emoji: p.emoji, primary: p.primary', kind: 'place-db', why: '選景點：p 是景點庫那一筆' },
+  { file: 'js/views/create.js', needle: "h('span', { class: 'pc-emoji' }, placeIconForEntry(p) ? placeIconImg(placeIconForEntry(p), p.emoji || '📍')", kind: 'place-db', why: '選景點清單：p 是景點庫那一筆' },
+  { file: 'js/views/create.js', needle: "h('span', { class: 'chip chip-sm' }, placeIconForEntry(v) ? [placeIconImg(placeIconForEntry(v), v.emoji || '📍')", kind: 'place-db', why: '已選小標籤：v 是點選時存的景點庫那一筆' },
+  { file: 'js/views/album.js', needle: "h('p', { style: 'margin:10px 0 2px;font-weight:800' }, `${c.emoji} ${c.label}`)", kind: 'other', why: '相簿分類' },
+  { file: 'js/views/album.js', needle: "cat ? h('span', { class: 'mp-cat' }, `${cat.emoji} ${cat.label}`)", kind: 'other', why: '相簿分類' },
+  { file: 'js/views/album.js', needle: "allWrap.append(h('p', { class: 'mp-head' }, `${c.emoji} ${c.label}`))", kind: 'other', why: '相簿分類' },
+  { file: 'js/views/nearby.js', needle: "h('span', { class: 'nl-cat-emoji' }, m.emoji)", kind: 'other', why: '附近的類別' },
+  { file: 'js/views/nearby.js', needle: '`${meta.emoji} ${it.name || defName(it.kind)}`', kind: 'other', why: '附近的類別' },
+  { file: 'js/views/recap.js', needle: "h('span', { class: 'recap-badge' }, `${b.emoji} ${b.name}`)", kind: 'other', why: '徽章' },
+  { file: 'js/views/recap.js', needle: 'const chips = r.tripBadges.map((b) => `${b.emoji} ${b.name}`);', kind: 'other', why: '徽章' },
+  { file: 'js/views/sos.js', needle: "h('div', { class: 'sos-near-head' }, `${meta.emoji} ${meta.label}`)", kind: 'other', n: 2, why: '求救頁附近的類別（兩行一模一樣）' },
+  { file: 'js/views/trip.js', needle: "shown ? shown.emoji + ' ' + shown.label : ''", kind: 'other', why: '主題表的符號（任務頁主題小標，類別由 trustedTheme 決定）' },
+  { file: 'js/views/trip.js', needle: 'store.spotsOf(tripId).map((s) => [s.id, s.name, s.emoji, s.day', kind: 'sig', why: '行程分頁判斷要不要重畫的簽名' },
+];
+export function emoScan(root, registry) {
+  const files = listJs(path.join(root, 'js')).map((f) => path.relative(root, f).split(path.sep).join('/')).filter((f) => f !== DEF_FILE);
+  const sites = [];
+  for (const f of files) for (const s of sitesIn(fs.readFileSync(path.join(root, f), 'utf8'), EMO_RE)) sites.push({ file: f, ...s });
+  const problems = [];
+  const used = new Map();
+  for (const s of sites) {
+    const hits = registry.filter((r) => r.file === s.file && s.text.includes(r.needle));
+    if (hits.length === 0) problems.push(`沒登記：${s.file}:${s.line}  ${s.text.slice(0, 100)}`);
+    else if (hits.length > 1) problems.push(`一行對到 ${hits.length} 條登記：${s.file}:${s.line}`);
+    for (const r of hits) used.set(r, (used.get(r) || 0) + 1);
+  }
+  for (const r of registry) {
+    const n = used.get(r) || 0, want = r.n || 1;
+    if (n === 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);
+    else if (n !== want) problems.push(`一條登記對到 ${n} 行（應該 ${want} 行）：${r.file}「${r.needle}」`);
+    if (!EMO_KINDS.includes(r.kind)) problems.push(`類別「${r.kind}」不准（只准 ${EMO_KINDS.join('、')}）：${r.file}「${r.needle}」`);
+  }
+  return { files: files.length, sites, problems };
+}
+const emoCtl = (label, files, registry, ok) => {
+  mkJs(files);
+  const r = emoScan(CTL, registry);
+  const good = ok(r);
+  yes(good, `對照組（.emoji 登記：${label}）`, `讀到的地方 ${r.sites.length}：${r.sites.map((s) => s.file + ':' + s.line).join('、')}；問題：${r.problems.join('；') || '無'}`);
+  return good;
+};
+ctlOk = emoCtl('沒登記：直接顯示存著的符號', { 'js/a.js': 'el.textContent = `${s.emoji} ${s.name}`;\n' }, [], (r) => r.sites.length === 1 && one(r, '沒登記：js/a.js:1')) && ctlOk;
+ctlOk = emoCtl('註解、定義檔本身、名字只是含 emoji 的不算', {
+  'js/b.js': '// s.emoji 只是提到\n/* s.emoji\n s.emoji */\nconst a = spotEmoji(s) + s.emojis;\n',
+  [DEF_FILE]: 'const e = place.emoji;\n',
+}, [], (r) => r.sites.length === 0 && r.problems.length === 0) && ctlOk;
+ctlOk = emoCtl('登記了、剛好一行（放行）', { 'js/c.js': '\n\nconst x = b.emoji;\n' }, [{ file: 'js/c.js', needle: 'const x = b.emoji;', kind: 'other' }], (r) => r.sites.length === 1 && r.sites[0].line === 3 && r.problems.length === 0) && ctlOk;
+ctlOk = emoCtl('登記過期', { 'js/d.js': 'const k = 1;\n' }, [{ file: 'js/d.js', needle: 'b.emoji', kind: 'other' }], (r) => one(r, '登記過期')) && ctlOk;
+ctlOk = emoCtl('一條登記對到兩行', { 'js/e.js': 'const a = b.emoji;\nconst a = b.emoji;\n' }, [{ file: 'js/e.js', needle: 'const a = b.emoji;', kind: 'other' }], (r) => one(r, '一條登記對到 2 行（應該 1 行）')) && ctlOk;
+ctlOk = emoCtl('寫明 2 行、真的 2 行（放行）', { 'js/f.js': 'const a = b.emoji;\nconst a = b.emoji;\n' }, [{ file: 'js/f.js', needle: 'const a = b.emoji;', kind: 'other', n: 2 }], (r) => r.sites.length === 2 && r.problems.length === 0) && ctlOk;
+ctlOk = emoCtl('寫明 2 行、只有 1 行', { 'js/g.js': 'const a = b.emoji;\n' }, [{ file: 'js/g.js', needle: 'const a = b.emoji;', kind: 'other', n: 2 }], (r) => one(r, '一條登記對到 1 行（應該 2 行）')) && ctlOk;
+ctlOk = emoCtl('類別不准（顯示存著的）', { 'js/h.js': 'el.append(s.emoji);\n' }, [{ file: 'js/h.js', needle: 'el.append(s.emoji);', kind: 'display' }], (r) => one(r, '類別「display」不准')) && ctlOk;
+ctlOk = emoCtl('一行對到兩條登記', { 'js/i.js': 'const a = b.emoji + c.emoji;\n' }, [{ file: 'js/i.js', needle: 'b.emoji', kind: 'other' }, { file: 'js/i.js', needle: 'c.emoji', kind: 'other' }], (r) => one(r, '一行對到 2 條登記')) && ctlOk;
 fs.rmSync(CTL, { recursive: true, force: true });
 
 if (!ctlOk) {
@@ -469,5 +658,12 @@ if (!ctlOk) {
   console.log(`說明：掃了 js/ 底下 ${s.files} 支 .js（不含 ${DEF_FILE}），用到圖示的 ${s.sites.length} 處；登記 ${REGISTRY.length} 條`);
   yes(s.files > 0 && s.sites.length > 0, `C1 母體非空（${s.files} 支檔、${s.sites.length} 處）`);
   yes(s.problems.length === 0 && s.sites.length === REGISTRY.length, `C2 每一處都登記了、每一條登記剛好對到一處（用到的地方 ${s.sites.length}＝登記 ${REGISTRY.length}）`, s.problems.join('\n   '));
+
+  const em = emoScan(ROOT, EMO_REGISTRY);
+  const emWant = EMO_REGISTRY.reduce((n, r) => n + (r.n || 1), 0);
+  const emKinds = EMO_KINDS.map((k) => `${k} ${EMO_REGISTRY.filter((r) => r.kind === k).length}`).join('、');
+  console.log(`說明：掃了 js/ 底下 ${em.files} 支 .js（不含 ${DEF_FILE}），讀 .emoji 的 ${em.sites.length} 行；登記 ${EMO_REGISTRY.length} 條（${emKinds}），應對到 ${emWant} 行`);
+  yes(em.files > 0 && em.sites.length > 0, `C3 .emoji 登記：母體非空（${em.files} 支檔、${em.sites.length} 行）`);
+  yes(em.problems.length === 0 && em.sites.length === emWant, `C4 .emoji 登記：每一處讀 .emoji 的都登記了、類別只有 ${EMO_KINDS.join('、')}（沒有「顯示存著的 spot.emoji」這一種），每一條登記對到的行數剛好（讀到的 ${em.sites.length} 行＝登記應對到的 ${emWant} 行）`, em.problems.join('\n   '));
 }
 console.log(`\n${pass} 項通過` + (process.exitCode === 1 ? '，有失敗' : process.exitCode === 4 ? '，對照組沒過' : ''));

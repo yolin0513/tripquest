@@ -25,6 +25,9 @@ import * as db from './db.js';
 import { blobURL } from './photos.js';
 import { createMusic, musicFromFile } from './music.js';
 import { trackMusic, isTrackStyle, musicCredit } from './tracks.js';
+import { loadThemes } from './theme.js';
+import { loadPlaceLookup, placeLookupSync } from './quests/generate.js';
+import { trustedPlaceEmoji } from './placeicon.js';
 
 // 依選項回傳配樂物件：內建曲目（'track:xxx'）→ 檔案播放（循環）；其餘 → 程序合成
 async function musicFor(style, total) {
@@ -210,8 +213,11 @@ export async function buildTimeline(tripId, opts = {}) {
   // 地圖版面先算好：有密集群（會多一段「鏡頭推進特寫」）的話，地圖段要多給時間
   let mapLayout = null;
   if (spots.length >= 2) {
+    // 地圖標籤的符號要從景點庫重算（v1.94.0，computeMapLayout 的 lookup）：先載好；載不到 → 不放符號
+    await loadThemes().catch(() => {});
+    const lookup = await loadPlaceLookup().catch(() => null);
     const mc = document.createElement('canvas').getContext('2d');
-    mapLayout = computeMapLayout(mc, spots, { totalSpots: store.spotsOf(tripId).length });
+    mapLayout = computeMapLayout(mc, spots, { totalSpots: store.spotsOf(tripId).length, lookup });
   }
   const tMap = spots.length >= 2 ? mapDur(spots.length) + (mapLayout?.zoomView ? 4.5 : 0) : 0;
 
@@ -280,7 +286,8 @@ export function estimateDuration(tripId, lengthKey) {
   let est = 0;
   if (coordSpots.length >= 2) {
     const mc = document.createElement('canvas').getContext('2d');
-    const lay = computeMapLayout(mc, coordSpots, { totalSpots: store.spotsOf(tripId).length });
+    // 只拿 zoomView 算時間：有沒有特寫只看位置、不看標籤的字（lookup 沒載好、標籤少了符號也一樣）
+    const lay = computeMapLayout(mc, coordSpots, { totalSpots: store.spotsOf(tripId).length, lookup: placeLookupSync() });
     est = mapDur(coordSpots.length) + (lay.zoomView ? 4.5 : 0);
   }
   const tMap = est;
@@ -628,7 +635,9 @@ function pickScaleBar(kmPerPx, x, y) {
 }
 
 // 版面計算（純函式，測試直接驗「標籤互不重疊、不出界」）。
-export function computeMapLayout(ctx, spots, { totalSpots = null } = {}) {
+// lookup（v1.94.0）：generate.js 的 loadPlaceLookup()。標籤前面的符號只給對得回景點庫的那幾站（景點庫那一筆的符號，
+// js/placeicon.js 的 trustedPlaceEmoji）；對不回的、沒給 lookup 的 → 不放符號。**不看存著的 spot.emoji**（有的是照名字猜的）。
+export function computeMapLayout(ctx, spots, { totalSpots = null, lookup = null } = {}) {
   const box = { x0: 100, y0: 430, x1: W - 100, y1: H - 430 };
   const bc = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
   const lats = spots.map((s) => s.lat), lngs = spots.map((s) => s.lng);
@@ -642,7 +651,7 @@ export function computeMapLayout(ctx, spots, { totalSpots = null } = {}) {
   const pts = spots.map((s, i) => ({
     x: bc.x + (s.lng - midLng) * kx * scale,
     y: bc.y - (s.lat - midLat) * scale,
-    i, name: s.name, emoji: s.emoji || '', region: s.region || '',
+    i, name: s.name, emoji: trustedPlaceEmoji(s, lookup) || '', region: s.region || '',
   }));
   const kmPerPx = 111.32 / scale;
 
@@ -741,7 +750,7 @@ const CAM_A = 0.42, CAM_B = 0.58;
 function drawMap(ctx, seg, t) {
   bgFill(ctx, 1);
   const fade = clamp01(t / 0.5) * clamp01((seg.dur - t) / 0.45);
-  if (!seg._layout) seg._layout = computeMapLayout(ctx, seg.spots, { totalSpots: seg.totalSpots });
+  if (!seg._layout) seg._layout = computeMapLayout(ctx, seg.spots, { totalSpots: seg.totalSpots, lookup: placeLookupSync() });
   const L = seg._layout;
   const f = clamp01(t / seg.dur);
 

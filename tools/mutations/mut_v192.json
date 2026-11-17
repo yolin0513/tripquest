@@ -1,11 +1,11 @@
 [
   {
     "name": "類型圖示：看可信類別的 key 不看 recheck",
-    "why": "（事前寫 2026-11-16 14:40，跑之前）「景點」sight 換出來是中性的 journey（key 是 null），改成看 key 就整類沒圖示（2026-11-16 15:3x 更正：原本寫「景點、打卡兩類」，打卡換成的是都市、key 不是 null；預期不變）。預期只紅 placeicontest 的 B2（清水寺）；B1 的梧棲漁港 key 是 food，不紅。",
-    "expect": ["B2 類別中性、複核通過"],
+    "why": "（事前寫 2026-11-16 14:40，跑之前）「景點」sight 換出來是中性的 journey（key 是 null），改成看 key 就整類沒圖示（2026-11-16 15:3x 更正：原本寫「景點、打卡兩類」，打卡換成的是都市、key 不是 null；預期不變）。預期只紅 placeicontest 的 B2（清水寺）；B1 的梧棲漁港 key 是 food，不紅。（v1.94.0 改寫 2026-11-17 15:2x、跑之前：同一行在 trustedPlaceEmoji 也有，find 帶下一行才唯一；打卡也換成 journey 之後，預期多紅 B9（打卡那站照樣有圖示）——預期紅 B2、B9。）",
+    "expect": ["B2 類別中性、複核通過", "B9 打卡換成中性"],
     "file": "js/placeicon.js",
-    "find": "  if (!v.recheck) return null;",
-    "replace": "  if (!v.key) return null;",
+    "find": "  if (!v.recheck) return null;\n  return placeIconForEntry(lookup.placeById(v.placeId));",
+    "replace": "  if (!v.key) return null;\n  return placeIconForEntry(lookup.placeById(v.placeId));",
     "cmd": "node scripts/placeicontest.mjs"
   },
   {
@@ -13,8 +13,8 @@
     "why": "（事前寫 2026-11-16 14:40，跑之前）複核沒過就拿名字去比景點庫、比得到就給圖示——正是「使用者自己打字新增的景點留白」要擋的那條路。預期紅 B3（打字新增的士林夜市）、B5（景點庫那筆不見了，名字還是梧棲漁港）、B6（建立時打的字比錯，名字還是梧棲漁港）；B4（改名成阿嬤家巷口，比不到任何一筆）不紅；B0（景點庫沒載好，lookup 是 null）不紅。",
     "expect": ["B3 使用者自己打字新增的", "B5 景點庫那一筆不見了", "B6 建立時打的字比不回同一筆"],
     "file": "js/placeicon.js",
-    "find": "  if (!v.recheck) return null;",
-    "replace": "  if (!v.recheck) { const m = lookup && lookup.matchPlace(spot.name || '', spot.region || ''); return m ? placeIconForEntry(m) : null; }",
+    "find": "  if (!v.recheck) return null;\n  return placeIconForEntry(lookup.placeById(v.placeId));",
+    "replace": "  if (!v.recheck) { const m = lookup && lookup.matchPlace(spot.name || '', spot.region || ''); return m ? placeIconForEntry(m) : null; }\n  return placeIconForEntry(lookup.placeById(v.placeId));",
     "cmd": "node scripts/placeicontest.mjs"
   },
   {
@@ -100,20 +100,20 @@
   },
   {
     "name": "類型圖示畫面：任務頁那一格不畫圖",
-    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）任務頁每一站標題列永遠用存著的表情符號。預期只紅 guesstruthtest 的 H4-2；行程分頁（H4-3、H4-4）與選景點（H4-5）不紅。",
+    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）任務頁每一站標題列永遠用存著的表情符號。預期只紅 guesstruthtest 的 H4-2；行程分頁（H4-3、H4-4）與選景點（H4-5）不紅。（v1.94.0 改寫 2026-11-17 15:2x、跑之前：符號改成重算的 spotEmoji，壞法改成「永遠只放重算的符號、不畫圖」；預期不變。）",
     "expect": ["H4-2 反向"],
     "file": "js/views/trip.js",
-    "find": "  return src ? placeIconImg(src, s.emoji || '📍') : (s.emoji || '📍');",
-    "replace": "  return s.emoji || '📍';",
+    "find": "  return src ? placeIconImg(src, spotEmoji(s)) : spotEmoji(s);",
+    "replace": "  return spotEmoji(s);",
     "cmd": "node scripts/guesstruthtest.mjs"
   },
   {
     "name": "類型圖示畫面：行程分頁站卡不畫圖",
-    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）站卡第一行永遠是「表情符號 名字」。預期紅 H4-3、H4-4；任務頁（H4-2）不紅。",
+    "why": "（事前寫 2026-11-16 14:40，跑之前；開瀏覽器）站卡第一行永遠是「表情符號 名字」。預期紅 H4-3、H4-4；任務頁（H4-2）不紅。（v1.94.0 改寫 2026-11-17 15:2x、跑之前：符號改成重算的 spotEmoji；預期不變。）",
     "expect": ["H4-3 行程分頁", "H4-4 在行程分頁重新整理"],
     "file": "js/views/trip.js",
-    "find": "  return src ? [placeIconImg(src, s.emoji || '📍'), ' ', name] : [`${s.emoji || '📍'} ${name}`];",
-    "replace": "  return [`${s.emoji || '📍'} ${name}`];",
+    "find": "  return src ? [placeIconImg(src, spotEmoji(s)), ' ', name] : [`${spotEmoji(s)} ${name}`];",
+    "replace": "  return [`${spotEmoji(s)} ${name}`];",
     "cmd": "node scripts/guesstruthtest.mjs"
   },
   {

@@ -84,9 +84,11 @@ export function themeForTrip(spots, themes = _themes) {
 // 已知限制：v1.76.0 以前建的景點（以及舊手機建的）沒有 matchInput，那些照樣擋不到；不回頭補（猜不出來當年打了什麼）。
 // lookup：{ placeById(id), matchPlace(name, cityHint) }，兩支都要同步；由 generate.js 的 loadPlaceLookup() 先載好。
 // 沒有 lookup → 一律當作沒有（保守方向）。回傳一律帶來源，下一個人看得出這個類別是怎麼來的。
+// cat（v1.94.0）：決定類別的那個景點庫類型（primary 或 tags 裡第一個在 byTag 上的，例 'checkin'）——複核通過、而且 byTag 對得上才有，
+// 其餘是 null。給探頭圖用（js/peeks.js 的 CAT_PEEK）：打卡在 byTag 換成中性的 journey（key 是 null），探頭圖照樣要知道它是打卡。
 export function trustedTheme(spot, lookup, themes = _themes) {
   const placeId = (spot && spot.placeId) || null;
-  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, ...extra });
+  const res = (key, extra) => ({ key, placeId, recheck: false, via: null, reason: null, cat: null, ...extra });
   if (!spot || spot.source !== 'curated' || !placeId) return res(null, { reason: 'not-curated' });
   if (!lookup || !themes) return res(null, { reason: 'no-lookup' });
   const place = lookup.placeById(placeId);
@@ -105,8 +107,9 @@ export function trustedTheme(spot, lookup, themes = _themes) {
   if (!src) return res(null, { recheck: true, reason: 'no-tag-map' });
   const key = byTag[src[1]];
   const via = src[0] + ':' + src[1];
-  if (key === 'journey') return res(null, { recheck: true, via, reason: 'neutral' });
-  return res(key, { recheck: true, via });
+  const cat = src[1];
+  if (key === 'journey') return res(null, { recheck: true, via, reason: 'neutral', cat });
+  return res(key, { recheck: true, via, cat });
 }
 
 // 一組景點（一天、一整趟）的可信類別：多數決，只算拿得到可信類別的；一個都沒有 → null（不印、不告訴 AI）。
@@ -128,7 +131,8 @@ function majorityTheme(spots, themes) {
   return pickMajority(list);
 }
 
-function pickMajority(list) {
+// v1.94.0 起 export：行程海報每天那一隻探頭圖（js/itinposter/model.js 的 dayPeek）對「探頭圖的種類」做同一套多數決
+export function pickMajority(list) {
   const count = new Map();
   const firstSeen = new Map();
   list.forEach((k, i) => {

@@ -5,7 +5,8 @@
 //   1. 行程裡的一站：要對得回景點庫——跟可信類別同一套檢查（js/theme.js 的 trustedTheme：curated＋placeId、那一筆還在、
 //      拿名字再比一次是同一筆、建立時打的字再比一次也是同一筆）。看的是 recheck（這幾步都過了），**不是 key**：
 //      「景點」（sight）在 themes.json 換成中性的 journey，key 是 null（景點庫 135 筆裡 17 筆），可是景點庫那一筆的 primary
-//      一樣是人工整理的，照樣給圖示。（v1.92.0 初稿寫成「景點、打卡兩類」是錯的：打卡 checkin 換成的是 urban，key 不是 null。）
+//      一樣是人工整理的，照樣給圖示。（v1.92.0 初稿寫成「景點、打卡兩類」是錯的：當時打卡 checkin 換成的是 urban，key 不是 null；
+//      v1.94.0 起打卡也換成中性的 journey，key 是 null、照樣給圖示。）
 //      圖示照景點庫那一筆的 primary 挑，**不看存著的 spot.emoji／spot.theme**（存著的有的是照名字猜的，見 theme.js 的說明）。
 //   2. 景點庫本身的一筆（建立行程時選景點的清單）：本來就是景點庫，直接看它的 primary。
 // 對不上（自己打字新增的、改過名字的、景點庫那筆不見了、景點庫還沒載好）→ null：呼叫端照原本的畫法，不照名字猜。
@@ -37,6 +38,33 @@ export function placeIconForSpot(spot, lookup) {
   const v = trustedTheme(spot, lookup);
   if (!v.recheck) return null;
   return placeIconForEntry(lookup.placeById(v.placeId));
+}
+
+// v1.94.0 行程裡的一站 → 畫面上名字前面的那個表情符號（Dispatch 2026-11-16「舊行程存著的照名字配符號——顯示時重算（甲）、
+// 不改寫存著的資料」）。**不看存著的 spot.emoji**：v1.92.0 以前建的行程，沒對上景點庫的那一站存的是照名字猜的
+// （牛排館「大佛牛排」存成 🛕），存著的值本身分不出是不是猜的。改成跟圖示同一套：
+//   對得回景點庫（trustedTheme 的 recheck）→ 景點庫那一筆的符號（generate.js 的 primaryEmoji：景點庫自己寫的 → 類型的 → 📍）；
+//   其餘（自己打字新增的、改過名字的、景點庫那筆不見了、景點庫或主題表還沒載好）→ 📍。
+// 所以畫面要先 await loadThemes() 與 loadPlaceLookup() 再畫，不然一律是 📍（保守方向、不會露出猜的）。
+// 回傳一律是非空字串。
+export const PLAIN_MARK = '📍';
+export function placeEmojiForSpot(spot, lookup) {
+  return trustedPlaceEmoji(spot, lookup) || PLAIN_MARK;
+}
+// 同上，但對不回景點庫時回 null（回顧影片的地圖標籤用：對不回的不放符號，跟 v1.94.0 以前沒有符號的那幾站一樣寬）
+export function trustedPlaceEmoji(spot, lookup) {
+  const v = trustedTheme(spot, lookup);
+  if (!v.recheck) return null;
+  const e = lookup.placeById(v.placeId)?.emoji;
+  return typeof e === 'string' && e ? e : null;
+}
+
+// 一站名字前面那一格（給 h() 當子節點）：有圖示 → <img>（載不到換回重算的符號）；沒有 → 重算的符號（字串）。
+// **不准放進樣板字串**（`${spotMark(s, L)} ${s.name}` 會印出「[object HTMLImageElement]」）——要字串的地方用 placeEmojiForSpot。
+export function spotMark(spot, lookup) {
+  const src = placeIconForSpot(spot, lookup);
+  const emo = placeEmojiForSpot(spot, lookup);
+  return src ? placeIconImg(src, emo) : emo;
 }
 
 // 畫面用的 <img>：裝飾性（名字就在旁邊），alt 空字串、不唸。圖載不到（例：離線快取沒裝好）→ 換回 fallback 那幾個字，

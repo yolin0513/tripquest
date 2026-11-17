@@ -15,7 +15,7 @@ import { activeMemberId, ensureMember } from '../claim.js';
 import { myName } from '../identity.js';
 import { pickDateRange, rangeLabel } from '../daterange.js';
 import { loadThemes, themeForSpot, themeMeta, themePlaceholder, trustedTheme } from '../theme.js';
-import { placeIconForSpot, placeIconImg } from '../placeicon.js';
+import { placeIconForSpot, placeIconImg, placeEmojiForSpot, spotMark } from '../placeicon.js';
 import { loadEmergency } from '../emergency.js';
 import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js';
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
@@ -332,16 +332,18 @@ function nextStationButton(tripId, t, allDone) {
   void allDone;
   const manual = !!store.getHereSpot(tripId);
   const url = mapsDirUrl(next);
+  // 站名前面的符號／圖示從景點庫重算（v1.94.0；tripHome 先載好景點庫）
+  const nameEl = h('span', { class: 'nextstn-name' }, spotMark(next, placeLookupSync()), ' ', next.name);
 
   const nav = url ? h('a', {
     class: 'btn btn-primary btn-block btn-big nextstn-btn',
     href: url, target: '_blank', rel: 'noopener', style: 'text-decoration:none',
   },
     h('span', {}, manual ? '🧭 用地圖帶我去這一站' : '🧭 用地圖帶我去下一站'),
-    h('span', { class: 'nextstn-name' }, `${next.emoji || '📍'} ${next.name}`),
+    nameEl,
   ) : h('div', { class: 'nextstn-plain' },
     h('span', {}, manual ? '📍 現在這一站' : '📍 下一站'),
-    h('span', { class: 'nextstn-name' }, `${next.emoji || '📍'} ${next.name}`),
+    nameEl,
   );
 
   return h('div', { class: 'nextstn', style: 'margin-top:8px' },
@@ -373,7 +375,7 @@ function todayCard(tripId, t) {
         const st = spotTimes(s).startTime || '';
         return h('li', { class: 'tn-item' },
           st ? h('span', { class: 'tn-time' }, st) : null,
-          h('span', { class: 'tn-name' }, `${s.emoji || '📍'} ${s.name}`));
+          h('span', { class: 'tn-name' }, spotMark(s, placeLookupSync()), ' ', s.name));
       })),
       h('button', { class: 'tn-all', onclick: () => navigate(`/trip/${tripId}/itinerary`) }, '整天的行程 ›')) : null);
 }
@@ -535,6 +537,10 @@ function claimNudge(tripId, t, members) {
 export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
+  // 下一站卡、今天接下來的符號／圖示從景點庫重算（v1.94.0，js/placeicon.js 的 spotMark）——跟任務頁（trip()）同一套先載好；
+  // 載不到就是 📍（placeLookupSync 回 null），不露出存著的、可能是照名字猜的符號
+  await loadThemes().catch(() => {});
+  await loadPlaceLookup().catch(() => {});
   setTop({
     title: t.title,
     action: { icon: '⚙️', label: '旅程設定', short: '設定', onClick: () => navigate(`/trip/${tripId}/settings`) },
@@ -649,6 +655,10 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
 async function pickHereSpot(tripId) {
   const spots = store.spotsOf(tripId);
   if (!spots.length) return;
+  // 每一站前面的符號／圖示從景點庫重算（v1.94.0）：先載好；主頁與任務頁已經載過，這裡通常是立刻好
+  await loadThemes().catch(() => {});
+  await loadPlaceLookup().catch(() => {});
+  const lookup = placeLookupSync();
   const manual = store.getHereSpot(tripId);
   const byDay = new Map();
   for (const s of spots) {
@@ -672,7 +682,7 @@ async function pickHereSpot(tripId) {
           class: 'here-pick' + (manual === s.id ? ' on' : ''),
           onclick: () => close(s.id),
         },
-          h('span', { class: 'here-pick-emoji' }, s.emoji || '📍'),
+          h('span', { class: 'here-pick-emoji' }, spotMark(s, lookup)),
           h('span', { class: 'here-pick-name' }, s.name),
           manual === s.id ? h('span', { class: 'here-pick-tick' }, '✓') : null,
         ));
@@ -1008,15 +1018,17 @@ function fillEta(ol, daySpots, mins) {
 // 照原本的表情符號，不照名字猜。圖載不到時 placeIconImg 自己換回同一個表情符號。
 const spotIconSrc = (s) => placeIconForSpot(s, placeLookupSync());
 // 任務頁每一站標題列最前面那一格
+// v1.94.0：符號（沒有圖示、或圖載不到時用的）也從景點庫重算（placeEmojiForSpot），不看存著的 s.emoji——對不回的一律 📍
+const spotEmoji = (s) => placeEmojiForSpot(s, placeLookupSync());
 function spotIcon(s) {
   const src = spotIconSrc(s);
-  return src ? placeIconImg(src, s.emoji || '📍') : (s.emoji || '📍');
+  return src ? placeIconImg(src, spotEmoji(s)) : spotEmoji(s);
 }
-// 行程分頁站卡的第一行：有圖示 → [圖, 空格, 名字]；沒有 → 跟 v1.92.0 以前一字不差的「表情符號 名字」
+// 行程分頁站卡的第一行：有圖示 → [圖, 空格, 名字]；沒有 → 「表情符號 名字」（v1.94.0 起符號是重算的）
 function itinStopHead(s) {
   const name = s.name || '（沒有名字）';
   const src = spotIconSrc(s);
-  return src ? [placeIconImg(src, s.emoji || '📍'), ' ', name] : [`${s.emoji || '📍'} ${name}`];
+  return src ? [placeIconImg(src, spotEmoji(s)), ' ', name] : [`${spotEmoji(s)} ${name}`];
 }
 
 // 每個景點的任務清單。預設規則：**還沒完成的展開、完成的收起** —— 進來就看得到還要做什麼，

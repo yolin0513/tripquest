@@ -13,6 +13,7 @@
 //   R5 景點庫沒載好（lookup 是 null）→ 拿不到
 //   R6 景點庫的分類換出來是中性的 journey（清水寺 primary 是 sight）→ 拿不到、via 照寫
 //   R7 一組景點的多數決只算拿得到的；一個都沒有 → null
+//   R8（v1.94.0）打卡（景點庫的 checkin）換成中性：key 是 null，但複核通過、cat 照寫 checkin（R1 也驗 cat）
 // 二、登記制：js/ 底下每一處讀 `.theme` 的地方、每一處呼叫 storedThemeOf 的地方，都要登記用途，而且只准這幾種——
 //   color    只影響配色（themeMeta(...).poster、佔位圖）
 //   number   推停留分鐘數（畫面標明是推算）
@@ -51,7 +52,7 @@ const yes = (c, m, extra = '') => {
 // ---------- 一、trustedTheme 雙向 ----------
 yes(gen.placeLookupSync() === null, 'R5 前置：景點庫還沒載 → placeLookupSync() 是 null');
 const r5 = theme.trustedTheme({ name: '梧棲漁港', source: 'curated', placeId: 'tc-wuqi', theme: 'food' }, gen.placeLookupSync());
-yes(r5.key === null && r5.reason === 'no-lookup', `R5 景點庫沒載好 → 拿不到（實得 ${r5.key}、${r5.reason}）`);
+yes(r5.key === null && r5.reason === 'no-lookup' && r5.cat === null, `R5 景點庫沒載好 → 拿不到、cat 也是 null（實得 ${r5.key}、${r5.reason}、${r5.cat}）`);
 
 const L = await gen.loadPlaceLookup();
 const place = L && L.placeById('tc-wuqi');
@@ -61,15 +62,15 @@ yes(guess === 'coast', `R0 前置：照名字猜「梧棲漁港」是 coast（�
 
 const R1 = { name: '梧棲漁港', region: '台中市', source: 'curated', placeId: 'tc-wuqi', theme: 'coast' };
 const r1 = theme.trustedTheme(R1, L);
-yes(r1.key === 'food' && r1.placeId === 'tc-wuqi' && r1.recheck === true && r1.via === 'primary:food' && r1.reason === null,
-  `R1 對上、複核通過 → food，帶來源（實得 ${JSON.stringify(r1)}）；存著的 coast 不看`);
+yes(r1.key === 'food' && r1.placeId === 'tc-wuqi' && r1.recheck === true && r1.via === 'primary:food' && r1.reason === null && r1.cat === 'food',
+  `R1 對上、複核通過 → food，帶來源（placeId、recheck、via、cat；實得 ${JSON.stringify(r1)}）；存著的 coast 不看`);
 
 const R2 = { ...R1, name: '阿嬤家巷口', theme: 'food' };
 const again2 = L.matchPlace(R2.name, R2.region);
 yes(!again2 || again2.id !== 'tc-wuqi', `R2 前置：現在的比對規則拿「${R2.name}」比不回 tc-wuqi（實得 ${again2 && again2.id}）`);
 const r2 = theme.trustedTheme(R2, L);
-yes(r2.key === null && r2.reason === 'recheck-mismatch' && r2.recheck === false,
-  `R2 對上但複核不通過 → 拿不到，存著的 food 不看（實得 ${JSON.stringify(r2)}）`);
+yes(r2.key === null && r2.reason === 'recheck-mismatch' && r2.recheck === false && r2.cat === null,
+  `R2 對上但複核不通過 → 拿不到、cat 也是 null（探頭圖靠它判斷複核過了沒），存著的 food 不看（實得 ${JSON.stringify(r2)}）`);
 
 const r3a = theme.trustedTheme({ name: '梧棲漁港', region: '台中市', source: 'shared', theme: 'food' }, L);
 const r3b = theme.trustedTheme({ name: '梧棲漁港', region: '台中市', source: 'auto', placeId: 'tc-wuqi', theme: 'food' }, L);
@@ -83,6 +84,13 @@ const kyo = L.placeById('kyoto-kiyomizu');
 const r6 = kyo && theme.trustedTheme({ name: kyo.name, region: kyo.cityName, source: 'curated', placeId: kyo.id, theme: 'heritage' }, L);
 yes(!!kyo && kyo.primary === 'sight' && r6.key === null && r6.reason === 'neutral' && r6.via === 'primary:sight' && r6.recheck === true,
   `R6 景點庫分類換出來是中性的（清水寺 sight）→ 拿不到、via 照寫（實得 ${JSON.stringify(r6)}）`);
+
+// R8（v1.94.0，Dispatch 2026-11-16「打卡改成中性、不顯示主題小標」＋ 2026-11-17 定丙）：打卡換成中性——key 是 null（主題小標、
+// 出題口吻、AI、海報主題一起變中性），但 recheck 照樣 true、cat 照寫 checkin（圖示與探頭圖靠這兩個，見 placeicontest B9、C 段）
+const gion = L.placeById('kyoto-gion');
+const r8 = gion && theme.trustedTheme({ name: gion.name, region: gion.cityName, source: 'curated', placeId: gion.id, theme: 'urban' }, L);
+yes(!!gion && gion.primary === 'checkin' && r8.key === null && r8.reason === 'neutral' && r8.via === 'primary:checkin' && r8.recheck === true && r8.cat === 'checkin',
+  `R8 打卡換成中性：key 是 null、reason neutral，複核照樣通過、cat 照寫 checkin；存著的 urban 不看（實得 ${gion && gion.primary}、${JSON.stringify(r8)}）`);
 
 const shared = { name: '甲山', source: 'shared', theme: 'nature' };
 const r7a = theme.trustedThemeOf([R1, shared, { ...shared, name: '乙山' }], L);

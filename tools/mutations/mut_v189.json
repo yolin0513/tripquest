@@ -10,20 +10,20 @@
   },
   {
     "name": "v189 每天的吉祥物：對不上圖的類別也算票",
-    "why": "（事前寫 2026-11-14 20:35，跑之前）多數決不先濾掉沒有圖的類別（古蹟也算一票）。「古蹟、美食」平手取先出現的古蹟 → 沒有圖 → 打領結，不是吃麵。預期只紅 A15e。",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）多數決不先濾掉沒有圖的類別（古蹟也算一票）。「古蹟、美食」平手取先出現的古蹟 → 沒有圖 → 打領結，不是吃麵。預期只紅 A15e。（v1.94.0 改寫 2026-11-17 15:2x、跑之前：dayPeek 改成直接對圖多數決，同一個壞法寫成「沒有圖的那一站投打領結一票」；預期不變。）",
     "expect": ["A15e 多數決"],
     "file": "js/itinposter/model.js",
-    "find": "  const mapped = lookup ? list.filter((s) => THEME_PEEK[trustedTheme(s, lookup).key]) : [];",
-    "replace": "  const mapped = lookup ? list : [];",
+    "find": "  const kinds = lookup ? list.map((s) => peekForVerdict(trustedTheme(s, lookup))).filter(Boolean) : [];",
+    "replace": "  const kinds = lookup ? list.map((s) => peekForVerdict(trustedTheme(s, lookup)) || DONE_PEEK) : [];",
     "cmd": "node scripts/itinposterlayouttest.mjs"
   },
   {
     "name": "v189 每天的吉祥物：可信類別拿不到就照名字猜",
-    "why": "（事前寫 2026-11-14 20:35，跑之前）可信類別拿不到時改用景點上的 theme 欄（建立時照名字猜的、或景點庫寫進去的舊值）。景點庫沒載好那一趟、名字比不回的那幾天會換成猜出來的圖。預期紅 A15c、A15d（若那幾站沒有 theme 欄，這條等於沒改，屆時照實回報）。",
+    "why": "（事前寫 2026-11-14 20:35，跑之前）可信類別拿不到時改用景點上的 theme 欄（建立時照名字猜的、或景點庫寫進去的舊值）。景點庫沒載好那一趟、名字比不回的那幾天會換成猜出來的圖。預期紅 A15c、A15d（若那幾站沒有 theme 欄，這條等於沒改，屆時照實回報）。（v1.94.0 改寫 2026-11-17 15:2x、跑之前：THEME_PEEK 拿掉了，replace 把舊表寫在行內；預期不變。）",
     "expect": ["A15c 景點庫沒載好", "A15d 分享匯入的同名景點"],
     "file": "js/itinposter/model.js",
-    "find": "  return THEME_PEEK[key] || DONE_PEEK;",
-    "replace": "  return THEME_PEEK[key] || THEME_PEEK[list[0] && list[0].theme] || DONE_PEEK;",
+    "find": "  return kinds.length ? pickMajority(kinds) : DONE_PEEK;",
+    "replace": "  return kinds.length ? pickMajority(kinds) : (({ food: 'eat', nightmarket: 'grill', nature: 'hat', urban: 'cam' })[list[0] && list[0].theme] || DONE_PEEK);",
     "cmd": "node scripts/itinposterlayouttest.mjs"
   },
   {

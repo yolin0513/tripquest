@@ -33,10 +33,11 @@
   },
   {
     "name": "可信類別：中性的 journey 也當成類別",
-    "why": "清水寺 sight → journey 也回傳，畫面會印「🧳 旅途」。預期只紅 R6。",
+    "why": "清水寺 sight → journey 也回傳，畫面會印「🧳 旅途」。預期只紅 R6。（v1.94.0 事前寫 2026-11-17 15:4x，跑之前：find 跟著加了 cat；打卡也換成 journey 之後，預期多紅 R8（打卡那站也會回傳 journey）——預期紅 R6、R8。）",
+    "expect": ["R6 景點庫分類換出來是中性的", "R8 打卡換成中性"],
     "file": "js/theme.js",
-    "find": "  if (key === 'journey') return res(null, { recheck: true, via, reason: 'neutral' });",
-    "replace": "  if (false && key === 'journey') return res(null, { recheck: true, via, reason: 'neutral' });",
+    "find": "  if (key === 'journey') return res(null, { recheck: true, via, reason: 'neutral', cat });",
+    "replace": "  if (false && key === 'journey') return res(null, { recheck: true, via, reason: 'neutral', cat });",
     "cmd": "node scripts/themetrusttest.mjs"
   },
   {

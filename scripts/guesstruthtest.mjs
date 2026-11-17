@@ -17,7 +17,11 @@
 //   H4（v1.92.0 景點類型圖示，js/placeicon.js）：匯入那趟三站都沒有圖示（名字猜得出類別也不給）；可信的梧棲漁港有 food 的圖示、
 //      而且圖真的載入了（naturalWidth > 0，檔案路徑寫錯或沒部署會抓到）——任務頁、行程分頁（點底部分頁進去、在那一頁重新整理）、
 //      建立行程搜景點的卡片，三個畫面各讀一次
-// 突變見 tools/mutations/mut_guesstruth.json、mut_v192.json。
+//   H5（v1.94.0，Dispatch 2026-11-16 三件＋2026-11-17 定丙）：存著照名字配的符號（🌊、🛕、🏯）畫面上一律從景點庫重算——
+//      已選小標籤、主頁下一站卡與今天接下來、換一站、調整行程、照片牆篩選、回顧影片地圖標籤；對得回的那一站同時驗有景點庫的圖或符號
+//      （只驗「存著的不見了」的話，景點庫沒載好、一律 📍 也會過）。每個畫面先重新整理再從真入口打開。任務頁打卡那站不顯示主題小標。
+//      每一頁都沒有印出「[object」。H4-1、H4-3 的乙寺、丙海也改成存著猜的符號。
+// 突變見 tools/mutations/mut_guesstruth.json、mut_v192.json、mut_v194.json。
 
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -126,13 +130,14 @@ try {
     { name: '丙', day: 3, order: 0, source: 'shared' },
   ];
   // 甲山：分享匯入（不帶 theme）；乙寺、丙海：v1.74 以前建的舊景點，存著當時照名字猜的 theme（帶著的也不可信，2026-10-27）
+  // v1.94.0：乙寺、丙海也存著當時照名字配的符號（🛕、🌊）——畫面上要重算成 📍（H4-1、H4-3 讀到的是重算的）
   const GUESSABLE = [
     { name: '甲山', day: 1, order: 0, source: 'shared' },
-    { name: '乙寺', day: 2, order: 0, source: 'auto', theme: 'heritage' },
-    { name: '丙海', day: 3, order: 0, source: 'auto', theme: 'coast' },
+    { name: '乙寺', day: 2, order: 0, source: 'auto', theme: 'heritage', emoji: '🛕' },
+    { name: '丙海', day: 3, order: 0, source: 'auto', theme: 'coast', emoji: '🌊' },
   ];
-  // 可信的那一站用景點庫裡真的「梧棲漁港」（tc-wuqi）：景點庫是 food；存著的是照名字猜的 coast
-  const CARRIED = [{ name: '梧棲漁港', region: '台中市', day: 1, order: 0, source: 'curated', placeId: 'tc-wuqi', theme: 'coast' }, GUESSABLE[1], GUESSABLE[2]];
+  // 可信的那一站用景點庫裡真的「梧棲漁港」（tc-wuqi）：景點庫是 food；存著的是照名字猜的 coast 與 🌊
+  const CARRIED = [{ name: '梧棲漁港', region: '台中市', day: 1, order: 0, source: 'curated', placeId: 'tc-wuqi', theme: 'coast', emoji: '🌊' }, GUESSABLE[1], GUESSABLE[2]];
 
   // 前置：資料有能力讓測試紅——照名字猜，猜得出的三個是具體類別，基準的三個猜不出
   const guess = await page.evaluate(async (names) => {
@@ -171,7 +176,7 @@ try {
   const foodOk = (c) => !!c && c.img === FOOD_IMG && c.loaded;
   const show4 = (cs) => JSON.stringify(cs);
   yes(guessed.icons.every((c) => c !== null) && guessed.icons.every((c) => noImg(c) && c.text === '📍'),
-    `H4-1 匯入的行程（甲山／乙寺／丙海，名字猜得出類別）：任務頁三站都沒有類型圖示，那一格照舊是「📍」`, show4(guessed.icons));
+    `H4-1 匯入的行程（甲山／乙寺／丙海，名字猜得出類別）：任務頁三站都沒有類型圖示，那一格是「📍」——乙寺、丙海存著的 🛕、🌊 不露出來（v1.94.0）`, show4(guessed.icons));
   yes(foodOk(carried.icons[0]) && noImg(carried.icons[1]) && noImg(carried.icons[2]),
     `H4-2 反向：可信的「梧棲漁港」任務頁那一格是景點庫 food 的圖示、真的載入了；同一趟另兩站沒有`, show4(carried.icons));
 
@@ -183,7 +188,7 @@ try {
   const ITIN = ['#itin-pane-plan .itin-stop', null, null];
   const it1 = await iconCells(...ITIN, ['梧棲漁港', '乙寺', '丙海']);
   yes(foodOk(it1[0]) && noImg(it1[1]) && noImg(it1[2]) && it1[1].all.startsWith('📍 乙寺') && it1[2].all.startsWith('📍 丙海'),
-    `H4-3 行程分頁（從底部「行程」點進去）：梧棲漁港站卡有 food 圖示、真的載入了；乙寺、丙海站卡照舊是「📍 名字」`, show4(it1));
+    `H4-3 行程分頁（從底部「行程」點進去）：梧棲漁港站卡有 food 圖示、真的載入了；乙寺、丙海站卡是「📍 名字」（存著的 🛕、🌊 不露出來）`, show4(it1));
   // 在行程分頁重新整理：模組重新載入，景點庫要由行程分頁自己載（任務頁沒先跑過）
   await page.reload({ waitUntil: 'networkidle0' });
   await page.waitForSelector('#itin-pane-plan .itin-stop', { timeout: 8000 });
@@ -198,6 +203,118 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('.place-card .pc-name')].some((x) => x.textContent.startsWith('梧棲漁港')), { timeout: 8000 });
   const pk = await iconCells('.place-card', '.pc-name', '.pc-emoji', ['梧棲漁港']);
   yes(foodOk(pk[0]), `H4-5 建立行程搜「梧棲」：梧棲漁港那張卡是景點庫 food 的圖示、真的載入了`, show4(pk));
+
+  // ---------- H5（v1.94.0）：舊行程存著照名字配的符號——畫面上一律從景點庫重算（js/placeicon.js 的 spotMark／placeEmojiForSpot） ----------
+  // Dispatch 2026-11-16「顯示時重算（甲）、不改寫存著的資料」＋「打卡改成中性、不顯示主題小標」＋「景點類型圖示接到其餘畫面」。
+  // 每一站存著的符號都故意寫成別的（梧棲漁港 🌊、乙寺 🛕、打卡那站 🏯）：對得回景點庫的 → 景點庫的圖示（圖載不到時退回景點庫的符號）；
+  // 對不回的 → 📍；存著的一個都不准露出來。每個畫面都從使用者會走的入口進去、先重新整理——景點庫要由那一頁自己載
+  // （只驗「存著的不見了」的話，景點庫沒載好、一律 📍 也會過，所以每個畫面同時驗對得回的那一站有景點庫的圖或符號）。
+  const CHECKIN_IMG = './media/art/a/checkin.png';
+  const objText = [];      // 每一頁有沒有印出「[object」（spotMark 回傳的是節點，誤放進樣板字串就會這樣）
+  const noObj = async (label) => { if (await page.evaluate(() => document.body.textContent.includes('[object'))) objText.push(label); };
+  // H5-1 已選小標籤：在上面搜到的梧棲漁港那張卡點一下
+  await page.evaluate(() => { [...document.querySelectorAll('.place-card')].find((c) => (c.querySelector('.pc-name')?.textContent || '').startsWith('梧棲漁港'))?.click(); });
+  await page.waitForSelector('.pb-chips .chip', { timeout: 8000 });
+  const chip = await iconCells('.pb-chips .chip', null, null, ['梧棲漁港']);
+  await noObj('建立行程');
+  yes(foodOk(chip[0]), `H5-1 建立行程「已選」小標籤：梧棲漁港有景點庫 food 的圖示、真的載入了`, show4(chip));
+
+  // 一趟進行中的行程（今天是第 1 天），三站都在今天；乙寺、打卡那站各拍一張（沒拍完），梧棲漁港沒拍 → 下一站是梧棲漁港
+  const today = await page.evaluate(() => { const d = new Date(); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; });
+  const h5 = await page.evaluate(async (o) => {
+    const s = await import('./js/store.js');
+    const { uuid } = await import('./js/ids.js');
+    const { importPhoto } = await import('./js/photos.js');
+    const L = await (await import('./js/quests/generate.js')).loadPlaceLookup();
+    const g = L.placeById('kyoto-gion'), w = L.placeById('tc-wuqi');
+    const gid = uuid(), tid = uuid(), mA = uuid();
+    await s.put({ id: gid, type: 'group', name: 'g5' });
+    await s.put({ id: mA, type: 'member', groupId: gid, displayName: '甲' });
+    const end = new Date(o.today + 'T12:00:00'); end.setDate(end.getDate() + 2);
+    const p2 = (n) => String(n).padStart(2, '0');
+    await s.put({ id: tid, type: 'trip', groupId: gid, title: 'H5', region: '某地', allowWiki: false,
+      startDate: o.today, endDate: `${end.getFullYear()}-${p2(end.getMonth() + 1)}-${p2(end.getDate())}` });
+    const defs = [
+      { name: '梧棲漁港', region: '台中市', source: 'curated', placeId: 'tc-wuqi', emoji: '🌊', theme: 'coast' },
+      { name: '乙寺', region: '某地', source: 'auto', emoji: '🛕', theme: 'heritage' },
+      { name: g.name, region: g.cityName, source: 'curated', placeId: g.id, emoji: '🏯', theme: 'urban' },
+    ];
+    const mk = (hue) => { const c = document.createElement('canvas'); c.width = 200; c.height = 150; const x = c.getContext('2d'); x.fillStyle = `hsl(${hue},60%,50%)`; x.fillRect(0, 0, 200, 150); return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8)); };
+    for (let i = 0; i < defs.length; i++) {
+      const sid = uuid();
+      await s.put({ id: sid, type: 'spot', tripId: tid, day: 1, order: i, lat: 24.2 + i * 0.05, lng: 120.5 + i * 0.05, ...defs[i] });
+      const qs = [];
+      for (let k = 0; k < 2; k++) { const qid = uuid(); qs.push(qid); await s.put({ id: qid, type: 'quest', tripId: tid, spotId: sid, title: `任務${i}-${k}`, kind: 'thing', order: k }); }
+      if (i > 0) await importPhoto(new File([await mk(40 * i)], 'p.jpg', { type: 'image/jpeg' }), { tripId: tid, questId: qs[0], memberId: mA, allowGeo: false });
+    }
+    return { tid, gion: { name: g.name, emoji: g.emoji }, wuqiEmoji: w.emoji };
+  }, { today });
+  const GN = h5.gion.name;
+  const okEmo = (e) => typeof e === 'string' && e !== '' && e !== '📍' && e !== '🌊' && e !== '🛕' && e !== '🏯';
+  yes(okEmo(h5.gion.emoji) && okEmo(h5.wuqiEmoji), `H5-0 前置：景點庫的符號（梧棲漁港 ${h5.wuqiEmoji}、打卡那站 ${h5.gion.emoji}）跟存著的 🌊／🏯、中性的 📍 都不一樣——分得出畫面用的是哪一個`);
+  const cold = async (hash, sel) => {
+    await page.evaluate((x) => { location.hash = x; }, hash);
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForSelector(sel, { timeout: 8000 });
+  };
+  const chkOk = (c) => !!c && c.img === CHECKIN_IMG && c.loaded;
+  const plain = (c, name) => noImg(c) && c.text.startsWith('📍') && c.all.includes(name);
+  const leak = (cs) => cs.some((c) => c && /[🌊🛕🏯]/u.test(c.all));
+
+  // H5-2、H5-3 主頁（重新整理直接打開主頁：景點庫由主頁自己載）
+  await cold(`#/trip/${h5.tid}/home`, '.today-card .nextstn-name');
+  const nx = await iconCells('.today-card .nextstn-name', null, null, ['梧棲漁港']);
+  const tn = await iconCells('.tn-item .tn-name', null, null, ['乙寺', GN]);
+  await noObj('主頁');
+  yes(foodOk(nx[0]) && !leak(nx), `H5-2 主頁下一站卡（重新整理後直接打開主頁）：梧棲漁港是景點庫 food 的圖示、真的載入了，存著的 🌊 沒露出來`, show4(nx));
+  yes(plain(tn[0], '乙寺') && chkOk(tn[1]) && !leak(tn), `H5-3 主頁「今天接下來」：乙寺是「📍」（存著的 🛕 沒露出來）、打卡那站是景點庫 checkin 的圖示（存著的 🏯 沒露出來）`, show4(tn));
+
+  // H5-4 換一站（主頁的「換一站」）
+  await page.click('.nextstn-switch');
+  await page.waitForSelector('.here-pick', { timeout: 8000 });
+  const hp = await iconCells('.here-pick', '.here-pick-name', '.here-pick-emoji', ['梧棲漁港', '乙寺', GN]);
+  await noObj('換一站');
+  yes(foodOk(hp[0]) && plain(hp[1], '乙寺') && chkOk(hp[2]) && !leak(hp), `H5-4 換一站：梧棲漁港 food 圖示、乙寺「📍」、打卡那站 checkin 圖示；存著的都沒露出來`, show4(hp));
+  await page.keyboard.press('Escape');
+
+  // H5-5 調整行程（重新整理直接打開）
+  await cold(`#/trip/${h5.tid}/plan`, '.plan-row .plan-name');
+  const pl = await iconCells('.plan-row', '.plan-name', '.plan-name', ['梧棲漁港', '乙寺', GN]);
+  await noObj('調整行程');
+  yes(foodOk(pl[0]) && plain(pl[1], '乙寺') && chkOk(pl[2]) && !leak(pl), `H5-5 調整行程：梧棲漁港 food 圖示、乙寺「📍 乙寺」、打卡那站 checkin 圖示；存著的都沒露出來`, show4(pl));
+
+  // H5-6 照片牆「要看哪些照片？」（下拉放不了圖，只有符號；只列有照片的乙寺、打卡那站）
+  await cold(`#/trip/${h5.tid}/people`, '.wall-ctl');
+  await page.evaluate(() => { [...document.querySelectorAll('.wall-ctl')].find((b) => (b.querySelector('.wall-ctl-label')?.textContent || '') === '全部照片')?.click(); });
+  await page.waitForSelector('.pick-row-label', { timeout: 8000 });
+  const pr = await page.evaluate(() => [...document.querySelectorAll('.pick-row-label')].map((x) => x.textContent));
+  await noObj('照片牆篩選');
+  yes(pr.includes('📍 乙寺') && pr.includes(`${h5.gion.emoji} ${GN}`) && !pr.some((t) => /[🌊🛕🏯]/u.test(t)),
+    `H5-6 照片牆篩選：乙寺是「📍 乙寺」、打卡那站是景點庫的符號「${h5.gion.emoji}」；存著的都沒露出來（實得 ${JSON.stringify(pr)}）`);
+  await page.keyboard.press('Escape');
+
+  // H5-7 任務頁：打卡那站不顯示主題小標（打卡改成中性）；梧棲漁港照樣是景點庫的「美食」（不是一律不印）
+  await cold(`#/trip/${h5.tid}`, '.qcollapse .qc-name');
+  const th7 = await page.evaluate((names) => names.map((n) => {
+    const sec = [...document.querySelectorAll('.qcollapse')].find((x) => (x.querySelector('.qc-name')?.textContent || '').startsWith(n));
+    return sec ? (sec.querySelector('.qc-theme')?.textContent ?? '') : null;
+  }), ['梧棲漁港', GN]);
+  await noObj('任務頁');
+  yes(th7[0] !== null && th7[0].includes(food) && th7[1] === '',
+    `H5-7 任務頁主題小標：梧棲漁港有「${food}」、打卡那站沒有小標（不是「${THEMES.urban.label}」；實得 ${JSON.stringify(th7)}）`);
+
+  // H5-8 回顧影片的地圖標籤（相簿頁算影片用的同一支 buildTimeline；重新整理後呼叫，景點庫由它自己載）
+  await page.reload({ waitUntil: 'networkidle0' });
+  const labels = await page.evaluate(async (tid) => {
+    const m = await import('./js/memory.js');
+    const tl = await m.buildTimeline(tid);
+    const seg = tl.segs.find((x) => x.kind === 'map');
+    return seg ? seg._layout.overview.labels.map((l) => l.text) : null;
+  }, h5.tid);
+  yes(!!labels && labels.includes(`${h5.wuqiEmoji}梧棲漁港`) && labels.includes('乙寺') && labels.includes(`${h5.gion.emoji}${GN}`) && !labels.some((t) => /[🌊🛕🏯]/u.test(t)),
+    `H5-8 回顧影片的地圖標籤：對得回的兩站是景點庫的符號、乙寺不放符號；存著的都沒露出來（實得 ${JSON.stringify(labels)}）`);
+
+  yes(objText.length === 0, `H5-9 上面每一頁都沒有印出「[object」（spotMark 回傳節點，誤放進樣板字串會印成這樣；有的：${objText.join('、') || '無'}）`);
 } catch (e) {
   yes(false, '例外：' + ((e && e.stack) || e));
 } finally {

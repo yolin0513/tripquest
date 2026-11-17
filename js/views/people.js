@@ -8,6 +8,9 @@ import { shooterOf, subjectsOf } from '../badges.js';
 import { openTagger } from '../phototag.js';
 import { openViewer } from '../viewer.js';
 import { blobURL } from '../photos.js';
+import { loadThemes } from '../theme.js';
+import { loadPlaceLookup, placeLookupSync } from '../quests/generate.js';
+import { placeEmojiForSpot } from '../placeicon.js';
 
 const REACTIONS = ['❤️', '👍', '😍', '👏'];
 
@@ -110,12 +113,16 @@ export default async function people(tripId, { drawPage, setTop }) {
     const label = view.untagged ? '只看未標記' : (pickedSpot ? pickedSpot.name : '全部照片');
 
     const openFilter = async () => {
+      // 每一站名字前面的符號從景點庫重算（v1.94.0，js/placeicon.js 的 placeEmojiForSpot）：先載好；載不到就是 📍
+      await loadThemes().catch(() => {});
+      await loadPlaceLookup().catch(() => {});
+      const lookup = placeLookupSync();
       const options = [{ value: '', label: '全部照片', tag: String(allSubs.length) }];
       if (members.length > 1 && (untagged.length || view.untagged)) {
         options.push({ value: '__untagged', label: '只看未標記', sub: '還沒標「照片裡有誰」的', tag: String(untagged.length) });
       }
       for (const s of spotsWithPhotos) {
-        options.push({ value: s.id, label: `${s.emoji || '📍'} ${s.name}`, tag: String(counts.get(s.id)) });
+        options.push({ value: s.id, label: `${placeEmojiForSpot(s, lookup)} ${s.name}`, tag: String(counts.get(s.id)) });
       }
       const cur = view.untagged ? '__untagged' : (view.spot || '');
       const got = await chooseFrom({ title: '要看哪些照片？', options, value: cur });
