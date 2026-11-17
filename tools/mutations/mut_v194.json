@@ -250,5 +250,50 @@
     "find": "  const em = emoScan(ROOT, EMO_REGISTRY);",
     "replace": "  const em = { ...emoScan(ROOT, EMO_REGISTRY), files: 0, sites: [] };",
     "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 畫面：回顧影片的前置改回在任務頁重新整理",
+    "why": "（事前寫 2026-11-17 18:4x，跑之前；開瀏覽器）H5-8 的前置（§5.8：把情境拿掉它必須紅）：冷開改回 v1.94.0 第 2 場那時的「在任務頁重新整理」——任務頁已經載好景點庫，呼叫 buildTimeline 之前景點庫不是空的。預期只紅前置那一條；地圖標籤那條照樣綠（景點庫已經載好、符號照樣對）。",
+    "expect": ["H5-8 前置"],
+    "file": "scripts/guesstruthtest.mjs",
+    "find": "  await cold('#/settings', '.page.form');\n  const h58 = await page.evaluate(async (tid) => {",
+    "replace": "  await page.reload({ waitUntil: 'networkidle0' });\n  const h58 = await page.evaluate(async (tid) => {",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：回顧影片只載景點庫、不載主題表",
+    "why": "（事前寫 2026-11-17 18:4x，跑之前；開瀏覽器）原本的「自己不載景點庫」那幾條都是兩行一起拿掉；只拿掉 loadThemes 那一行沒有東西守。trustedTheme 沒有主題表就回 recheck false（theme.js 93 行），設定頁冷開沒有別的地方載主題表（讀程式：js/ 底下呼叫 loadThemes 的地方沒有開機流程或設定頁），所以標籤一律不放符號。預期只紅 H5-8 回顧影片的地圖標籤；前置只看景點庫，照樣綠。",
+    "expect": ["H5-8 回顧影片的地圖標籤"],
+    "file": "js/memory.js",
+    "find": "    await loadThemes().catch(() => {});\n    const lookup = await loadPlaceLookup().catch(() => null);",
+    "replace": "    const lookup = await loadPlaceLookup().catch(() => null);",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：主頁只載景點庫、不載主題表",
+    "why": "（事前寫 2026-11-17 18:4x，跑之前；開瀏覽器）tripHome 只拿掉 loadThemes 那一行。理由同上一條。預期紅 H5-2、H5-3；H5-4 換一站自己會載主題表（trip.js pickHereSpot），照樣綠。若主頁上別的東西先載了主題表、這條不紅，就照 §5.12 分辨。",
+    "expect": ["H5-2 主頁下一站卡", "H5-3 主頁「今天接下來」"],
+    "file": "js/views/trip.js",
+    "find": "  // 載不到就是 📍（placeLookupSync 回 null），不露出存著的、可能是照名字猜的符號\n  await loadThemes().catch(() => {});",
+    "replace": "  // 載不到就是 📍（placeLookupSync 回 null），不露出存著的、可能是照名字猜的符號",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：調整行程只載景點庫、不載主題表",
+    "why": "（事前寫 2026-11-17 18:4x，跑之前；開瀏覽器）plan.js 畫面一開頭只拿掉 loadThemes 那一行。理由同上。預期只紅 H5-5。",
+    "expect": ["H5-5 調整行程"],
+    "file": "js/views/plan.js",
+    "find": "可能是照名字猜的符號\n  await loadThemes().catch(() => {});",
+    "replace": "可能是照名字猜的符號",
+    "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 畫面：照片牆篩選只載景點庫、不載主題表",
+    "why": "（事前寫 2026-11-17 18:4x，跑之前；開瀏覽器）people.js 打開篩選時只拿掉 loadThemes 那一行。理由同上。預期只紅 H5-6。",
+    "expect": ["H5-6 照片牆篩選"],
+    "file": "js/views/people.js",
+    "find": "載不到就是 📍\n      await loadThemes().catch(() => {});",
+    "replace": "載不到就是 📍",
+    "cmd": "node scripts/guesstruthtest.mjs"
   }
 ]

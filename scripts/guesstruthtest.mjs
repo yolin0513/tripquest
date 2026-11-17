@@ -303,14 +303,21 @@ try {
   yes(th7[0] !== null && th7[0].includes(food) && th7[1] === '',
     `H5-7 任務頁主題小標：梧棲漁港有「${food}」、打卡那站沒有小標（不是「${THEMES.urban.label}」；實得 ${JSON.stringify(th7)}）`);
 
-  // H5-8 回顧影片的地圖標籤（相簿頁算影片用的同一支 buildTimeline；重新整理後呼叫，景點庫由它自己載）
-  await page.reload({ waitUntil: 'networkidle0' });
-  const labels = await page.evaluate(async (tid) => {
+  // H5-8 回顧影片的地圖標籤（相簿頁算影片用的同一支 buildTimeline）。相簿頁（views/album.js）自己不載景點庫、有照片時一打開就呼叫
+  // buildTimeline 建播放器，所以影片地圖標籤的符號全靠 buildTimeline 自己載景點庫。
+  // v1.94.0 第 2 場（2026-11-17）：原本重新整理在任務頁——任務頁（trip.js）已經載好景點庫，突變「回顧影片自己不載景點庫」照樣綠。
+  // 改成冷開在設定頁（不碰景點庫），同一個 evaluate 裡、呼叫之前先讀 placeLookupSync() 當前置（§5.8）。
+  await cold('#/settings', '.page.form');
+  const h58 = await page.evaluate(async (tid) => {
+    const g = await import('./js/quests/generate.js');
+    const before = g.placeLookupSync() === null;
     const m = await import('./js/memory.js');
     const tl = await m.buildTimeline(tid);
     const seg = tl.segs.find((x) => x.kind === 'map');
-    return seg ? seg._layout.overview.labels.map((l) => l.text) : null;
+    return { before, labels: seg ? seg._layout.overview.labels.map((l) => l.text) : null };
   }, h5.tid);
+  yes(h58.before, `H5-8 前置（冷開設定頁）：呼叫 buildTimeline 之前景點庫還沒載，才驗得到它自己載（實得 ${h58.before ? '還沒載' : '已經載好'}）`);
+  const labels = h58.labels;
   yes(!!labels && labels.includes(`${h5.wuqiEmoji}梧棲漁港`) && labels.includes('乙寺') && labels.includes(`${h5.gion.emoji}${GN}`) && !labels.some((t) => /[🌊🛕🏯]/u.test(t)),
     `H5-8 回顧影片的地圖標籤：對得回的兩站是景點庫的符號、乙寺不放符號；存著的都沒露出來（實得 ${JSON.stringify(labels)}）`);
 
