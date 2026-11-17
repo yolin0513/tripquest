@@ -31,7 +31,8 @@
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
 //         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、主頁一樣沒有拍照鈕
 //   動畫（v1.83.0 起；js/peeks.js 的 cheer()、css/style.css 的 .pk-cheer）：完成任務那一刻小鳳打領結那張從照片後面跳上來、揮翅膀——
-//     和紙那輪 P3 的「古蹟 → 小鳳打領結」：慶祝畫面一出來就量（隔 150ms 量兩次位置不一樣＝有動）；每一段動畫的 keyframes 只動 transform、opacity；
+//     和紙那輪 P3 的「古蹟 → 小鳳打領結」：慶祝畫面一出來就量（兩次取位置不一樣＝有動；兩次之間瀏覽器要畫了新的格、時間軸走了至少 150ms，
+//     沒畫就另一條「量的時候瀏覽器有畫新的格」紅——2026-11-17 加，七張都有）；每一段動畫的 keyframes 只動 transform、opacity；
 //     等每一段都結束，身體、翅膀沒有殘留的位移（框跟撤掉動畫的靜止圖一樣）、扣在照片上的手與揮動線都完全看得到（不會卡在半空）
 //     減少動態效果那輪：設定頁的開關、系統設定（瀏覽器模擬 prefers-reduced-motion）各完成一個任務——照舊探頭（靜止圖）、0 段動畫
 //   動畫（v1.85.0 推廣；Yolin：「效果不錯，推廣到其他時刻」）：P3 的另外四張（捧麵蒸氣、烤串晃兩下、遮陽帽揮兩下、相機閃一下）、
@@ -219,7 +220,7 @@ async function pickRow(page, spot, must) {
 }
 
 // 動畫（v1.83.0 只有小鳳打領結；v1.85.0 七張都會動）：畫面一出來就量。圖上每一段動畫的名字、狀態、keyframes 用到的屬性；
-// 隔 150ms 取兩次會動的那幾層的 transform／opacity，看有沒有變。會動的層（js/peeks.js 的 cheer() 包的）：
+// 取兩次會動的那幾層的 transform／opacity，看有沒有變——兩次之間等瀏覽器真的畫了新的格、時間軸往前走至少 150ms（見 animNow 裡的說明）。會動的層（js/peeks.js 的 cheer() 包的）：
 //   身體 .pk-hop；轉／滑的零件 .pk-wave（翅膀）、.pk-wave-r（右手）、.pk-sway（烤串）、.pk-tilt（雨傘）、.pk-slide（雪板）；
 //   只動透明度的 .pk-grip（扣在卡片／照片上的手）、.pk-wave-lines（揮動線）、.pk-steam（蒸氣）、.pk-flash（閃光）
 // 跳之前：把每一段動畫倒回 0，量邊線以上那層的內容是不是整個在邊線下面（＝藏在卡片／照片後面）；量完照常往下播。
@@ -236,9 +237,43 @@ const animNow = (page, ps = PEEK_SEL) => page.evaluate(async (ps, meta, cls) => 
     .map((x) => { const s = getComputedStyle(x); return `${x.getAttribute('class')}:${s.transform}|${s.opacity}`; }).join(';');
   const anims = el.getAnimations({ subtree: true });
   const props = [...new Set(anims.flatMap((a) => (a.effect?.getKeyframes?.() || []).flatMap((k) => Object.keys(k).filter((p) => !meta.includes(p)))))];
+  // 2026-11-17 改（2026-11-16 全套第 74 支撐傘那條紅「三段都在跑，但隔 150ms 量兩次位置一樣」，第二輪單跑綠）：
+  //   1. 量的當下先記每一段動畫的狀態（播到第幾毫秒、總長、播完了沒）與時間軸。一定要在下面「倒回第 0 格」那段之前記：
+  //      那段量完會 play()，播完的動畫一 play() 就從頭重播、狀態變回 running——原本在 return 時才數 running，數到的永遠是全部，
+  //      「跑著的 3」不代表量的時候還在跑。現在 running 是量的當下數的（它在斷言裡跟「位置變了」是同一件事的兩面：
+  //      位置變了就一定有一段在跑，單獨拿掉它不會有測試紅——等價，不另配突變）。
+  //   2. 兩次取位置之間，等瀏覽器真的畫了新的格：至少 2 格，而且時間軸往前走至少 150ms；最多等 3 秒（畫格一直不來時 rAF 迴圈不會自己結束）。
+  //      原本是 setTimeout 150ms——機器忙的時候計時器可能先到、中間一格都沒畫，兩次讀到的是同一格。
+  //      等不到就回 frameOk false，另一條斷言「量的時候瀏覽器有畫新的格」紅（＝這一次沒量到），不跟「畫了新的格、位置沒變」（動畫壞了）混在一起。
+  //   那一次紅的原因還沒證實：可能是沒畫新的格，也可能是到的時候動畫已經播完（撐傘整段 0.75＋1.6＝2.35 秒）。兩種現在各有自己的數字印在訊息裡
+  //   （畫了幾格、時間軸走了多少；量的當下播完幾段、各段播到第幾毫秒／總長）。
+  const tl = () => { const t = document.timeline ? document.timeline.currentTime : null; return typeof t === 'number' ? t : null; };
+  const at = () => anims.map((a) => {
+    const end = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming().endTime : null;
+    return { st: a.playState, t: typeof a.currentTime === 'number' ? Math.round(a.currentTime) : null, end: typeof end === 'number' ? Math.round(end) : null };
+  });
+  const fmt = (xs) => xs.map((x) => `${x.t}/${x.end}${x.st === 'running' ? '' : `(${x.st})`}`).join('、') || '無';
+  const st1 = at(), tl1 = tl();
   const s1 = layers();
-  await new Promise((r) => setTimeout(r, 150));
+  const w0 = performance.now();
+  let frames = 0, stop = false;
+  const frameOk = await Promise.race([
+    new Promise((res) => {
+      const tick = () => {
+        if (stop) return;
+        frames++;
+        const now = tl();
+        if (frames >= 2 && tl1 != null && now != null && now - tl1 >= 150) res(true); else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }),
+    new Promise((res) => setTimeout(() => res(false), 3000)),
+  ]);
+  stop = true;
+  const waited = Math.round(performance.now() - w0);
+  const tl2 = tl();
   const s2 = layers();
+  const st2 = at();
   const count = {};
   for (const c of cls) count[c] = el.querySelectorAll('.' + c).length;
   let hidden = null, topGap = null;
@@ -254,7 +289,9 @@ const animNow = (page, ps = PEEK_SEL) => page.evaluate(async (ps, meta, cls) => 
   }
   return {
     found: true, kind: el.getAttribute('data-peek'), cheer: el.classList.contains('pk-cheer'), soft: el.classList.contains('pk-soft'),
-    n: anims.length, running: anims.filter((a) => a.playState === 'running').length, names: anims.map((a) => a.animationName || '?'),
+    n: anims.length, running: st1.filter((x) => x.st === 'running').length, finished: st1.filter((x) => x.st === 'finished').length,
+    names: anims.map((a) => a.animationName || '?'),
+    frameOk, frames, waited, tlAdv: tl1 != null && tl2 != null ? Math.round(tl2 - tl1) : null, at1: fmt(st1), at2: fmt(st2),
     props, moved: s1 !== '' && s1 !== s2, count, hidden, topGap,
     layers: { hop: count['pk-hop'], wave: count['pk-wave'], grip: count['pk-grip'], lines: count['pk-wave-lines'] },
   };
@@ -324,15 +361,22 @@ const ANIM_WANT = {
   rain: { label: '撐傘', soft: true, layers: { 'pk-tilt': 1, 'pk-grip': 1 }, parts: 1, fades: 1 },
   snow: { label: '雪板', soft: true, layers: { 'pk-slide': 1 }, parts: 1, fades: 0 },
 };
-// 一張的四條（swing 有寫的再加一條「兩下」）：有動、跳之前藏在後面、只用 transform／opacity、動完停在正確位置
+// 「量的時候瀏覽器有畫新的格」（2026-11-17 加）：animNow 兩次取位置之間，瀏覽器畫了至少 2 格、時間軸往前走至少 150ms（最多等 3 秒）。
+// 這條紅＝這一次沒量到（機器太忙、瀏覽器沒畫），不是動畫壞了；這條綠、「有動」紅＝畫了新的格但位置沒變，才是動畫的問題。
+// 通過的時候也印畫了幾格、時間軸走了多少、等了多久（§5.20：通過時也印算過的東西）。
+const frameMsg = (label, A) => `${label}：兩次取位置之間瀏覽器畫了至少 2 格、時間軸往前走至少 150ms（最多等 3 秒）；這條紅表示這一次沒量到，不是動畫壞了`
+  + `（畫了 ${A.frames} 格、時間軸走了 ${A.tlAdv}ms、等了 ${A.waited}ms）`;
+// 一張的五條（swing 有寫的再加一條「兩下」）：量的時候瀏覽器有畫新的格、有動、跳之前藏在後面、只用 transform／opacity、動完停在正確位置
 function animChecks(kind, A, E) {
   const w = ANIM_WANT[kind], L = `動畫・${w.label}`;
   const cnt = A.count || {};
   const layerBad = LAYER_CLS.filter((c) => c !== 'pk-hop' && (cnt[c] || 0) !== (w.layers[c] || 0));
   const total = LAYER_CLS.reduce((s, c) => s + (cnt[c] || 0), 0);
+  yes(A.found && A.frameOk === true, frameMsg(`${L} 量的時候瀏覽器有畫新的格`, A));
   yes(A.found && A.kind === kind && A.cheer === true && A.soft === w.soft && A.running >= 1 && A.moved === true
     && cnt['pk-hop'] === 1 && layerBad.length === 0 && A.n === total,
-    `${L} 有動：一出來就有動畫在跑、隔 150ms 量兩次位置不一樣、${w.soft ? '慢慢探上來' : '跳上來'}、會動的層跟登記的一樣（${A.kind}；pk-cheer ${A.cheer}；慢慢探 ${A.soft}；動畫 ${A.n} 段、跑著的 ${A.running}、層數合計 ${total}；位置變了 ${A.moved}；`
+    `${L} 有動：一出來就有動畫在跑、兩次取位置（中間時間軸走了至少 150ms）不一樣、${w.soft ? '慢慢探上來' : '跳上來'}、會動的層跟登記的一樣（${A.kind}；pk-cheer ${A.cheer}；慢慢探 ${A.soft}；動畫 ${A.n} 段、量的當下跑著的 ${A.running}、播完的 ${A.finished}、層數合計 ${total}；位置變了 ${A.moved}；`
+    + `各段播到（毫秒／總長）${A.at1} → ${A.at2}；`
     + `層：${LAYER_CLS.filter((c) => cnt[c]).map((c) => `${c} ${cnt[c]}`).join('、') || '無'}；對不上：${layerBad.map((c) => `${c} ${cnt[c] || 0}≠${w.layers[c] || 0}`).join('、') || '無'}）`);
   yes(A.found && A.hidden === true,
     `${L} 跳之前整隻藏在後面：動畫倒回第 0 格，邊線以上那層的內容整個在邊線下面（內容頂離邊線 ${A.topGap}px）`);
@@ -498,8 +542,9 @@ async function washiRound() {
 
     // ---- 動畫（v1.83.0）：完成任務那一刻小鳳打領結那張跳上來、揮翅膀 ----
     const A = doneAnim, E = doneEnd, L = A.layers || {};
+    yes(A.found && A.frameOk === true, frameMsg('動畫 完成任務那一刻量的時候瀏覽器有畫新的格', A));
     yes(A.found && A.kind === 'done' && A.cheer === true && A.running >= 1 && A.moved === true,
-      `動畫 完成任務那一刻有動：慶祝畫面一出來，小鳳打領結那張有動畫在跑、隔 150ms 量兩次位置不一樣（${A.kind}；pk-cheer ${A.cheer}；動畫 ${A.n} 段、跑著的 ${A.running}；位置變了 ${A.moved}）`);
+      `動畫 完成任務那一刻有動：慶祝畫面一出來，小鳳打領結那張有動畫在跑、兩次取位置（中間時間軸走了至少 150ms）不一樣（${A.kind}；pk-cheer ${A.cheer}；動畫 ${A.n} 段、量的當下跑著的 ${A.running}、播完的 ${A.finished}；位置變了 ${A.moved}；各段播到（毫秒／總長）${A.at1} → ${A.at2}）`);
     // 母體：每一層一段動畫（身體 1、手 1、翅膀每一段各 1、揮動線 1——和紙才畫揮動線）
     const ONLY = ['transform', 'opacity'], props = A.props || [];
     yes(A.found && L.hop === 1 && L.grip === 1 && L.wave >= 1 && L.lines === 1 && A.n === L.hop + L.grip + L.wave + L.lines
