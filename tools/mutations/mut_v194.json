@@ -232,5 +232,23 @@
     "find": "const spotEmoji = (s) => placeEmojiForSpot(s, placeLookupSync());",
     "replace": "const spotEmoji = (s) => s.emoji || '📍';",
     "cmd": "node scripts/guesstruthtest.mjs"
+  },
+  {
+    "name": "v194 .emoji 登記：畫面又先讀存著的符號",
+    "why": "（事前寫 2026-11-17 15:5x，跑之前；15:59 查過時鐘）有人把任務頁的 spotEmoji 改回先看存著的 s.emoji——就是這版要擋的形狀。那一行多讀一處 .emoji、沒有登記，placeicontest 第五段的真實結果要紅。預期只紅 C4（C3 母體照樣非空；第三段圖示登記不看 .emoji、不紅）。補的原因：C3、C4 是新斷言，前 26 條沒有一條讓它們紅（前兩條改的是 placeicon.js，第五段不掃定義檔）。",
+    "expect": ["C4 .emoji 登記"],
+    "file": "js/views/trip.js",
+    "find": "const spotEmoji = (s) => placeEmojiForSpot(s, placeLookupSync());",
+    "replace": "const spotEmoji = (s) => s.emoji || placeEmojiForSpot(s, placeLookupSync());",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "v194 .emoji 登記：真實掃描讀到 0 行",
+    "why": "（事前寫 2026-11-17 15:5x，跑之前）C3 是前置斷言（§5.8：把情境拿掉它必須紅）：真實那一次掃描的結果換成 0 支檔、0 行。只改呼叫那一行、不動共用的 emoScan 與 EMO_RE——動那兩處會連對照組一起弄紅，被判沒跑完（見 STATUS v1.94.0 那一節「沒有結果的 4 條」）。預期紅 C3（母體是空的）、C4（0 行不等於應對到的行數）。",
+    "expect": ["C3 .emoji 登記", "C4 .emoji 登記"],
+    "file": "scripts/placeicontest.mjs",
+    "find": "  const em = emoScan(ROOT, EMO_REGISTRY);",
+    "replace": "  const em = { ...emoScan(ROOT, EMO_REGISTRY), files: 0, sites: [] };",
+    "cmd": "node scripts/placeicontest.mjs"
   }
 ]
