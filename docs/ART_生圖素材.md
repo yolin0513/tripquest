@@ -262,7 +262,7 @@ Style: flat sticker-style illustration that matches the characters: thick, even,
 Do not draw anything that could be read as information: no sun, no moon, no rain, no snow, no rainbow, no umbrella; no buildings, houses, towers, temples, bridges, landmarks or snow-capped peaks; no vehicles; no food; no signs, no maps; nothing season-specific (no cherry blossoms, no autumn leaves). No text, no letters, no numbers, no signature, no border, no frame. Original artwork, not resembling any existing artwork, brand or franchise.
 ```
 
-收到圖之後：量上半部（標題、日期那一行壓上去 ≥ 4.5）、逐隻對參考圖、看有沒有偷畫字或天氣建築食物；正式墊進海報仍要先做 B18 的新檢查並另排一版。
+收到圖之後：量上半部（標題、日期那一行壓上去 ≥ 4.5）、逐隻對參考圖、看有沒有偷畫字或天氣建築食物；正式墊進海報仍要先做 B18 的新檢查並另排一版。（2026-11-17 起「逐隻對參考圖」只看明顯的錯，細節不再追，見第 9 節第 0 條。）
 
 **2026-11-16 晚第一張回來之後**：
 - 鬍鬍被畫成淺灰毛、白眉毛。Yolin 選乙案，由程式改色：`scripts/art-recolor.mjs` 的內建配方 `d2-huhu`，見第 9 節第 6 點。
@@ -280,7 +280,7 @@ Do not draw anything that could be read as information: no sun, no moon, no rain
 **給 Yolin**：
 - 新對話、不附舊圖（附了容易把字、框、角色照抄），直式 2:3。
 - 存進 `art-inbox`，檔名例如 `北海道無字底圖-第一次.png`。
-- 看得到字、數字、框、角色、路線、箭頭、道路、建築、食物的，直接重生。
+- 看得到字、數字、框、角色、路線、箭頭、道路、建築、食物的，直接重生。（2026-11-17 第 9 節第 0 條：字、數字照樣直接重生；其餘只看明顯的、會被讀成資訊的。）
 
 ```
 A soft hand-drawn watercolor illustrated map of the island of Hokkaido, Japan, seen from directly above, with north at the top. Portrait orientation, 2:3.
@@ -428,7 +428,7 @@ For all items: no packaging, boxes with logos, shop signs or brand shapes; no re
   - 括號裡的地名只用來定位，並寫明「不要寫出來」。
   - 連兩次有字，就刪掉括號再試。
 
-**收到之後**：
+**收到之後**（2026-11-17 起照第 9 節第 0 條的比重：字逐一核對，圖只看明顯的錯）：
 1. 看重生清單。
 2. 量各區塊實際在哪裡。
 3. 在新圖上重新目測站點。
@@ -462,6 +462,23 @@ For all items: no packaging, boxes with logos, shop signs or brand shapes; no re
 ---
 
 ## 9. 收到圖之後（Session 做的）
+
+**0. 檢查與回報的比重（Yolin 2026-11-17，經 Dispatch；先讀這條）**
+
+Yolin 原話（選吉祥物動作丙版時）：「丙方案，我覺得吉祥物整合進去比較自然好看，疊上去的有些吉祥物太大了，路線及動作等等算是參考配圖而已，不用達到 100% 正確，文字等等資訊正確就好。」
+
+Dispatch 轉成三條：
+- 插圖、路線、吉祥物動作屬於「參考配圖」，不必 100% 精確（例如地標位置、動作細節）。
+- 文字資訊（地名、日期、天數、菜名）必須正確，這條照守。
+- 以後檢查與回報照這個比重：字逐一核對，圖只看有沒有明顯錯，不再逐像素追求精確。
+
+**範圍（Session 寫明，可推翻）**：只管生圖的插圖與人工流程的海報樣品——本檔第 7 節各張、九宮格動作圖、北海道疊字樣品這一類。**這些都不變**：App 的版面與畫面測試、文字對比 ≥ 4.5、觸控 ≥ 44px、B18（插圖上的字逐點量對比）、第 10 節「猜出來的東西不准變成使用者看得到的字或圖」。
+
+**怎麼套（Session 的讀法，可推翻）**：
+- **照守、會擋**：我們疊的字從行程表讀，程式核字數、每道菜名、名單掃描；字不准被蓋住、要看得清楚；生圖自己畫出字來仍算錯（字就是資訊，見第 7c 節）。
+- **只看明顯的錯、照報**：角色認不出是哪一隻、整隻顏色不對、少了一隻；圖跟旁邊的字明顯對不上（例如標籤寫哈密瓜、圖是拉麵）；去背留下色塊或色邊。
+- **不再追、不列成缺點**：地標或站點位置偏一點、路線沒貼著景色、動作細節（腳的顏色、眉毛深淺、白煙有沒有碰到木桶）、提示詞「看到就直接重生」清單裡不帶字的小項（例如遠處一座白頂的山）。
+- 疊字腳本裡管插圖位置的檢查（路線壓到別天的景色、編號圈與引線放哪）可以留著幫忙排版，但不再當成交不交的門檻，回報也不逐項列。
 
 1. **切圖** `node scripts/art-slice.mjs <圖> <輸出資料夾> [--grid 3] --names a,b,…`：
    - `--grid` 是每邊幾格（2～6，預設 3）；4×4 就寫 `--grid 4`，`--names` 要剛好 16 個。（2026-11-16 加，Dispatch 同意小圖示改 4×4、先試一張。）
@@ -508,7 +525,7 @@ For all items: no packaging, boxes with logos, shop signs or brand shapes; no re
 
 ## 10. 「猜的東西不准變成資訊」怎麼守
 
-設計原則（v1.74 起）：只有對得上景點庫的才自動出現，猜出來的東西不准變成使用者看得到的字或圖。換到圖示：
+設計原則（v1.74 起）：只有對得上景點庫的才自動出現，猜出來的東西不准變成使用者看得到的字或圖。（第 9 節第 0 條「參考配圖不必 100% 精確」只管人工流程的生圖插圖與海報樣品，不放寬這一節。）換到圖示：
 
 1. **景點類型圖示只看景點庫的 `primary`**：
    - 只給景點庫裡的景點（`source: 'curated'`，靠 `placeId` 回查景點庫）。
