@@ -1,0 +1,11 @@
+[
+  {
+    "name": "動畫：天氣頁撐傘那張多等 3 秒才量（模擬到的時候動畫已經播完）",
+    "why": "（事前寫 2026-11-17 22:0x，跑之前）改的是測試本身（scripts/peektest.mjs 的 P2）：天氣頁開好之後先睡 3 秒才叫 animNow 量撐傘那張。撐傘三段動畫最長的是傘晃（.75 秒延遲＋1.6 秒＝2.35 秒），平常 217ms 左右就量（2026-11-17 14:2x 實測），多等 3 秒就三段都播完了——模擬 2026-11-16 全套第 74 支那條紅的另一種解釋（乙、到的時候已經播完）。CSS 三段都是 fill both，播完的動畫還在 getAnimations() 裡、playState 是 finished。預期只紅「動畫・撐傘 有動」：量的當下跑著的 0（running >= 1 不成立）、兩次取位置一樣（moved false），訊息印「播完的 3」。不紅的：「動畫・撐傘 量的時候瀏覽器有畫新的格」（沒有動畫時瀏覽器照樣畫格、時間軸照樣走——mut_anim1114／mut_cheer1113 那三條拿掉動畫時這條保持綠，2026-11-17 14:2x 實測）；跳之前整隻藏在後面（倒回第 0 格量，跟播到哪無關）；只用 transform 和 opacity（看 keyframes）；動完停在正確位置（animEnd 等全部播完再量；播完的動畫 finished 立刻成立）；P2 的位置、對齊（probe 量的是 svg 元素自己的框，裡面那層動畫的位移不影響它——讀程式推的）。推論、這一次順便實測的：animNow 量完會把動畫放回原本那一格再 play()，播完的動畫一 play() 是不是從頭重播（程式註解寫成事實、沒量過）；重播的話 animEnd 要多等約 2.35 秒、仍在 6 秒內，結果不變——這條突變紅不紅不靠它，所以這一場分不出重播與否，只排除「重播會害別條紅」。這條是「乙」那一邊第一次被觸發（§5.20）：證明「播完的 N」那一句真的會印出非 0、而且只紅「有動」、不紅「有畫新的格」——兩種解釋各自的紅分得開。",
+    "expect": ["動畫・撐傘 有動"],
+    "file": "scripts/peektest.mjs",
+    "find": "    const rainA = nav1 ? await animNow(page, '.wx-advice svg.gl-peek') : { found: false };",
+    "replace": "    const rainA = nav1 ? await sleep(3000).then(() => animNow(page, '.wx-advice svg.gl-peek')) : { found: false };   // 突變：多等 3 秒才量，到的時候已經播完",
+    "cmd": "node scripts/peektest.mjs"
+  }
+]
