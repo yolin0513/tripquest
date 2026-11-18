@@ -1,8 +1,8 @@
 [
   {
     "name": "海報入口：行程分頁沒有那顆按鈕",
-    "why": "（事前寫 2026-11-14 14:40，跑之前）行程分頁「行程」那一格不放「做成行程海報」。測試從入口進不來時直接開那一頁、後面照樣量。預期只紅 P1a；P2a（空的一趟沒有按鈕）照樣綠。",
-    "expect": ["P1a 從首頁 → 底部「行程」"],
+    "why": "（事前寫 2026-11-14 14:40，跑之前）行程分頁「行程」那一格不放「做成行程海報」。測試從入口進不來時直接開那一頁、後面照樣量。預期只紅 P1a；P2a（空的一趟沒有按鈕）照樣綠。〔2026-11-18 12:3x 補 expect，**事後**：H2（帳本第 1668 次）多紅 P10b——之後才加的斷言（上一次第 1220 次 62 項時還沒有）。〕",
+    "expect": ["P1a 從首頁 → 底部「行程」", "P10b 開過行程分頁再按進海報"],
     "file": "js/views/trip.js",
     "find": "      spots.length ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },",
     "replace": "      false ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },",
@@ -37,8 +37,8 @@
   },
   {
     "name": "海報頁：天氣預報到了不重畫",
-    "why": "（事前寫 2026-11-14 14:40，跑之前）預報查到了也不放進小提醒（照樣重畫一次，但用的是沒有預報的那一份）。P3a、P6a、P6b 只要求預覽跟「有預報」或「沒預報」其中一份逐像素相同，P7、P8 跟當下預覽那一份比，所以都不連帶。預期只紅 P5a。",
-    "expect": ["P5a 天氣預報到了會重畫"],
+    "why": "（事前寫 2026-11-14 14:40，跑之前）預報查到了也不放進小提醒（照樣重畫一次，但用的是沒有預報的那一份）。P3a、P6a、P6b 只要求預覽跟「有預報」或「沒預報」其中一份逐像素相同，P7、P8 跟當下預覽那一份比，所以都不連帶。預期只紅 P5a。〔2026-11-18 12:3x 補 expect，**事後**：H2（帳本第 1672 次）多紅 P15、P17——之後才加的斷言（上一次第 1224 次 62 項時還沒有）。〕",
+    "expect": ["P5a 天氣預報到了會重畫", "P15 插圖載不到", "P17 有插圖時存下來的圖"],
     "file": "js/views/itinposter.js",
     "find": "    forecast = f;\n    await rebuild();",
     "replace": "    forecast = null;\n    await rebuild();",

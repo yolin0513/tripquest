@@ -66,8 +66,8 @@
   },
   {
     "name": "v190 裝飾：旁邊多寫一個字",
-    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 8 條，跑前補 B18）每一個裝飾旁邊用 text 寫一個全形星號。B10：模型裡沒有這個字 → 紅；B17：裝飾碰到字 → 紅；B18：那個字直接在紙上、底下有紋理點 → 紅。全形星號不是 emoji，B11 不紅。預期紅 B10、B17、B18。",
-    "expect": ["B10 字的來源", "B17 路旁的裝飾", "B18 背景紋理"],
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 8 條，跑前補 B18）每一個裝飾旁邊用 text 寫一個全形星號。B10：模型裡沒有這個字 → 紅；B17：裝飾碰到字 → 紅；B18：那個字直接在紙上、底下有紋理點 → 紅。全形星號不是 emoji，B11 不紅。預期紅 B10、B17、B18。〔2026-11-18 12:3x 補 expect，**事後**：S2（帳本第 1631 次）多紅 B20b、B18d——之後才加的斷言（上一次第 1271 次 146 項時還沒有）。〕",
+    "expect": ["B10 字的來源", "B17 路旁的裝飾", "B18 背景紋理", "B20b 插圖載得到跟載不到", "B18d 真的圖檔"],
     "file": "js/itinposter/layout.js",
     "find": "    c.deco(shape, x, y, DECO_R, shape === 'star' ? col : mix(col, shape === 'dot' ? 0.55 : 0.45), Math.atan2(b.y - a.y, b.x - a.x));",
     "replace": "    c.deco(shape, x, y, DECO_R, shape === 'star' ? col : mix(col, shape === 'dot' ? 0.55 : 0.45), Math.atan2(b.y - a.y, b.x - a.x)); c.text('＊', x, y + 8, 22, { weight: 700, color: col, align: 'center', role: 'deco' });",
@@ -75,8 +75,8 @@
   },
   {
     "name": "v190 紋理：點的顏色換深（版面）",
-    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 10 條的版面那一半）點的顏色換成 #d0c2a8（跟紙的對比約 1.63、灰字壓在上面約 3.41）。B18：跟紙的對比超過 1.35、內文字色壓在點上不到 4.5 → 紅。預期只紅 B18。",
-    "expect": ["B18 背景紋理"],
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 10 條的版面那一半）點的顏色換成 #d0c2a8（跟紙的對比約 1.63、灰字壓在上面約 3.41）。B18：跟紙的對比超過 1.35、內文字色壓在點上不到 4.5 → 紅。預期只紅 B18。〔2026-11-18 12:3x 補 expect，**事後**：S2（帳本第 1632 次）多紅 B18d——之後才加的斷言（上一次第 1272 次 146 項時還沒有）。〕",
+    "expect": ["B18 背景紋理", "B18d 真的圖檔"],
     "file": "js/itinposter/layout.js",
     "find": "export const DOT = { step: 36, r: 3, color: '#ede2cc' };",
     "replace": "export const DOT = { step: 36, r: 3, color: '#d0c2a8' };",
@@ -84,8 +84,8 @@
   },
   {
     "name": "v190 紋理：沒有紋理（版面不給 bg）",
-    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 12 條的版面那一半）background() 回傳 null。B18 每一張報「沒有背景紋理」→ 紅。預期只紅 B18。",
-    "expect": ["B18 背景紋理"],
+    "why": "（事前寫 2026-11-14 22:27，跑之前；規劃表第 12 條的版面那一半）background() 回傳 null。B18 每一張報「沒有背景紋理」→ 紅。預期只紅 B18。〔2026-11-18 12:3x 補 expect，**事後**：S2（帳本第 1633 次）多紅 B18d——之後才加的斷言（上一次第 1273 次 146 項時還沒有）。〕",
+    "expect": ["B18 背景紋理", "B18d 真的圖檔"],
     "file": "js/itinposter/layout.js",
     "find": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear };",
     "replace": "  return null;",
@@ -102,8 +102,8 @@
   },
   {
     "name": "v190 紋理：標題區與頁尾也鋪點（版面 clear 清空）",
-    "why": "（事前寫 2026-11-14 22:27，跑之前；跑前新增）background() 的 clear 給空陣列。標題區的字直接在紙上、又不在不鋪點的地方 → B18 報「壓在紋理上」→ 紅。預期只紅 B18。",
-    "expect": ["B18 背景紋理"],
+    "why": "（事前寫 2026-11-14 22:27，跑之前；跑前新增）background() 的 clear 給空陣列。標題區的字直接在紙上、又不在不鋪點的地方 → B18 報「壓在紋理上」→ 紅。預期只紅 B18。〔2026-11-18 12:3x 補 expect，**事後**：S2（帳本第 1635 次）多紅 B18d——之後才加的斷言（上一次第 1275 次 146 項時還沒有）。〕",
+    "expect": ["B18 背景紋理", "B18d 真的圖檔"],
     "file": "js/itinposter/layout.js",
     "find": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear };",
     "replace": "  return { kind: 'dots', step: DOT.step, r: DOT.r, color: DOT.color, clear: [] };",
