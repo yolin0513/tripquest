@@ -9,6 +9,8 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 
 **同日修訂**（交出前自己複查出來的）：H1 不是「幾乎不變」，出發那一句出現的那天會變高約 44px（不論晴雨）；「一個畫面一張」改成只管新加的，不拿掉已上線的組合；T2（按下拍照的反應）看不到，建議不做；T1 改成只有自己完成的才滑；第 8 節寫明測試支數的前提；提示詞逐字對過原文。示意圖與提示詞改用 04～06，01～03 作廢。
 
+**Yolin 2026-11-18 答覆之後**：第 9 節八件的答覆記在第 9 節開頭；6.4 加上「保留 GPT 的融入感、第二版第一張先給他看」；底部分頁五格要做、另案排，規劃寫在 3.12、提示詞在 6.6（交件 07、小樣 08）；第 5 節的表加一欄；第 8 節加「第一版實作時的更動」。
+
 ---
 
 ## 0. 結論
@@ -36,7 +38,7 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
   - 我的旅程空白、建立行程、主頁下一站卡；
   - 分帳、設定、最終回顧；
   - 錯誤狀態。
-- **底部分頁列五格**是另案。
+- **底部分頁列五格**是另案（Yolin 2026-11-18：要做、另案排；3.12、6.6）。
 
 **圖的建議**：GPT 圖只當參考、照著畫成向量，不直接把點陣圖放進 App。理由在第 6 節，主要兩條：
 
@@ -279,7 +281,40 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
   - `renderTabs` 每次換頁都整列重畫（`js/app.js:117-148`），進子頁面也會重畫。要另外記「上一次選中哪一格」，才分得出真的切了分頁。
   - 改 `js/app.js` 會讓測試放大成全套。
   - 五格要五張新的小圖。
-- 列為 Yolin 決定的事，不放進這次的兩版。
+- **Yolin 2026-11-18：要做，另案排。** 要求：小尺寸、深淺兩個主題、選中與未選中都看得清楚。
+
+**五格各用哪隻、什麼姿勢**（新圖的提示詞在 6.6）：
+
+| 分頁 | 誰 | 姿勢（胸像，道具舉在胸前） | 為什麼是牠 |
+|---|---|---|---|
+| 主頁 | 湯圓 | 一隻翅膀在臉旁揮手 | 第二版主頁的倒數卡也是湯圓；第一版進度條的圓形頭像也是牠 |
+| 任務 | 小鳳 | 雙翅捧一張空白小卡（一角折起） | 完成任務那一隻 |
+| 行程 | 阿灰 | 雙翅把淺藍小望遠鏡舉到眼前 | 第一版「行程｜回顧」切換鈕的「行程」、載入中都是牠 |
+| 照片 | 鬍鬍 | 雙手捧一台小相機（一個大圓鏡頭） | 照片空白頁、拍照圖示、相機那張探頭圖都是牠 |
+| 分帳 | 棉棉 | 雙手把一枚黃色硬幣抱在胸前 | 第二版分帳卡也是棉棉 |
+
+- **北北不上**：五格只有五個位置，北北已經有「回顧」那格的頭、最終回顧、夜市與自然的完成圖。
+- 「我的旅程」「設定」那一層的分頁（`renderTabs` 的另一組）不在這次的範圍，維持表情符號。
+- **畫法**（照 v1.95.0 進度條、切換鈕的圓形頭像，同一種寫法）：
+  - 淺色圓底（`#fffcf6`）＋一圈線，兩個主題都是同一個淺色圓；
+  - 未選中：26px、細線（`--line`）；
+  - 選中：30px（現在的表情符號是 25px）、圈換主色（`--primary-text`）、後面一塊淡色底、往上 2px、字變主色；
+  - 切到那一格時那隻跳一下，只動 transform，減少動態效果時不動；背景重畫不跳（要記上一次選中哪一格）；
+  - 分頁列高度 76px 不變。
+- **對比**（暫存區腳本算的，WCAG 相對亮度，含對照組；分頁列底色照 `--bg` 本身算，CSS 實際是 `--bg` 94%＋模糊）：
+
+  | | 和紙 | 深色 |
+  |---|---|---|
+  | 字，未選中（`--muted`） | 7.14 | 11.43 |
+  | 字，選中（`--primary-text`） | 6.80 | 7.26 |
+  | 圓底對分頁列底 | 1.00（同色，靠那一圈線） | 17.80 |
+  | 未選中的圈對分頁列底 | 13.54 | 2.03（圈本身淡，形狀靠圓底） |
+  | 選中的圈對分頁列底 | 6.80 | 7.26 |
+
+  - 和紙底上圓形靠墨色圈（13.54）分出來；深色底上靠淺色圓本身（17.80）。兩個都超過圖形 3:1。
+  - 選中與未選中不只靠顏色：大一號、有淡色底、往上 2px，色弱也分得出來。
+- **小樣**：`TripQuest_吉祥物融入_08_底部分頁小樣.png`，用現有的全身圖裁頭先代替（新姿勢還沒畫），只看大小、對比、選中與未選中分不分得出來。暫存區腳本用 sharp 轉的，沒開瀏覽器，不是 App 截圖。我看過：兩個主題、選中與未選中都分得出來。
+- **為什麼不直接用現有的頭**：可以，而且最清楚（小樣就是）。但 2026-11-13 的決定是「每格一隻抱著那一格的東西」，只有頭就看不出是哪一格。所以先請 Yolin 生 07 的參考圖，照著畫成胸像＋大道具；畫出來在 26px 認不出道具的話，退回只用頭，照實回報。
 
 ---
 
@@ -300,14 +335,16 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 
 ## 5. 六隻的出場次數
 
-| | 現在 | 提案後 |
-|---|---|---|
-| 鬍鬍 | 5：頁首、拍照圖示、下雨、打卡完成、出發那一句 | 6：加照片空白 |
-| 棉棉 | 2：相簿圖示、我的旅程空白 | 4：加分帳（空白與總覽同一張）、沒有旅伴 |
-| 北北 | 4：夜市完成、自然完成、最終回顧、結束那一句 | 4：結束那一句交給小鳳，加回顧那格的頭 |
-| 小鳳 | 4：預設完成、美食完成、主頁結束／完成卡、解鎖徽章 | 4：結束那一句併進卡上那一隻，不算新位置 |
-| 阿灰 | 1：載入中 | 5：加下一站卡、建立行程、還沒有景點、行程那格的頭 |
-| 湯圓 | 2：下雪、設定 | 5：加倒數卡、進度條、錯誤 |
+| | 現在 | 提案後 | 加上底部分頁（另案，3.12） |
+|---|---|---|---|
+| 鬍鬍 | 5：頁首、拍照圖示、下雨、打卡完成、出發那一句 | 6：加照片空白 | 7：加「照片」那格 |
+| 棉棉 | 2：相簿圖示、我的旅程空白 | 4：加分帳（空白與總覽同一張）、沒有旅伴 | 5：加「分帳」那格 |
+| 北北 | 4：夜市完成、自然完成、最終回顧、結束那一句 | 4：結束那一句交給小鳳，加回顧那格的頭 | 4：不上 |
+| 小鳳 | 4：預設完成、美食完成、主頁結束／完成卡、解鎖徽章 | 4：結束那一句併進卡上那一隻，不算新位置 | 5：加「任務」那格 |
+| 阿灰 | 1：載入中 | 5：加下一站卡、建立行程、還沒有景點、行程那格的頭 | 6：加「行程」那格 |
+| 湯圓 | 2：下雪、設定 | 5：加倒數卡、進度條、錯誤 | 6：加「主頁」那格 |
+
+- 分頁列一直在畫面上，所以那五隻每個畫面都會出現一次；北北是唯一不在分頁列上的。Yolin 想讓北北上，最順的是跟棉棉換「分帳」（07 的第 7 格就是北北抱硬幣，不必重生）。
 
 **要 Yolin 看的**：
 
@@ -389,6 +426,12 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
   - 透明檢查（`arttransparenttest`）用現有的登記制就管得到。
 - GPT 畫錯的地方（鬍鬍變灰、多口袋），照著畫時直接用正確的樣子，不必重生到對為止。
 - **原創性**：照我們自己六隻的參考圖畫，不碰別的角色。新姿勢照舊寫進 `docs/吉祥物原創性檢查.md`。
+
+**Yolin 2026-11-18 選 A，補一句**：「先讓我看效果，我喜歡 GPT 產出的角色融入感。」所以照著畫的時候：
+
+- 保留 GPT 圖的姿勢與互動：身體的傾斜、手扣在邊上的位置、跟道具的接觸點照參考圖，不要拉直成正面站好的貼紙。
+- 改的只有顏色、線條、服裝這些跟參考圖不符的地方（鬍鬍變灰、多口袋這類）。
+- **第二版的第一張向量圖畫好，先拍給 Yolin 看，他看過才畫其餘幾張。** 拍的時候並排放 GPT 那一格，讓他比融入感有沒有留住。
 
 **替代方案：直接用點陣。**
 
@@ -474,6 +517,56 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 
 **收件**：從 Dispatch outputs 複製進 `art-inbox/`，核 sha256；原圖不進 repo。
 
+### 6.6 給 GPT 的提示詞（底部分頁五格，另案用）
+
+另寫一份，不併進 6.5 的九宮格：6.5 是「從卡片上緣探頭」，這張是「胸像＋大道具、縮到指尖大小還認得出來」，兩種構圖寫在同一張裡，GPT 容易混。九格＝五格正選（3.12 的表）＋四格備用。
+
+**怎麼生**：同 6.5（新對話、上傳同樣兩張參考圖、整段貼上、1:1、下載鈕存原檔）。
+
+**哪些照抄、哪些是新寫的**：
+
+- 第一段、六隻的描述、版面段（`Square image, 1:1 …`）：跟 6.5 逐字相同（6.5 又是照九宮格原檔第一段與 `ART_行程海報生圖流程.md` 2.1、2.3 節抄的）。暫存區腳本逐字比對過。
+- 「每格一隻」段：照 2.3 節，改兩處，其餘逐字相同：
+  - 舉例的道具 `oars, boats, steam` 換成 `the beanie`（湯圓的毛帽，胸像最容易被切掉的就是它）；
+  - 句尾填空同 6.5：`the lilac scarf and the lilac bow tie stay a soft pale lilac`。
+- 「分頁圖示」那一段、九格的動作、NOT ALLOWED 的填空：新寫的。NOT ALLOWED 照 2.3 節的句型。
+
+```
+Use the two uploaded reference images: a sheet of six original cute characters, and a large picture of one of them (the white dog). Draw the characters exactly as they look in the references: same body shape and proportions, same face, same colors, same outfits and accessories, same clean sticker style with thick, even, dark charcoal outlines and flat solid colors. Do not redesign them, do not change any color, do not add or remove clothes, pockets or accessories, and do not turn them into other characters or realistic animals. They may hold the small props listed below; their bodies, faces, colors and outfits stay exactly as in the reference. Do not copy the names or any other text from the reference sheet.
+
+The six characters, as in the reference:
+- 棉棉: a white bunny. Pure white body; two tall ears with pink insides, one standing straight and one bent over at the tip; a tiny pink nose; pink cheeks; a lilac scarf with white dots.
+- 北北: a white bear. White body; light grey inner ears; a round beige muzzle with a black nose; pink cheeks; light blue overalls with two yellow buttons. No pockets and no other clothes.
+- 鬍鬍: a white miniature schnauzer. His fur is pure white everywhere: head, face, body and paws are all white, never grey. Only his bushy eyebrows are grey. His floppy ears are a very pale warm grey. A big white beard and moustache, pink cheeks, and a coral triangle bandana around his neck.
+- 湯圓: a round white long-tailed tit. A white egg-shaped body; a green knit beanie with a yellow pom-pom; a tiny black beak (black, not orange); black wings; a long black tail; pink cheeks; small black feet. No brown anywhere.
+- 阿灰: a grey hawk. Grey head and body, a little darker on top of the head; a cream belly with small grey V-shaped marks; yellow feet. A small pair of light blue binoculars hangs on his chest: small and light blue, never big, never black.
+- 小鳳: a cockatiel. A yellow head with a tall yellow crest; round orange cheeks; a grey body; a small lilac bow tie; a long grey tail; pink feet.
+
+Square image, 1:1. Exactly 9 separate cells arranged in a 3×3 grid of equal square cells. The entire background is one flat, solid, pure magenta color #FF00FF: no gradient, no texture, no noise, no vignette, no floor, no ground shadow, no scenery. Leave wide, clearly empty magenta gaps between neighboring cells, and an empty magenta margin around the outside of the whole grid. Do not draw grid lines, borders, frames, boxes, labels, captions or any text.
+
+Each cell shows exactly ONE character doing ONE action, centered in its cell, with empty magenta space on every side; nothing crosses into another cell or touches the edge of the picture. The whole drawing in each cell, including tails, ears, crests, the beanie and every prop, fits inside the middle 75% of its cell, both in width and in height, so that the magenta gaps between neighboring cells stay completely empty from top to bottom and from left to right. Long tails may point sideways, but they also stay inside that middle area. The characters are all about the same size. In each cell the character and its props touch each other and form one connected shape. Do not draw motion lines, sparkles, hearts, music notes, sweat drops, speech bubbles or any other loose marks floating around the character. Do not use magenta, fuchsia or hot pink anywhere in the characters or props; the lilac scarf and the lilac bow tie stay a soft pale lilac.
+
+These are 9 icon studies for the bottom tab bar of a phone app. Each icon will be shown very small, about the size of a fingertip, so in every cell draw only the character's head and the top of the chest (a bust), large and centered, facing the viewer with a happy, friendly face. When a cell lists a prop, the character holds it up in front of the chest, and the prop is big and simple: at least one third as wide as the head, with a clear outline and very few details, so that it is still easy to recognize when the whole icon is tiny. The head and the prop together fit inside an imaginary circle in the middle of the cell; only the tips of tall ears and crests may reach a little beyond it. Do not draw that circle, and do not draw any badge, frame, button or background shape behind the character.
+
+The nine cells, left to right, top row first:
+1. 湯圓 waving one wing beside the face, the other wing tucked in.
+2. 小鳳 holding up a small plain white card with one folded corner, with both wings. The card is blank.
+3. 阿灰 holding his small light blue binoculars up to his eyes with both wings.
+4. 鬍鬍 holding a small simple camera with one big round lens in front of his chest with both paws. The camera is blank.
+5. 棉棉 hugging one big plain round yellow coin against the chest with both paws. The coin is blank.
+6. 北北 waving one paw beside the face, the other paw tucked in.
+7. 北北 holding up one big plain round yellow coin with both paws. The coin is blank.
+8. 棉棉 waving one paw beside the face, the other paw tucked in.
+9. 小鳳 holding a plain five-pointed star badge with both wings. The badge is blank, with no marks on it.
+
+NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no Chinese or Japanese characters, no names, no labels, no signature, no watermark); every card, badge, coin and camera is blank. No characters other than these six; no people, no other animals.
+```
+
+- 第 1～5 格是五格正選（主頁、任務、行程、照片、分帳）；第 6～9 格備用：北北揮手、北北抱硬幣（想讓北北上時換掉棉棉的「分帳」）、棉棉揮手、小鳳抱星形徽章。
+- **看到這些就直接重生**：有字（卡片、硬幣、相機、徽章上出現字或數字也算）；多一隻、同一格兩隻、出現六隻以外的角色；畫成全身、道具小到看不出是什麼；某一格認不出是哪一隻。
+- **可以接受、不用重生**：鬍鬍變灰這類顏色與服裝的錯（照著畫時改正）；姿勢跟描述有一點出入；底色不是一整片洋紅、尾巴伸進格子之間的縫（只當參考，不切圖）。
+- **收件**：同 6.5。
+
 ---
 
 ## 7. 動畫規矩（照舊，每條怎麼驗）
@@ -529,6 +622,15 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 - 截圖和錄影 Yolin 看過，才跑突變與 `test:affected`。11-13 那次就是這個順序：先看截圖再跑。
 - 合計約 1～1.5 小時的機器時間，分三段，每段開跑前列清單、拿許可。
 
+**實作時的更動**（2026-11-18 開工，v1.95.0；跟上面的規劃不一樣的地方，讀程式時發現的）：
+
+- **T1 拿掉「到終點蹦一下」**：全部完成時慶祝畫面的兩顆按鈕都換頁、不呼叫 `onDone`，回到任務頁時沒有「自己剛完成」的那一刻可以接（`js/views/trip.js` 檔頭 T1 那段註解）。只剩「自己完成一個、回來時滑到新進度」。
+- **P1 靜止、不跳**：照片分頁的路由沒有把「真的導覽進來」（`fresh`）傳給這一頁，分不出導覽與背景重畫；要分就得改 `js/app.js`，測試放大成全套。跟底部分頁那一案（也要改 `app.js`）一起做。
+- **H1 深色看不到相機閃光**：閃光是 `.mc-extra`，跟揮動線、蒸氣一樣只在和紙畫；深色下只看得到相機那張探上來（現有規矩，不是新問題）。
+- **H2 結束卡不寫 CSS 保底高度**：卡上要留的高度由 `js/says.js` 的 `roomOnCard` 量那一句的實際高度決定（390 寬時那一句排兩行，推論）。CSS 再寫一個保底高度，`roomOnCard` 壞了也看不出來，所以不寫，改由 `saytest` S11b 量「那一句的頂沒有超出頁面」守著。
+- **B1 標題上那一隻整個拿掉**：小鳳改扣在「太棒了」按鈕上緣、跳上來揮翅膀；原本的「原地彈跳兩下」（`glyphs.js` 的 bounce）沒有別處用，一起拿掉。圖載不到時照舊在標題上放整隻（不動）。
+- **裁頭沒動 `js/peeks.js`**：圓形頭像寫在 `js/glyphs.js` 的 `mascotBadge`（湯圓、阿灰、北北三個裁切框）。
+
 ### 第二版：新圖（Yolin 生九宮格 → 我畫成向量）
 
 **範圍**：H3、H4、T3、S1～S3、G1、C1～C3、R1、我的旅程空白、錯誤狀態。
@@ -554,7 +656,11 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 
 ### 另案：底部分頁列五格
 
-Yolin 決定要做再排。改 `js/app.js`，測試是全套 97 支，約 57 分（乾跑）。
+Yolin 2026-11-18 決定要做、另案排。誰、什麼姿勢、怎麼畫、對比在 3.12；提示詞在 6.6。
+
+- 順序：Yolin 生 07 的參考圖 → 我畫五張胸像（第一張先給他看，跟第二版同一個規矩）→ 改 `js/app.js` 的 `tabItem`／`renderTabs` 與 CSS → 截圖（和紙＋深色、每一格選中一次）給他看 → 才跑測試。
+- 改 `js/app.js`，測試是全套 97 支，約 57 分（乾跑）。
+- 要新寫的斷言（推論，實作時再定）：五格都是吉祥物、選中那格大一號且圈是主色；背景重畫不跳、真的切分頁才跳；減少動態效果時 0 段動畫；圖示不擋點擊（點圖＝點那一格）；分頁列高度不變。
 
 ### 跟測試整理（第二～四批）的關係
 
@@ -564,6 +670,15 @@ Yolin 決定要做再排。改 `js/app.js`，測試是全套 97 支，約 57 分
 ---
 
 ## 9. 要 Yolin 決定的事
+
+**Yolin 2026-11-18 的答覆**（經 Dispatch）：
+
+1. 選 **A**，補一句「先讓我看效果，我喜歡 GPT 產出的角色融入感」→ 寫進 6.4：保留姿勢與互動，第二版第一張先給他看。
+2. ～4. 照建議：新加的探頭圖只在沒有別張時出現（已上線的組合不收）；H2 結束那一句改由卡上的小鳳講；六隻照第 5 節的表分。
+5. 底部分頁五格：**要做，另案排** → 3.12、6.6。
+6. ～8. 照建議：頁首鬍鬍不動；`mascottest` 150ms 併進第一版；先做第一版，截圖給他看過才跑完整檢查、上線。
+
+以下是當時列給他的原文，保留：
 
 1. **圖的路線**：
    - **A**：GPT 九宮格只當參考，我畫成向量。**建議 A**，理由在 6.3、6.4。
@@ -594,6 +709,9 @@ Yolin 決定要做再排。改 `js/app.js`，測試是全套 97 支，約 57 分
 - 交之前放大看過交接處：深色的探頭圖白邊在按鈕、對話框上緣收掉，沒有白帶。
 - 分頁列的圖示畫成灰色小圓點，因為轉圖程式畫不出彩色表情符號。示意圖裡的位置與大小是照 CSS 估的，不是量出來的。實作時的截圖才是準的。
 - 第二版的新圖還沒有，所以不在示意圖裡。
+- **底部分頁另案（2026-11-18 加）**：
+  - `TripQuest_吉祥物融入_07_底部分頁提示詞.md`：6.6 節的提示詞，加上怎麼生、五格各是誰、重生清單。跟規劃 6.6 節的區塊逐字相同（暫存區腳本比過）。
+  - `TripQuest_吉祥物融入_08_底部分頁小樣.png`：3.12 節的小樣，和紙、深色各兩列（選中「主頁」、選中「照片」）。用現有的全身圖裁頭先代替新姿勢；尺寸照 CSS 畫成 3 倍；不是 App 截圖。
 
 ---
 
