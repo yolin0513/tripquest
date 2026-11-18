@@ -1,6 +1,8 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-11-19 00:4x 守夜模式（寫之前 `date`＝00:48）：**A、B1、C 都綠了；五行交 Dispatch、等放行才推**（本機 v1.95.0，`origin/main`＝`94baed8` 之後 19 個 commit，沒推；沒碰 `workers/` 與 `js/merge.js`，不必部署 Worker）。
+> 最後更新：2026-11-19 00:5x 守夜模式（寫之前 `date`＝00:51）：**v1.95.0 上線**（Dispatch 00:4x 核過五行後放行；`safe-push.sh` 回 0，遠端 main＝本機 HEAD＝`7001d9d`，範圍 `94baed8..7001d9d` 20 個 commit，自查 5 類都 0 命中、對照組都命中、新增行 1801 行兩邊相同）。線上 `sw.js` 00:50 curl HTTP 200、`tripquest-v1.95.0`。逐位元組比對這段改到、會上線的 15 支（`sw.js`、`css/style.css`、`js/` 的 addphoto／glyphs／peeks／says／ui、`js/views/` 的 create／expenses／home／join／people／recap／settings／trip）**全部跟 `7001d9d` 相同**（暫存區 `verify-online195.mjs`，`.logs/verify-online195.log`）；每支都做對照組：新版比自己判相同、改一個位元組判不同、新版與上一版（`94baed8`）判不同、線上與上一版判不同；比對器的必敗對照：「上一版」也指到新版，2 支都報不符、回 1。只改客戶端、沒碰 `workers/` 與 `js/merge.js`、沒部署 Worker。本筆上線紀錄是本機 commit、跟下一批一起推。
+>   - **接下來（Dispatch 00:4x，守夜模式依序）**：①補已知缺口那支專門的測試；②修「按 ✕ 後阿灰不出來」；③跑 B2 那 6 條。重負載 Dispatch 直接准，每段有結果當輪回報。
+> 之前 00:4x 守夜模式（寫之前 `date`＝00:48）：**A、B1、C 都綠了；五行交 Dispatch、等放行才推**（本機 v1.95.0，`origin/main`＝`94baed8` 之後 19 個 commit，沒推；沒碰 `workers/` 與 `js/merge.js`，不必部署 Worker）。
 >   - **C 場第一輪（11-18 22:09～22:36，`.logs/C-1118.res.log`）：挑到 61 支，跑到第 31 支 layouttest 紅、停下（前 30 支綠）**。第一版進度條頭像（T1）`.tp-run` 跟軌道一樣寬、translateX 把框推出畫面，行程頁 360／390／430 寬整頁多出橫向捲動（390 寬捲到 536；overflow-x 8、overflow-el 8，全在行程頁）。修：`.tp-bar` 加 `overflow-x: clip`（49af616），突變清單加 1 條（拿掉 clip，預期照這一次實測寫、標事後，沒另外跑——修正前的那一次就是證據）。
 >   - **C 場第二段（22:40～22:52，`.logs/C2-1118.res.log`）：layouttest 綠（零版面問題 ✓），到 hometest 共 12 支綠；saytest 26 項全過，但跑完後工作區守衛叫 git 失敗、照規則停下**。最後兩筆資源紀錄（22:52）「取不到程序表」，推論機器或工作階段那時中斷（Dispatch：中間斷了一陣），不是測試紅。
 >   - **C 場第三段（11-19 00:19～00:20，`.logs/C3-1119.res.log`）：saytest（補守衛那一拍）＋3 支綠，themetrusttest 紅**——誤判：settings.js 新姿勢那行用類別名字串找「畫面顏色」分段鈕，字串裡那一段被當成讀行程猜測主題的讀點。照「誤判修觸發側」改寫法（從 `data-theme-pick` 找父層，a554765），突變 1 條單獨跑紅在預期。
