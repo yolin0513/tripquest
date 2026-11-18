@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty, mountPeek } from '../ui.js';
+import { h, toast, mount, confirmDialog, promptDialog, modal, fmtDate, avatar, smoothScrollTo, KIND_META, qty, mountPeek, mountPose, unmountPeek } from '../ui.js';
 import { navigate, back, navRestoredScroll, refreshPage } from '../router.js';
 import { getPrefs } from '../prefs.js';
 import { uuid, hashHue, deviceId } from '../ids.js';
@@ -149,10 +149,14 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
   );
 
   if (spots.length === 0) {
-    container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'),
-      // 簡易的「景點名稱」對話框不好用（實機回報）—— 統一帶去「調整每天的行程」，
-      // 那裡有完整的加景點、搜尋加入、時間停留設定
-      h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}/plan`) }, '＋ 去安排景點')));
+    // 簡易的「景點名稱」對話框不好用（實機回報）—— 統一帶去「調整每天的行程」，
+    // 那裡有完整的加景點、搜尋加入、時間停留設定
+    const go = h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}/plan`) }, '＋ 去安排景點');
+    // 新姿勢（規劃 T3）：阿灰從這顆按鈕上緣探頭、指向它（跟主頁同一張），導覽進來時跳上來。這一格沒有進度那一行、
+    // 也沒有任務列，不受「任務頁不准變高」的限制（那條管的是有任務時資訊被擠下去）。圖載不到：按鈕照舊。
+    const pk = await import('../peeks.js').catch(() => null);
+    if (pk) { const el = pk.pose('point', 'l'); mountPose(go, el); if (fresh) pk.cheer(el); }
+    container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'), go));
   } else {
     const dayNums = [...byDay.keys()].sort((a, b) => a - b);
     const todayDay = dayForToday(t);
@@ -609,13 +613,21 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
   // 只有真的導覽到主頁（fresh）才動；主頁自己重畫（現在在哪一站變了、AI 文案回來）時停在靜止圖，不會每重畫一次就再跳一次。
   // 0.3＝顯示縮放（畫布 1 單位畫成幾 px）：比天氣頁的提醒卡小一點，卡片上面空出來的高度少一些（主頁一打開就要看到這張卡）
   // v1.95.0 出發那一句也用探頭圖（下面）：圖這兩處都要時才載一次
+  // 新姿勢（Yolin 2026-11-18 晚上）起主頁幾乎每一種狀態都有一張探頭圖（下一站卡、倒數卡、沒有景點），圖一律載
   const endCard = !!(main && main.classList.contains('th-end'));
-  const pk = endCard || todayDay === 1 ? await import('../peeks.js').catch(() => null) : null;
+  const pk = await import('../peeks.js').catch(() => null);
   let endPeek = null;
   if (endCard && pk) {
-    endPeek = pk.peek(pk.DONE_PEEK, 0.3);
+    // 新姿勢起縮放跟其他探頭圖一樣（peeks.js 的 POSE_K；第一版是 0.3）——Yolin 要比第一版大、顯眼。九宮格沒有這一格的新姿勢，圖照舊是打領結那張
+    endPeek = pk.peek(pk.DONE_PEEK, pk.POSE_K);
     mountPeek(main, endPeek);
     if (fresh) pk.cheer(endPeek, { soft: true });
+  }
+  // 新姿勢：這個旅程還沒有景點 → 阿灰從「＋ 去安排景點」上緣探頭、一隻翅膀指向按鈕（融入九宮格第 7 格），導覽進來時跳上來
+  let noSpotPeek = null;
+  if (!spots.length && pk && main) {
+    const go = main.querySelector('.btn');
+    if (go) { noSpotPeek = pk.pose('point', 'l'); mountPose(go, noSpotPeek); if (fresh) pk.cheer(noSpotPeek); }
   }
 
   // v1.87.0 吉祥物講一句（js/says.js；誰說、什麼時候講的表在 STATUS）。主頁一次最多一句，放在它講的那一塊旁邊：
@@ -630,18 +642,35 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
     ? sayRow(tripId, endLine(true), endPeek ? { animate: fresh, onCard: main } : { animate: fresh })
     : null;
   let departPeek = null;
-  if (!sayEnd && todayDay === 1 && pk) departPeek = pk.peekFit('cam', WHO_PX);
+  // 新姿勢：出發那一句換成鬍鬍探頭揮手（融入九宮格第 8 格；第一版是拿相機那張），縮放跟其他新姿勢一樣
+  if (!sayEnd && todayDay === 1 && pk) departPeek = pk.pose('hello', 'l');
   const sayDepart = !sayEnd && todayDay === 1 ? sayRow(tripId, departLine(t), { animate: fresh, peek: departPeek }) : null;
   if (sayDepart && departPeek && fresh) pk.cheer(departPeek, { soft: true });
+
+  // 新姿勢 H3／H4（規劃 3.1）：出發前的倒數卡＝湯圓坐在卡片上緣（第 4 格照描述畫）；其餘有下一站時的下一站卡＝阿灰拿望遠鏡（第 2 格，甲）。
+  // 規劃第 2 節的規矩（Yolin 同意）：新加的探頭圖只在畫面上沒有別張探頭圖時出現，一個畫面也只放一張新的——
+  //   已經有「旅程結束了／任務全部完成了」卡上的小鳳、出發那一句的鬍鬍、或「還沒有景點」按鈕上的阿灰，就都不放；
+  //   倒數卡跟下一站卡同時在時只放倒數卡。
+  //   下雨／下雪那一句的探頭圖是天氣背景載完才知道有沒有：放上去的那一刻把這一張拿掉（fillWeather；已上線的組合不動、新的讓位）。
+  // 導覽進來才慢慢探上來（跟卡上的小鳳同一條規矩）；主頁自己重畫停在靜止圖。
+  const cdCard = cd ? h('div', { class: 'countdown', role: 'status' },
+    h('span', { class: 'cd-big' }, cd),
+    h('span', { class: 'cd-sub' }, rangeLabel(t.startDate, t.endDate))) : null;
+  if (pk && !endPeek && !departPeek && !noSpotPeek) {
+    const host = cdCard || (main && main.classList.contains('today-card') ? main : null);
+    if (host) {
+      const el = pk.pose(cdCard ? 'perch' : 'scout', 'r');
+      mountPose(host, el);
+      if (fresh) pk.cheer(el, { soft: true });
+    }
+  }
 
   // v1.86.0 主頁補內容（守夜模式照建議做；決定與替代方案見 STATUS）。都是「有才放」，沒有的不放、不顯示 0、不猜；不放任務的跳轉。
   //   結束後：這趟的數字（天數・景點・照片・花費）；出發前：每天的行程預覽＋下一班航班；照片列：有照片就有（不分哪個階段）
   const shotsSlot = spots.length ? h('div', { class: 'th-shots-slot' }) : null;
   const page = h('div', { class: 'page trip-home' },
     note,
-    cd ? h('div', { class: 'countdown', role: 'status' },
-      h('span', { class: 'cd-big' }, cd),
-      h('span', { class: 'cd-sub' }, rangeLabel(t.startDate, t.endDate))) : null,
+    cdCard,
     todayDay > 0 ? h('div', { class: 'th-day' },
       h('span', { class: 'th-day-n' }, `今天是第 ${todayDay} 天`),
       t.startDate ? h('span', { class: 'th-day-d' }, `${dayDate(t, todayDay)} ${weekdayLabel(t.startDate, todayDay)}`.trim()) : null) : null,
@@ -924,6 +953,9 @@ async function fillWeather(slot, container, tripId, trip, { say = false, animate
     const pkEl = pk && pk.WEATHER_PEEK[wl.peek] ? pk.peekFit(pk.WEATHER_PEEK[wl.peek], WHO_PX) : null;
     const line = wl ? sayRow(tripId, wl, { animate, peek: pkEl }) : null;
     if (line && pkEl && animate) pk.cheer(pkEl, { soft: true });
+    // 新姿勢的下一站卡／倒數卡那一張（tripHome 的 H3／H4）讓位：畫面上已經有這一句的探頭圖就拿掉（已上線的組合不動、新的讓位）。
+    // 跟天氣條同一次放上去，版面只動一次。
+    if (line && pkEl) for (const x of page.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);
     slot.replaceChildren(...[btn, line].filter(Boolean));
   } catch { /* 靜默：天氣是加分項 */ }
 }

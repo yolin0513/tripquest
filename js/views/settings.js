@@ -1,6 +1,6 @@
 import { keepOriginals, originalUsage, dropOriginals } from '../photoexport.js';
 import * as store from '../store.js';
-import { h, toast, confirmDialog, promptDialog, modal, fmtBytes } from '../ui.js';
+import { h, toast, confirmDialog, promptDialog, modal, fmtBytes, mountPose } from '../ui.js';
 import { navigate, refreshPage } from '../router.js';
 import { estimate, isPersisted, requestPersist, wipeAll } from '../db.js';
 import { importBundle, importShareCode, joinInvite, parseInviteText } from '../share.js';
@@ -21,8 +21,16 @@ const HOME_CITIES = [
   { name: '宜蘭', lat: 24.76, lng: 121.75 }, { name: '嘉義', lat: 23.48, lng: 120.45 },
 ];
 
+// 新姿勢（Yolin 2026-11-18 晚上）：湯圓坐在「畫面顏色」那一排按鈕的上緣，按下切換主題那一刻跳一下（規劃 G1 原本放在「關於」卡上，
+// 但「關於」在頁面最下面，切換主題時看不到牠跳——Yolin 要「跟按鈕有互動、動作明顯」，改坐在被按的那一排上）。
+// 進設定頁不動（設定頁不需要打招呼）。refreshPage 只從各頁自己叫，所以切換主題那一下記一個旗標、下一次畫讀掉。
+let themeSwitched = false;
+
 export default async function settings({ drawPage, setTop }) {
+  const hop = themeSwitched;
+  themeSwitched = false;
   setTop({ title: '設定', back: false });
+  const pk = await import('../peeks.js').catch(() => null);
 
   const est = await estimate();
   const persisted = await isPersisted();
@@ -46,7 +54,7 @@ export default async function settings({ drawPage, setTop }) {
     } catch (e) { toast('匯入失敗：' + e.message); }
   });
 
-  drawPage(h('div', { class: 'page form' },
+  const page = h('div', { class: 'page form' },
     // ---- 看得舒服 ----
     h('div', { class: 'section-label' }, '看得舒服'),
     h('div', { class: 'form-field' },
@@ -58,7 +66,7 @@ export default async function settings({ drawPage, setTop }) {
       h('span', { class: 'form-label' }, '畫面顏色'),
       h('div', { class: 'seg theme-seg' }, ...Object.entries(THEME_LABELS).map(([k, label]) =>
         h('button', { class: (prefs.theme === 'washi' ? 'washi' : 'dark') === k ? 'on' : '', 'data-theme-pick': k,
-          onclick: () => { setPref('theme', k); refreshPage(); } }, label))),
+          onclick: () => { setPref('theme', k); themeSwitched = true; refreshPage(); } }, label))),
       h('div', { class: 'form-hint' }, '深色適合晚上、比較不刺眼；淺色像白紙，白天在戶外比較好看。'),
     ),
     // 「高對比模式」2026-11-12 拿掉（Yolin 放棄長輩路線）；以前打開過的人，prefs.js 會把那個設定丟掉。
@@ -194,8 +202,9 @@ export default async function settings({ drawPage, setTop }) {
     // ---- 關於 ----
     h('div', { class: 'section-label' }, '關於'),
     h('div', { class: 'card about' },
-      // 2026-11-13 起「關於」卡最上面站設定頁那一隻吉祥物（見 js/glyphs.js 的 MASCOT_SPOT）
-      h('div', { class: 'about-mascot' }, mascot(MASCOT_SPOT.settings, 96)),
+      // 2026-11-13 起「關於」卡最上面站設定頁那一隻吉祥物（見 js/glyphs.js 的 MASCOT_SPOT）；
+      // 新姿勢起改坐在「畫面顏色」那一排上（見檔頭），這裡只在圖載不到時站
+      pk ? null : h('div', { class: 'about-mascot' }, mascot(MASCOT_SPOT.settings, 96)),
       h('p', { class: 'sm' }, 'TripQuest 旅圖任務 — 純前端 App，不需帳號密碼。單機可用；設定同步後照片會存一份到旅伴共用的伺服器。'),
       h('p', { class: 'form-hint' }, '任務來源：內建景點資料庫 + 規則模板；景點示意圖來自 zh.wikipedia.org（只送景點名稱）。AI 加值功能預設關閉，開了也只用建立者自己的金鑰。'),
       // v1.92.0（Yolin 2026-11-16，功能研究的建議）：景點類型圖示是 ChatGPT 生的，照實寫
@@ -210,7 +219,18 @@ export default async function settings({ drawPage, setTop }) {
         }
       } }, '清除所有資料'),
     ),
-  ));
+  );
+  const seg = page.querySelector('.theme-seg');
+  if (pk && seg) {
+    // 分段鈕自己是 overflow: hidden（圓角把兩端的按鈕底色切掉），圖掛在裡面會被切掉；包一層、掛在外面那層——外層的上緣就是分段鈕的上緣
+    const wrap = h('div', { class: 'theme-seg-wrap' });
+    seg.replaceWith(wrap);
+    wrap.append(seg);
+    const el = pk.pose('perch', 'r');
+    mountPose(wrap, el);
+    if (hop) pk.cheer(el);   // 只有剛按了切換主題才跳（減少動態效果時 cheer 不動）
+  }
+  drawPage(page);
 }
 
 function checkbox(checked, onChange) {

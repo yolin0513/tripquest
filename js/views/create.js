@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, toast } from '../ui.js';
+import { h, toast, mountPose } from '../ui.js';
 import { navigate } from '../router.js';
 import { uuid } from '../ids.js';
 import { generateForTrip, placeHierarchy, placesOfCity, searchPlaces } from '../quests/generate.js';
@@ -238,7 +238,15 @@ export default async function create({ drawPage, setTop }) {
         aiChk),
     ));
 
-  const submitBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: submit }, '產生拍照任務');
+  // 字放在自己的 span：新姿勢的阿灰掛在這顆按鈕裡（點牠＝點按鈕），換字時只換 span，不能用 textContent 把整顆按鈕清掉
+  const submitLabel = h('span', {}, '產生拍照任務');
+  const submitBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: submit }, submitLabel);
+  // 新姿勢（Yolin 2026-11-18 晚上；規劃 C1～C3）：阿灰拿望遠鏡從這顆按鈕上緣探頭。這一頁只在導覽進來時畫一次（沒有自己重畫），
+  // 所以畫好就跳上來；按下去「產生中…」時拿望遠鏡左右看（等待時一直重複，跟載入中同一個意思）；
+  // 名稱沒填被擋下 → 搖頭一次；產生失敗 → 停下、回到靜止圖。成功就換頁，不另外做反應。圖載不到：按鈕照舊。
+  const pk = await import('../peeks.js').catch(() => null);
+  const scout = pk ? pk.pose('scout', 'l') : null;
+  if (scout) { mountPose(submitBtn, scout); pk.cheer(scout); }
   // 建立行程的另一條路（規劃第 2 批）：不先選景點，建好就進「搜尋景點」邊查邊排
   const plannerBtn = h('button', {
     class: 'btn btn-soft btn-block', style: 'margin-top:8px',
@@ -254,6 +262,7 @@ export default async function create({ drawPage, setTop }) {
     const title = titleField.value.trim();
     if (!title) {
       toast('先幫這趟旅程取個名字');
+      if (scout) pk.nudge(scout, 'pk-shake');
       titleField.scrollIntoView({ block: 'center', behavior: document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth' });
       titleField.focus();
       titleField.classList.add('field-attn');
@@ -265,11 +274,14 @@ export default async function create({ drawPage, setTop }) {
 
     const itineraryText = itinField.value.trim();
     if (!state.picked.size && !itineraryText && !state.imported.length && !planner) {
-      toast('選幾個景點，或按「幫我規劃行程」用搜尋來排'); return;
+      toast('選幾個景點，或按「幫我規劃行程」用搜尋來排');
+      if (scout) pk.nudge(scout, 'pk-shake');   // 一樣是按了被擋下，跟沒填名稱同一個反應
+      return;
     }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = '產生中…';
+    submitLabel.textContent = '產生中…';
+    if (scout) pk.busy(scout, true);
     try {
       const groupId = uuid();
       const tripId = uuid();
@@ -300,7 +312,11 @@ export default async function create({ drawPage, setTop }) {
       }
 
       const { spots, quests } = await generateForTrip({ tripId, items, itineraryText, region });
-      if (!spots.length && !planner) { toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitBtn.textContent = '產生拍照任務'; return; }
+      if (!spots.length && !planner) {
+        toast('沒抓到景點，再試一次'); submitBtn.disabled = false; submitLabel.textContent = '產生拍照任務';
+        if (scout) pk.busy(scout, false);
+        return;
+      }
       for (const s of spots) await store.put(s);
       for (const q of quests) await store.put(q);
 
@@ -322,7 +338,8 @@ export default async function create({ drawPage, setTop }) {
       console.error(err);
       toast('產生失敗：' + err.message);
       submitBtn.disabled = false;
-      submitBtn.textContent = '產生拍照任務';
+      submitLabel.textContent = '產生拍照任務';
+      if (scout) pk.busy(scout, false);
     }
   }
 

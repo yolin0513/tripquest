@@ -141,11 +141,11 @@ export async function showNewBadges(tripId, memberId) {
       // v1.95.0（吉祥物融入介面第一版，Yolin 2026-11-18 同意）：小鳳不再站在標題上彈跳，改從「太棒了」按鈕上緣探頭、
       // 跳上來揮翅膀（跟完成任務那一刻同一張、同一個動作；減少動態效果時 cheer 不動）。
       // 圖載不到：照舊在標題上面放整隻小鳳（不動），不擋住慶祝。
-      // 0.4＝顯示縮放：比照片上那張（0.6）小——按鈕只有 240 寬，牠露出約 69px。
+      // 新姿勢（Yolin 2026-11-18 晚上）：換成小鳳雙翅抱一枚無字的星星（融入九宮格第 9 格），縮放跟其他新姿勢一樣（peeks.js 的 POSE_K）。
       let btnPeek = null;
       try {
         const m = await import('./peeks.js');
-        btnPeek = m.peek(m.DONE_PEEK, 0.4);
+        btnPeek = m.pose('star', 'c');
         m.cheer(btnPeek);
       } catch (e) { console.error(e); }
       await celebrate({

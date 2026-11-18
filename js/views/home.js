@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, ring, fmtDate, avatar, toast } from '../ui.js';
+import { h, ring, fmtDate, avatar, toast, mountPose } from '../ui.js';
 import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { isStandalone, shouldOfferInstall } from '../install.js';
@@ -18,7 +18,7 @@ async function joinFromLink() {
   await joinByCode();
 }
 
-export default function home({ fresh = false, drawPage, setTop }) {
+export default async function home({ fresh = false, drawPage, setTop }) {
   setTop({ title: 'TripQuest', back: false });
   const trips = store.trips();
   const std = isStandalone();
@@ -27,6 +27,9 @@ export default function home({ fresh = false, drawPage, setTop }) {
   // 旅伴的連結、裝了 App，結果打開是空的」那個情境（iPhone 的儲存空間是分開的）。
   // 這時候最該給的不是「建立新旅程」，是「把剛剛那個邀請貼進來」。
   const justInstalledEmpty = std && trips.length === 0;
+  // 新姿勢（Yolin 2026-11-18 晚上）：還沒有旅程時，棉棉不再站在「還沒有旅程」上面，改從這一頁的主要按鈕上緣探頭揮手
+  // （平常是「＋ 建立新旅程」；剛裝好那種情境是「貼上邀請連結」）。圖載不到：照舊站在字上面。
+  const pk = trips.length ? null : await import('../peeks.js').catch(() => null);
 
   const page = h('div', { class: 'page' },
     h('div', { class: 'hero' },
@@ -45,14 +48,14 @@ export default function home({ fresh = false, drawPage, setTop }) {
     trips.length
       ? h('div', { class: 'stack' }, ...trips.map(tripCard))
       : h('div', { class: 'empty' },
-          // 2026-11-13 起放空白頁那一隻吉祥物（原本是 🧳；見 js/glyphs.js 的 MASCOT_SPOT）
-          h('div', { class: 'empty-mascot' }, mascot(MASCOT_SPOT.empty, 120)),
+          // 2026-11-13 起放空白頁那一隻吉祥物（原本是 🧳；見 js/glyphs.js 的 MASCOT_SPOT）；新姿勢起只在圖載不到時站這裡
+          pk ? null : h('div', { class: 'empty-mascot' }, mascot(MASCOT_SPOT.empty, 120)),
           h('p', {}, '還沒有旅程'),
           h('p', { class: 'muted sm' }, justInstalledEmpty ? '或按下面的按鈕自己開一個' : '按下面的按鈕開一個'),
         ),
 
     h('button', {
-      class: justInstalledEmpty ? 'btn btn-soft btn-block' : 'btn btn-primary btn-block btn-big',
+      class: (justInstalledEmpty ? 'btn btn-soft btn-block' : 'btn btn-primary btn-block btn-big') + ' home-new',
       onclick: () => navigate('/new'),
     }, '＋ 建立新旅程'),
 
@@ -72,9 +75,18 @@ export default function home({ fresh = false, drawPage, setTop }) {
         }, '📲 把 TripQuest 放到主畫面')
       : null,
   );
+  if (pk) {
+    const host = justInstalledEmpty ? page.querySelector('.join-hint .btn') : page.querySelector('.home-new');
+    if (host) {
+      const el = pk.pose('hi', 'r');
+      mountPose(host, el);
+      if (fresh) pk.cheer(el);
+    }
+  }
   drawPage(page);
   // 還沒有旅程：白兔揮手兩下（v1.85.0）。只有真的導覽到這一頁才動——這一頁自己重畫（refreshPage）時停在靜止圖，不會每重畫一次就再揮一次
-  if (fresh) moveMascot(page.querySelector('.empty-mascot svg.gl-mascot'));
+  // 新姿勢起是上面那一張探頭揮手（同一條規矩：fresh 才動）；這一行只剩圖載不到、站在字上面那一隻
+  if (fresh && !pk) moveMascot(page.querySelector('.empty-mascot svg.gl-mascot'));
 }
 
 function tripCard(trip) {

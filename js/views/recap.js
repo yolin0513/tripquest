@@ -1,7 +1,7 @@
 // 行程最終回顧 —— 一份可留念的成果報告 + 可匯出的回顧卡。
 
 import * as store from '../store.js';
-import { h, toast, avatar, spinnerBox, qty } from '../ui.js';
+import { h, toast, avatar, spinnerBox, qty, mountPose } from '../ui.js';
 import { navigate } from '../router.js';
 import { hashHue } from '../ids.js';
 import { blobURL } from '../photos.js';
@@ -21,6 +21,8 @@ export default async function recap(tripId, { drawPage, setTop }) {
   page.append(spinnerBox('正在整理這趟的回顧…', '要算路線、找美食、查當時的天氣'));
 
   const r = await buildRecap(tripId);
+  // 新姿勢（Yolin 2026-11-18 晚上；規劃 R1）：北北不再站在標題上，改趴在大數字那一區的上緣、雙手舉一塊空白小白板。圖載不到：照舊站在標題上。
+  const pk = await import('../peeks.js').catch(() => null);
 
   // 有開 AI → 用潤飾過的文案（有快取秒回；沒開 / 失敗就用內建句子）
   let ai = null;
@@ -33,8 +35,8 @@ export default async function recap(tripId, { drawPage, setTop }) {
 
   // 標題
   out.append(h('div', { class: 'recap-head' },
-    // 2026-11-13 起標題上面站行程回顧那一隻吉祥物（見 js/glyphs.js 的 MASCOT_SPOT）
-    h('div', { class: 'recap-mascot' }, mascot(MASCOT_SPOT.recap, 104)),
+    // 2026-11-13 起標題上面站行程回顧那一隻吉祥物（見 js/glyphs.js 的 MASCOT_SPOT）；新姿勢起只在圖載不到時站這裡
+    pk ? null : h('div', { class: 'recap-mascot' }, mascot(MASCOT_SPOT.recap, 104)),
     h('div', { class: 'recap-title' }, r.title),
     // v1.73.5：拆成各自 nowrap 的 span。以前是一整串字串，特大字級下只能在
     // 奇怪的地方斷（使用者實機：「3」留在行尾、「天 · 4 人」跑到下一行）。
@@ -50,13 +52,16 @@ export default async function recap(tripId, { drawPage, setTop }) {
   }
 
   // 大數字
-  out.append(h('div', { class: 'recap-nums' },
+  const nums = h('div', { class: 'recap-nums' },
     num('📷', r.photoCount, '張照片'),
     num('📍', r.spotCount, '個地方'),
     num('✅', `${r.doneCount}/${r.questTotal}`, '個任務'),
     r.distanceKm >= 0.1 ? num('👣', r.distanceKm, '公里') : null,
     r.interactions != null ? num('💬', r.interactions, '次互動') : null,   // null＝行程裡有舊式讚、數不準（recap.js）
-  ));
+  );
+  const board = pk ? pk.pose('board', 'c') : null;
+  if (board) mountPose(nums, board);
+  out.append(nums);
 
   // 天氣
   if (r.weather) {
@@ -122,8 +127,10 @@ export default async function recap(tripId, { drawPage, setTop }) {
   ));
 
   page.replaceChildren(out);
-  // 回顧整理好、換上畫面的這一刻：白熊從下面淡入、跳出來（v1.85.0）；減少動態效果時不動
-  moveMascot(out.querySelector('.recap-mascot svg.gl-mascot'));
+  // 回顧整理好、換上畫面的這一刻：白熊從下面淡入、跳出來（v1.85.0）；減少動態效果時不動。
+  // 新姿勢起是舉白板那一張跳上來（這一頁沒有自己重畫，每次畫都是整理好的那一刻）；圖載不到才是標題上那一隻。
+  if (board) pk.cheer(board);
+  else moveMascot(out.querySelector('.recap-mascot svg.gl-mascot'));
 }
 
 function num(ic, n, label) {

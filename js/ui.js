@@ -242,6 +242,21 @@ export function mountPeek(host, el) {
   host.append(el);
   return host;
 }
+// 新姿勢（js/peeks.js 的 pose()）掛到按鈕或卡片上：跟 mountPeek 一樣，另外標 .pose-host——
+// 宿主上面留出牠露出來的高度（CSS .pose-host），不必每個宿主各寫一條。點牠＝點宿主（圖是宿主的子元素）。
+export function mountPose(host, el) {
+  mountPeek(host, el);
+  host.classList.add('pose-host');
+  return host;
+}
+// 拿掉一張掛上去的探頭圖，宿主回到沒掛時的樣子（主頁下雨／下雪那一句的探頭圖晚到時，新姿勢的下一站卡／倒數卡那一張讓位）
+export function unmountPeek(el) {
+  const host = el && el.parentNode;
+  if (!host) return;
+  el.remove();
+  host.classList.remove('has-peek', 'pose-host');
+  host.style.removeProperty('--pk-rise');
+}
 
 // 成就慶祝畫面
 // withMascot：把打勾的圓換成吉祥物（完成任務那一隻，見 js/glyphs.js 的 MASCOT_SPOT）——完成任務、解鎖新徽章（addphoto.js）；

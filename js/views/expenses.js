@@ -1,7 +1,7 @@
 // 分帳 —— 記一筆、看總覽、看「誰該給誰多少」。
 
 import * as store from '../store.js';
-import { h, toast, modal, confirmDialog } from '../ui.js';
+import { h, toast, modal, confirmDialog, mountPose } from '../ui.js';
 import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { avatar } from '../ui.js';
@@ -26,18 +26,40 @@ function dayDateText(trip, day) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+// 這一頁的下一次重畫是誰叫的（新姿勢的動作要分「導覽進來」與「自己重畫」）。
+// 路由只把「真的導覽進來」（fresh）給主頁與行程頁（js/app.js）；補給這一頁要改 app.js 或 router.js，兩支都是測試挑選器的骨架放大器。
+// refreshPage 只從各頁自己叫（js/ 底下其餘地方沒有呼叫），所以這一頁叫之前記下原因、下一次畫讀掉：沒有原因＝導覽進來。
+//   'saved'＝記一筆按存檔（硬幣丟進錢包）；'quiet'＝其他自己重畫（切換幣別、刪一筆）——都不再跳一次。
+let redrawCause = null;
+function redraw(cause) { redrawCause = cause; refreshPage(); }
+
 export default async function expenses(tripId, { drawPage, setTop }) {
+  const cause = redrawCause;
+  redrawCause = null;
   const trip = store.get(tripId);
   if (!trip) { navigate('/', { replace: true }); return; }
   setTop({ title: '分帳', action: { icon: '＋', label: '記一筆', onClick: () => openEdit(tripId, null) } });
   await loadCurrencies();
+  // 新姿勢（Yolin 2026-11-18 晚上）：棉棉。圖載不到：照舊沒有吉祥物（還沒有花費那一格照舊是 💰）。
+  const pk = await import('../peeks.js').catch(() => null);
+  const putPose = (host, kind, side) => {
+    if (!pk || !host) return null;
+    const el = pk.pose(kind, side);
+    mountPose(host, el);
+    if (!cause) pk.cheer(el);   // 導覽進來：跳上來（減少動態效果時 cheer 不動）
+    return el;
+  };
 
   const members = store.membersOf(trip.groupId);
   if (members.length < 1) {
     // 要包在 .page 裡 —— 少了它就沒有底部留白，內容會被底部功能列蓋住
+    // 新姿勢：棉棉從「去旅程設定加旅伴」上緣探頭揮手（規劃 S3）
+    const go = h('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: () => navigate(`/trip/${tripId}/settings`) }, '去旅程設定加旅伴');
+    // 掛上去的話上面留多少空間由 CSS（.empty .btn.has-peek）決定，行內的 margin-top 會蓋過它，拿掉
+    if (putPose(go, 'hi', 'r')) go.style.removeProperty('margin-top');
     drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' },
       h('p', {}, '先在「旅程設定」加旅伴，才能分帳。'),
-      h('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: () => navigate(`/trip/${tripId}/settings`) }, '去旅程設定加旅伴'))));
+      go)));
     return;
   }
 
@@ -48,12 +70,15 @@ export default async function expenses(tripId, { drawPage, setTop }) {
   drawPage(page);
 
   if (!list.length) {
+    // 新姿勢：💰 拿掉，棉棉抱著錢包從「＋ 記第一筆」上緣探頭（規劃 S1）；圖載不到才留 💰
+    const first = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => openEdit(tripId, null) }, '＋ 記第一筆');
+    const el = putPose(first, 'purse', 'r');
     page.append(
       h('div', { class: 'empty' },
-        h('div', { class: 'empty-emoji' }, '💰'),
+        el ? null : h('div', { class: 'empty-emoji' }, '💰'),
         h('p', {}, '還沒有任何花費'),
         h('p', { class: 'muted sm' }, '誰付了錢就記一筆，最後自動算出誰要還誰。')),
-      h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => openEdit(tripId, null) }, '＋ 記第一筆'),
+      first,
     );
     return;
   }
@@ -76,7 +101,9 @@ export default async function expenses(tripId, { drawPage, setTop }) {
   const nothingCounted = s.counted === 0;
 
   // ---- 總覽 ----
-  page.append(h('div', { class: 'exp-summary' },
+  // 新姿勢：同一張棉棉抱錢包坐在總覽卡右上緣（規劃 S2）。導覽進來跳上來；記一筆按存檔回到這頁，只把一枚硬幣丟進錢包（不再跳）；
+  // 其他自己重畫不動。
+  const sumCard = h('div', { class: 'exp-summary' },
     h('div', { class: 'exp-total' },
       h('span', { class: 'muted sm' },
         (s.counted === s.count ? `共 ${s.count} 筆` : `共 ${s.count} 筆（${s.counted} 筆算進合計、${s.count - s.counted} 筆沒有）`)
@@ -88,7 +115,14 @@ export default async function expenses(tripId, { drawPage, setTop }) {
     ),
     ...noteLines.map((t) => h('p', { class: 'form-hint exp-unconv' }, '⚠ ' + t)),
     rates ? h('p', { class: 'form-hint' }, `匯率更新：${fmtFxDate(rates.updatedAt)}${rates.stale ? '（離線快取）' : ''}`) : null,
-  ));
+  );
+  const sumPose = pk ? pk.pose('purse', 'r') : null;
+  if (sumPose) {
+    mountPose(sumCard, sumPose);
+    if (!cause) pk.cheer(sumPose);
+    else if (cause === 'saved') pk.cheer(sumPose, { still: true, add: ['pk-coin-go'] });
+  }
+  page.append(sumCard);
 
   // ---- 每天花多少（只有標了第幾天的才分得進去；沒標的照實寫筆數，不猜它是哪一天） ----
   const dt = dayTotals(list, base, rates);
@@ -166,7 +200,7 @@ async function changeBase(tripId, cur) {
   const actions = C.list.map((c) => ({ label: `${c.code}　${c.name}`, value: c.code }));
   actions.push({ label: '取消', value: null });
   const pick = await modal({ title: '用哪個幣別顯示總帳？', actions });
-  if (pick) { await store.patch(tripId, { baseCurrency: pick }); toast('已切換'); refreshPage(); }
+  if (pick) { await store.patch(tripId, { baseCurrency: pick }); toast('已切換'); redraw('quiet'); }
 }
 
 // ---------- 記一筆 / 編輯 ----------
@@ -280,7 +314,7 @@ async function openEdit(tripId, existing) {
   });
 
   if (res === 'del') {
-    if (await confirmDialog('刪除這筆花費？', { danger: true, okLabel: '刪除' })) { await deleteExpense(existing.id); toast('已刪除'); refreshPage(); }
+    if (await confirmDialog('刪除這筆花費？', { danger: true, okLabel: '刪除' })) { await deleteExpense(existing.id); toast('已刪除'); redraw('quiet'); }
     return;
   }
   if (res !== 'save') return;
@@ -292,7 +326,7 @@ async function openEdit(tripId, existing) {
   }
   await saveExpense({ ...st, id: existing?.id, amount: amt, title: titleEl.value.trim() });
   toast('已記錄');
-  refreshPage();
+  redraw('saved');   // openEdit 只在這一頁叫（沒有匯出），原因一定由這一頁的下一次畫讀掉
 }
 
 // 分帳頁查名字用的函式（見 expenses() 裡的說明）。

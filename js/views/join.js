@@ -1,4 +1,4 @@
-import { h, toast, spinnerBox, modal, confirmDialog } from '../ui.js';
+import { h, toast, spinnerBox, modal, confirmDialog, mountPose } from '../ui.js';
 import { navigate } from '../router.js';
 import { importShareCode, peekShareCode, peekInvite, joinInvite, parseShortInvite, parseInviteText, fetchInviteSummary } from '../share.js';
 import { ensureMember } from '../claim.js';
@@ -33,10 +33,15 @@ export default async function join(query, { drawPage, setTop }) {
     try {
       info = syncCode ? await peekInvite(syncCode) : await peekShareCode(copyCode);
     } catch (e) {
+      // 新姿勢（Yolin 2026-11-18 晚上；規劃 3.10）：湯圓歪頭搔頭，從「回首頁」上緣探頭。錯誤一律靜止：使用者正煩的時候，
+      // 吉祥物動起來像在笑他（不呼叫 cheer）。圖載不到：按鈕照舊。
+      const home = h('button', { class: 'btn btn-soft', onclick: () => navigate('/') }, '回首頁');
+      const pk = await import('../peeks.js').catch(() => null);
+      if (pk) mountPose(home, pk.pose('puzzle', 'r'));
       drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' },
         h('p', {}, '這個邀請連結無法解析'),
         h('p', { class: 'form-hint' }, e.message),
-        h('button', { class: 'btn btn-soft', onclick: () => navigate('/') }, '回首頁'))));
+        home)));
       return;
     }
   }

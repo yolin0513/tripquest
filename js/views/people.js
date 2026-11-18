@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, avatar, toast, chooseFrom, mountPeek } from '../ui.js';
+import { h, avatar, toast, chooseFrom, mountPose } from '../ui.js';
 import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { subPhoto } from '../photoimg.js';
@@ -59,7 +59,15 @@ function arrange(all, view) {
   return { list, spotOf };
 }
 
+// 這一頁的重畫是不是本頁自己叫的（新姿勢：照片空白那一格的鬍鬍只在導覽進來時跳）。
+// 路由只把「真的導覽進來」（fresh）給主頁與行程頁；補給這一頁要改 js/app.js 或 router.js（測試挑選器的骨架放大器）。
+// refreshPage 只從各頁自己叫，所以本頁叫之前記一個旗標、下一次畫讀掉：沒有旗標＝導覽進來。
+let selfRedraw = false;
+function redrawSelf() { selfRedraw = true; refreshPage(); }
+
 export default async function people(tripId, { drawPage, setTop }) {
+  const self = selfRedraw;
+  selfRedraw = false;
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
   setTop({ title: '照片牆' });
@@ -78,7 +86,7 @@ export default async function people(tripId, { drawPage, setTop }) {
       class: 'untag-cta',
       onclick: async () => {
         const first = untagged[0];
-        if (await openTagger(tripId, first.id, allSubs)) refreshPage();
+        if (await openTagger(tripId, first.id, allSubs)) redrawSelf();
       },
     },
       h('span', { class: 'untag-cta-main' },
@@ -101,7 +109,7 @@ export default async function people(tripId, { drawPage, setTop }) {
     : (filtered ? `${subs.length}／${allSubs.length} 張` : `${allSubs.length} 張照片`);
 
   if (allSubs.length) {
-    const apply = (patch) => { saveView(tripId, { ...view, ...patch }); refreshPage(); };
+    const apply = (patch) => { saveView(tripId, { ...view, ...patch }); redrawSelf(); };
 
     const counts = new Map();
     for (const s of allSubs) {
@@ -160,18 +168,18 @@ export default async function people(tripId, { drawPage, setTop }) {
     // 按鈕文字說了目的地就要真的去那裡：back() 是「回上一頁」，從分帳分頁切過來時
     // 會退回分帳（使用者實機回報的正是這個）。標了地名的按鈕一律用 navigate。
     const go = h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單');
-    // v1.95.0（吉祥物融入介面第一版）：鬍鬍拿相機從這顆按鈕上緣探頭（點牠＝點按鈕）。
-    // 不動：路由沒把「真的導覽進來」（fresh）傳給這一頁（js/app.js），分不出導覽與重畫；改 app.js 會讓測試放大成全套，
-    // 跟底部分頁那一案（也要改 app.js）一起做。圖載不到：按鈕照舊、沒有吉祥物。
+    // v1.95.0（吉祥物融入介面第一版）：鬍鬍拿相機從這顆按鈕上緣探頭（點牠＝點按鈕）。圖載不到：按鈕照舊、沒有吉祥物。
+    // 新姿勢（Yolin 2026-11-18 晚上）：換成鬍鬍探頭揮手（融入九宮格第 8 格），導覽進來時跳上來。
+    // 第一版不動是因為路由沒把「真的導覽進來」（fresh）傳給這一頁；改成本頁自己分辨（見 people() 上面的 redrawSelf）：本頁叫的重畫不跳。
     const pk = await import('../peeks.js').catch(() => null);
-    if (pk) mountPeek(go, pk.peek('cam', 0.4));
+    if (pk) { const el = pk.pose('hello', 'r'); mountPose(go, el); if (!self) pk.cheer(el); }
     page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'), go));
   } else if (!subs.length) {
     page.append(h('div', { class: 'empty' },
       h('p', {}, '這個條件下沒有照片'),
       h('button', {
         class: 'btn btn-primary',
-        onclick: () => { saveView(tripId, { ...view, spot: '', untagged: false }); refreshPage(); },
+        onclick: () => { saveView(tripId, { ...view, spot: '', untagged: false }); redrawSelf(); },
       }, '看全部照片')));
   }
 
@@ -239,9 +247,9 @@ function gridView(tripId, trip, subs, spotOf, multi) {
         class: 'pg-cell pg-wait', dataset: { i: String(i) }, 'aria-label': `第 ${idx + 1} 張照片`,
         onclick: async () => {
           const { changed } = await openViewer(tripId, subs, i, {
-            onTag: async (s) => { if (await openTagger(tripId, s.id, subs)) refreshPage(); },
+            onTag: async (s) => { if (await openTagger(tripId, s.id, subs)) redrawSelf(); },
           });
-          if (changed) refreshPage();
+          if (changed) redrawSelf();
         },
       },
         h('img', { alt: '', hidden: true, draggable: false }),
@@ -284,9 +292,9 @@ async function feedItem(sub, tripId, allSubs, multi) {
     class: 'fi-photo-btn',
     onclick: async () => {
       const { changed } = await openViewer(tripId, allSubs, allSubs.indexOf(sub), {
-        onTag: async (s) => { if (await openTagger(tripId, s.id, allSubs)) refreshPage(); },
+        onTag: async (s) => { if (await openTagger(tripId, s.id, allSubs)) redrawSelf(); },
       });
-      if (changed) redraw();
+      if (changed) redrawSelf();
     },
   },
     subPhoto(sub, { className: 'fi-photo', alt: caption || '' }),
