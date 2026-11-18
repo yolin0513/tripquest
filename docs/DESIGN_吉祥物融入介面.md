@@ -289,7 +289,7 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 |---|---|---|---|
 | 主頁 | 湯圓 | 一隻翅膀在臉旁揮手 | 第二版主頁的倒數卡也是湯圓；第一版進度條的圓形頭像也是牠 |
 | 任務 | 小鳳 | 雙翅捧一張空白小卡（一角折起） | 完成任務那一隻 |
-| 行程 | 阿灰 | 雙翅把淺藍小望遠鏡舉到眼前 | 第一版「行程｜回顧」切換鈕的「行程」、載入中都是牠 |
+| 行程 | 阿灰 | 雙翅把淺藍小望遠鏡捧在胸前（不舉到眼前：26px 時遮住眼睛最可能認不出是誰） | 第一版「行程｜回顧」切換鈕的「行程」、載入中都是牠 |
 | 照片 | 鬍鬍 | 雙手捧一台小相機（一個大圓鏡頭） | 照片空白頁、拍照圖示、相機那張探頭圖都是牠 |
 | 分帳 | 棉棉 | 雙手把一枚黃色硬幣抱在胸前 | 第二版分帳卡也是棉棉 |
 
@@ -551,7 +551,7 @@ These are 9 icon studies for the bottom tab bar of a phone app. Each icon will b
 The nine cells, left to right, top row first:
 1. 湯圓 waving one wing beside the face, the other wing tucked in.
 2. 小鳳 holding up a small plain white card with one folded corner, with both wings. The card is blank.
-3. 阿灰 holding his small light blue binoculars up to his eyes with both wings.
+3. 阿灰 holding his small light blue binoculars in front of his chest with both wings. His eyes stay visible.
 4. 鬍鬍 holding a small simple camera with one big round lens in front of his chest with both paws. The camera is blank.
 5. 棉棉 hugging one big plain round yellow coin against the chest with both paws. The coin is blank.
 6. 北北 waving one paw beside the face, the other paw tucked in.
@@ -710,7 +710,7 @@ Yolin 2026-11-18 決定要做、另案排。誰、什麼姿勢、怎麼畫、對
 - 分頁列的圖示畫成灰色小圓點，因為轉圖程式畫不出彩色表情符號。示意圖裡的位置與大小是照 CSS 估的，不是量出來的。實作時的截圖才是準的。
 - 第二版的新圖還沒有，所以不在示意圖裡。
 - **底部分頁另案（2026-11-18 加）**：
-  - `TripQuest_吉祥物融入_07_底部分頁提示詞.md`：6.6 節的提示詞，加上怎麼生、五格各是誰、重生清單。跟規劃 6.6 節的區塊逐字相同（暫存區腳本比過）。
+  - `TripQuest_吉祥物融入_07_底部分頁提示詞_v2.md`：6.6 節的提示詞，加上怎麼生、五格各是誰、重生清單。跟規劃 6.6 節的區塊逐字相同（暫存區腳本比過）。**沒有 v2 的 07 作廢**：第 3 格寫成阿灰把望遠鏡舉到眼前，會遮住眼睛（26px 時最可能認不出是誰），也跟「道具舉在胸前」的通則不一致；交出前 advisor 點出，改成捧在胸前。
   - `TripQuest_吉祥物融入_08_底部分頁小樣.png`：3.12 節的小樣，和紙、深色各兩列（選中「主頁」、選中「照片」）。用現有的全身圖裁頭先代替新姿勢；尺寸照 CSS 畫成 3 倍；不是 App 截圖。
 
 ---
