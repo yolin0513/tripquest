@@ -246,36 +246,41 @@ export function mountPeek(host, el) {
 // 成就慶祝畫面
 // withMascot：把打勾的圓換成吉祥物（完成任務那一隻，見 js/glyphs.js 的 MASCOT_SPOT）——完成任務、解鎖新徽章（addphoto.js）；
 // 其他慶祝照舊是打勾。
-// move：標題上面那一隻動一下（glyphs.js 的 moveMascot；解鎖新徽章＝原地彈跳兩下，v1.85.0）。
+// btnPeek：從第一顆按鈕上緣探頭的那一張（v1.95.0 解鎖新徽章：小鳳不再站在標題上，改扣在「太棒了」上緣；js/peeks.js 做好、呼叫的一方決定動不動）。
+//   有給、也有按鈕：標題上面不再放整隻；按鈕上面留出牠露出來的高度（CSS .celebrate .btn.has-peek）。點牠＝點那顆按鈕。
+//   （v1.85.0～v1.94.0 的 move：標題上面那一隻原地彈跳兩下——只有解鎖新徽章用，v1.95.0 換成這個，move 一起拿掉。）
 // peek：完成任務時的探頭圖（js/peeks.js；呼叫的一方挑好哪一張）。有照片就掛在照片上緣、標題上面不再另外放一隻；
 // 沒拿到照片（縮圖讀不到）就照舊在標題上面放整隻（MASCOT_SPOT.done）。
 // say：探頭的那一隻講的那一句（js/says.js 的 sayOnPeek 做好的元素，v1.87.0）。只在照片上有探頭圖時放（對話框要指著牠）；
 // 沒拿到照片就不放——標題上面那一隻沒有對話框的位置。
-export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, move = false, peek = null, say = null }) {
+export function celebrate({ title, lines = [], photoURL, actions = [], withMascot = false, btnPeek = null, peek = null, say = null }) {
   const root = document.getElementById('modalRoot');
   return new Promise((resolve) => {
     const close = (v) => { wrap.remove(); conf.remove(); resolve(v); };
     const conf = confetti();
     const onPhoto = !!(withMascot && peek && photoURL);
+    const onBtn = !!(withMascot && !onPhoto && btnPeek && actions.length);
     const photo = photoURL ? h('img', { class: 'celebrate-photo', src: photoURL, alt: '' }) : null;
     const shot = onPhoto ? mountPeek(h('div', { class: 'celebrate-shot' }, photo), peek) : null;
     if (shot && say) { shot.append(say); shot.classList.add('has-say'); }   // 照片上面要留得下那一句：見 roomForSay（放進畫面之後才量得到）
     const wrap = h('div', { class: 'celebrate' },
-      onPhoto ? null
+      onPhoto || onBtn ? null
         : withMascot
           ? h('div', { class: 'celebrate-mascot' }, mascot(MASCOT_SPOT.done, 132))
           : h('div', { class: 'celebrate-badge' }, '✓'),
       h('h2', {}, title || '完成了！'),
       ...lines.map((l) => h('p', {}, l)),
       onPhoto ? shot : photo,
-      ...actions.map((a) => h('button', {
-        class: 'btn ' + (a.primary ? 'btn-primary' : 'btn-soft') + ' btn-block btn-big',
-        onclick: () => close(a.value),
-      }, a.label)),
+      ...actions.map((a, i) => {
+        const b = h('button', {
+          class: 'btn ' + (a.primary ? 'btn-primary' : 'btn-soft') + ' btn-block btn-big',
+          onclick: () => close(a.value),
+        }, a.label);
+        return onBtn && i === 0 ? mountPeek(b, btnPeek) : b;
+      }),
     );
     root.append(conf, wrap);
     if (shot && say) roomForSay(shot, say);
-    if (move) moveMascot(wrap.querySelector('.celebrate-mascot svg.gl-mascot'));
     if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch { /* noop */ } }
     if (!actions.length) setTimeout(() => close(null), 2200);
   });

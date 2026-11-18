@@ -4,8 +4,9 @@
     "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/trip.js 拿掉 mountPeek(main, el)：圖做好了、也呼叫了 cheer，但沒放進卡片（v1.84.0 以前的樣子）。H9、H10 紅（沒有探頭圖）；H11 也紅（重畫之後一樣找不到圖——它要求圖在，才分得出「停在靜止圖」跟「根本沒有圖」）。H5、H6 只看字與按鈕，照樣綠。",
     "expect": ["H9 結束後「旅程結束了」那張卡", "H10 全部拍完「任務全部完成了」那張卡", "H11 主頁自己重畫時探頭圖照樣在"],
     "file": "js/views/trip.js",
-    "find": "mountPeek(main, el);",
+    "find": "mountPeek(main, endPeek);",
     "replace": "/* 突變：不掛上卡片 */",
+    "note": "v1.95.0（2026-11-18 17:22 事前改 find，mutlint 報死掉）：變數從 el 改名 endPeek（出發那一句也用探頭圖，要分開兩張），find 跟著換；拿掉的仍是「掛上卡片」那一行，預期不變（R已結束那一句照樣掛在卡上講——onCard 看的是圖做好了沒，不看掛上去了沒——H9 照樣紅在沒有探頭圖）。",
     "cmd": "node scripts/hometest.mjs"
   },
   {
@@ -13,17 +14,19 @@
     "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/trip.js 的 cheer 拿掉 if (fresh)：主頁自己重畫（refreshPage：現在在哪一站變了、AI 文案回來）也加 pk-cheer、再探上來一次。只紅 H11；H9、H10 是真的導覽進來，本來就要動，照樣綠。",
     "expect": ["H11 主頁自己重畫時探頭圖照樣在"],
     "file": "js/views/trip.js",
-    "find": "if (fresh) pk.cheer(el, { soft: true });",
-    "replace": "pk.cheer(el, { soft: true });",
+    "find": "if (fresh) pk.cheer(endPeek, { soft: true });",
+    "replace": "pk.cheer(endPeek, { soft: true });",
+    "note": "v1.95.0（2026-11-18 17:22 事前改 find，mutlint 報死掉）：變數從 el 改名 endPeek，find 跟著換；意思不變、預期不變（出發那一句的 cheer 是另一行，不受影響）。",
     "cmd": "node scripts/hometest.mjs"
   },
   {
     "name": "主頁：那張卡上面沒有讓出探頭圖的高度",
     "why": "（事前寫 2026-11-14 00:39，跑之前）css/style.css 拿掉 .th-end.has-peek 的 margin-top：卡片照原本的間距排，探出卡片上緣的那截壓到上一個區塊（卡片是最上面一張時就是壓到頁首）。H9、H10 紅（不壓到上面那一項不成立）；H11 只看動畫，照樣綠。",
-    "expect": ["H9 結束後「旅程結束了」那張卡", "H10 全部拍完「任務全部完成了」那張卡"],
+    "expect": ["H10 全部拍完「任務全部完成了」那張卡"],
     "file": "css/style.css",
     "find": ".th-end.has-peek { margin-top: calc(var(--pk-rise) + 8px); }",
     "replace": "/* 突變：沒有讓出探頭圖的高度 */",
+    "note": "v1.95.0（2026-11-18 17:22 事前改預期，跑之前）：旅程結束那一句改掛在「旅程結束了」卡上（js/says.js 的 onCard），卡片上面要留多高由 roomOnCard 量那一句的高度設成行內樣式（max(露出高度＋8, 那一列高＋12)）——R已結束那一趟（H9）那一句在，拿掉這條 CSS 照樣留得夠，H9 不紅；R全部拍完（H10）沒有那一句，只靠這條，照樣紅。預期從 H9、H10 改成只有 H10。H9 那一種情境（卡上有那一句）的留高改由 saytest S11b「整列在頁面裡」守（mut_v195.json「卡片上面沒照那一列的高度留空間」）。",
     "cmd": "node scripts/hometest.mjs"
   },
   {

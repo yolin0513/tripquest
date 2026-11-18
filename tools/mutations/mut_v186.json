@@ -186,8 +186,9 @@
     "why": "（事前寫 2026-11-14 03:15，跑之前）那一排按鈕的 data-tab 換了名字（layouttest 用它切格）。layouttest 每一種組合都切不到「行程」那一格。紅：layouttest 的「前置：要切到行程分頁某一格」。其餘版面斷言照樣掃（沒切到就掃預設那一格），預期不紅。",
     "expect": ["前置：要切到行程分頁某一格"],
     "file": "js/views/trip.js",
-    "find": "'aria-controls': pane.id, dataset: { tab: key }, onclick: () => show(key) }, label);",
-    "replace": "'aria-controls': pane.id, dataset: { t: key }, onclick: () => show(key) }, label);",
+    "find": "'aria-controls': pane.id, dataset: { tab: key },",
+    "replace": "'aria-controls': pane.id, dataset: { t: key },",
+    "note": "v1.95.0（2026-11-18 17:22 事前改 find，mutlint 報死掉）：按鈕多了圓形頭像、onclick 拆成好幾行（只有點了換格那一下頭像才冒出來），find 縮成 data-tab 那一段；改的仍是 data-tab 的名字，意思不變、預期不變。",
     "cmd": "node scripts/layouttest.mjs",
     "timeoutMs": 1400000,
     "timeoutBasis": "第一次跑原樣在預設 400 秒被殺（帳本第 986 次，11-14 03:59 記下）。原樣實測 477 秒（tools/test-times.json，2026-11-13），v1.86.0 多掃一頁（「行程分頁（行程那一格）」，每種字級 × 寬度各掃一次），會比 477 秒再長；照 mut_narrowcol 的同一個數（改壞後實測 673.4 秒 × 2、進位）"

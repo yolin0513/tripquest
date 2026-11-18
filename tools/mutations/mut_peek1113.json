@@ -33,8 +33,9 @@
     "why": "（事前寫 11:15，跑之前沒改）onPhoto ? null → false ? null：有照片時標題上面照樣放整隻小鳳。和紙 P3 五種都量「標題上面沒有另一隻」→ 紅 5 條。深色慶祝那條不量這一項 → 不紅。",
     "expect": ["P3 必吃 → 捧麵", "P3 夜市的其他任務 → 烤串", "P3 自然 → 遮陽帽", "P3 城市 → 相機", "P3 古蹟（沒有對得上的類別）→ 小鳳打領結"],
     "file": "js/ui.js",
-    "find": "      onPhoto ? null",
-    "replace": "      false ? null",
+    "find": "      onPhoto || onBtn ? null",
+    "replace": "      onBtn ? null",
+    "note": "v1.95.0（2026-11-18 17:22 事前改 find，mutlint 報死掉）：那一行多了 onBtn（解鎖新徽章的小鳳改扣在按鈕上緣時，標題上面也不放整隻），find 跟著換；只拿掉 onPhoto 那一半＝原本「onPhoto → false」的意思，完成任務（有照片、沒有 btnPeek）時標題上面照樣多一隻，預期不變。",
     "cmd": "node scripts/peektest.mjs"
   },
   {

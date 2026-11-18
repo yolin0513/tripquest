@@ -21,7 +21,7 @@ import { aiConfigCard, mapsConfigCard, keyNotice, AI_WHY } from './ai-config.js'
 import { mapsDirUrl, mapsSearchUrl } from '../maps.js';
 import { spotTimes, stayText, etaChain, fmtHHMM } from '../spottime.js';
 import { tripPhase, countdownText, defaultDay, weekdayLabel, dayRoute, timelineStates, takeDayJump } from '../tripday.js';
-import { paperPlane } from '../glyphs.js';
+import { paperPlane, mascotBadge, reducedMotion } from '../glyphs.js';
 import { sayRow, departLine, endLine, weatherLine, WHO_PX } from '../says.js';
 import { dayRealMap } from '../realmap.js';
 import { tripOverviewMap } from '../overmap.js';
@@ -86,6 +86,34 @@ async function pickCountry(tripId) {
 // 這次打開 App 以來看過任務頁的旅程（只在記憶體裡；關掉 App 再開就清空）。用來分「回來」與「新打開」，見 trip() 的 selKey。
 const taskSeen = new Set();
 
+// v1.95.0 任務頁進度條的前端放山雀的圓形頭像（吉祥物融入介面第一版，規劃 docs/DESIGN_吉祥物融入介面.md 3.2 節 T1）。
+// 什麼時候滑：只有自己完成任務、慶祝畫面按「繼續下一個」之後那一次重畫（addPhotoButtons 的 onDone）。
+//   起點＝畫出那顆拍照按鈕時的進度（使用者按下時畫面上看到的那個）：慶祝畫面開著時旅伴同步進來，任務頁會先在底下重畫一次，
+//   所以不能拿「上一次畫的比例」當起點，也不能讓任何一次重畫都去讀——只有 onDone 那一次設 tpSlide、畫的時候讀掉。
+//   旅伴同步、切分頁回來、第一次進來：沒有 tpSlide，頭像直接停在現在的進度、不滑。
+//   全部完成時慶祝畫面的兩顆按鈕都換頁（不呼叫 onDone），所以「到終點」那一下不會有滑動——規劃原本寫的「蹦一下」拿掉。
+// 只動 transform（.tp-run 的 translateX，百分比對著它自己的寬＝軌道可走的長度）；減少動態效果時不滑。
+// 頭像不影響那一行的高度：絕對定位、不佔版面（任務頁不准變高，Yolin 2026-11-13）。
+let tpSlide = null;
+function slideOnDone(tripId) {
+  const from = store.tripProgress(tripId).ratio;
+  return () => { tpSlide = { tripId, from }; refreshPage(); };
+}
+const pct = (r) => `${(Math.max(0, Math.min(1, r)) * 100).toFixed(2)}%`;
+function progBar(tripId, ratio) {
+  const s = tpSlide && tpSlide.tripId === tripId ? tpSlide : null;
+  tpSlide = null;
+  const run = h('span', { class: 'tp-run', 'aria-hidden': 'true' }, mascotBadge('tit', 26));
+  run.style.setProperty('--tp-to', pct(ratio));
+  if (s && pct(s.from) !== pct(ratio) && !reducedMotion()) {
+    run.style.setProperty('--tp-from', pct(s.from));
+    run.classList.add('tp-slide');
+  }
+  return h('div', { class: 'tp-bar' },
+    h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round(ratio * 100)}%` })),
+    run);
+}
+
 export default async function trip(tripId, { fresh = false, drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
@@ -117,7 +145,7 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     syncBanner(tripId, t),
     prog.total > 0 ? h('div', { class: 'task-prog', role: 'status' },
       h('span', { class: 'tp-title' }, allDone ? '全部完成了！🎉' : `已完成 ${prog.done} / ${prog.total}`),
-      h('div', { class: 'progress-track' }, h('i', { style: `width:${Math.round(prog.ratio * 100)}%` }))) : null,
+      progBar(tripId, prog.ratio)) : null,
   );
 
   if (spots.length === 0) {
@@ -580,20 +608,31 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
   // 「旅程結束了」「任務全部完成了」那張卡：小鳳打領結從卡片上緣探頭、揮翅膀（v1.85.0 新的出場處；圖載不到：卡片照樣出）。
   // 只有真的導覽到主頁（fresh）才動；主頁自己重畫（現在在哪一站變了、AI 文案回來）時停在靜止圖，不會每重畫一次就再跳一次。
   // 0.3＝顯示縮放（畫布 1 單位畫成幾 px）：比天氣頁的提醒卡小一點，卡片上面空出來的高度少一些（主頁一打開就要看到這張卡）
-  if (main && main.classList.contains('th-end')) {
-    const pk = await import('../peeks.js').catch(() => null);
-    if (pk) {
-      const el = pk.peek(pk.DONE_PEEK, 0.3);
-      mountPeek(main, el);
-      if (fresh) pk.cheer(el, { soft: true });
-    }
+  // v1.95.0 出發那一句也用探頭圖（下面）：圖這兩處都要時才載一次
+  const endCard = !!(main && main.classList.contains('th-end'));
+  const pk = endCard || todayDay === 1 ? await import('../peeks.js').catch(() => null) : null;
+  let endPeek = null;
+  if (endCard && pk) {
+    endPeek = pk.peek(pk.DONE_PEEK, 0.3);
+    mountPeek(main, endPeek);
+    if (fresh) pk.cheer(endPeek, { soft: true });
   }
 
   // v1.87.0 吉祥物講一句（js/says.js；誰說、什麼時候講的表在 STATUS）。主頁一次最多一句，放在它講的那一塊旁邊：
-  //   旅程結束 → 「旅程結束了」那張卡下面；出發當天早上 → 「今天是第 1 天」那一行下面；
+  //   旅程結束 → 「旅程結束了」那張卡；出發當天早上 → 「今天是第 1 天」那一行下面；
   //   都沒有（或已經關掉）才輪到天氣那一句（天氣條下面，fillWeather 背景載完才知道）。
-  const sayEnd = ended && spots.length ? sayRow(tripId, endLine(true), { animate: fresh }) : null;
-  const sayDepart = !sayEnd && todayDay === 1 ? sayRow(tripId, departLine(t), { animate: fresh }) : null;
+  // v1.95.0（吉祥物融入介面第一版，Yolin 2026-11-18 同意）：
+  //   結束那一句改由卡片上探頭的小鳳講（says.js 的 onCard）——對話框放在卡片上緣、小鳳左邊，北北不再站在卡片下面。
+  //     卡上沒有小鳳（peeks.js 載不到）：照舊是北北站在卡片下面那一行。
+  //   出發那一句：鬍鬍不再站在對話框左邊，改拿相機從對話框上緣探頭（跟下雨那一句同一種擺法），導覽進來時探上來、閃一下
+  //     （閃光是動作線那一層，跟所有動作線一樣只在和紙畫）。這一句因此多約 44px 高（並排變上下疊）。圖載不到：照舊站在左邊。
+  const sayEnd = ended && spots.length
+    ? sayRow(tripId, endLine(true), endPeek ? { animate: fresh, onCard: main } : { animate: fresh })
+    : null;
+  let departPeek = null;
+  if (!sayEnd && todayDay === 1 && pk) departPeek = pk.peekFit('cam', WHO_PX);
+  const sayDepart = !sayEnd && todayDay === 1 ? sayRow(tripId, departLine(t), { animate: fresh, peek: departPeek }) : null;
+  if (sayDepart && departPeek && fresh) pk.cheer(departPeek, { soft: true });
 
   // v1.86.0 主頁補內容（守夜模式照建議做；決定與替代方案見 STATUS）。都是「有才放」，沒有的不放、不顯示 0、不猜；不放任務的跳轉。
   //   結束後：這趟的數字（天數・景點・照片・花費）；出發前：每天的行程預覽＋下一班航班；照片列：有照片就有（不分哪個階段）
@@ -608,7 +647,7 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
       t.startDate ? h('span', { class: 'th-day-d' }, `${dayDate(t, todayDay)} ${weekdayLabel(t.startDate, todayDay)}`.trim()) : null) : null,
     sayDepart,
     main,
-    sayEnd,
+    sayEnd && sayEnd.parentNode !== main ? sayEnd : null,   // 掛在卡片上的那一句（onCard）已經在卡片裡，不再放一次
     ended && spots.length ? endNums(tripId, t, spots) : null,
     todayDay === 0 && spots.length ? planPreview(tripId, t, spots) : null,
     todayDay === 0 ? flightRow(tripId) : null,
@@ -1139,7 +1178,7 @@ function spotAddRow(s, tripId, questCount) {
     questCount ? null : addPhotoButtons(tripId, photoQuestId(s.id), {
       compact: true,
       ensureQuest: () => ensurePhotoQuest(s),
-      onDone: () => refreshPage(),
+      onDone: slideOnDone(tripId),
     }),
   );
 }
@@ -1515,7 +1554,7 @@ function questLine(q, spot, themeKey) {
             class: 'qline-link', onclick: () => navigate(`/quest/${q.id}`),
           }, `看照片（${subs.length} 張）`) : null,
         ),
-        addPhotoButtons(q.tripId, q.id, { compact: true, onDone: () => refreshPage() }),
+        addPhotoButtons(q.tripId, q.id, { compact: true, onDone: slideOnDone(q.tripId) }),
       ),
     ));
   };
@@ -1558,7 +1597,7 @@ function questLine(q, spot, themeKey) {
     // 想再拍一張的人會在原本的位置找不到東西。
     // 完成狀態改由縮圖（換成他自己拍的那張）與列上的「✓ 已完成」表示。
     h('div', { class: 'qline-act' },
-      addPhotoButtons(q.tripId, q.id, { icons: true, onDone: () => refreshPage() })),
+      addPhotoButtons(q.tripId, q.id, { icons: true, onDone: slideOnDone(q.tripId) })),
     more,
   );
   return row;
@@ -1807,9 +1846,24 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
   } catch { /* noop */ }
   const planPane = h('div', { class: 'itin-pane', id: 'itin-pane-plan', role: 'tabpanel', 'aria-label': '行程' });
   const memPane = h('div', { class: 'itin-pane', id: 'itin-pane-mem', role: 'tabpanel', 'aria-label': '回顧' });
-  const segBtn = (key, label, pane) => h('button', { type: 'button', role: 'tab', 'aria-controls': pane.id, dataset: { tab: key }, onclick: () => show(key) }, label);
+  // v1.95.0（吉祥物融入介面第一版，規劃 I1）：選中那一格的字前面有一個圓形頭像——行程是鷹（拿望遠鏡看路）、回顧是熊（最終回顧那一隻）。
+  // 只在使用者點了、換到另一格的那一下冒出來（translateY＋opacity，約 0.25 秒）；第一次畫、重畫、返回都直接顯示、不動；減少動態效果時不動。
+  // 頭像放在按鈕原本的內距裡（按鈕高度不變，--tap 56px）；aria-hidden，分頁的名字照舊由字講。
+  const segBtn = (key, label, pane, kind) => {
+    const head = h('span', { class: 'seg-head', 'aria-hidden': 'true' }, mascotBadge(kind, 24));
+    head.addEventListener('animationend', () => head.classList.remove('seg-pop'));
+    const b = h('button', {
+      type: 'button', role: 'tab', 'aria-controls': pane.id, dataset: { tab: key },
+      onclick: () => {
+        const was = b.classList.contains('on');
+        show(key);
+        if (!was && !reducedMotion()) head.classList.add('seg-pop');
+      },
+    }, head, label);
+    return b;
+  };
   const seg = h('div', { class: 'seg itin-seg', role: 'tablist', 'aria-label': '行程或回顧' },
-    segBtn('plan', '行程', planPane), segBtn('mem', '回顧', memPane));
+    segBtn('plan', '行程', planPane, 'hawk'), segBtn('mem', '回顧', memPane, 'bear'));
   const page = h('div', { class: 'page itin-page' + (ended ? ' is-ended' : '') }, seg, planPane, memPane);
   // 兩格各自第一次顯示時才建：地圖、日期列的紙飛機要量尺寸，藏著（display:none）的時候量不到
   const built = new Set();

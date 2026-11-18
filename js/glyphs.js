@@ -105,6 +105,33 @@ export function mascotHead(hgt = 26) {
   return figure(MASCOT_SPOT.header, HEAD_VB, false, Math.round(hgt * 128 / 116), hgt, 'gl-mascot gl-mascot-head');
 }
 
+// 圓形頭像（v1.95.0 吉祥物融入介面第一版）：從全身圖裁一塊正方形、裝進圓框。
+// 用在任務頁進度條的前端（山雀）、行程分頁「行程｜回顧」選中那一格（鷹、熊）。
+// 為什麼是圓框、不是直接裁頭：山雀是蛋形，頭跟身體沒有分界，直接裁底部是一條直的切口、兩角露出翅膀
+// （規劃 docs/DESIGN_吉祥物融入介面.md 3.2 節）；圓框的邊有框線，看起來是刻意的。
+// 裁切框（全身圖的畫布座標，200×240）：放大加格線看過，頭在圓的中間、圓的下緣切在脖子上。
+const BADGE_VB = Object.freeze({
+  tit: [36, 22, 128, 128],
+  hawk: [40, 32, 120, 120],
+  bear: [36, 30, 128, 128],
+});
+// 圓底與框線的顏色在 CSS（.mc-badge-bg、.mc-badge-ring）；圈裡不套深色白邊——框線已經把輪廓圈出來了。
+export function mascotBadge(kind, px = 26) {
+  const a = ART[kind], vb = BADGE_VB[kind];
+  if (!a || !vb) throw new Error('沒有這隻的圓形頭像：' + kind);
+  const seq = ++rimSeq;
+  const [x, y, s] = vb, cx = x + s / 2, cy = y + s / 2, r = s / 2;
+  const pose = a.pose.replace(/(\bid="|url\(#)(i\d+)(?=[")])/g, `$1mb${seq}-$2`);
+  const el = svg(vb.join(' '), 'gl-mascot mc-badge',
+    `<defs><clipPath id="mb${seq}-c"><circle cx="${cx}" cy="${cy}" r="${r - 1}"/></clipPath></defs>`
+    + `<circle class="mc-badge-bg" cx="${cx}" cy="${cy}" r="${r}"/>`
+    + `<g clip-path="url(#mb${seq}-c)"><g class="mc-fig">${pose}</g></g>`
+    + `<circle class="mc-badge-ring" cx="${cx}" cy="${cy}" r="${r - 1}"/>`,
+    px, px);
+  el.setAttribute('data-mascot', kind);
+  return el;
+}
+
 // ---- 吉祥物的動作（v1.85.0；Yolin 看了 v1.83.0 完成任務那一刻的動畫：「效果不錯，推廣到其他時刻」，核過哪個時刻哪隻、什麼動作那張表）----
 // 規矩：只動 transform 與 opacity；減少動態效果就完全不動（停在靜止圖）；除了載入中，都只動一次、動完停回靜止圖的位置。
 // 這裡只負責把圖拆成會動的幾層、掛上 class；動作的時間與角度在 css/style.css（.mc-move、.pk-cheer 那一段）。
@@ -141,15 +168,15 @@ export function wrapPart(root, tf, pivot, cls) {
 //   bunny 空白頁「還沒有旅程」：舉著的那隻手（肩膀 128,146）揮兩下，揮動線跟著一閃一閃（揮動線只在和紙畫）
 //   bear 最終回顧：從下面淡入、跳出來
 //   hawk 載入中：拿望遠鏡左右慢慢看（整隻繞腳底轉一點點），等待時一直重複——只有這一隻會重複
-//   cockatiel 解鎖新徽章：原地彈跳兩下（地面陰影留在地上、不跟著跳）
 // 頁首的頭（雪納瑞）、設定頁的山雀不動（那張表）；完成任務那一隻是探頭圖，見 js/peeks.js。
+// 解鎖新徽章的玄鳳（v1.85.0～v1.94.0 原地彈跳兩下）v1.95.0 改成從「太棒了」按鈕上緣探頭（js/addphoto.js 的 showNewBadges），
+// 彈跳這一條沒有別的地方用，一起拿掉（留著就是一段永遠走不到的程式）。
 // part＝要揮的那隻手（同 wrapPart）；body＝要整塊一起動的幾層（包成一個 g.mc-body；動畫放在圖裡面，<svg> 本身的框不動，排版不跳）；
 // pivot＝整塊轉的原點（鷹的腳底）。
 const MOVES = Object.freeze({
   bunny: { move: 'wave', part: { tf: 'translate(128 146) rotate(-122)', pivot: [128, 146], cls: 'pk-wave-r' }, lines: true },
   bear: { move: 'popin', body: ['.mc-shadow', '.mc-fig', '.mc-extra'] },
   hawk: { move: 'look', body: ['.mc-fig', '.mc-extra'], pivot: [100, 228] },
-  cockatiel: { move: 'bounce', body: ['.mc-fig', '.mc-extra'] },
 });
 export const MOVE_KINDS = Object.freeze(Object.keys(MOVES));
 // 讓一張 mascot() 動起來；回傳有沒有動。減少動態效果、沒登記動作的那幾隻、圖對不上：不動，停在靜止圖。

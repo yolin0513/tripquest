@@ -18,7 +18,11 @@
 //      圖裡的 id 在整頁唯一、每個 url(#…) 都指到同一張圖裡面（同一頁好幾張時不會指到別張的裁切框）
 //   M9 動作（v1.85.0；js/glyphs.js 的 moveMascot；Yolin：「效果不錯，推廣到其他時刻」，核過的那張表）——和紙那輪：
 //      空白頁的白兔揮手兩下（只在真的導覽到首頁時；到設定頁再回來量）、載入中的鷹拿望遠鏡左右看且一直重複、
-//      回顧的白熊從下面淡入跳出來、解鎖新徽章是玄鳳（v1.84.0 以前是打勾的圓）原地彈跳兩下；動完停回靜止圖的位置；只用 transform／opacity。
+//      回顧的白熊從下面淡入跳出來、解鎖新徽章是玄鳳（v1.84.0 以前是打勾的圓）；動完停回靜止圖的位置；只用 transform／opacity。
+//      v1.95.0（吉祥物融入介面第一版，規劃 B1）：解鎖新徽章的小鳳不再站在標題上彈跳，改從「太棒了」按鈕上緣探頭、跳上來
+//      （js/addphoto.js 的 showNewBadges → js/ui.js 的 celebrate 的 btnPeek；探頭圖與 cheer 跟完成任務那一刻同一張——那一張的動畫細節由 peektest 驗）。
+//      這裡驗：在按鈕上、標題上面沒有整隻、跳上來、跳完停回原位、邊線對在按鈕框線外緣而且置中、不蓋到上面那行字與按鈕的字（兩輪都量位置）。
+//      兩次取位置之間等瀏覽器真的畫了新的格（v1.95.0 起；原本是 setTimeout 150ms，機器忙時兩次可能讀到同一格——同 peektest 的 animNow）。
 //      深色那輪同時打開設定頁的「減少動態效果」：同樣四個時刻都不動（系統設定那個入口由 peektest 驗：兩支共用 glyphs.js 的 reducedMotion）
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -74,11 +78,16 @@ const probe = (page, sel) => page.evaluate((s) => {
 
 const brief = (p) => p.found ? `${p.kind}，${p.w}×${p.h}` : '沒找到';
 
-// M9 動作（v1.85.0，js/glyphs.js 的 moveMascot）：會動的層——.mc-body（整隻一起：熊淡入跳出來、玄鳳彈跳）、.mc-look（鷹繞腳底轉）、
-// .pk-wave-r（白兔舉著的那隻手）、.pk-wave-lines（揮動線）。一出來就量：隔 150ms 取兩次看有沒有變、keyframes 用到哪些屬性、
+// M9 動作（v1.85.0，js/glyphs.js 的 moveMascot）：會動的層——.mc-body（整隻一起：熊淡入跳出來）、.mc-look（鷹繞腳底轉）、
+// .pk-wave-r（白兔舉著的那隻手）、.pk-wave-lines（揮動線）；v1.95.0 解鎖新徽章改成探頭圖（js/peeks.js 的 cheer），再加
+// .pk-hop（邊線以上那層跳上來）、.pk-wave（翅膀）、.pk-grip（扣在按鈕上的手）。一出來就量：取兩次看有沒有變、keyframes 用到哪些屬性、
 // 會一直重複的有幾段；整隻那一層倒回第 0 格量透明度與往下的位移（量完照常往下播）。
+// 兩次之間（v1.95.0 起，同 peektest 的 animNow 2026-11-17 那次改法）：等瀏覽器真的畫了至少 2 格、時間軸往前走至少 150ms，最多等 3 秒；
+//   原本是 setTimeout 150ms——機器忙的時候計時器可能先到、中間一格都沒畫，兩次讀到同一格，看起來像「沒在動」。
+//   等不到回 frameOk false，另一條斷言「量的時候瀏覽器有畫新的格」紅（這一次沒量到），不跟「畫了新的格、位置沒變」（動畫壞了）混在一起。
+//   跑著的段數在量的當下數（倒回第 0 格那段量完會 play()，播完的動畫一 play() 就從頭重播，事後數永遠是全部）。
 const KF_META = ['offset', 'computedOffset', 'easing', 'composite'];   // getKeyframes() 每一格都帶的欄位，不是被動畫的屬性
-const MOVE_CLS = ['mc-body', 'mc-look', 'pk-wave-r', 'pk-wave-lines'];
+const MOVE_CLS = ['mc-body', 'mc-look', 'pk-wave-r', 'pk-wave-lines', 'pk-hop', 'pk-wave', 'pk-grip'];
 const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
   const el = document.querySelector(s);
   if (!el) return { found: false };
@@ -86,11 +95,30 @@ const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
   const snap = () => [...el.querySelectorAll(q)].map((x) => { const st = getComputedStyle(x); return `${x.getAttribute('class')}:${st.transform}|${st.opacity}`; }).join(';');
   const anims = el.getAnimations({ subtree: true });
   const props = [...new Set(anims.flatMap((a) => (a.effect?.getKeyframes?.() || []).flatMap((k) => Object.keys(k).filter((p) => !meta.includes(p)))))];
-  // 有起跳延遲的（解鎖新徽章的彈跳等慶祝畫面先跳出來，0.45 秒）：等延遲過了才量兩次——延遲裡本來就不動，量到「沒變」不代表沒在動
+  // 有起跳延遲的：等延遲過了才量兩次——延遲裡本來就不動，量到「沒變」不代表沒在動
   const lag = Math.max(0, ...anims.map((a) => (a.effect?.getComputedTiming?.().delay || 0) - (a.currentTime || 0)));
   if (lag > 0) await new Promise((r) => setTimeout(r, Math.min(lag, 1500) + 30));
+  const tl = () => { const t = document.timeline ? document.timeline.currentTime : null; return typeof t === 'number' ? t : null; };
+  const running = anims.filter((a) => a.playState === 'running').length;   // 量的當下
+  const tl1 = tl();
   const s1 = snap();
-  await new Promise((r) => setTimeout(r, 150));
+  const w0 = performance.now();
+  let frames = 0, stop = false;
+  const frameOk = await Promise.race([
+    new Promise((res) => {
+      const tick = () => {
+        if (stop) return;
+        frames++;
+        const now = tl();
+        if (frames >= 2 && tl1 != null && now != null && now - tl1 >= 150) res(true); else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }),
+    new Promise((res) => setTimeout(() => res(false), 3000)),
+  ]);
+  stop = true;
+  const waited = Math.round(performance.now() - w0);
+  const tl2 = tl();
   const s2 = snap();
   const count = {};
   for (const c of cls) count[c] = el.querySelectorAll('.' + c).length;
@@ -105,10 +133,11 @@ const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
     anims.forEach((a, i) => { a.currentTime = was[i]; a.play(); });
   }
   return {
-    found: true, kind: el.getAttribute('data-mascot'), cls: el.getAttribute('class') || '',
-    n: anims.length, running: anims.filter((a) => a.playState === 'running').length,
+    found: true, kind: el.getAttribute('data-mascot'), peek: el.getAttribute('data-peek'), cls: el.getAttribute('class') || '',
+    n: anims.length, running,
     endless: anims.filter((a) => a.effect?.getComputedTiming?.().iterations === Infinity).length,
     names: anims.map((a) => a.animationName || '?'), props, moved: s1 !== '' && s1 !== s2, count, start,
+    frameOk, frames, waited, tlAdv: tl1 != null && tl2 != null ? Math.round(tl2 - tl1) : null,
   };
 }, sel, KF_META, MOVE_CLS);
 // 動完：等每一段動畫結束（最多 6 秒），會動的每一層相對於整張圖的位置矩陣，跟拿掉 mc-move（動畫撤掉＝靜止圖）比；透明度都要是 1。
@@ -143,7 +172,8 @@ const moveEnd = (page, sel, swingSel = null) => page.evaluate(async (s, cls, swi
   const rel = () => { const root = el.getScreenCTM().inverse(); return layers.map((x) => six(root.multiply(x.getScreenCTM()))); };
   const opacities = layers.map((x) => getComputedStyle(x).opacity);
   const moving = rel();
-  el.classList.remove(...[...el.classList].filter((c) => c.startsWith('mc-move')));
+  // 撤掉動畫＝靜止圖：全身圖是 mc-move*；探頭圖（v1.95.0 解鎖新徽章）是 pk-cheer／pk-soft
+  el.classList.remove(...[...el.classList].filter((c) => c.startsWith('mc-move') || c === 'pk-cheer' || c === 'pk-soft'));
   const still = rel();
   const d = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
   return {
@@ -151,7 +181,9 @@ const moveEnd = (page, sel, swingSel = null) => page.evaluate(async (s, cls, swi
     diff: layers.length ? +Math.max(...moving.map((m, i) => d(m, still[i]))).toFixed(3) : null,
   };
 }, sel, MOVE_CLS, swingSel);
-const moveBrief = (m) => (m.found ? `${m.kind}；${m.cls.split(' ').filter((c) => c.startsWith('mc-move-')).join('') || '沒有 mc-move'}；動畫 ${m.n} 段、跑著的 ${m.running}；位置變了 ${m.moved}` : '沒找到');
+const moveBrief = (m) => (m.found ? `${m.kind || (m.peek ? `探頭圖 ${m.peek}` : '?')}；${m.cls.split(' ').filter((c) => c.startsWith('mc-move-') || c.startsWith('pk-')).join(' ') || '沒有 mc-move／pk-cheer'}；動畫 ${m.n} 段、量的當下跑著的 ${m.running}；位置變了 ${m.moved}` : '沒找到');
+// 「量的時候瀏覽器有畫新的格」那條的數字（通過時也印：§5.20）
+const frameBrief = (k, m) => `${k} ${m.found ? `${m.frameOk ? '有' : '沒有'}（畫了 ${m.frames} 格、時間軸走了 ${m.tlAdv}ms、等了 ${m.waited}ms）` : '沒量到'}`;
 const endBrief = (e) => (e.found ? `結束了 ${e.done}；${e.layers} 層、相對於整張圖的矩陣差 ${e.diff}；透明度 ${(e.opacities || []).join('、') || '無'}` : '沒找到');
 
 // M7：這一輪的主題下，白邊／陰影／動作線該是什麼樣子
@@ -349,13 +381,35 @@ async function round(theme) {
       const btns = [...document.querySelectorAll('.celebrate .btn')];
       (btns.find((b) => /繼續|太棒/.test(b.textContent)) || btns[0])?.click();
     });
-    const BADGE = '.celebrate .celebrate-mascot svg.gl-mascot';
+    // v1.95.0：小鳳從「太棒了」按鈕上緣探頭（探頭圖 done＝玄鳳打領結），標題上面不再放整隻
+    const BADGE = '.celebrate .btn.has-peek > svg.gl-peek';
     const gotBadge = await page.waitForFunction(() => document.querySelector('.celebrate h2')?.textContent === '解鎖新徽章！', { timeout: 8000 }).then(() => true, () => false);
     mv.badge = await moveNow(page, BADGE);
     mv.badge.title = await page.evaluate(() => document.querySelector('.celebrate h2')?.textContent || '');
     mv.badge.check = await page.evaluate(() => !!document.querySelector('.celebrate .celebrate-badge'));
+    mv.badge.whole = await page.evaluate(() => !!document.querySelector('.celebrate .celebrate-mascot'));
     mv.badge.got = gotBadge;
-    if (washi) mvEnd.badge = await moveEnd(page, BADGE, '.mc-body');
+    if (washi) mvEnd.badge = await moveEnd(page, BADGE);
+    // 位置（兩輪都量；和紙那輪在跳完之後量）：邊線（圖底往上 --pk-sink）對在按鈕框線外緣、圖的中線＝按鈕的中線、
+    // 圖頂不碰到上面那一行字、按鈕的字中間那一點點下去是按鈕（不是被圖蓋住）
+    mv.badge.pos = await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      if (!el) return { found: false };
+      const btn = el.parentElement, r = el.getBoundingClientRect(), b = btn.getBoundingClientRect();
+      const sink = parseFloat(el.style.getPropertyValue('--pk-sink'));
+      const prev = btn.previousElementSibling, pr = prev ? prev.getBoundingClientRect() : null;
+      const label = [...btn.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+      const rg = document.createRange();
+      const tn = [...btn.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+      let labelHit = null;
+      if (tn) { rg.selectNodeContents(tn); const lr = rg.getBoundingClientRect(); const hit = document.elementFromPoint(lr.left + lr.width / 2, lr.top + lr.height / 2); labelHit = hit === btn ? 'button' : hit && el.contains(hit) ? 'peek' : hit ? hit.tagName : null; }
+      return {
+        found: true, label, primary: btn.classList.contains('btn-primary'),
+        rimGap: Number.isFinite(sink) ? +(r.bottom - sink - b.top).toFixed(2) : null,
+        midGap: +((r.left + r.width / 2) - (b.left + b.width / 2)).toFixed(2),
+        clearAbove: pr ? +(r.top - pr.bottom).toFixed(1) : null, prevTag: prev ? prev.tagName : null, labelHit,
+      };
+    }, BADGE);
     await clearCelebrations(page);
 
     // ---- M3 載入中、M4 行程回顧 ----
@@ -433,18 +487,29 @@ async function round(theme) {
       yes(settled(ME.recap), `${tag} M9 白熊跳完停回原位：整隻的位置矩陣跟靜止圖一樣、完全看得到（${endBrief(ME.recap)}）`);
       yes(has(M.loading, 'look') && M.loading.kind === 'hawk' && M.loading.endless >= 1 && M.loading.running >= 1 && M.loading.moved,
         `${tag} M9 載入中的鷹拿望遠鏡左右慢慢看、一直重複：還在整理時有動、動畫是無限次（${moveBrief(M.loading)}；無限次的 ${M.loading.endless ?? '無'} 段）`);
-      yes(M.badge.got && M.badge.title === '解鎖新徽章！' && !M.badge.check && has(M.badge, 'bounce') && M.badge.kind === 'cockatiel' && M.badge.moved && ME.badge.swings === 2,
-        `${tag} M9 解鎖新徽章是小鳳、原地彈跳兩下：標題上面是玄鳳（不是打勾的圓）、起跳的延遲過了就在跳、往上到頂 2 次（「${M.badge.title || '沒跳出來'}」；打勾 ${M.badge.check}；${moveBrief(M.badge)}；到頂 ${ME.badge.swings} 次、最高 ${ME.badge.peak}）`);
-      yes(settled(ME.badge), `${tag} M9 小鳳彈完停回原位：整隻的位置矩陣跟靜止圖一樣、完全看得到（${endBrief(ME.badge)}）`);
+      const bc = M.badge.cls ? M.badge.cls.split(' ') : [];
+      yes(M.badge.got && M.badge.title === '解鎖新徽章！' && !M.badge.check && !M.badge.whole && M.badge.peek === 'done'
+        && bc.includes('pk-cheer') && !bc.includes('pk-soft') && M.badge.running >= 1 && M.badge.moved,
+        `${tag} M9 解鎖新徽章的小鳳從按鈕上緣跳上來：是玄鳳打領結那一張、標題上面沒有整隻也沒有打勾的圓、一出來就在跳（不是慢慢探）、兩次取位置不一樣（「${M.badge.title || '沒跳出來'}」；打勾 ${M.badge.check}；標題上面整隻 ${M.badge.whole}；${moveBrief(M.badge)}）`);
+      yes(settled(ME.badge), `${tag} M9 按鈕上的小鳳跳完停回原位：會動的每一層位置矩陣跟撤掉 pk-cheer 的靜止圖一樣、完全看得到（${endBrief(ME.badge)}）`);
+      const fr = ['empty', 'loading', 'recap', 'badge'];
+      yes(fr.every((k) => M[k].found && M[k].frameOk === true),
+        `${tag} M9 量的時候瀏覽器有畫新的格：四個時刻兩次取位置之間都畫了至少 2 格、時間軸走了至少 150ms（最多等 3 秒）；這條紅表示這一次沒量到，不是動畫壞了（${fr.map((k) => frameBrief(k, M[k])).join('；')}）`);
       const ONLY = ['transform', 'opacity'];
       const four = ['empty', 'loading', 'recap', 'badge'].map((k) => [k, M[k].props || []]);
       yes(four.every(([, p]) => p.length > 0 && p.every((x) => ONLY.includes(x))),
         `${tag} M9 吉祥物的動作只用 transform 和 opacity：四個時刻每一段動畫的 keyframes 只動這兩個屬性（${four.map(([k, p]) => `${k} ${p.join('、') || '無'}`).join('；')}）`);
     } else {
       const four = ['empty', 'loading', 'recap', 'badge'].map((k) => [k, M[k]]);
-      yes(four.every(([, m]) => m.found && m.n === 0 && !/\bmc-move\b/.test(m.cls)) && M.badge.title === '解鎖新徽章！' && M.badge.kind === 'cockatiel',
-        `${tag} M9 減少動態效果（設定頁的開關）：空白頁、載入中、回顧、解鎖新徽章都不動——沒有 mc-move、0 段動畫；解鎖新徽章照樣是玄鳳（${four.map(([k, m]) => `${k}：${moveBrief(m)}`).join('；')}）`);
+      yes(four.every(([, m]) => m.found && m.n === 0 && !/\b(mc-move|pk-cheer)\b/.test(m.cls)) && M.badge.title === '解鎖新徽章！' && M.badge.peek === 'done',
+        `${tag} M9 減少動態效果（設定頁的開關）：空白頁、載入中、回顧、解鎖新徽章都不動——沒有 mc-move／pk-cheer、0 段動畫；解鎖新徽章照樣是按鈕上的玄鳳（${four.map(([k, m]) => `${k}：${moveBrief(m)}`).join('；')}）`);
     }
+    // B1 的位置（v1.95.0；兩輪都量）
+    const P = (M.badge && M.badge.pos) || { found: false };
+    yes(P.found && P.label === '太棒了' && P.primary && P.rimGap != null && Math.abs(P.rimGap) <= 1 && Math.abs(P.midGap) <= 1,
+      `${tag} M9 解鎖新徽章的小鳳扣在「太棒了」上緣：邊線對在按鈕框線外緣（差 ≤ 1px）、圖的中線＝按鈕的中線（差 ≤ 1px）（按鈕「${P.label ?? '沒找到'}」主色 ${P.primary}；邊線差 ${P.rimGap}、中線差 ${P.midGap}）`);
+    yes(P.found && P.clearAbove != null && P.clearAbove >= 0 && P.labelHit === 'button',
+      `${tag} M9 按鈕上的小鳳不蓋字：圖頂在上面那一行字的下面、按鈕的字中間點下去是按鈕（離上面那一行 ${P.clearAbove}px（${P.prevTag ?? '無'}）；按鈕字中間是 ${P.labelHit}）`);
     await ctx.close();
   }
 }

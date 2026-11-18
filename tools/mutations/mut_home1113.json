@@ -44,9 +44,9 @@
     "why": "（事前寫 2026-11-13 19:58，跑之前）在主頁的主卡後面插一張 .task-prog「已完成 0 / 1」。紅：H3（主頁不放任務的數字）。不紅：其餘（M2 讀的是任務頁）。",
     "expect": ["H3 主頁不放任務的跳轉"],
     "file": "js/views/trip.js",
-    "find": "    sayEnd,\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
-    "replace": "    sayEnd,\n    h('div', { class: 'task-prog' }, '已完成 0 / 1'),\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
-    "note": "v1.86.0 主卡後面接的是「這趟的數字」，不再是今晚住；find 跟著改，插的位置仍是主卡正後面（意思不變、預期不變）。v1.87.0（2026-11-14 事前改）主卡後面多一格 sayEnd（旅程結束那一句，只有結束後才有），find 改成 sayEnd 那一行＋endNums；旅程中那幾趟 sayEnd 是 null，插的位置照樣是主卡正後面，預期不變",
+    "find": "    sayEnd && sayEnd.parentNode !== main ? sayEnd : null,   // 掛在卡片上的那一句（onCard）已經在卡片裡，不再放一次\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
+    "replace": "    sayEnd && sayEnd.parentNode !== main ? sayEnd : null,   // 掛在卡片上的那一句（onCard）已經在卡片裡，不再放一次\n    h('div', { class: 'task-prog' }, '已完成 0 / 1'),\n    ended && spots.length ? endNums(tripId, t, spots) : null,",
+    "note": "v1.86.0 主卡後面接的是「這趟的數字」，不再是今晚住；find 跟著改，插的位置仍是主卡正後面（意思不變、預期不變）。v1.87.0（2026-11-14 事前改）主卡後面多一格 sayEnd（旅程結束那一句，只有結束後才有），find 改成 sayEnd 那一行＋endNums；旅程中那幾趟 sayEnd 是 null，插的位置照樣是主卡正後面，預期不變。v1.95.0（2026-11-18 17:20 事前改，mutlint 報 find 死掉）sayEnd 那一格改成「掛在卡上時不再放一次」，find 跟著換成那一行＋endNums；插的位置仍是主卡正後面，預期不變",
     "cmd": "node scripts/hometest.mjs"
   },
   {

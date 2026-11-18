@@ -138,11 +138,20 @@ export async function showNewBadges(tripId, memberId) {
     const fresh = await newlyEarned(tripId, memberId);
     const member = store.getRaw(memberId);
     for (const b of fresh) {
+      // v1.95.0（吉祥物融入介面第一版，Yolin 2026-11-18 同意）：小鳳不再站在標題上彈跳，改從「太棒了」按鈕上緣探頭、
+      // 跳上來揮翅膀（跟完成任務那一刻同一張、同一個動作；減少動態效果時 cheer 不動）。
+      // 圖載不到：照舊在標題上面放整隻小鳳（不動），不擋住慶祝。
+      // 0.4＝顯示縮放：比照片上那張（0.6）小——按鈕只有 240 寬，牠露出約 69px。
+      let btnPeek = null;
+      try {
+        const m = await import('./peeks.js');
+        btnPeek = m.peek(m.DONE_PEEK, 0.4);
+        m.cheer(btnPeek);
+      } catch (e) { console.error(e); }
       await celebrate({
         title: '解鎖新徽章！',
         lines: [`${b.emoji}　${b.name}`, b.desc + (member ? `（${member.displayName}）` : '')],
-        // v1.85.0：打勾的圓換成小鳳、原地彈跳兩下（那張表的「解鎖新徽章」；v1.84.0 以前這裡是打勾，等於新的出場處）
-        withMascot: true, move: true,
+        withMascot: true, btnPeek,
         actions: [{ label: '太棒了', value: 'ok', primary: true }],
       });
     }

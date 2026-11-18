@@ -1,5 +1,5 @@
 import * as store from '../store.js';
-import { h, avatar, toast, chooseFrom } from '../ui.js';
+import { h, avatar, toast, chooseFrom, mountPeek } from '../ui.js';
 import { navigate, refreshPage } from '../router.js';
 import { hashHue } from '../ids.js';
 import { subPhoto } from '../photoimg.js';
@@ -157,10 +157,15 @@ export default async function people(tripId, { drawPage, setTop }) {
   }
 
   if (!allSubs.length) {
-    page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'),
-      // 按鈕文字說了目的地就要真的去那裡：back() 是「回上一頁」，從分帳分頁切過來時
-      // 會退回分帳（使用者實機回報的正是這個）。標了地名的按鈕一律用 navigate。
-      h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單')));
+    // 按鈕文字說了目的地就要真的去那裡：back() 是「回上一頁」，從分帳分頁切過來時
+    // 會退回分帳（使用者實機回報的正是這個）。標了地名的按鈕一律用 navigate。
+    const go = h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單');
+    // v1.95.0（吉祥物融入介面第一版）：鬍鬍拿相機從這顆按鈕上緣探頭（點牠＝點按鈕）。
+    // 不動：路由沒把「真的導覽進來」（fresh）傳給這一頁（js/app.js），分不出導覽與重畫；改 app.js 會讓測試放大成全套，
+    // 跟底部分頁那一案（也要改 app.js）一起做。圖載不到：按鈕照舊、沒有吉祥物。
+    const pk = await import('../peeks.js').catch(() => null);
+    if (pk) mountPeek(go, pk.peek('cam', 0.4));
+    page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'), go));
   } else if (!subs.length) {
     page.append(h('div', { class: 'empty' },
       h('p', {}, '這個條件下沒有照片'),

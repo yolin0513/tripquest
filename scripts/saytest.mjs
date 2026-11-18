@@ -7,13 +7,13 @@
 //
 // 驗什麼（每一種時機都驗「該講時講」與「不該講時不講」）：
 //   S0  純函式的邊界（中午 12 點、別天、下雨／下雪、出發那天）——只是補充，使用者的路在下面
-//   出發當天早上（時區撥到當地 9 點）：主頁「今天是第 1 天」下面雪納瑞講一句；今天也會下雨，但一次只講一句（出發優先）；
+//   出發當天早上（時區撥到當地 9 點）：主頁「今天是第 1 天」下面雪納瑞講一句（v1.95.0 起拿相機從對話框上緣探頭，S1b）；今天也會下雨，但一次只講一句（出發優先）；
 //     那一句跟著版面排、不疊在別的區塊上；✕ 至少 44×44；出場只動 opacity／transform；
 //     按 ✕ → 這趟不再講出發那一句、換天氣那一句（今天可能會下雨）；下雨那一句關掉 → 同一天不再講；
 //     出發日改成明天、明天會下雨 → 照樣講「出發那天可能會下雨」（天氣那兩句照哪一天記）
 //   出發當天下午（撥到 15 點）：不講出發那一句；沒下雨下雪也不講天氣那一句（主頁一句都沒有）
 //   還沒出發、出發那天會下雪：山雀講「出發那天可能會下雪」
-//   旅程結束：「旅程結束了」那張卡下面白熊講一句；關掉之後這趟不再講
+//   旅程結束：v1.95.0 起由「旅程結束了」卡上探頭的小鳳講——對話框在卡片上緣上面、小鳳左邊、尾巴朝右、✕ 在左（S11、S11b）；關掉之後這趟不再講
 //   完成任務：慶祝畫面照片上探頭的那一隻旁邊講一句（390／360／320 寬都在畫面裡、不疊到標題、說明、照片、吉祥物）；
 //     全部拍完講另一句；夜市那一站、最後一個任務（S18）：探頭的是夜市那一張——五張裡邊線以上最矮、照片上面原本留的空間最少，
 //     全部拍完那一句排成三行、上面那一行又最寬，最可能碰到字（龍山寺那張是預設圖、留得最多，原本只驗它，
@@ -167,7 +167,22 @@ const says = (page) => page.evaluate(() => {
     const pk = tx ? tx.querySelector(':scope > svg.gl-peek') : null;
     const pr = pk ? pk.getBoundingClientRect() : null;
     const edgeGap = pk ? Math.round((pr.bottom - parseFloat(pk.style.getPropertyValue('--pk-sink')) - tx.getBoundingClientRect().top) * 100) / 100 : null;
+    // v1.95.0 結束那一句掛在「旅程結束了」卡上（js/says.js 的 onCard）：卡上探頭的小鳳講。量：在不在卡片裡、整列底離卡片上緣幾 px、
+    // 整列右邊離小鳳左邊幾 px（不疊到牠）、尾巴伸出右邊（::before 的 right 是負的；left／right 的計算值是實際用到的 px）、✕ 在對話框左邊
+    const card = el.parentElement && el.parentElement.classList.contains('th-end') ? el.parentElement : null;
+    const cpk = card ? card.querySelector(':scope > svg.gl-peek') : null;
+    const cr = card ? card.getBoundingClientRect() : null, cpr = cpk ? cpk.getBoundingClientRect() : null;
+    const tb = tx ? getComputedStyle(tx, '::before') : null, txr = tx ? tx.getBoundingClientRect() : null;
+    // 整列的頂在頁面內容區裡（卡片上面留的高度夠：js/says.js 的 roomOnCard 量了設；卡片是主頁第一塊，上面沒有別的區塊可以「疊到」，所以另外量這個）
+    const pgTop = pg.getBoundingClientRect().top + parseFloat(getComputedStyle(pg).paddingTop);
+    const onCard = card ? {
+      topRoom: Math.round((r.top - pgTop) * 10) / 10,
+      pk: cpk ? cpk.dataset.peek : null, above: Math.round((cr.top - r.bottom) * 10) / 10,
+      clearPk: cpr ? Math.round((cpr.left - r.right) * 10) / 10 : null,
+      tailRight: !!tb && tb.content !== 'none' && parseFloat(tb.right) < 0, xFirst: !!(xr && txr) && xr.right <= txr.left + 0.5,
+    } : null;
     return {
+      onCard,
       peek: pk ? pk.dataset.peek : null, peekHidden: !!pk && pk.getAttribute('aria-hidden') === 'true', peekW: pr ? Math.round(pr.width) : 0, edgeGap,
       peekOver: pk ? others.filter((o) => hit(pr, o.getBoundingClientRect())).map((o) => o.className || o.tagName) : [],
       general: !!el.querySelector('.say-who svg[data-mascot]'), tail: !!tx && getComputedStyle(tx, '::before').content !== 'none',
@@ -294,8 +309,12 @@ try {
     const dep = one(S, 'depart');
     const wxKind = await page.evaluate(() => document.querySelector('.trip-home .wx-strip-tip')?.getAttribute('data-wx') || null);
     const day = await page.evaluate(() => document.querySelector('.trip-home .th-day-n')?.textContent || '');
-    yes(!!dep && dep.who === 'schnauzer' && dep.text === '今天出發！東西都帶齊了嗎？' && dep.prev === 'th-day' && dep.role === 'status' && dep.whoHidden && day === '今天是第 1 天',
-      `S1 出發當天早上：主頁「${day || '沒讀到'}」下面，雪納瑞講「今天出發！東西都帶齊了嗎？」（${dep ? `${dep.who}「${dep.text}」、上一個是 ${dep.prev}、role=${dep.role}、吉祥物 aria-hidden ${dep.whoHidden}` : brief(S)}）`);
+    yes(!!dep && dep.who === 'schnauzer' && dep.text === '今天出發！東西都帶齊了嗎？' && dep.prev === 'th-day' && dep.role === 'status' && day === '今天是第 1 天',
+      `S1 出發當天早上：主頁「${day || '沒讀到'}」下面，雪納瑞講「今天出發！東西都帶齊了嗎？」（${dep ? `${dep.who}「${dep.text}」、上一個是 ${dep.prev}、role=${dep.role}` : brief(S)}）`);
+    // v1.95.0（吉祥物融入介面第一版，規劃 H1）：講話的鬍鬍拿相機從對話框上緣探頭（跟下雨那一句同一種擺法），不再站在左邊
+    yes(!!dep && dep.peek === 'cam' && dep.peekHidden && dep.peekW > 0 && dep.edgeGap != null && Math.abs(dep.edgeGap) <= 1
+      && dep.peekOver.length === 0 && !dep.general && !dep.tail,
+      `S1b 出發那一句：拿相機的鬍鬍從對話框上緣探頭（${dep ? `探頭圖 ${dep.peek || '沒有'}、aria-hidden ${dep.peekHidden}、寬 ${dep.peekW}px、邊線差 ${dep.edgeGap}px、疊到 ${dep.peekOver.join('、') || '沒有'}、左邊那一隻 ${dep.general}、尾巴 ${dep.tail}` : '—'}）`);
     yes(!!S && S.length === 1 && !!dep && wxKind === 'rain',
       `S2 主頁一次最多一句：今天會下雨（天氣條提示 ${wxKind || '沒有'}），但只講出發那一句（主頁上：${brief(S)}）`);
     yes(!!dep && dep.over.length === 0 && dep.pos === 'static' && dep.h > 0,
@@ -378,10 +397,16 @@ try {
     const { ctx, page } = await open(tz, {});
     const { t } = await makeTrip(page, '上個月去的', dateIn(tz, -11), dateIn(tz, -9), ITEMS);
     const ok = await openTrip(page, '上個月去的', false);
+    // v1.95.0：那一句等小鳳探上來（.7 秒）才淡入、出場時往下 6px——量位置之前等它的出場動畫播完（量的是使用者最後看到的位置）
+    if (ok) await soft(page.waitForFunction(() => { const el = document.querySelector('.trip-home .say[data-say="end"]'); return !el || el.getAnimations().every((a) => a.playState === 'finished'); }, { timeout: 5000 }));
     const S = ok ? await says(page) : null;
     const end = one(S, 'end');
-    yes(!!end && end.who === 'bear' && end.text === '這趟旅程結束了，辛苦啦！' && end.prev === 'th-end' && S.length === 1 && end.over.length === 0,
-      `S11 旅程結束：「旅程結束了」那張卡下面白熊講「這趟旅程結束了，辛苦啦！」、不疊在別的區塊上（主頁上：${brief(S)}${end ? `；上一個 ${end.prev}；疊到 ${end.over.join('、') || '沒有'}` : ''}）`);
+    // v1.95.0（規劃 H2）：不再是卡片下面的白熊——由「旅程結束了」卡上探頭的小鳳講，對話框在卡片上緣上面、小鳳的左邊
+    const oc = end && end.onCard;
+    yes(!!end && end.who === 'cockatiel' && end.text === '這趟旅程結束了，辛苦啦！' && S.length === 1 && !!oc && oc.pk === 'done' && !end.general,
+      `S11 旅程結束：「旅程結束了」那張卡上探頭的小鳳講「這趟旅程結束了，辛苦啦！」、沒有另外站一隻（主頁上：${brief(S)}${end ? `；在卡上 ${!!oc}、卡上探頭的 ${oc ? oc.pk : '—'}、左邊那一隻 ${end.general}` : ''}）`);
+    yes(!!oc && oc.above >= 0 && oc.above <= 8 && oc.topRoom >= 0 && oc.clearPk != null && oc.clearPk >= 0 && end.over.length === 0 && oc.tailRight && oc.xFirst && end.xw >= 44 && end.xh >= 44,
+      `S11b 結束那一句的位置：整列在卡片上緣上面（離 0～8px）、整列在頁面裡（卡片上面留夠高）、在小鳳左邊不疊到牠、不疊到別的區塊、尾巴朝右指向小鳳、✕ 在對話框左邊而且至少 44×44（${oc ? `離卡片上緣 ${oc.above}px、頂離頁面內容區上緣 ${oc.topRoom}px、離小鳳 ${oc.clearPk}px、疊到 ${end.over.join('、') || '沒有'}、尾巴朝右 ${oc.tailRight}、✕ 在左 ${oc.xFirst}、✕ ${end.xw}×${end.xh}` : '不在卡上'}）`);
     const closed = !!end && await closeSay(page, 'end');
     const ok2 = closed && await backToHome(page, false);
     const S2 = ok2 ? await says(page) : null;

@@ -189,5 +189,86 @@
     "find": "  if (ro) ro.observe(say);\n",
     "replace": "",
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H1：出發那一句的鬍鬍不從對話框上緣探頭",
+    "why": "（事前寫 2026-11-18 17:15，跑之前；v1.95.0 吉祥物融入介面第一版）js/views/trip.js 不給出發那一句探頭圖（departPeek 一直是 null）：照舊站在對話框左邊、對話框有尾巴。只紅「S1b 出發那一句」（探頭圖沒有、左邊那一隻 true、尾巴 true）；S1 不看是誰站著、照樣綠；S3／S4／S5 照樣綠（跟著版面排、✕、出場動畫都在）。",
+    "expect": ["S1b 出發那一句"],
+    "file": "js/views/trip.js",
+    "find": "  if (!sayEnd && todayDay === 1 && pk) departPeek = pk.peekFit('cam', WHO_PX);",
+    "replace": "  /* 突變：出發那一句不探頭 */",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：結束那一句不掛在卡上",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）js/views/trip.js 不傳 onCard：結束那一句照 v1.94.0 放在卡片下面、北北站在左邊講。紅「S11 旅程結束」（who 是 bear、不在卡上）與「S11b 結束那一句的位置」（不在卡上，量不到）；S12（關掉之後不再講）照樣綠；S16 減少動態效果照樣綠（照樣講、不動）。",
+    "expect": ["S11 旅程結束", "S11b 結束那一句的位置"],
+    "file": "js/views/trip.js",
+    "find": "sayRow(tripId, endLine(true), endPeek ? { animate: fresh, onCard: main } : { animate: fresh })",
+    "replace": "sayRow(tripId, endLine(true), { animate: fresh })",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡上那一句標成原本的白熊",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）js/says.js 的 dataset.who 不看 onCard、照舊寫 line.who（bear）：畫面一樣、但標的是不在畫面上的那一隻。只紅「S11 旅程結束」（who 不是 cockatiel）；位置那條照樣綠。",
+    "expect": ["S11 旅程結束"],
+    "file": "js/says.js",
+    "find": "dataset: { say: line.key, who: onCard ? CARD_WHO : line.who } }",
+    "replace": "dataset: { say: line.key, who: line.who } }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡上那一句還另外站一隻",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）js/says.js 只在有 peek 時才不放左邊那一隻（拿掉 onCard）：卡上那一句多一隻站著的北北。只紅「S11 旅程結束」（左邊那一隻 true）；✕ 照樣在最左邊（order -1）、整列照樣在卡片上緣上面、在頁面裡（roomOnCard 照多出來的高度重算），位置那條照樣綠。",
+    "expect": ["S11 旅程結束"],
+    "file": "js/says.js",
+    "find": "    peek || onCard ? null : h('span', { class: 'say-who', 'aria-hidden': 'true' }, mascot(line.who, WHO_PX)),",
+    "replace": "    peek ? null : h('span', { class: 'say-who', 'aria-hidden': 'true' }, mascot(line.who, WHO_PX)),",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡上那一句沒讓出小鳳的寬度",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）css 的 .th-end > .say-card 右邊從 var(--say-right) 改成 0：整列伸到卡片右緣、蓋到小鳳。只紅「S11b 結束那一句的位置」的「不疊到小鳳」那一支（離小鳳變負的）；離卡片上緣、在頁面裡、尾巴、✕ 照樣對。",
+    "expect": ["S11b 結束那一句的位置"],
+    "file": "css/style.css",
+    "find": ".th-end > .say-card { position: absolute; left: 0; right: var(--say-right, 80px); bottom: calc(100% + 4px); margin: 0; }",
+    "replace": ".th-end > .say-card { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); margin: 0; }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡上那一句往下陷進卡片",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）css 的 .th-end > .say-card 底從卡片上緣上面 4px 改成往下 20px：對話框疊進卡片。只紅「S11b 結束那一句的位置」的「離卡片上緣 0～8px」那一支（變負的）；在頁面裡（離頁面頂更遠了）、不疊到小鳳（左右沒變）、尾巴、✕ 照樣對；疊到別的區塊那一支不看卡片本身（卡片包著那一句）。",
+    "expect": ["S11b 結束那一句的位置"],
+    "file": "css/style.css",
+    "find": "right: var(--say-right, 80px); bottom: calc(100% + 4px); margin: 0; }",
+    "replace": "right: var(--say-right, 80px); bottom: calc(100% - 20px); margin: 0; }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡片上面沒照那一列的高度留空間",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）js/says.js 的 roomOnCard 不設卡片的上邊距：只剩 .th-end.has-peek 的「露出高度＋8」。390 寬時那一句排兩行（1rem＝18.88px、12 個字放不進一行），比小鳳露出來的高：整列頂超出頁面內容區。只紅「S11b 結束那一句的位置」的「整列在頁面裡」那一支；其餘幾支量的是相對卡片與小鳳，照樣對。若實跑沒紅：先查那一次是不是排成一行（量到的高度），不是去放寬斷言。",
+    "expect": ["S11b 結束那一句的位置"],
+    "file": "js/says.js",
+    "find": "    card.style.marginTop = `${Math.ceil(Math.max(rise + 8, el.offsetHeight + 12))}px`;",
+    "replace": "    /* 突變：卡片上面不留那一列的高度 */",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡上那一句的尾巴還在左邊",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）css 拿掉 .say-card 的尾巴改向：尾巴照 .say-text 的預設在左邊、指向沒有吉祥物的地方。只紅「S11b 結束那一句的位置」的「尾巴朝右」那一支；位置、✕ 照樣對。",
+    "expect": ["S11b 結束那一句的位置"],
+    "file": "css/style.css",
+    "find": ".say-card .say-text::before { left: auto; right: -8px; transform: rotate(-135deg); }",
+    "replace": "",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
+  },
+  {
+    "name": "H2：卡上那一句的 ✕ 還在右邊",
+    "why": "（事前寫 2026-11-18 17:15，跑之前）css 拿掉 .say-card .say-x 的 order: -1：✕ 照 DOM 順序排在對話框右邊、夾在對話框與小鳳中間。只紅「S11b 結束那一句的位置」的「✕ 在對話框左邊」那一支；整列的框沒變（離小鳳、離卡片上緣照樣對），尾巴照樣朝右。",
+    "expect": ["S11b 結束那一句的位置"],
+    "file": "css/style.css",
+    "find": ".say-card .say-x { order: -1; margin-bottom: 0; }",
+    "replace": ".say-card .say-x { margin-bottom: 0; }",
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   }
 ]

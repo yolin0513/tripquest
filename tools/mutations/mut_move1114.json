@@ -27,12 +27,66 @@
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "動作：解鎖新徽章的小鳳不彈跳",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）js/addphoto.js 的 showNewBadges 拿掉 move: true：標題上面照舊是玄鳳（withMascot 還在）、但不動。和紙那輪紅「小鳳、原地彈跳兩下」「小鳳彈完停回原位」與「只用 transform 和 opacity」（解鎖新徽章那一格母體空）；「是玄鳳不是打勾」的部分照樣成立，但同一條斷言還要求在跳，所以整條紅；深色那輪照樣綠。",
-    "expect": ["［和紙］ M9 解鎖新徽章是小鳳、原地彈跳兩下", "［和紙］ M9 小鳳彈完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "name": "動作：解鎖新徽章按鈕上的小鳳不跳",
+    "why": "（事前寫 2026-11-18 17:10，跑之前；v1.95.0 取代「解鎖新徽章的小鳳不彈跳」——move 那個參數已經拿掉）js/addphoto.js 的 showNewBadges 拿掉 cheer：小鳳照舊扣在「太棒了」上緣、但不動。和紙那輪紅「小鳳從按鈕上緣跳上來」（沒有 pk-cheer、0 段在跑）、「按鈕上的小鳳跳完停回原位」（沒有動畫可以等完，done 不成立）與「只用 transform 和 opacity」（解鎖新徽章那一格母體空）；「量的時候瀏覽器有畫新的格」照樣綠（照樣等畫格）；位置那兩條照樣綠；深色那輪本來就不動，照樣綠。",
+    "expect": ["［和紙］ M9 解鎖新徽章的小鳳從按鈕上緣跳上來", "［和紙］ M9 按鈕上的小鳳跳完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
     "file": "js/addphoto.js",
-    "find": "withMascot: true, move: true,",
-    "replace": "withMascot: true,",
+    "find": "m.cheer(btnPeek);",
+    "replace": "/* 突變：按鈕上的小鳳不跳 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "位置：解鎖新徽章時標題上面還留著整隻小鳳",
+    "why": "（事前寫 2026-11-18 17:10，跑之前）js/ui.js 的 celebrate 只在照片上有探頭時才不放整隻（拿掉 onBtn）：按鈕上的小鳳照樣在、照樣跳，標題上面多一隻站著的。只紅和紙那輪「小鳳從按鈕上緣跳上來」（標題上面整隻 true）；深色那輪的減少動態效果那條不看整隻、位置那兩條量的是按鈕上那張（上面那一行字仍是第二行說明），照樣綠。",
+    "expect": ["［和紙］ M9 解鎖新徽章的小鳳從按鈕上緣跳上來"],
+    "file": "js/ui.js",
+    "find": "onPhoto || onBtn ? null",
+    "replace": "onPhoto ? null",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "位置：按鈕上的小鳳沒補框線寬（邊線低 2px）",
+    "why": "（事前寫 2026-11-18 17:10，跑之前）css 的 .celebrate .btn > .gl-peek 拿掉補框線的 2px：邊線對在框線內側、比外緣低 2px。兩輪都紅「小鳳扣在「太棒了」上緣」（邊線差 2，門檻 1）；中線、不蓋字照樣綠；動畫那幾條不受影響。",
+    "expect": ["［和紙］ M9 解鎖新徽章的小鳳扣在「太棒了」上緣", "［深色］ M9 解鎖新徽章的小鳳扣在「太棒了」上緣"],
+    "file": "css/style.css",
+    "find": ".celebrate .btn > .gl-peek { left: 50%; transform: translateX(-50%); bottom: calc(100% - var(--pk-sink) + 2px); }",
+    "replace": ".celebrate .btn > .gl-peek { left: 50%; transform: translateX(-50%); bottom: calc(100% - var(--pk-sink)); }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "位置：按鈕上的小鳳沒置中",
+    "why": "（事前寫 2026-11-18 17:10，跑之前）css 的 .celebrate .btn > .gl-peek 拿掉 left: 50% 與 translateX(-50%)：小鳳貼在按鈕左邊。兩輪都紅「小鳳扣在「太棒了」上緣」的中線那一半（中線差約按鈕寬的一半）——跟上一條各打同一條斷言的一個分支（邊線／中線）；邊線照樣對、不蓋字照樣綠。",
+    "expect": ["［和紙］ M9 解鎖新徽章的小鳳扣在「太棒了」上緣", "［深色］ M9 解鎖新徽章的小鳳扣在「太棒了」上緣"],
+    "file": "css/style.css",
+    "find": ".celebrate .btn > .gl-peek { left: 50%; transform: translateX(-50%); bottom:",
+    "replace": ".celebrate .btn > .gl-peek { bottom:",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "位置：按鈕上面沒留小鳳露出來的高度",
+    "why": "（事前寫 2026-11-18 17:10，跑之前）css 的 .celebrate .btn.has-peek 上面只留 8px（跟一般按鈕一樣）：小鳳露出來約 69px，頭疊到上面那一行說明。兩輪都紅「按鈕上的小鳳不蓋字」（離上面那一行變負的）；邊線、中線照樣對（量的是相對按鈕），動畫照樣綠。",
+    "expect": ["［和紙］ M9 按鈕上的小鳳不蓋字", "［深色］ M9 按鈕上的小鳳不蓋字"],
+    "file": "css/style.css",
+    "find": ".celebrate .btn.has-peek { margin-top: calc(var(--pk-rise) + 14px); }",
+    "replace": ".celebrate .btn.has-peek { margin-top: 8px; }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：按鈕上的小鳳揮完翅膀停在歪 4 度",
+    "why": "（事前寫 2026-11-18 17:10，跑之前）pk-wave 最後一格從 rotate(0deg) 改成 rotate(4deg)：小鳳揮完翅膀停在歪的。只紅和紙那輪「按鈕上的小鳳跳完停回原位」——證明那條真的拿跳完的那一格跟撤掉 pk-cheer 的靜止圖比（moveEnd 撤動畫時沒撤 pk-cheer 的話，兩邊永遠一樣、這條不會紅）。白兔揮的是 pk-wave-r，不受影響；「從按鈕上緣跳上來」量的是一出來那兩格，照樣綠。peektest 若有同一個 find 的突變，那邊紅的是照片上的那一張。",
+    "expect": ["［和紙］ M9 按鈕上的小鳳跳完停回原位"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); }",
+    "replace": "@keyframes pk-wave { 0% { transform: rotate(0deg); } 100% { transform: rotate(4deg); }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "量測：兩次取位置之間永遠等不到時間軸走夠",
+    "why": "（事前寫 2026-11-18 17:10，跑之前；v1.95.0 新加的「量的時候瀏覽器有畫新的格」要證明會紅）scripts/mascottest.mjs 的 moveNow 把「時間軸走了至少 150ms」改成 99999ms：每一次都等滿 3 秒、frameOk false。只紅和紙那輪「量的時候瀏覽器有畫新的格」；位置在 3 秒後照樣不一樣（有動那幾條照樣綠，跑著的段數在量之前就數好了）；深色那輪沒有這一條。",
+    "expect": ["［和紙］ M9 量的時候瀏覽器有畫新的格"],
+    "file": "scripts/mascottest.mjs",
+    "find": "if (frames >= 2 && tl1 != null && now != null && now - tl1 >= 150) res(true); else requestAnimationFrame(tick);",
+    "replace": "if (frames >= 2 && tl1 != null && now != null && now - tl1 >= 99999) res(true); else requestAnimationFrame(tick);",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
@@ -54,30 +108,12 @@
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "動作：小鳳只彈一下",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-bounce 改成只往上一次（40% 到 −18、頭尾 0）：表上寫的是「原地彈跳兩下」。只紅「小鳳、原地彈跳兩下」（到頂次數 1）；最後一格照樣 0，停回原位不受影響。",
-    "expect": ["［和紙］ M9 解鎖新徽章是小鳳、原地彈跳兩下"],
-    "file": "css/style.css",
-    "find": "@keyframes mc-bounce { 0%, 44%, 82%, 100% { transform: translateY(0); } 22% { transform: translateY(-18px); } 64% { transform: translateY(-9px); } }",
-    "replace": "@keyframes mc-bounce { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-18px); } }",
-    "cmd": "node scripts/mascottest.mjs"
-  },
-  {
-    "name": "動作：小鳳彈完停在半空",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-bounce 最後一格從 translateY(0) 改成 translateY(-4px)：彈完停在比靜止圖高 4 個單位。只紅「小鳳彈完停回原位」。選 −4 不選 −9：數「到頂幾次」的門檻是最高點的 35%（約 6.3），−4 不會被多數成第三下，「彈跳兩下」那條才不會一起紅。",
-    "expect": ["［和紙］ M9 小鳳彈完停回原位"],
-    "file": "css/style.css",
-    "find": "@keyframes mc-bounce { 0%, 44%, 82%, 100% { transform: translateY(0); }",
-    "replace": "@keyframes mc-bounce { 0%, 44%, 82% { transform: translateY(0); } 100% { transform: translateY(-4px); }",
-    "cmd": "node scripts/mascottest.mjs"
-  },
-  {
-    "name": "動作：小鳳彈跳多動一個 filter",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-bounce 兩個最高點多一個 filter: blur：違反「只動 transform 和 opacity」。只紅「吉祥物的動作只用 transform 和 opacity」；頭尾沒有 filter，停回原位、彈兩下都不受影響。",
+    "name": "動作：按鈕上的小鳳跳上來多動一個 filter",
+    "why": "（事前寫 2026-11-18 17:10，跑之前；v1.95.0 取代「小鳳彈跳多動一個 filter」——mc-bounce 已經拿掉）pk-hop 中間那一格多一個 filter: blur：違反「只動 transform 和 opacity」。只紅和紙那輪「吉祥物的動作只用 transform 和 opacity」（解鎖新徽章那一格多了 filter）；頭尾沒有 filter，停回原位、跳上來照樣綠。peektest 的照片那一張用同一段 keyframes，那邊另有自己的守法。",
     "expect": ["［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
     "file": "css/style.css",
-    "find": "22% { transform: translateY(-18px); } 64% { transform: translateY(-9px); } }",
-    "replace": "22% { transform: translateY(-18px); filter: blur(1px); } 64% { transform: translateY(-9px); filter: blur(1px); } }",
+    "find": "@keyframes pk-hop { 0% { transform: translateY(var(--pk-from, 180px)); } 68% { transform: translateY(-6px); }",
+    "replace": "@keyframes pk-hop { 0% { transform: translateY(var(--pk-from, 180px)); } 68% { transform: translateY(-6px); filter: blur(1px); }",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
