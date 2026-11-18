@@ -104,9 +104,14 @@ for (const [code, label] of [['B1', B1_LABEL], ...PAGE_CHECKS]) LBL[`P4-${code}`
 
 let pass = 0;
 const said = new Set();
+// 不採信模式（2026-11-18，「9 條洞」的修法甲，themetrusttest 同一個寫法）：對照組沒過之後設起來，後面每一項照跑、
+//   一律印成「✗ 不採信・…」、不算通過、結束碼維持 4。原本是對照組沒過就丟例外、P0 起整份不跑——項數少了，
+//   突變執行器（要求項數＝原樣的母體）會判成「沒跑完」。現在項數照舊、執行器規則不動。
+let distrust = false;
 const say = (code, cond, detail = '', extra = '') => {
   said.add(code);
   const m = LBL[code] + (detail ? `（${detail}）` : '');
+  if (distrust) { console.log(`✗ 不採信・${m}（對照組沒過，這一項不判定；檢查器說${cond ? '過' : '不過'}）`); return; }
   if (cond) { pass++; console.log('✓ ' + m); }
   else { console.log('✗ ' + m + (extra ? '\n   ' + String(extra).slice(0, 900) : '')); if (process.exitCode !== 4) process.exitCode = 1; }
 };
@@ -623,9 +628,9 @@ try {
   }), { name: 'ctl.txt', size: 3, type: 'text/plain' });
   net.outside.length = 0; net.writes.length = 0;
   if (!ctlOk) {
-    console.log('✗ 對照組沒過——檢查器壞了，不採信下面的結果');
+    console.log('✗ 對照組沒過——檢查器壞了，下面每一項照跑、一律印成「不採信」（項數照舊）');
     process.exitCode = 4;
-    throw new Error('對照組沒過');
+    distrust = true;
   }
 
   // ================= P0 造資料 =================

@@ -49,7 +49,12 @@ const { HEADER_ART } = await import('../js/itinposter/layout.js');
 await theme.loadThemes();
 
 let pass = 0;
+// 不採信模式（2026-11-18，「9 條洞」的修法甲，themetrusttest 同一個寫法）：對照組沒過之後設起來，後面每一項照跑、
+//   一律印成「✗ 不採信・…」、不算通過、結束碼維持 4。原本是對照組沒過就不跑一、三段（12 項）——項數少了，
+//   突變執行器（要求項數＝原樣的母體）會判成「沒跑完」。現在項數照舊、執行器規則不動。
+let distrust = false;
 const yes = (c, m, extra = '') => {
+  if (distrust) { console.log(`✗ 不採信・${m}（對照組沒過，這一項不判定；檢查器說${c ? '過' : '不過'}）`); return; }
   if (c) { pass++; console.log('✓ ' + m); }
   else { console.log('✗ ' + m + (extra ? '\n   ' + String(extra).slice(0, 1200) : '')); if (process.exitCode !== 4) process.exitCode = 1; }
 };
@@ -639,9 +644,11 @@ ctlOk = emoCtl('一行對到兩條登記', { 'js/i.js': 'const a = b.emoji + c.e
 fs.rmSync(CTL, { recursive: true, force: true });
 
 if (!ctlOk) {
-  console.log('✗ 對照組沒過——檢查器壞了，不採信下面一、三段的結果');
+  console.log('✗ 對照組沒過——檢查器壞了，下面一、三段每一項照跑、一律印成「不採信」（項數照舊）');
   process.exitCode = 4;
-} else {
+  distrust = true;
+}
+{
   const r = checkAssets({ dir: realDir, iconMap: realMap, posterArt: HEADER_ART, shell: realShell, tracked: realTracked, ignored: (rel) => gitIgnored(`${ART_DIR}/${rel}`) });
   const nKind = (k) => r.items.filter((it) => it.kind === k).length;
   console.log(`說明：${ART_DIR} 底下 ${r.files.length} 張圖、登記 ${r.items.length} 筆（place-type ${nKind('place-type')}、poster-header ${nKind('poster-header')}）、組 A 合計 ${r.total} 位元組、海報頁首 ${r.artBytes} 位元組；程式的表 ${Object.keys(realMap).length} 類、海報頁首 ${HEADER_ART.src}（${HEADER_ART.w}×${HEADER_ART.h}）；SHELL_ASSETS ${realShell.length} 項（其中 ${ART_DIR} 底下 ${realShell.filter((u) => u.startsWith(`./${ART_DIR}/`)).length} 項）；git 追蹤 ${ART_DIR} 底下 ${realTracked.size} 個檔`);

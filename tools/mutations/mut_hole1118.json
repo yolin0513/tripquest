@@ -1,0 +1,29 @@
+[
+  {
+    "name": "不採信模式：placeicontest 的 .emoji 登記不檢查類別（對照組沒過）",
+    "why": "（2026-11-18 11:0x 事前寫，跑之前）「9 條洞」修法甲在這支加了不採信模式，原本沒有任何突變走得到「對照組沒過」那條路（§5.20）。弄壞 emoScan 的類別檢查：對照組「類別不准（顯示存著的）」紅；真實登記的類別都對，所以真實結果不受影響、項數不變，但對照組沒過之後一、三段 12 項（A1～A8、C1～C4）一律印成「不採信」。預期紅：那條對照組＋不採信 12 行（expect 用「不採信・」整類開頭，另加首尾 A1、C4 確認兩端都印出來——整類開頭是 §5.22「一條預期對一個斷言」的刻意例外：這 12 行是同一個分支印的，逐條寫等於重抄一遍標籤）；結束碼 4、項數等於原樣的母體（不是沒跑完）。",
+    "expect": ["對照組（.emoji 登記：類別不准（顯示存著的））", "不採信・", "不採信・A1 登記檔", "不採信・C4 .emoji 登記"],
+    "file": "scripts/placeicontest.mjs",
+    "find": "    if (!EMO_KINDS.includes(r.kind)) problems.push(",
+    "replace": "    if (!EMO_KINDS.includes(r.kind) && r.kind === '不會有這一類') problems.push(",
+    "cmd": "node scripts/placeicontest.mjs"
+  },
+  {
+    "name": "不採信模式：itinposterlayouttest 的 import 稽核不報登記過期（對照組沒過）",
+    "why": "（2026-11-18 11:0x 事前寫，跑之前）原本對照組沒過就 process.exit()，沒有任何突變走得到那條路（§5.20）。弄壞 auditImports 的「登記過期」：對照組「登記過期」紅；真實的 import 登記沒有過期的，真實結果不受影響、項數不變，但對照組之後的 62 項（A0 起到 D3）一律印成「不採信」。預期紅：那條對照組＋不採信那一整類（整類開頭的理由同 placeicontest 那條），另加首尾 A0、D3；結束碼 4、項數等於原樣的母體。",
+    "expect": ["對照組（登記過期）", "不採信・", "不採信・A0 前置", "不採信・D3 畫的那支"],
+    "file": "scripts/itinposterlayouttest.mjs",
+    "find": "    for (const s of registry[rel]) if (!out.includes(s)) problems.push(`登記過期：${rel} → ${s}`);",
+    "replace": "    for (const s of registry[rel]) if (!out.includes(s) && rel === '不會有這一支') problems.push(`登記過期：${rel} → ${s}`);",
+    "cmd": "node scripts/itinposterlayouttest.mjs"
+  },
+  {
+    "name": "不採信模式：itinpostertest 的網路紀錄不記外站（對照組沒過）",
+    "why": "（2026-11-18 11:0x 事前寫，跑之前）原本對照組沒過就丟例外、P0 起整份不跑，沒有任何突變走得到那條路（§5.20）。拿掉記錄外站請求的那一行（請求照樣回 503，行為不變）：對照組「網路紀錄：外站與上傳都記得到」紅；真實的 P8b 照樣量到 0 個外站（不是真的沒有，是記不到——正是對照組要抓的），項數不變，但 P0 起每一項一律印成「不採信」。預期紅：那條對照組＋不採信那一整類（整類開頭的理由同 placeicontest 那條），另加首尾 P0、P9；結束碼 4、項數等於原樣的母體。",
+    "expect": ["對照組（網路紀錄：外站與上傳都記得到）", "不採信・", "不採信・P0 前置", "不採信・P9 整段頁面"],
+    "file": "scripts/itinpostertest.mjs",
+    "find": "    net.outside.push(u);\n",
+    "replace": "    // 突變：外站請求不記\n",
+    "cmd": "node scripts/itinpostertest.mjs"
+  }
+]

@@ -104,16 +104,23 @@ const coverTxt = (what, c) => `${what}${c.before === null ? '原本不在畫面�
 // 選項那一格量的是「舊點法」下的位置：舊點法點按鈕不捲（按鈕沒被蓋住時），選項就在按鈕原本的位置下面打開；
 // 新點法先把按鈕捲到中間，選項跟著到中間，直接量就量不到舊點法會點到什麼（18:14 第一次單跑就是這樣：兩格都「沒被蓋住」）。
 // 所以點完按鈕、捲回點之前的位置再量那一格，量完才捲到中間點。捲動只是平移，選項開著的版面不變。
+// 點不到（puppeteer 丟「Node is either not clickable…」）時不讓整支停：回 ok false、寫明點不到哪一個（2026-11-18）。
+//   原本例外往外丟到最外層，第八節後面的項全部不印——C 場 `js/legs.js` 兩條突變（選項名字改掉、八之二／八之五找不到那一格、
+//   選項面板一直開著、下一小節點「怎麼去」按鈕點不到）因此只跑 37／39、38／39 項，執行器判「沒跑完」。現在那一小節照常印自己的 ✗。
 const pickLeg = async (spotId, label) => {
   const btn = await page.$(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
   if (!btn) return { ok: false, cover: '找不到「怎麼去」按鈕' };
   const y0 = await page.evaluate(() => window.scrollY);
-  const c1 = await tapCentered(btn);
+  let c1;
+  try { c1 = await tapCentered(btn); } catch (e) { return { ok: false, cover: `點不到「怎麼去」按鈕（${e && e.message}）` }; }
   const opt = await page.evaluateHandle((dc, id, label) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
     .find((b) => b.querySelector('.tl-leg-name')?.textContent === label) || null, DC, spotId, label);
   const ok = !!(await opt.evaluate((b) => !!b));
   if (ok) await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), y0);
-  const c2 = ok ? await tapCentered(opt.asElement()) : null;
+  let c2 = null;
+  if (ok) {
+    try { c2 = await tapCentered(opt.asElement()); } catch (e) { return { ok: false, cover: `${coverTxt('按鈕', c1)}、點不到「${label}」那一格（${e && e.message}）` }; }
+  }
   return { ok, cover: `${coverTxt('按鈕', c1)}、${c2 ? coverTxt(`「${label}」那一格在點按鈕之前的捲動位置（＝舊點法會點的地方）`, c2) : `找不到「${label}」那一格`}` };
 };
 try {

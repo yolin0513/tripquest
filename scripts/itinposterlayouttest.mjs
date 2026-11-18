@@ -68,7 +68,12 @@ const TH = await theme.loadThemes();
 const LK = await gen.loadPlaceLookup().catch(() => null);
 
 let pass = 0;
+// 不採信模式（2026-11-18，「9 條洞」的修法甲，themetrusttest 同一個寫法）：對照組沒過之後設起來，後面每一項照跑、
+//   一律印成「✗ 不採信・…」、不算通過、結束碼維持 4。原本是對照組沒過就 process.exit()、後面整份不跑——項數少了，
+//   突變執行器（要求項數＝原樣的母體）會判成「沒跑完」。現在項數照舊、執行器規則不動。
+let distrust = false;
 const yes = (c, m, extra = '') => {
+  if (distrust) { console.log(`✗ 不採信・${m}（對照組沒過，這一項不判定；檢查器說${c ? '過' : '不過'}）`); return; }
   if (c) { pass++; console.log('✓ ' + m); }
   else { console.log('✗ ' + m + (extra ? '\n   ' + String(extra).slice(0, 900) : '')); if (process.exitCode !== 4) process.exitCode = 1; }
 };
@@ -163,10 +168,9 @@ ctl('畫的那支碰到類別', lineHits(CTL, [A_], DRAW_RE), [`${A_}:1 theme`])
 fs.rmSync(CTL, { recursive: true, force: true });
 
 if (!ctlOk) {
-  console.log('✗ 對照組沒過——檢查器壞了，不採信下面的結果');
+  console.log('✗ 對照組沒過——檢查器壞了，下面每一項照跑、一律印成「不採信」（項數照舊）');
   process.exitCode = 4;
-  console.log(`\n${pass} 項通過，對照組沒過`);
-  process.exit();
+  distrust = true;
 }
 
 // ================= A 模型 =================
@@ -506,4 +510,4 @@ yes(netBad.length === 0, `D2 不直接打網路：這 ${Object.keys(IMPORTS).len
 const drawBad = lineHits(ROOT, ['js/itinposter/draw.js'], DRAW_RE);
 yes(drawBad.length === 0, 'D3 畫的那支不碰模型與類別（只照 ops 畫）', drawBad.join('；'));
 
-console.log(`\n${pass} 項通過` + (process.exitCode === 1 ? '，有失敗' : ''));
+console.log(`\n${pass} 項通過` + (process.exitCode === 1 ? '，有失敗' : process.exitCode === 4 ? '，對照組沒過' : ''));
