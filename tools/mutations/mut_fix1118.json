@@ -143,5 +143,23 @@
     "find": "        btnPeek = m.pose('star', 'c');",
     "replace": "        btnPeek = m.peek(m.DONE_PEEK, 0.4);   // 突變：換回打領結",
     "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "主頁天氣條：讓位那一行改回 page（新姿勢第一版的寫法）",
+    "why": "（事後寫 2026-11-18 21:4x：預期照 A 場第一次跑的實測紅，那一次跑的就是這個寫法）js/views/trip.js 的 fillWeather 裡沒有 page 這個名字，丟出的錯被「天氣是加分項」的 catch 吞掉，下雨／下雪那天整條天氣條不見。saytest 紅「關掉出發那一句之後輪到天氣那一句」到「下雪那一句探頭」那七條（主頁上找不到天氣條與那一句）；其餘照樣綠（出發那一句、下午、旅程結束、完成任務都不經過天氣條那一句）。",
+    "expect": ["S6 ", "S6b ", "S6c ", "S7 ", "S8 ", "S10 ", "S10b "],
+    "file": "js/views/trip.js",
+    "find": "    if (line && pkEl) for (const x of container.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);",
+    "replace": "    if (line && pkEl) for (const x of page.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);",
+    "cmd": "node scripts/saytest.mjs"
+  },
+  {
+    "name": "探頭圖：前景下層那一份不換前綴（新姿勢第一版的寫法）",
+    "why": "（事後寫 2026-11-18 21:4x：預期照 A 場第一次跑的實測紅）js/peeks.js 的 peek() 下層前景照上層同一個前綴：前景裡有裁切框的（山雀坐姿、鬍鬍揮手）同一張圖裡 id 出現兩次。mascottest 紅兩輪的「M8 設定頁」（山雀坐姿 pk5-i1 重複）；空白頁白兔、回顧白熊的前景沒有裁切框，照樣綠。",
+    "expect": ["［和紙］ M8 設定頁", "［深色］ M8 設定頁"],
+    "file": "js/peeks.js",
+    "find": "${pre(p.front, `${id}d`)}",
+    "replace": "${pre(p.front)}",
+    "cmd": "node scripts/mascottest.mjs"
   }
 ]

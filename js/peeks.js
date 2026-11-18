@@ -87,7 +87,9 @@ export function peek(kind, k = 0.6) {
   el.style.setProperty('--pk-sink', `${((y + h - e) * k).toFixed(1)}px`);
   el.style.setProperty('--pk-rise', `${((e - y) * k).toFixed(1)}px`);   // 邊線以上有多高（卡片上面要留這麼多空間，見 ui.js 的 mountPeek）
   // 圖裡的 id（裁切框）是 i0、i1…，每一張加上自己的流水號：同一頁好幾張時引用才不會指到別張
-  const pre = (s) => s.replace(/(\bid="|url\(#)(i\d+)(?=[")])/g, `$1${id}-$2`);
+  // 前景（front）上下兩層各畫一次：下層那一份換另一個前綴（pkNd-），前景裡有裁切框的（新姿勢的鬍鬍揮手、山雀坐姿）id 才不會在同一張圖裡出現兩次
+  // （2026-11-18 A 場 peektest P8、mascottest M8 設定頁抓到 pk5-i1 重複）。
+  const pre = (s, tag = id) => s.replace(/(\bid="|url\(#)(i\d+)(?=[")])/g, `$1${tag}-$2`);
   const flt = ` filter="url(#${id}-rim)"`;
   el.innerHTML = rimDefs(`${id}-rim`, p.vb)
     + `<defs><clipPath id="${id}-up"><rect x="${x - 20}" y="${y - 20}" width="${w + 40}" height="${e - y + 20}"/></clipPath>`
@@ -96,7 +98,7 @@ export function peek(kind, k = 0.6) {
     + `<clipPath id="${id}-dn"><rect x="${x - 20}" y="${e - 1}" width="${w + 40}" height="${y + h - e + 21}"/></clipPath></defs>`
     + `<g clip-path="url(#${id}-up)"><g class="mc-fig"${flt}>${pre(p.fig)}${pre(p.front)}</g>`
     + (p.extra ? `<g class="mc-extra">${pre(p.extra)}</g>` : '') + '</g>'
-    + (p.front ? `<g clip-path="url(#${id}-dn)"><g class="mc-fig"${flt}>${pre(p.front)}</g></g>` : '');
+    + (p.front ? `<g clip-path="url(#${id}-dn)"><g class="mc-fig"${flt}>${pre(p.front, `${id}d`)}</g></g>` : '');
   return el;
 }
 

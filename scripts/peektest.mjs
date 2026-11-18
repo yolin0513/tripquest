@@ -487,12 +487,17 @@ async function headCorners(page) {
     document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* 一直重複的動畫不能 finish：照跑 */ } });
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const b = el.getBoundingClientRect();
-    return { x: b.left, y: b.top, w: b.width, h: b.height, vb: el.getAttribute('viewBox').split(/\s+/).map(Number) };
+    return { x: b.left, y: b.top, w: b.width, h: b.height, vw: innerWidth, vh: innerHeight, vb: el.getAttribute('viewBox').split(/\s+/).map(Number) };
   }, SCOUT_SEL);
   if (!r) return null;
-  const buf = await page.screenshot({ clip: { x: r.x, y: r.y, width: r.w, height: r.h } });
+  // 截整個畫面、再照「畫面座標 × 畫素比」裁：page.screenshot({clip}) 的座標不是照捲動後的畫面算的
+  // （11-18 第一次跑 A 場，兩個主題、修好與對照組量到的四個點完全一樣——裁到別處；19:5x 拍截圖那一場也踩過同一個坑）
+  const shot = await page.screenshot();
   const sharp = (await import('sharp')).default;
-  const { data, info } = await sharp(buf).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const d = (await sharp(shot).metadata()).width / r.vw;
+  const box = { left: Math.round(r.x * d), top: Math.round(r.y * d), width: Math.round(r.w * d), height: Math.round(r.h * d) };
+  if (box.left < 0 || box.top < 0 || r.x + r.w > r.vw || r.y + r.h > r.vh) return { off: `圖不整張在畫面裡（${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.w)}×${Math.round(r.h)}，畫面 ${r.vw}×${r.vh}）` };
+  const { data, info } = await sharp(shot).extract(box).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const kx = info.width / r.vb[2], ky = info.height / r.vb[3];   // 1 畫布單位幾個截圖畫素
   const nine = (ax, ay) => {
     const cx = Math.round((ax - r.vb[0]) * kx), cy = Math.round((ay - r.vb[1]) * ky), out = [];
@@ -528,10 +533,10 @@ async function scoutHead(page, tag) {
   } catch (e) {
     console.log(`  ${tag} P9 例外：${String(e && e.message || e).split('\n')[0]}`);
   }
-  const say = (c) => (c ? `上角 ${c.L}／${c.R}、頭頂中間 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素` : '沒量到');
-  yes(!!now && now.scaleOk && now.mid && !now.corner,
+  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `上角 ${c.L}／${c.R}、頭頂中間 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素`);
+  yes(!!now && !now.off && now.scaleOk && now.mid && !now.corner,
     `${tag} P9 建立行程頁的阿灰望遠鏡：頭頂深灰帶照圓頭裁，頭的外接長方形兩個上角不是深灰帶（前置：頭頂中間是深灰帶）（到了建立行程頁 ${go}；${say(now)}）`);
-  yes(!!old && old.scaleOk && old.mid && old.corner,
+  yes(!!old && !old.off && old.scaleOk && old.mid && old.corner,
     `${tag} P9 對照組：同一頁頭頂用 11-18 以前的 clipPath 寫法，量得到方框（兩個上角是深灰帶）（${how || '換不回去'}；${say(old)}）`);
 }
 

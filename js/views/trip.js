@@ -955,7 +955,9 @@ async function fillWeather(slot, container, tripId, trip, { say = false, animate
     if (line && pkEl && animate) pk.cheer(pkEl, { soft: true });
     // 新姿勢的下一站卡／倒數卡那一張（tripHome 的 H3／H4）讓位：畫面上已經有這一句的探頭圖就拿掉（已上線的組合不動、新的讓位）。
     // 跟天氣條同一次放上去，版面只動一次。
-    if (line && pkEl) for (const x of page.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);
+    // container＝主頁那一頁（呼叫的一方傳 page）。11-18 新姿勢第一版這裡寫成 page（這個函式裡沒有這個名字），丟出的錯被下面的 catch 吞掉，
+    // 下雨／下雪那天整條天氣條都不見——A 場 peektest P1～P6、saytest S6～S10 抓到。
+    if (line && pkEl) for (const x of container.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);
     slot.replaceChildren(...[btn, line].filter(Boolean));
   } catch { /* 靜默：天氣是加分項 */ }
 }
