@@ -172,7 +172,7 @@ export default async function people(tripId, { drawPage, setTop }) {
     // 新姿勢（Yolin 2026-11-18 晚上）：換成鬍鬍探頭揮手（融入九宮格第 8 格），導覽進來時跳上來。
     // 第一版不動是因為路由沒把「真的導覽進來」（fresh）傳給這一頁；改成本頁自己分辨（見 people() 上面的 redrawSelf）：本頁叫的重畫不跳。
     const pk = await import('../peeks.js').catch(() => null);
-    if (pk) { const el = pk.pose('hello', 'r'); mountPose(go, el); if (!self) pk.cheer(el); }
+    if (pk) { const el = pk.pose('hello', 'c'); mountPose(go, el); if (!self) pk.cheer(el); }   // 空白區塊置中排、按鈕窄：圖也置中
     page.append(h('div', { class: 'empty' }, h('p', {}, '快去拍第一張！'), go));
   } else if (!subs.length) {
     page.append(h('div', { class: 'empty' },

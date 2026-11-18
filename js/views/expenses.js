@@ -56,7 +56,7 @@ export default async function expenses(tripId, { drawPage, setTop }) {
     // 新姿勢：棉棉從「去旅程設定加旅伴」上緣探頭揮手（規劃 S3）
     const go = h('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: () => navigate(`/trip/${tripId}/settings`) }, '去旅程設定加旅伴');
     // 掛上去的話上面留多少空間由 CSS（.empty .btn.has-peek）決定，行內的 margin-top 會蓋過它，拿掉
-    if (putPose(go, 'hi', 'r')) go.style.removeProperty('margin-top');
+    if (putPose(go, 'hi', 'c')) go.style.removeProperty('margin-top');   // 空白區塊置中排、按鈕不是整行寬：圖也置中（.empty .btn > .gl-peek 本來就置中）
     drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' },
       h('p', {}, '先在「旅程設定」加旅伴，才能分帳。'),
       go)));
@@ -72,7 +72,7 @@ export default async function expenses(tripId, { drawPage, setTop }) {
   if (!list.length) {
     // 新姿勢：💰 拿掉，棉棉抱著錢包從「＋ 記第一筆」上緣探頭（規劃 S1）；圖載不到才留 💰
     const first = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: () => openEdit(tripId, null) }, '＋ 記第一筆');
-    const el = putPose(first, 'purse', 'r');
+    const el = putPose(first, 'purse', 'c');   // 空白區塊置中排：圖也置中
     page.append(
       h('div', { class: 'empty' },
         el ? null : h('div', { class: 'empty-emoji' }, '💰'),

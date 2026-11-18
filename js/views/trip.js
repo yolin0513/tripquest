@@ -155,7 +155,7 @@ export default async function trip(tripId, { fresh = false, drawPage, setTop } =
     // 新姿勢（規劃 T3）：阿灰從這顆按鈕上緣探頭、指向它（跟主頁同一張），導覽進來時跳上來。這一格沒有進度那一行、
     // 也沒有任務列，不受「任務頁不准變高」的限制（那條管的是有任務時資訊被擠下去）。圖載不到：按鈕照舊。
     const pk = await import('../peeks.js').catch(() => null);
-    if (pk) { const el = pk.pose('point', 'l'); mountPose(go, el); if (fresh) pk.cheer(el); }
+    if (pk) { const el = pk.pose('point', 'c'); mountPose(go, el); if (fresh) pk.cheer(el); }   // 空白區塊置中排、按鈕窄：圖也置中
     container.append(h('div', { class: 'empty' }, h('p', {}, '這個旅程還沒有景點'), go));
   } else {
     const dayNums = [...byDay.keys()].sort((a, b) => a - b);
@@ -627,7 +627,7 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
   let noSpotPeek = null;
   if (!spots.length && pk && main) {
     const go = main.querySelector('.btn');
-    if (go) { noSpotPeek = pk.pose('point', 'l'); mountPose(go, noSpotPeek); if (fresh) pk.cheer(noSpotPeek); }
+    if (go) { noSpotPeek = pk.pose('point', 'c'); mountPose(go, noSpotPeek); if (fresh) pk.cheer(noSpotPeek); }   // 同任務頁：置中
   }
 
   // v1.87.0 吉祥物講一句（js/says.js；誰說、什麼時候講的表在 STATUS）。主頁一次最多一句，放在它講的那一塊旁邊：

@@ -37,7 +37,7 @@ export default async function join(query, { drawPage, setTop }) {
       // 吉祥物動起來像在笑他（不呼叫 cheer）。圖載不到：按鈕照舊。
       const home = h('button', { class: 'btn btn-soft', onclick: () => navigate('/') }, '回首頁');
       const pk = await import('../peeks.js').catch(() => null);
-      if (pk) mountPose(home, pk.pose('puzzle', 'r'));
+      if (pk) mountPose(home, pk.pose('puzzle', 'c'));   // 「回首頁」很窄、空白區塊置中排：圖也置中
       drawPage(h('div', { class: 'page' }, h('div', { class: 'empty' },
         h('p', {}, '這個邀請連結無法解析'),
         h('p', { class: 'form-hint' }, e.message),

@@ -215,7 +215,9 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
 /* 新姿勢（js/peeks.js 的 pose()、ui.js 的 mountPose；Yolin 2026-11-18 晚上「這版不行，嘗試用 GPT 生成的新姿勢圖」）：
    全部同一個縮放，掛在宿主的左／右／中（.pose-l／.pose-r／.pose-c），宿主上面留出牠露出來的高度。
    用 .has-peek.pose-host 兩個 class：宿主自己的 margin-top（.today-card、.countdown）寫在後面，一個 class 會被蓋掉。
-   宿主已經有更具體的留白規則的（.empty .btn.has-peek）照那一條。 */
+   宿主已經有更具體的留白規則的（.empty .btn.has-peek）照那一條。
+   左右：空白區塊（.empty .btn > .gl-peek）與慶祝畫面（.celebrate .btn > .gl-peek）後面有同權重的置中規則，會蓋過 .pose-l／.pose-r——
+   那些位置的按鈕窄、整塊置中排，程式也一律傳 'c'（兩邊說法一致，不靠先後順序）。 */
 .has-peek.pose-host { margin-top: calc(var(--pk-rise) + 8px); }
 .pose-host > .gl-peek.pose-l { left: 14px; right: auto; transform: none; }
 .pose-host > .gl-peek.pose-r { right: 14px; left: auto; transform: none; }
