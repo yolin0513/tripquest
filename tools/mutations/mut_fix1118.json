@@ -151,7 +151,7 @@
     "file": "js/views/trip.js",
     "find": "    if (line && pkEl) for (const x of container.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);",
     "replace": "    if (line && pkEl) for (const x of page.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);",
-    "cmd": "node scripts/saytest.mjs"
+    "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   },
   {
     "name": "探頭圖：前景下層那一份不換前綴（新姿勢第一版的寫法）",
