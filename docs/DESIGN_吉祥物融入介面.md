@@ -7,11 +7,13 @@
 Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示詞與點陣／向量評估）、動畫規矩、分版計畫、示意圖。
 **這份交 Dispatch 轉 Yolin 看過才實作。**
 
+**同日修訂**（交出前自己複查出來的）：H1 不是「幾乎不變」，出發那一句出現的那天會變高約 44px（不論晴雨）；「一個畫面一張」改成只管新加的，不拿掉已上線的組合；T2（按下拍照的反應）看不到，建議不做；T1 改成只有自己完成的才滑；第 8 節寫明測試支數的前提；提示詞逐字對過原文。示意圖與提示詞改用 04～06，01～03 作廢。
+
 ---
 
 ## 0. 結論
 
-**還沒有全做好。**
+**還沒有全做好：已經融入的 5 處，還站在那邊的 7 處。**
 
 - 已經融入的有 **5 處**：
   - 完成任務：照片上緣探頭；
@@ -25,8 +27,8 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 **建議分兩版做：**
 
 - **第一版只用現有的向量圖**，不必等新圖：
-  - 主頁出發那一句改成探頭；
-  - 任務頁：進度條前端放湯圓的圓形頭像；拍照圖示按下時有反應；
+  - 主頁出發那一句改成探頭（這一句會變高約 44px，推論）；
+  - 任務頁：進度條前端放湯圓的圓形頭像，完成任務回來時滑到新進度；
   - 行程｜回顧分段鈕；
   - 照片空白頁；
   - 解鎖徽章。
@@ -39,7 +41,7 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 **圖的建議**：GPT 圖只當參考、照著畫成向量，不直接把點陣圖放進 App。理由在第 6 節，主要兩條：
 
 - 探頭圖要拆上下兩層、手扣在卡片邊上、深色要有白邊、零件要能動，GPT 的點陣圖做不到。
-- 新增點陣圖要改 `sw.js` 的快取清單，每版的測試會從 58 支放大成全套 97 支（乾跑實測）。
+- 新增點陣圖要改 `sw.js` 的快取清單，每版的測試會從 58～59 支放大成全套 97 支（乾跑實測，前提見第 8 節）。
 
 ---
 
@@ -111,14 +113,12 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 5. **融入，不是插圖**（2026-11-13 Yolin）。每一個位置先回答「牠跟哪個元件結合」：從按鈕或卡片邊緣探頭、坐在卡上、拿著畫面上的東西。**找不到能結合的元件就不放**，不放一張插圖湊數。
 6. **六隻平等、次數差不多**（`js/glyphs.js` 的 `MASCOT_SPOT` 上面的註解）。
 
-**我另外建議的兩條規矩（第 9 節請 Yolin 定）：**
+**我另外建議的一條規矩（第 9 節第 2 題請 Yolin 定）：新加的探頭圖，只在畫面上沒有別張探頭圖時出現。**
 
-- **一個畫面同一時間最多一張探頭圖。** 主頁的優先順序：
-  1. 結束／完成卡；
-  2. 對話框那一句；
-  3. 倒數卡（出發前）；
-  4. 下一站卡（旅程中）。
-- **一個畫面同一時間最多一隻在動。**
+- **已經上線的組合不動。** 讀程式確認過：主頁的「任務全部完成了」卡（小鳳）跟下雨／下雪那一句（鬍鬍撐傘／湯圓雪板）現在**可以同時出現**，導覽進主頁時兩隻同時探上來、各自動（`js/views/trip.js:583-590` 與 `:639-642`、`:882-887`）。這條規矩不去拿掉它。
+  - H1（出發那一句改探頭）算同一個組合：出發那一句出現時天氣那一句不出現（`trip.js:642` 的 `say: !sayDepart && !sayEnd`），所以不會變三張。
+- **只管第二版新加的 H3（下一站卡）、H4（倒數卡）**：畫面上已經有完成卡或對話框的探頭圖時，H3、H4 不出現，卡片照現在的樣子。
+- **要不要連既有組合也收成一張**，是第 9 節第 2 題。收的話要再定：被擠掉的那一句是退回「站在左邊」，還是整句不出現。
 
 ---
 
@@ -140,24 +140,30 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 | H4 | 出發倒數卡：湯圓坐在卡片上緣，尾巴垂在卡片前面 | 導覽進主頁 | 探上來一次 | 新圖 |
 
 - 多佔高度：
-  - H1 幾乎不變：天氣那一句的探頭圖露出高度就是原本左邊那一隻的高度（`WHO_PX` 56），這一句照同一套做。
+  - **H1 這一句會變高約 44px（推論，從 CSS 算，沒有在畫面上量）。** 站在左邊時，那一行高＝max(左邊那一隻 56px, 對話框＋下緣 12px)，鬍鬍跟對話框並排；改成探頭，對話框上面要先留出牠露出來的 56px（`css/style.css:279` 的 `margin: var(--pk-rise) 0 0`，露出高度照 `WHO_PX`），再接對話框——並排變成上下疊。對話框不論一行或兩行，算出來都是多 56－12＝44px。**出發那一句出現的那天（第 1 天、那一句沒被關掉），不論晴雨都變高約 44px**：那一句出現時天氣那一句不出現（`trip.js:642` 的 `say: !sayDepart && !sayEnd`），所以下雨的出發日現在也是鬍鬍站在左邊。其他日子沒有這一句，不受影響。
+  - **H2：未估。** 拿掉北北那一行（現在高＝max(56, 對話框＋12)），對話框改接在卡上的小鳳旁邊；接法還沒設計到像素，高度會增還是減要畫出來才知道。
   - H3、H4 各多一張卡上方的空間，縮放 0.25～0.3 時約 40～50px（推論，新圖畫出來才量得到）。
-  - 照「一個畫面一張」的規矩，主頁同一時間最多多一段。
+  - 照第 2 節的規矩，H3、H4 只在畫面上沒有別張探頭圖時出現。
 - **不做**：今晚住、待買、照片列、這趟的數字、小工具列——都是資訊或入口，不再加。
 
 ### 3.2 任務頁（不准變高）
 
 | | 融入在哪 | 連動的使用者動作 | 反應 | 圖 |
 |---|---|---|---|---|
-| T1 | 進度那一行：進度條的前端放湯圓的圓形頭像（直徑約 26px，圓框裡是臉和毛帽） | 完成任務之後回到任務頁 | 頭像從舊的進度滑到新的進度（`translateX`，約 0.5 秒）；全部完成時到終點、蹦一下 | 現有（從湯圓的全身圖裁臉和帽子，裝進圓框） |
-| T2 | 任務列的拍照／相簿兩顆圖示（按鈕 46×46 不變） | 按下（`pointerdown`） | 鬍鬍那顆的相機閃一下（只動 opacity）；棉棉那顆的耳朵抖一下（rotate） | 現有圖示 |
+| T1 | 進度那一行：進度條的前端放湯圓的圓形頭像（直徑約 26px，圓框裡是臉和毛帽） | 完成任務、慶祝畫面關掉、回到任務頁 | 頭像從舊的進度滑到新的進度（`translateX`，約 0.5 秒）；全部完成時到終點、蹦一下 | 現有（從湯圓的全身圖裁臉和帽子，裝進圓框） |
+| T2 | ~~任務列的拍照／相簿兩顆圖示：按下時相機閃一下、耳朵抖一下~~ **建議不做** | 按下 | 理由見下面 | — |
 | T3 | 「這個旅程還沒有景點」：阿灰探頭在「＋去安排景點」按鈕上緣 | 導覽進來 | 探上來 | 新圖 |
 
 - **T1 為什麼是圓形頭像、不是直接裁頭**：湯圓是蛋形的身體，頭跟身體沒有分界。畫示意圖時先試了直接裁，放大看底部是一條直的切口，兩角露出翅膀的粉紅，兩側還有動作線的殘點，像一隻被切斷的鳥。改成圓框，邊緣是有框線的圓，看起來是刻意設計的進度拇指。
 - **T1 不加高的前提**：
   - 進度那一行高度由字決定，約 26px；進度條本身只有 12px 高。
   - 頭像不超過字高，就不會撐高那一行。**這要實測**，量那一行改前改後的高度一樣；量不到一樣就不做。
-- **T1 舊進度從哪來**：上一次畫的比例記在 sessionStorage；第一次進來沒有舊值，不動。
+- **T1 什麼時候滑、什麼時候不滑**（讀 `js/addphoto.js` 的時序）：
+  - 完成任務時，慶祝畫面關掉之後才呼叫 `onDone`、任務頁重畫。所以在**完成那一刻記一個旗標**（sessionStorage），**只有 `onDone` 觸發的那一次重畫才讀旗標**、讀掉，從舊進度滑到新進度。
+  - 不能寫成「任務頁任何一次重畫都讀旗標」：慶祝畫面還開著時，旅伴同步進來會讓底下的任務頁先重畫一次，旗標會被那一次吃掉，關掉慶祝畫面後反而不滑。
+  - 旅伴那邊同步進來的完成，也會讓任務頁重畫、進度變了，但**沒有旗標，頭像直接停在新位置、不滑**。這跟第 2 節「背景重畫不動」一致：只有自己按的完成才有反應。
+  - 舊進度：上一次畫的比例記在 sessionStorage；第一次進來沒有舊值，不動。
+- **T2 為什麼建議不做**（讀程式＋推論）：按下拍照那顆，`onclick` 裡**同步**呼叫 `camInput.click()`，手機會立刻切到系統相機，App 的畫面被蓋掉（`js/addphoto.js:112`；相簿那顆是 `:116` 的 `libInput.click()`）。圖示上的閃光就算做了，使用者多半看不到（推論，沒有在手機上實測）。相簿那顆同理，會立刻打開系統的相簿。為了一個看不到的反應多一段動畫和斷言，不划算。按下之後真正看得到的反應，是完成時的慶祝畫面（已經有）。
 - **T1 的一個現況**：進度條的填色現在用 `transition: width 0.5s`（`css/style.css:519`），不是 transform。湯圓的頭另外用 `translateX` 定位，填色那一條不在這次範圍。
 - **不做**：各站的列、日期列、全部展開／收合。這頁資訊密集，再加就是擠。
 
@@ -281,8 +287,8 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 
 | 動作 | 做什麼 | 在哪一節 |
 |---|---|---|
-| 按下拍照 | 任務列相機圖示閃一下；相簿圖示的耳朵抖一下 | T2 |
-| 完成任務 | 慶祝畫面（已有）；回任務頁時湯圓沿進度條滑到新位置；主頁的下一站換了，阿灰轉望遠鏡 | T1、H3 |
+| 按下拍照 | **不加**：按下就同步切到系統相機，圖示上的反應看不到（推論）。看得到的反應是完成後的慶祝畫面（已有） | T2 |
+| 完成任務 | 慶祝畫面（已有）；慶祝畫面關掉、回任務頁時湯圓沿進度條滑到新位置（只有自己完成的才滑）；主頁的下一站換了，阿灰轉望遠鏡 | T1、H3 |
 | 下拉重新整理 | **不做**：App 沒有這個功能 | 1.4 |
 | 切換分頁 | 底部分頁：另案；行程｜回顧分段：頭冒出來 | 3.12、I1 |
 | 記一筆帳 | 硬幣丟進錢包 | S2 |
@@ -319,7 +325,7 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 - **全身圖 6 隻**（`js/glyphs.js` 的 `ART`）：T1 湯圓的圓形頭像、I1 阿灰與北北的頭，都從全身圖裁。
   - 頁首鬍鬍的頭就是這樣裁的（`HEAD_VB`）。
   - 另外三隻要各自訂一個裁切框。這是新的常數，不是新圖。示意圖裡湯圓用的是 `36 22 128 128`，裝進圓框。
-- **拍照圖示 2 顆**（`photoIcon`）：T2 只是把圖示裡的零件包起來、讓它動。相機閃光的做法，現有的 cam 探頭圖已經有。
+- **拍照圖示 2 顆**（`photoIcon`）：維持現狀（T2 建議不做，理由在 3.2）。
 
 ### 6.2 需要新圖的（第二版）
 
@@ -349,7 +355,7 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
   - 7 張探頭圖都在 `js/peeks.js`，整支檔 94.4 KB（未壓縮的文字；GitHub Pages 傳送時會壓縮）。
   - 6 隻全身圖在 `js/glyphs.js`，79.4 KB。
 - **測試的範圍**（`node scripts/run-affected.mjs --dry --files …` 乾跑實測，2026-11-18）：
-  - 新圖畫進 `js/peeks.js`：這支檔本來就在快取清單裡，`sw.js` 只改版號。測試挑 **58/97 支、預估 2235 秒（約 37 分）**。
+  - 新圖畫進 `js/peeks.js`：這支檔本來就在快取清單裡，`sw.js` 只改版號。測試挑 **58/97 支、預估 2235 秒（約 37 分）**（前提見第 8 節）。
   - 新圖是點陣檔：要在 `sw.js` 的快取清單加一行，挑選器判「骨架改了」，放大成 **全套 97 支、預估 3427 秒（約 57 分）**。
   - 改到 `js/app.js`（頁首、底部分頁）也一樣是全套。
 - **GPT 畫我們這六隻的紀錄**（`docs/ART_行程海報生圖流程.md` 3.2 節）：
@@ -405,10 +411,22 @@ Dispatch 要六樣：盤點現況、逐頁提案、圖從哪來（含 GPT 提示
 4. 比例選正方形 1:1。
 5. 用下載鈕存原檔，不要截圖。
 
-**為什麼不能照抄 ART 第 2 節的風格句**：那一句寫了 `No people, no animals`，是給景點圖示用的；這裡要畫的就是動物，所以另寫。人物描述的兩段照抄 `ART_行程海報生圖流程.md` 2.1 節的九宮格版，一字不改。
+**為什麼不能照抄 ART 第 2 節的風格句**：那一句寫了 `No people, no animals`，是給景點圖示用的；這裡要畫的就是動物，所以另寫。
+
+**哪些照抄、哪些是新寫的**（第一版的提示詞沒有逐字對過，這一版對了）：
+
+- 第一段：照抄 Dispatch outputs 的 `TripQuest_吉祥物動作九宮格_提示詞.md` 第 71 行（九宮格版的第一段）。暫存區腳本逐字比對過，相同。
+  - 第一版把 `same clean sticker style …` 那一句放錯位置（放在冒號前面），已改回原文的位置。
+- 六隻的描述：照抄 `docs/ART_行程海報生圖流程.md` 2.1 節，逐字比對過，相同。
+- 九宮格的版面段（`Square image, 1:1 …`）：照抄 2.3 節，逐字相同。
+- 「每格一隻」段（`Each cell shows exactly ONE character …`）：照 2.3 節，改了兩處，其餘逐字相同：
+  - 舉例的道具 `oars, boats, steam` 換成這次的 `the grey bar`；
+  - 句尾填空（2.3 節的〔換：這趟有紫色系的東西〕）寫成 `the lilac scarf and the lilac bow tie stay a soft pale lilac`。
+- 灰條那一段、九格的動作、NOT ALLOWED 的填空：新寫的。
+- 第一版寫的 `appears only in its own cell` 拿掉了：棉棉、阿灰、湯圓各佔兩格，跟這句矛盾。改用 2.3 節原有的 `Each cell shows exactly ONE character doing ONE action`。
 
 ```
-Use the two uploaded reference images: a sheet of six original cute characters, and a large picture of one of them (the white dog). Draw the characters exactly as they look in the references, in the same clean sticker style with thick, even, dark charcoal outlines and flat solid colors: same body shape and proportions, same face, same colors, same outfits and accessories. Do not redesign them, do not change any color, do not add or remove clothes, pockets or accessories, and do not turn them into other characters or realistic animals. They may hold the small props listed below; their bodies, faces, colors and outfits stay exactly as in the reference. Do not copy the names or any other text from the reference sheet.
+Use the two uploaded reference images: a sheet of six original cute characters, and a large picture of one of them (the white dog). Draw the characters exactly as they look in the references: same body shape and proportions, same face, same colors, same outfits and accessories, same clean sticker style with thick, even, dark charcoal outlines and flat solid colors. Do not redesign them, do not change any color, do not add or remove clothes, pockets or accessories, and do not turn them into other characters or realistic animals. They may hold the small props listed below; their bodies, faces, colors and outfits stay exactly as in the reference. Do not copy the names or any other text from the reference sheet.
 
 The six characters, as in the reference:
 - 棉棉: a white bunny. Pure white body; two tall ears with pink insides, one standing straight and one bent over at the tip; a tiny pink nose; pink cheeks; a lilac scarf with white dots.
@@ -418,9 +436,13 @@ The six characters, as in the reference:
 - 阿灰: a grey hawk. Grey head and body, a little darker on top of the head; a cream belly with small grey V-shaped marks; yellow feet. A small pair of light blue binoculars hangs on his chest: small and light blue, never big, never black.
 - 小鳳: a cockatiel. A yellow head with a tall yellow crest; round orange cheeks; a grey body; a small lilac bow tie; a long grey tail; pink feet.
 
-These are 9 pose studies of the characters peeking over the top edge of an app card. In every cell, draw one plain light warm grey (#ECE6DE) horizontal rounded bar across the lower part of the cell: this bar is the top edge of a card. The character is behind the bar: only the part of the body above the bar is visible, and the paws or wings that rest on the bar overlap the front of it. Nothing is drawn below the bar except the paws or wings that hang over its front. Each character faces the viewer, with a happy, friendly face, and appears only in its own cell.
+Square image, 1:1. Exactly 9 separate cells arranged in a 3×3 grid of equal square cells. The entire background is one flat, solid, pure magenta color #FF00FF: no gradient, no texture, no noise, no vignette, no floor, no ground shadow, no scenery. Leave wide, clearly empty magenta gaps between neighboring cells, and an empty magenta margin around the outside of the whole grid. Do not draw grid lines, borders, frames, boxes, labels, captions or any text.
 
-Cells, left to right, top row first:
+Each cell shows exactly ONE character doing ONE action, centered in its cell, with empty magenta space on every side; nothing crosses into another cell or touches the edge of the picture. The whole drawing in each cell, including tails, ears, crests, the grey bar and every prop, fits inside the middle 75% of its cell, both in width and in height, so that the magenta gaps between neighboring cells stay completely empty from top to bottom and from left to right. Long tails may point sideways, but they also stay inside that middle area. The characters are all about the same size. In each cell the character and its props touch each other and form one connected shape. Do not draw motion lines, sparkles, hearts, music notes, sweat drops, speech bubbles or any other loose marks floating around the character. Do not use magenta, fuchsia or hot pink anywhere in the characters or props; the lilac scarf and the lilac bow tie stay a soft pale lilac.
+
+These are 9 pose studies of the characters peeking over the top edge of an app card. In every cell, draw one plain light warm grey (#ECE6DE) horizontal rounded bar across the lower part of the drawing: this bar is the top edge of a card. The character is behind the bar and touches it: only the part of the body above the bar is visible, and the paws or wings that rest on the bar overlap the front of it. Nothing is drawn below the bar except the paws, wings or tail that hang over its front. Unless a cell says otherwise, the character faces the viewer with a happy, friendly face.
+
+The nine cells, left to right, top row first:
 1. 棉棉 peeking over the bar, waving with one paw raised, the other paw resting on the bar.
 2. 阿灰 leaning on the bar with both wings, holding his small light blue binoculars up to his eyes and looking to the right.
 3. 棉棉 peeking over the bar, hugging a small round butter-yellow coin purse with one arm, holding up one plain round yellow coin in the other paw. The coin and the purse are blank.
@@ -431,10 +453,10 @@ Cells, left to right, top row first:
 8. 鬍鬍 peeking over the bar, waving with one paw raised, the other paw resting on the bar.
 9. 小鳳 peeking over the bar, holding a plain five-pointed star badge with both wings. The badge is blank, with no marks on it.
 
-Square image, 1:1. Exactly 9 separate items arranged in a 3×3 grid of equal square cells. The entire background is one flat, solid, pure magenta color #FF00FF — no gradient, no texture, no noise, no shadow, no vignette, no floor, no scenery. Leave wide, clearly empty magenta gaps between neighboring cells, and an empty magenta margin around the outside of the whole grid. Each item (the character together with its bar) is centered in its own cell and fully inside the middle 75% of the cell, with generous empty space on every side; no item crosses into another cell or touches the image edge. Do not draw grid lines, borders, frames, boxes, labels, captions or any text. Do not use magenta, purple-pink or hot pink anywhere in the items.
-
-NOT ALLOWED ANYWHERE: no text of any kind (no letters, numbers, Chinese or Japanese characters, names, labels or signatures); every board, badge, coin and purse is blank. No other characters, no people, no extra animals. Each character appears only in the cells listed above.
+NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no Chinese or Japanese characters, no names, no labels, no signature, no watermark); every board, badge, coin, purse and bar is blank. No characters other than these six; no people, no other animals.
 ```
+
+- NOT ALLOWED 照 2.3 節的句型，填空填這九格的道具；2.3 節句尾的季節禁止項（例：`No snow.`）拿掉，這張圖是介面用的，跟季節無關。
 
 **看到這些就直接重生**（照 `ART_行程海報生圖流程.md` 3.2 的分法）：
 
@@ -448,6 +470,7 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, numbers, Chinese or Japan
 - 鬍鬍變灰、北北多口袋、湯圓嘴色不對、阿灰的望遠鏡變大。照著畫向量時用參考圖的正確樣子，這些錯不會進 App。
 - 灰條位置歪、灰條太長或太短。
 - 姿勢跟描述有一點出入，但看得出在做什麼。
+- 尾巴或灰條伸進格子之間的縫：走路線 A（只當參考、我畫成向量）可以接受；走路線 B（點陣直接用）要重生，切圖程式會把那一整列標成壞格（`ART_行程海報生圖流程.md` 2.3 節）。
 
 **收件**：從 Dispatch outputs 複製進 `art-inbox/`，核 sha256；原圖不進 repo。
 
@@ -465,7 +488,8 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, numbers, Chinese or Japan
 | 只在觸發時動、只動一次 | 導覽進來（`fresh`）或明確的使用者動作才加 class；背景重畫不加。只有載入中與「產生中…」會重複 | 同一頁重畫兩次，第二次 0 段動畫 |
 | 不變高（任務頁） | 只用既有空間 | 進度那一行、拍照列，改前改後高度相同 |
 | 透明 | 新圖不畫鋪滿畫布的底色 | `arttransparenttest` 的登記制，新圖登記進去 |
-| 一個畫面最多一張探頭圖（如果 Yolin 同意） | 主頁照第 2 節的優先順序 | 造出四種情況同時成立，畫面上只有優先的那一張 |
+| 新加的探頭圖只在畫面上沒有別張時出現（如果 Yolin 同意） | H3、H4 出現前先看畫面上有沒有完成卡或對話框的探頭圖 | 造「完成卡＋下雨那一句＋下一站卡」同時成立：H3 不出現、既有兩張照舊；拿掉完成卡與下雨那一句：H3 出現 |
+| 分段鈕不變高 | 頭放在原本的內距裡（要實測） | 改前改後高度相同。另外兩處會變高、照實量給 Yolin：主頁 H1 約 44px（推論）；照片空白頁按鈕上面多出探頭圖露出的那一段（頁面本來是空的，不擠到資訊） |
 
 ---
 
@@ -473,11 +497,11 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, numbers, Chinese or Japan
 
 ### 第一版：全用現有的向量圖（不等新圖）
 
-**範圍**：H1、H2（如果 Yolin 同意結束那一句換人講）、主頁「一個畫面一張」的優先順序、T1、T2、I1、P1、B1。
+**範圍**：H1、H2（如果 Yolin 同意結束那一句換人講）、T1、I1、P1、B1。T2 建議不做（3.2）。「新加的只在沒有別張時出現」那條規矩只管第二版的 H3、H4，第一版不用寫。
 
 **改到的檔**：
 
-- `js/peeks.js`、`js/glyphs.js`：裁頭、讓圖示的零件動；
+- `js/peeks.js`、`js/glyphs.js`：裁頭；
 - `css/style.css`；
 - `js/views/trip.js`、`js/views/people.js`；
 - `js/ui.js`、`js/addphoto.js`、`js/says.js`；
@@ -488,10 +512,19 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, numbers, Chinese or Japan
 
 | 項目 | 時長 | 依據 |
 |---|---|---|
-| `test:affected` | 58/97 支，約 37 分（預測 2235 秒） | 乾跑 |
+| `test:affected` | 58～59/97 支，約 37 分（預測 2235～2244 秒） | 乾跑，前提見下面 |
 | 突變 | 約 20 條，約 15～25 分 | 推論：每條約一支測試的單跑時間；`hometest` 72 秒、`peektest` 60 秒、`saytest` 45 秒、`mascottest` 23 秒、`photoicontest` 11 秒，取自 `tools/test-times.json` |
 | 截圖給 Yolin | 3～5 場，每場約 40～70 秒 | 拍在真的按鈕和卡片上，和紙＋深色 |
-| 錄影 | 1～2 場 | T1、T2 這種動作要錄才看得到 |
+| 錄影 | 1～2 場 | T1、I1 這種動作要錄才看得到 |
+
+**「58～59 支」的前提**（`node scripts/run-affected.mjs --dry --files …` 乾跑，2026-11-18；紀錄在 `.logs/fix1118/` 的 `dryV1*`，不進 repo）：
+
+- 只放上面那幾支 App 檔＋`sw.js#VERSION`（只改版號）：**58 支、2235 秒**（實測，`dryV1`）。
+- 加上新斷言要寫進的既有測試檔：仍是 58 支（實測，`dryV1t`）。
+- 加上 `package.json`：仍是 58 支（實測，`dryV1p`）。
+- 加上 `scripts/peektest.mjs`＋新突變寫進既有清單（`tools/mutations/mut_peek1113.json`、`mut_mascot1113.json`）：**59 支、2244 秒**（實測，`dryV1e`）。
+- **新開一個突變清單檔**：乾跑時檔還不存在，挑選器判「讀不到、解析不了或已刪除 → 全套」，放大成 97 支（實測，`dryV1m`）。這是因為檔不存在，不代表建好之後也是全套；建好之後只挑它點名的測試，是**推論**。所以第一版的新突變寫進既有清單，不新開檔。
+- **改到 `sw.js` 的快取清單（不只版號）或 `js/app.js`**：97 支、3427 秒（實測，`dryB`、`dryD`）。乾跑輸出的理由是「放大器 C：sw.js（骨架／合併語意）」「放大器 C：js/app.js（骨架／合併語意）」。
 
 - 截圖和錄影 Yolin 看過，才跑突變與 `test:affected`。11-13 那次就是這個順序：先看截圖再跑。
 - 合計約 1～1.5 小時的機器時間，分三段，每段開跑前列清單、拿許可。
@@ -512,7 +545,7 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, numbers, Chinese or Japan
 
 | 項目 | 時長 | 依據 |
 |---|---|---|
-| `test:affected` | 58/97 支，約 37 分 | 乾跑 |
+| `test:affected` | 58/97 支，約 37 分 | 乾跑（`dryC`）；新突變也寫進既有清單時，照第一版的情形約多 1 支（推論，沒有另外乾跑） |
 | 突變 | 約 30 條，約 25～40 分 | 推論 |
 | 截圖 | 5～7 場 | |
 | 原創性檢查 | 不吃機器 | 新姿勢寫進 `docs/吉祥物原創性檢查.md` |
@@ -535,7 +568,8 @@ Yolin 決定要做再排。改 `js/app.js`，測試是全套 97 支，約 57 分
 1. **圖的路線**：
    - **A**：GPT 九宮格只當參考，我畫成向量。**建議 A**，理由在 6.3、6.4。
    - **B**：GPT 點陣直接放進 App。
-2. **一個畫面同一時間最多一張探頭圖。** 建議同意。不同意的話，主頁可能同時出現三張。
+2. **新加的探頭圖，只在畫面上沒有別張時出現**（第 2 節）。建議同意。這條只管第二版的 H3、H4；不同意的話，主頁最多可能同時三張（完成卡、下雨那一句、下一站卡）。
+   - 附帶一題：**要不要連已上線的組合也收成一張？** 現在「任務全部完成了」卡跟下雨／下雪那一句可以同時出現、同時動。建議不收（已上線，收了要多改一處、多一組斷言）。要收的話再定：被擠掉的那一句退回「站在左邊」，還是整句不出現。
 3. **H2 結束那一句改由卡片上的小鳳講**：說話的從北北換成小鳳。建議同意。不同意的話，北北照舊站在對話框左邊。
 4. **六隻的分配**（第 5 節的表）：要不要調。例如照片空白給棉棉，要多畫一張。
 5. **底部分頁五格**：要不要另案做。
@@ -551,11 +585,12 @@ Yolin 決定要做再排。改 `js/app.js`，測試是全套 97 支，約 57 分
 
 - 做法：暫存區腳本用 sharp 轉成 PNG，**沒有開瀏覽器**，不進 repo。
 - 行程、站名都是造的；不是 App 截圖。
-- 放在 Dispatch outputs（複製後核過 sha256，三個都相同）：
-  - `TripQuest_吉祥物融入_01_第一版_和紙.png`（405,673 bytes）
-  - `TripQuest_吉祥物融入_02_第一版_深色.png`（420,384 bytes）
-  - `TripQuest_吉祥物融入_03_九宮格提示詞.md`（6,686 bytes）：6.5 節的提示詞，加上怎麼生、重生清單、九格各是什麼，Yolin 可以直接照著用。
-- 內容：第一版的主頁（出發當天那一句）、任務頁（進度條前端的湯圓圓形頭像、拍照圖示按下那一刻）、照片空白頁（鬍鬍探頭在按鈕上）。
+- 放在 Dispatch outputs（複製後核過 sha256，三個都相同；同名的不覆蓋，所以改版另存新檔名）。**有效的是 04～06，01～03 作廢**：
+  - `TripQuest_吉祥物融入_04_第一版_和紙_v2.png`（397,461 bytes）
+  - `TripQuest_吉祥物融入_05_第一版_深色_v2.png`（413,319 bytes）
+  - `TripQuest_吉祥物融入_06_九宮格提示詞_v2.md`（8,387 bytes）：6.5 節的提示詞，加上怎麼生、重生清單、九格各是什麼，Yolin 可以直接照著用。跟規劃 6.5 節的區塊逐字相同（暫存區腳本比過）。
+  - 01～03 作廢的原因：01、02 的任務頁畫了「按下拍照、相機閃一下」（T2，現在建議不做），說明寫「那一行不變高」像是已確定；03 的第一段沒有逐字照九宮格原文，還有一句跟「同一隻佔兩格」矛盾。
+- 內容：第一版的主頁（出發當天那一句）、任務頁（進度條前端的湯圓圓形頭像；拍照圖示照舊）、照片空白頁（鬍鬍探頭在按鈕上）。
 - 交之前放大看過交接處：深色的探頭圖白邊在按鈕、對話框上緣收掉，沒有白帶。
 - 分頁列的圖示畫成灰色小圓點，因為轉圖程式畫不出彩色表情符號。示意圖裡的位置與大小是照 CSS 估的，不是量出來的。實作時的截圖才是準的。
 - 第二版的新圖還沒有，所以不在示意圖裡。
@@ -572,11 +607,20 @@ Yolin 決定要做再排。改 `js/app.js`，測試是全套 97 支，約 57 分
 - 每版要跑哪些測試、預估多久：`run-affected.mjs --dry --files` 乾跑。這是預測器的預估，它讀的是 `tools/test-times.json` 的單支耗時；不是實際跑出來的時間。
 - 探頭圖露出高度：用 `peekGeom` 算的。
 - sharp 能畫吉祥物的濾鏡和中文字：探路腳本畫了一張，看過。
+- 完成卡的小鳳跟下雨／下雪那一句的探頭圖可以同時出現：讀 `trip.js` 確認（沒有在畫面上造出來看）。
+- 出發那一句出現時天氣那一句不出現：讀 `trip.js:595-596`、`:642`。
+- 拍照、相簿兩顆按鈕在 `onclick` 裡同步打開系統的相機／相簿：讀 `addphoto.js:112`、`:116`。
+- 完成任務的慶祝畫面關掉之後才呼叫 `onDone`：讀 `addphoto.js`。
+- 提示詞跟原文逐字比對：暫存區腳本，30 項符合、0 項不符，含兩向對照組（03 的舊寫法必須判不同、原文自己比自己必須判相同、06 改一個字必須判不同）。
 
 **推論**（沒有實測）：
 
+- **H1 那一句變高約 44px**：從 CSS 算的，沒有在畫面上量。H2 的高度變化未估。
+- **T2 按下時的反應使用者看不到**：從「同步打開系統相機」推的，沒有在手機上試。
 - 新圖的露出高度，約 40～50px。
 - T1 湯圓的頭不會撐高那一行。
+- T1 用旗標分辨「自己完成」與「旅伴同步」：是設計，還沒寫、沒驗。
+- 新開的突變清單檔建好之後，挑選器只挑它點名的測試（乾跑時檔還不存在，判成全套）。
 - S1 拿掉表情符號後不會變高。
 - 點陣圖跟向量圖放在一起的畫風差異。
 - `drop-shadow` 的效能。
