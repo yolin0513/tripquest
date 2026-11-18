@@ -161,5 +161,16 @@
     "find": "${pre(p.front, `${id}d`)}",
     "replace": "${pre(p.front)}",
     "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "進度條頭像：軌道不裁橫向（第一版的寫法）",
+    "why": "（事後寫 2026-11-18 22:3x：預期照 C 場 layouttest 跑修正前的程式時的實測紅；這條沒另外跑，修正前的那一次就是它的證據）css/style.css 的 .tp-bar 拿掉 overflow-x: clip：.tp-run 跟軌道一樣寬、translateX 把框推出畫面，行程頁 360／390／430 寬整頁多出橫向捲動。layouttest 只紅總結那一條「零版面問題」（overflow-x 8、overflow-el 8，全部在行程頁）。",
+    "expect": ["零版面問題"],
+    "file": "css/style.css",
+    "find": ".tp-bar { position: relative; flex: 1; min-width: 0; overflow-x: clip; }",
+    "replace": ".tp-bar { position: relative; flex: 1; min-width: 0; }",
+    "cmd": "node scripts/layouttest.mjs",
+    "timeoutMs": 1500000,
+    "timeoutBasis": "照 mut_measuretarget.json 同一個數：layouttest 改壞後乾淨實測最長 726 秒（帳本 seq 251）× 2、進位到百秒；這次修正前的程式實測 543.7 秒（C 場，.logs/C-1118.res.log）"
   }
 ]

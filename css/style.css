@@ -993,7 +993,9 @@ html[data-theme="washi"] .th-nums, html[data-theme="washi"] .th-shots, html[data
    .tp-run 左右各縮 13px（頭像半徑）：translateX 的百分比照它自己的寬算，0% 時頭像貼左端、100% 時貼右端，不會超出軌道。
    完成一個任務那一下（onDone 那一次重畫）從舊的位置滑到新的位置（.tp-slide）；綠色那條照舊直接到新長度，牠跑過去追上。
    不擋點擊（pointer-events: none）；減少動態效果時 js 不加 .tp-slide。 */
-.tp-bar { position: relative; flex: 1; min-width: 0; }
+/* overflow-x: clip（11-18 C 場 layouttest 抓到）：.tp-run 跟軌道一樣寬、translateX 把整個框往右推，框的右緣超出畫面，
+   整頁多出橫向捲動（390 寬的行程頁捲到 536）。頭像本身照上面的算法永遠在軌道裡，只裁橫向、直向照樣露出（頭像比軌道高）。 */
+.tp-bar { position: relative; flex: 1; min-width: 0; overflow-x: clip; }
 .task-prog .progress-track { margin-top: 0; }
 .tp-run { position: absolute; left: 13px; right: 13px; top: 50%; height: 0; pointer-events: none; transform: translateX(var(--tp-to, 0%)); }
 .tp-run > svg { position: absolute; left: -13px; top: -13px; }
