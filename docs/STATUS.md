@@ -1,6 +1,15 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-11-18 14:5x 上班模式：**Yolin「開始清待辦」——分批、重負載清單、要決定的事已交 Dispatch，等放行；還沒動手**（只讀檔、跑秒級的一次性數數腳本）。
+> 最後更新：2026-11-18 15:0x 上班模式：**Dispatch 八題回覆、第一批開工——改完 commit `6f513dc`，15:1x 背景先跑 H3（legviewtest 26 條）再跑 T1（測試鏈 19 支），預計 15:3x～15:4x 跑完**。
+>   - **Dispatch 定（15:0x）**：順序一 → 二 → 三（設計）→ 四；第 3 項併進第一批；第一批 (a) 一起改 pickVia、(b) 不做；R5 劃掉、R6 不動；playertest 探針上限 6 次，超過就停下回報；第三批 ② 照設計、① 放寬也同意（不用投票），設計交上來看過再動手；第四批拆開——mascottest 白天、hometest 晚上；每批做完回報、放行才推；第一批 T1＋H3 准。
+>   - **第一批改了什麼（`6f513dc`，只動測試與突變清單）**：
+>     - legviewtest `pickLeg`：找不到那一格就再按一次按鈕把面板收起來、等收好才回；註解改成實情（點不到的是選項、不是按鈕）。
+>     - `pickVia`：固定等 150ms 改成等到開了、最多 3 秒；被背景重畫換掉（detached）就重新找、重點，最多 3 次，有重點就印說明行。
+>     - v190ui 抖動那條 `why` 改成推論。
+>   - **事前預測（跑之前寫進清單）**：car 那條拿掉八之五、鐵路那條拿掉八之六——收面板之後，下一小節按按鈕是打開、要點的那一格點得到。這兩條的說明行要出現「已把面板收起來」。其餘 24 條預期不變：第七節的成因是第六節「點畫面上寫搭車」那一步，不經 pickLeg、pickVia。
+>   - **順序為什麼倒過來**：測試鏈跑完會改寫 `tools/test-times.json`，突變執行器看到工作區不等於 HEAD 就拒跑，所以先跑 H3。H3 的原樣那一次本身就是 legviewtest 在新版上跑一遍。H3 用的清單 `.logs/fix1118/b1h3.json` 由 `pickby.mjs` 從現在的清單挑出：26 條、讀回逐條相同；八之五那一行剩 2 筆、八之六剩 1 筆，跟改後的預期對得上。
+>   - **秒級（實測）**：`node --check`、mutlint、mutcmdtest 綠；乾跑 `--commit 6f513dc` 挑到 19 支（底線 15＋mutlint、mutcmdtest、legviewtest、itinpostertest），預估 182 秒。
+> 之前 14:5x 上班模式：**Yolin「開始清待辦」——分批、重負載清單、要決定的事已交 Dispatch，等放行；還沒動手**（只讀檔、跑秒級的一次性數數腳本）。
 >   - **實測**：
 >     - motiontest R5 早就修好了：`77984c1`（在 origin/main 上）改成等條件成立、最多 3 秒（`waitClass`）。albumtest 在 v1.94.0 修過。「同一族偶發」只剩 playertest、photosynctest。
 >     - photosynctest **沒有任何突變**（從寬數：cmd 點名或目標檔是它，0 條）；playertest 2 條、motiontest 7 條。
