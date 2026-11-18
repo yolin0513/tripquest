@@ -1,6 +1,13 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-11-18 21:4x 上班模式（寫之前 `date`＝21:42）：**Dispatch 准 A → B1 → C 依序跑（前一場綠才開下一場）、B2 推完再跑；選甲（A、B1、C 都綠就推，沒有斷言的新行為列為已知缺口，推完下一件就補專門的測試）**。
+> 最後更新：2026-11-19 00:4x 守夜模式（寫之前 `date`＝00:48）：**A、B1、C 都綠了；五行交 Dispatch、等放行才推**（本機 v1.95.0，`origin/main`＝`94baed8` 之後 19 個 commit，沒推；沒碰 `workers/` 與 `js/merge.js`，不必部署 Worker）。
+>   - **C 場第一輪（11-18 22:09～22:36，`.logs/C-1118.res.log`）：挑到 61 支，跑到第 31 支 layouttest 紅、停下（前 30 支綠）**。第一版進度條頭像（T1）`.tp-run` 跟軌道一樣寬、translateX 把框推出畫面，行程頁 360／390／430 寬整頁多出橫向捲動（390 寬捲到 536；overflow-x 8、overflow-el 8，全在行程頁）。修：`.tp-bar` 加 `overflow-x: clip`（49af616），突變清單加 1 條（拿掉 clip，預期照這一次實測寫、標事後，沒另外跑——修正前的那一次就是證據）。
+>   - **C 場第二段（22:40～22:52，`.logs/C2-1118.res.log`）：layouttest 綠（零版面問題 ✓），到 hometest 共 12 支綠；saytest 26 項全過，但跑完後工作區守衛叫 git 失敗、照規則停下**。最後兩筆資源紀錄（22:52）「取不到程序表」，推論機器或工作階段那時中斷（Dispatch：中間斷了一陣），不是測試紅。
+>   - **C 場第三段（11-19 00:19～00:20，`.logs/C3-1119.res.log`）：saytest（補守衛那一拍）＋3 支綠，themetrusttest 紅**——誤判：settings.js 新姿勢那行用類別名字串找「畫面顏色」分段鈕，字串裡那一段被當成讀行程猜測主題的讀點。照「誤判修觸發側」改寫法（從 `data-theme-pick` 找父層，a554765），突變 1 條單獨跑紅在預期。
+>   - **C 場第四段（00:22～00:47，`.logs/C4-1119.res.log`）：36/36 綠（1476 秒）**——挑選器為 settings.js 挑的 23 支（含 layouttest）＋mascottest（量設定頁山雀，挑選器沒挑到）＋C 場還沒跑到的 10 支＋mutlint／mutcmdtest。取樣峰值工作程序 5（含啟動它的主程式，不含是 4），記憶體合計峰值 4029 MB、系統可用最低 5861 MB；逐一計數漏收結束事件、不採信。
+>   - **C 場合起來**：挑到的 61 支每一支都至少綠過一次；但第一輪前 30 支是在修正前的程式上綠的（差 `.tp-bar` 一行 overflow-x 與 settings.js 找分段鈕那兩行），**推論**不影響它們（Dispatch 11-18 23:0x 選甲：前 30 支照推論算數、五行裡寫明）。第一輪前 30 支裡有 14 支第四段在最終版上又跑過一次；只在修正前跑過的 16 支：aitest、albumtest、formgrouptest、importtest、installtest、jointest、legtest、livesynctest、membergonetest、musictest、photosynctest、postest、settletest、updatetest、v147shots、videotest。
+>   - **這一場 A／C 抓到並修好的**：天氣條不見、新姿勢 id 重複、進度條撐出橫向捲動（三個真的 bug，都是新姿勢或第一版 commit 時沒跑瀏覽器測試留下的）；themetrusttest 誤判 1 個（改寫法）。
+> 之前 21:4x 上班模式（寫之前 `date`＝21:42）：**Dispatch 准 A → B1 → C 依序跑（前一場綠才開下一場）、B2 推完再跑；選甲（A、B1、C 都綠就推，沒有斷言的新行為列為已知缺口，推完下一件就補專門的測試）**。
 >   - **A 場第一次（21:32～21:39，四支依序，`.logs/A1118-*.res.log`）**：hometest 綠；peektest、mascottest、saytest 紅，抓到兩個真的 bug＋一個量法錯：①主頁天氣條讓新姿勢讓位那一行寫成 `page`（`fillWeather` 裡沒有這個名字），錯被「天氣是加分項」的 catch 吞掉，**下雨／下雪那天整條天氣條不見**——改成 `container`；②山雀坐姿、鬍鬍揮手的前景裡有裁切框，前景上下兩層各畫一次，同一張圖 id 重複——下層那一份換前綴；③P9 用 `page.screenshot({clip})` 在捲動過的頁面裁到別處（修好與對照組量到一模一樣的四個點）——改成截整個畫面再裁。兩個 bug 各配一條突變（預期照第一次的實測寫，標「事後寫」）。耗時比估的長（peektest 205 秒、saytest 111 秒，等天氣條逾時）。
 >   - **A 場重跑（21:43～21:47，`.logs/A2-1118-*.res.log`）全綠**：peektest 76、mascottest 88、saytest 26、hometest 53 項。P9：修好的兩個上角是底色／白（和紙 255,252,246、深色 255,255,255）、頭頂中間是深灰帶；對照組（換回舊寫法）兩個上角是深灰帶 154,148,143。
 >   - **B1 場（21:49～22:05 背景五組＋22:05～22:08 補跑 1 條，`.logs/B1-1118-*.res.log`、`B1b-1118-say.res.log`）：19/19 紅在預期**，另有非預期的紅 0、預期要紅卻沒紅 0。第一次跑時「主頁天氣條：讓位那一行改回 page」沒跑起來——我寫那條時漏了 `done`（saytest 最後一行是「吉祥物講一句：N 項通過」，不是預設樣式），原樣被判「崩潰、沒有總結行」、這組不跑；補上 `done` 單獨重跑，紅在預期 7 條。mutcmdtest 沒擋「cmd 的總結行不是預設樣式卻沒寫 done」（靜態判斷不了，跑了才知道）。工作程序峰值 4（取樣）。
