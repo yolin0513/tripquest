@@ -1,0 +1,21 @@
+[
+  {
+    "name": "檢視器淡入那條路永遠不標 data-full",
+    "why": "（事前寫 2026-11-18 09:3x，跑之前）待辦 (7) 改了 albumtest 的等法（開檢視器 600 毫秒後再等中間那格標上 data-full，最多 10 秒）。這條證明新等法照樣抓得到「永遠不標」：淡入那條路（測試走的那條；減少動態那條不走）底圖照樣換成全圖、疊層照樣拿掉，畫面看起來一樣，只是不標。預期只紅 albumtest「縮圖先秀、全圖到了無縫換上」，訊息印「等滿 10000 毫秒還沒標——疊層 0 張、底圖有 src、data-full＝（沒有）」。交叉淡入、減少動態兩條不看 data-full，不該紅；項數不變（逾時收成 false、不丟例外）。",
+    "expect": ["縮圖先秀、全圖到了無縫換上"],
+    "file": "js/viewer.js",
+    "find": "              img.src = full;               // 底圖也換成全圖（同一張、已解碼），再拿掉疊層\n              img.dataset.full = '1';\n",
+    "replace": "              img.src = full;               // 底圖也換成全圖（同一張、已解碼），再拿掉疊層\n",
+    "cmd": "node scripts/albumtest.mjs"
+  },
+  {
+    "name": "行程分頁簽章拿掉站名（背景改站名不重畫）",
+    "why": "（事前寫 2026-11-18 09:3x，跑之前）legviewtest 第七節的記號從存著的表情符號換成甲的站名（v1.94.0 起符號不顯示）。這條是舊記號抓不到、新記號才抓得到的：itinSignature 不含 s.name → 背景改站名不重畫。預期紅 4 條：「前置：選項關著時背景改甲的站名」（redrew0 false，等滿 6 秒；甲仍寫原名）、「七之一」與「七之二 選項打開時背景改了行程」（兩條的連言式都含 redrew0）、「收起選項 →」（改名沒讓簽章變、沒有被擋下的重畫可補，redrew1 false）。第一～六節、第八節以後不改站名，不該紅（第六節的 legFrom／legMode 仍在簽章裡）。舊突變 mut_bgredraw1111、mut_v187 的 expect 開頭「七之二 選項打開時背景改了行程」「收起選項 →」「七之一」逐字沒變。",
+    "expect": ["前置：選項關著時背景改甲的站名", "七之一", "七之二 選項打開時背景改了行程", "收起選項 →"],
+    "file": "js/views/trip.js",
+    "find": "  const sp = store.spotsOf(tripId).map((s) => [s.id, s.name, s.emoji, s.day,",
+    "replace": "  const sp = store.spotsOf(tripId).map((s) => [s.id, s.emoji, s.day,",
+    "cmd": "node scripts/legviewtest.mjs",
+    "done": "^交通方式畫面：\\d+ 項通過"
+  }
+]

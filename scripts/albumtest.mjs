@@ -117,6 +117,20 @@ try {
   await page.evaluate(() => document.querySelectorAll('.pg-cell')[4].click());
   await page.waitForSelector('.pv', { timeout: 8000 });
   await sleep(600);
+  // 待辦 (7)（2026-11-18 改）：原本固定等 600 毫秒就斷言全圖已換上——js/viewer.js 要讀縮圖→解碼→讀全圖→解碼→淡入→再等 200 毫秒
+  //   才標 data-full，機器忙時來不及（11-12、11-17 全套各紅一次、單跑綠）。改成 600 毫秒之後再等「中間那格標上 data-full」，最多 FULL_MAX 毫秒：
+  //   快的那條路時序跟原本一樣（後面交叉淡入那段不會被提早），只有慢的那條路變長。逾時收成 false、不丟例外（項數照舊，突變才不會被判成沒跑完）；
+  //   逾時時印當下狀態（疊層幾張、底圖有沒有 src），下次紅分得出是「慢」還是「永遠不標」。
+  const FULL_MAX = 10000;
+  const tFull = Date.now();
+  const fullOk = await page.waitForFunction(() => document.querySelectorAll('.pv .pv-slide')[1]?.querySelector('img')?.dataset.full === '1',
+    { timeout: FULL_MAX }).then(() => true, () => false);
+  const fullWait = Date.now() - tFull;
+  const fullState = fullOk ? '' : await page.evaluate(() => {
+    const sl = document.querySelectorAll('.pv .pv-slide')[1];
+    const img = sl?.querySelector('img');
+    return sl ? `疊層 ${sl.querySelectorAll('.pv-fadein').length} 張、底圖${img?.src ? '有' : '沒有'} src、data-full＝${img?.dataset.full ?? '（沒有）'}` : '找不到中間那格';
+  });
   const v = await page.evaluate(() => {
     const pv = document.querySelector('.pv');
     const r = (el) => el.getBoundingClientRect();
@@ -135,7 +149,8 @@ try {
   yes(v.counter === '5 / 210' && v.imgSrc && v.imgOnScreen, `點第 5 格 → 全螢幕「${v.counter}」、圖片有載且在畫面中央（不是黑的）`);
   const rClose = M.within(v.closeH, '>=', 48, 'px', '檢視器 ✕'), rReact = M.within(v.reactH, '>=', 44, 'px', '檢視器按讚鈕');
   yes(rClose.ok && rReact.ok && v.reacts === 4, `✕ ${v.closeH}px、按讚鈕 ${v.reactH}px、四種讚｜✕${rClose.tail.slice(1)}｜按讚鈕${rReact.tail.slice(1)}`);
-  yes(v.full, '縮圖先秀、全圖到了無縫換上（本機兩份都在 → 已是全圖）');
+  yes(fullOk && v.full, `縮圖先秀、全圖到了無縫換上（本機兩份都在 → 已是全圖；開檢視器 600 毫秒後再等了 ${fullWait} 毫秒`
+    + (fullOk ? '）' : `，等滿 ${FULL_MAX} 毫秒還沒標——${fullState}）`));
   // 交叉淡入（v1.57.2）：疊層出現期間底圖必須還在（不可能空窗）；減少動態時不做淡入
   const fadeChk = await page.evaluate(async () => {
     const pv = document.querySelector('.pv');

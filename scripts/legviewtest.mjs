@@ -387,28 +387,31 @@ try {
   // 七、背景變動不收起打開的選項（2026-11-11 守夜第 2 項；v1.87.0 改在行程分頁）。
   // v1.87.0 起「怎麼去」只在行程分頁；行程分頁的簽章（itinSignature）本來就不含補維基圖片寫的欄位（heroHash／heroAttr）：
   //   七之一 補圖那一類寫入（甲的 heroAttr，updatedAt 照樣推高）→ 行程分頁不重畫（這一支原本 flaky 的根因：任務頁會重畫）；
-  //   七之二 會讓行程分頁重畫的背景變動＝旅伴同步進來改了行程：造情境用 store.patch 甲的表情符號（簽章裡有、畫面上看得到；
+  //   七之二 會讓行程分頁重畫的背景變動＝旅伴同步進來改了行程：造情境用 store.patch 甲的站名（簽章裡有、畫面上看得到；
   //          甲前面沒有「怎麼去」那一列，不會動到要量的東西）。
-  // 先做對照：選項關著時，改表情符號要讓整頁重畫（時間軸換成新節點）——不然「選項還開著」「沒重畫」可能只是根本不會重畫。
+  //   2026-11-18 改記號：原本改甲存著的表情符號。v1.94.0 起行程頁不顯示存著的符號（從景點庫重算，對不回的寫 📍，js/views/trip.js 1021 行），
+  //          改了也看不到 → 這兩條紅在「甲寫成 📍」（重畫本身有發生）。換成站名：itinSignature 有 s.name、畫面 itinStopHead 直接寫 s.name。
+  //          新名字自編、互不為子字串、不含原名、對不回景點庫（對上會變圖示，names() 拿不掉開頭）。補座標只在按鈕觸發、只補沒座標的站，甲有座標。
+  // 先做對照：選項關著時，改站名要讓整頁重畫（時間軸換成新節點）——不然「選項還開著」「沒重畫」可能只是根本不會重畫。
   // 現在順序是 甲 丙 乙 戊；戊那一列（乙→戊）沒設定。
-  const EMO = ['🚉', '🏯', '⛩️'];
-  const bgPatch = (n, kind) => page.evaluate(async (id, n, kind, emo) => {
+  const RENAME = ['甲・改名測試一', '甲・改名測試二'];
+  const bgPatch = (n, kind) => page.evaluate(async (id, n, kind, nm) => {
     const s = await import('./js/store.js'); const b = s.get(id).updatedAt || 0;
-    await s.patch(id, kind === 'emoji' ? { emoji: emo[n] } : { heroAttr: `背景補圖（測試 ${n}）` });
+    await s.patch(id, kind === 'name' ? { name: nm[n] } : { heroAttr: `背景補圖（測試 ${n}）` });
     return s.get(id).updatedAt > b;
-  }, A, n, kind, EMO);
+  }, A, n, kind, RENAME);
   const markTl = () => page.evaluate((dc) => { window.__tl7 = document.querySelector(`${dc} .timeline`); }, DC);
   const sameTl = () => page.evaluate((dc) => !!window.__tl7 && window.__tl7 === document.querySelector(`${dc} .timeline`), DC);
   const redrawn = (ms) => page.waitForFunction((dc) => !!window.__tl7 && window.__tl7 !== document.querySelector(`${dc} .timeline`), { timeout: ms }, DC).then(() => true, () => false);
   await stable(`${DC} .timeline`);
   await markTl();
   const t7 = Date.now();
-  const bumped0 = await bgPatch(0, 'emoji');
+  const bumped0 = await bgPatch(0, 'name');
   const redrew0 = await redrawn(6000);
   const lag7 = Date.now() - t7;
   const wait7 = Math.max(1500, lag7 * 3);
-  const emo0 = await page.evaluate((dc) => document.querySelector(`${dc} .tl-item .itin-stop`)?.textContent || '', DC);
-  yes(bumped0 && redrew0 && emo0.startsWith(EMO[0]), `前置：選項關著時背景改甲的表情符號（旅伴同步那一類）→ 整頁重畫、甲寫成「${emo0}」（${lag7} 毫秒）`, JSON.stringify({ bumped0, redrew0 }));
+  const name0 = (await names())[0] || '';
+  yes(bumped0 && redrew0 && name0 === RENAME[0], `前置：選項關著時背景改甲的站名（旅伴同步那一類）→ 整頁重畫、甲寫成「${name0}」（${lag7} 毫秒）`, JSON.stringify({ bumped0, redrew0 }));
   await stable(`${DC} .timeline`);
   await markTl();
   const bumpedH = await bgPatch(0, 'hero');
@@ -419,18 +422,18 @@ try {
   await stable(`${DC} .timeline`);
   const open7 = await pickVia(E);
   await markTl();
-  const bumped1 = await bgPatch(1, 'emoji');
+  const bumped1 = await bgPatch(1, 'name');
   await sleep(wait7);
   const still7 = await page.evaluate((dc, id) => { const p = document.querySelector(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-pick`); return !!p && !p.hidden; }, DC, E);
   const same7 = await sameTl();
-  yes(redrew0 && open7 && bumped1 && still7 && same7, `七之二 選項打開時背景改了行程（甲的表情符號）→ 選項還開著、沒有整頁重畫（等了 ${wait7} 毫秒）`,
+  yes(redrew0 && open7 && bumped1 && still7 && same7, `七之二 選項打開時背景改了行程（甲的站名）→ 選項還開著、沒有整頁重畫（等了 ${wait7} 毫秒）`,
     JSON.stringify({ redrew0, open7, bumped1, still7, same7 }));
   // 收起來（再點一次那一列）→ 剛才擋下的重畫要補上，不然改過的行程要等下一次別的變動才出現。
   // 要先確認上一條真的擋下了（still7、same7），不然時間軸早就換過、這條會白白成立。
   await page.click(`${DC} .tl-leg[data-spot="${E}"] .tl-leg-btn`);
   const redrew1 = await redrawn(6000);
-  const emo1 = await page.evaluate((dc) => document.querySelector(`${dc} .tl-item .itin-stop`)?.textContent || '', DC);
-  yes(still7 && same7 && redrew1 && emo1.startsWith(EMO[1]), `收起選項 → 剛才擋下的重畫補上（時間軸換成新節點、甲寫成「${emo1}」）`, JSON.stringify({ still7, same7, redrew1 }));
+  const name1 = (await names())[0] || '';
+  yes(still7 && same7 && redrew1 && name1 === RENAME[1], `收起選項 → 剛才擋下的重畫補上（時間軸換成新節點、甲寫成「${name1}」）`, JSON.stringify({ still7, same7, redrew1 }));
 
   // 八、行程分頁的「約幾點到」與停留時間（v1.87.1；Yolin 看 v1.87.0 實機：第一站 10:00 到、停 3 小時，下一段設成搭車約 40 分，
   //    後面幾站沒帶出時間；第一站卡上也看不到停留時間）。另一趟（上面的 ETA）：
