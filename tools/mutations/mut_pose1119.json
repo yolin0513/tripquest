@@ -1,0 +1,173 @@
+[
+  {
+    "name": "主頁：按 ✕ 之後鬍鬍那張照樣算數（v1.95.0 的寫法）",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 拿掉「那一句沒出來就把 departPeek 清掉」：出發當天按 ✕ 關掉那一句、或 12 點以後那一句本來就不出來，鬍鬍那張做了沒掛，下一站卡的阿灰照樣被擋。posetest 紅 PS14（按 ✕ 回來）與 PS15（下午）。",
+    "expect": ["PS14", "PS15"],
+    "file": "js/views/trip.js",
+    "find": "  if (!sayDepart) departPeek = null;\n",
+    "replace": "",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁天氣條：下雨那一句出來時不讓位",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 的 fillWeather 拿掉讓位那一行：下雨那一句的鬍鬍撐傘出來了，下一站卡上的阿灰還在，一個畫面兩張。只紅 PS05（PS04 是攔住預報時的前置，不受影響）。",
+    "expect": ["PS05"],
+    "file": "js/views/trip.js",
+    "find": "    if (line && pkEl) for (const x of container.querySelectorAll('.pose-host > .gl-peek.pose')) unmountPeek(x);\n",
+    "replace": "",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁：倒數卡與下一站卡同時在時先放下一站卡",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 宿主的優先順序反過來：還沒出發時湯圓（cdCard 在就挑 perch）掛到下一站卡上、倒數卡沒有。只紅 PS07；第 2 天、出發當天沒有倒數卡，沒景點、全部拍完被另外兩道擋，都不受影響。",
+    "expect": ["PS07"],
+    "file": "js/views/trip.js",
+    "find": "    const host = cdCard || (main && main.classList.contains('today-card') ? main : null);",
+    "replace": "    const host = (main && main.classList.contains('today-card') ? main : null) || cdCard;",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁：「任務全部完成了」卡上有小鳳時照樣放湯圓",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 一次只放一張的判斷拿掉 !endPeek：出發前就全部拍完，倒數卡上多一隻湯圓。只紅 PS09；旅程結束（PS12）沒有倒數卡、卡片也不是下一站卡，宿主是空的，不受影響。",
+    "expect": ["PS09"],
+    "file": "js/views/trip.js",
+    "find": "  if (pk && !endPeek && !departPeek && !noSpotPeek) {",
+    "replace": "  if (pk && !departPeek && !noSpotPeek) {",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁：沒有景點的按鈕上有阿灰時照樣放湯圓",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 一次只放一張的判斷拿掉 !noSpotPeek：還沒出發、沒有景點，倒數卡上多一隻湯圓。只紅 PS10。",
+    "expect": ["PS10"],
+    "file": "js/views/trip.js",
+    "find": "  if (pk && !endPeek && !departPeek && !noSpotPeek) {",
+    "replace": "  if (pk && !endPeek && !departPeek) {",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁：出發那一句有鬍鬍時照樣放阿灰",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 一次只放一張的判斷拿掉 !departPeek：出發當天早上下一站卡上多一隻阿灰。只紅 PS13；PS14 是那一句關掉之後、PS15 是下午沒有那一句，本來就要有阿灰。",
+    "expect": ["PS13"],
+    "file": "js/views/trip.js",
+    "find": "  if (pk && !endPeek && !departPeek && !noSpotPeek) {",
+    "replace": "  if (pk && !endPeek && !noSpotPeek) {",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁：倒數卡、下一站卡一律不放新姿勢（反向對照）",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 整條判斷關掉：上面三條是「多放了」，這條反過來證明該放的那幾條真的量到圖、不是剛好沒有就過。紅 PS01～PS04（第 2 天的阿灰、天氣讓位的前置）、PS07（倒數卡的湯圓）、PS14、PS15（出發當天的阿灰）；PS05 量的是讓位之後沒有阿灰，照樣綠。",
+    "expect": ["PS01", "PS02", "PS03", "PS04", "PS07", "PS14", "PS15"],
+    "file": "js/views/trip.js",
+    "find": "  if (pk && !endPeek && !departPeek && !noSpotPeek) {",
+    "replace": "  if (pk && !endPeek && !departPeek && !noSpotPeek && !cdCard && !main) {",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "主頁「旅程結束了」卡上的小鳳縮放改回第一版的 0.3",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 的 endPeek 縮放寫死 0.3：卡上的小鳳比其他新姿勢小一半。posetest 只紅 PS12（出發前全部拍完的 PS09 只看有沒有、不量縮放）。",
+    "expect": ["PS12"],
+    "file": "js/views/trip.js",
+    "find": "    endPeek = pk.peek(pk.DONE_PEEK, pk.POSE_K);",
+    "replace": "    endPeek = pk.peek(pk.DONE_PEEK, 0.3);",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "分帳：存檔那一下棉棉整隻再跳一次",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/expenses.js 存檔後的 cheer 拿掉 still 與 pk-coin-go：同一頁剛看過牠跳上來，存檔又跳一次、硬幣不丟。只紅 PS18。",
+    "expect": ["PS18"],
+    "file": "js/views/expenses.js",
+    "find": "    else if (cause === 'saved') pk.cheer(sumPose, { still: true, add: ['pk-coin-go'] });",
+    "replace": "    else if (cause === 'saved') pk.cheer(sumPose);",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "分帳：換幣別（自己重畫）時總帳卡上的棉棉也跳",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/expenses.js 總帳卡的 cheer 條件從「沒有原因」改成「不是存檔」：換幣別、刪一筆時也跳。只紅 PS19；PS20 導覽進來本來就跳，PS18 存檔走另一個分支。",
+    "expect": ["PS19"],
+    "file": "js/views/expenses.js",
+    "find": "    if (!cause) pk.cheer(sumPose);",
+    "replace": "    if (cause !== 'saved') pk.cheer(sumPose);",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "分帳空白頁：導覽進來時棉棉不跳",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/expenses.js 的 putPose 條件反過來：導覽進來（沒有原因）不跳。紅 PS16（沒旅伴）與 PS17（還沒有花費）。",
+    "expect": ["PS16", "PS17"],
+    "file": "js/views/expenses.js",
+    "find": "    if (!cause) pk.cheer(el);   // 導覽進來",
+    "replace": "    if (cause) pk.cheer(el);   // 導覽進來",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "照片頁空白：導覽進來時鬍鬍不跳",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/people.js 的條件反過來：導覽進來不跳、本頁自己重畫才跳。只紅 PS21。",
+    "expect": ["PS21"],
+    "file": "js/views/people.js",
+    "find": "if (!self) pk.cheer(el); }   // 空白區塊置中排",
+    "replace": "if (self) pk.cheer(el); }   // 空白區塊置中排",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "任務頁沒有景點：按鈕上不放阿灰",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 任務頁那一格不掛圖。只紅 PS11——也證明 PS11 量的是任務頁那顆鈕，不是主頁上同樣字的那一顆（第一次跑時的選擇器在主頁上就成立）。",
+    "expect": ["PS11"],
+    "file": "js/views/trip.js",
+    "find": "    if (pk) { const el = pk.pose('point', 'c'); mountPose(go, el); if (fresh) pk.cheer(el); }   // 空白區塊置中排、按鈕窄：圖也置中",
+    "replace": "    void mountPose;",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "行程分頁：換格時頭像不冒",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 點了換到另一格不加 seg-pop。只紅 PS23。",
+    "expect": ["PS23"],
+    "file": "js/views/trip.js",
+    "find": "        if (!was && !reducedMotion()) head.classList.add('seg-pop');",
+    "replace": "        void was;",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "行程分頁：點已經選中的那一格頭像也冒",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 拿掉「原本沒選中」的條件。只紅 PS24（PS23 換格本來就冒）。",
+    "expect": ["PS24"],
+    "file": "js/views/trip.js",
+    "find": "        if (!was && !reducedMotion()) head.classList.add('seg-pop');",
+    "replace": "        if (!reducedMotion()) head.classList.add('seg-pop');",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "進度條頭像：軌道不裁橫向（posetest 這一份）",
+    "why": "（事前寫 2026-11-19 01:1x）css/style.css 的 .tp-bar 拿掉 overflow-x: clip（同 mut_fix1118 那一條，那條給 layouttest 跑、要 9 分鐘；這條給 posetest）。只紅 PS27；PS25 是前置（框本來就超出，不受影響）。",
+    "expect": ["PS27"],
+    "file": "css/style.css",
+    "find": ".tp-bar { position: relative; flex: 1; min-width: 0; overflow-x: clip; }",
+    "replace": ".tp-bar { position: relative; flex: 1; min-width: 0; }",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "進度條頭像：軌道左右不縮半個頭像",
+    "why": "（事前寫 2026-11-19 01:1x）css/style.css 的 .tp-run 左右從 13px 改成 0：頭像的中心照整條軌道算，0% 時半個頭超出左端、進度 0.875 時偏右約 10px。只紅 PS26。",
+    "expect": ["PS26"],
+    "file": "css/style.css",
+    "find": ".tp-run { position: absolute; left: 13px; right: 13px;",
+    "replace": ".tp-run { position: absolute; left: 0; right: 0;",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "進度條頭像：完成一個任務之後不滑",
+    "why": "（事前寫 2026-11-19 01:1x）js/views/trip.js 的 progBar 條件改成「起點等於終點才滑」：按「繼續下一個」之後頭像直接跳到新位置。只紅 PS28。",
+    "expect": ["PS28"],
+    "file": "js/views/trip.js",
+    "find": "  if (s && pct(s.from) !== pct(ratio) && !reducedMotion()) {",
+    "replace": "  if (s && pct(s.from) === pct(ratio) && !reducedMotion()) {",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "零件表：阿灰望遠鏡的轉頭零件對不上（圖改過、表沒跟著改）",
+    "why": "（事前寫 2026-11-19 01:1x）js/peeks.js 的 CHEER.scout 那一段的 transform 字串差一個數字：cheer 找不到那個零件，只跳上來、不轉頭，不報錯。紅 PS03、PS15（主頁的阿灰）與 PS30（補充的零件表）；PS01、PS02、PS14 只看哪一張與位置，不受影響。",
+    "expect": ["PS03", "PS15", "PS30"],
+    "file": "js/peeks.js",
+    "find": "  scout: { parts: [{ tf: 'rotate(0 133 148)', pivot: [133, 148], cls: 'pk-scan' }], nod: true },",
+    "replace": "  scout: { parts: [{ tf: 'rotate(0 133 149)', pivot: [133, 148], cls: 'pk-scan' }], nod: true },",
+    "cmd": "node scripts/posetest.mjs"
+  }
+]

@@ -645,6 +645,9 @@ export async function tripHome(tripId, { fresh = false, drawPage, setTop } = {})
   // 新姿勢：出發那一句換成鬍鬍探頭揮手（融入九宮格第 8 格；第一版是拿相機那張），縮放跟其他新姿勢一樣
   if (!sayEnd && todayDay === 1 && pk) departPeek = pk.pose('hello', 'l');
   const sayDepart = !sayEnd && todayDay === 1 ? sayRow(tripId, departLine(t), { animate: fresh, peek: departPeek }) : null;
+  // 那一句沒出來（出發當天 12 點以後、或按 ✕ 關掉了）：鬍鬍那張沒掛上去，不算「畫面上有別張探頭圖」，下一站卡的阿灰照放。
+  // （v1.95.1 修：v1.95.0 照樣做出 departPeek、只是沒掛，下面那條判斷因此不放阿灰——跟「看畫面上有沒有」的規則不一致）
+  if (!sayDepart) departPeek = null;
   if (sayDepart && departPeek && fresh) pk.cheer(departPeek, { soft: true });
 
   // 新姿勢 H3／H4（規劃 3.1）：出發前的倒數卡＝湯圓坐在卡片上緣（第 4 格照描述畫）；其餘有下一站時的下一站卡＝阿灰拿望遠鏡（第 2 格，甲）。
