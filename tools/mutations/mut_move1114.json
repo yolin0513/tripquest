@@ -54,12 +54,12 @@
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "位置：按鈕上的小鳳沒置中",
-    "why": "（事前寫 2026-11-18 17:10，跑之前）css 的 .celebrate .btn > .gl-peek 拿掉 left: 50% 與 translateX(-50%)：小鳳貼在按鈕左邊。兩輪都紅「小鳳扣在「太棒了」上緣」的中線那一半（中線差約按鈕寬的一半）——跟上一條各打同一條斷言的一個分支（邊線／中線）；邊線照樣對、不蓋字照樣綠。",
+    "name": "位置：按鈕上的小鳳釘到按鈕左邊（沒置中）",
+    "why": "（事前寫 2026-11-19 05:5x，跑之前；取代 11-18 17:10 的「位置：按鈕上的小鳳沒置中」）css 的 .celebrate .btn > .gl-peek 把 left: 50%、translateX(-50%) 換成 left: 0、transform: none：小鳳釘在按鈕左邊。兩輪都紅「小鳳扣在「太棒了」上緣」的中線那一半（推論中線差約「按鈕寬減圖寬」的一半，按鈕至少 240px）——跟上一條各打同一條斷言的一個分支（邊線／中線）；邊線照樣對（只動左右）；「不蓋字」看的是圖頂與上一行的距離、按鈕字的中間點，推論照樣綠。舊的那一版只拿掉兩個屬性，11-19 第 1910 次實測兩輪中線差都是 0、沒紅：.btn 是 inline-flex＋justify-content: center，絕對定位、left 沒設時靜態位置就在中間（推論），等於沒改——等價突變，不留、不為它補斷言（§5.12）；這顆按鈕是 mountPeek 掛的、沒有 .pose-host，.pose-c 那條管不到。意思變了所以改名（帳本照檔＋名字記）。",
     "expect": ["［和紙］ M9 解鎖新徽章的小鳳扣在「太棒了」上緣", "［深色］ M9 解鎖新徽章的小鳳扣在「太棒了」上緣"],
     "file": "css/style.css",
     "find": ".celebrate .btn > .gl-peek { left: 50%; transform: translateX(-50%); bottom:",
-    "replace": ".celebrate .btn > .gl-peek { bottom:",
+    "replace": ".celebrate .btn > .gl-peek { left: 0; transform: none; bottom:",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
