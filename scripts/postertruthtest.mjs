@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-// theme.js、generate.js 用 fetch 讀 data/；node 底下換成讀檔（只供應 themes.json 與 data/places/，其餘照樣失敗）
+// theme.js、generate.js 用 fetch 讀 data 目錄的檔（這裡不寫成路徑：挑選器會把它認成「涵蓋整個 data 目錄」）；node 底下換成讀檔（只供應 themes.json 與 data/places/，其餘照樣失敗）
 globalThis.fetch = async (u) => {
   const s = String(u);
   if (s !== './data/themes.json' && !/^\.\/data\/places\/[\w-]+\.json$/.test(s)) throw new Error('postertruthtest 不供應：' + s);
