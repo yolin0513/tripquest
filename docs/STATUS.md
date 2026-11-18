@@ -19,7 +19,8 @@
 >     - **D** 的三條（mascot1113）紅在預期——事後補的 expect 這一次實跑也對得上。
 >     - **E**（第 2053 次）：又多紅白兔（跑著的 7、位置變了 false；畫 2 格、時間軸 500ms），執行器環境累計 3/3 紅（1916、1929、2053），複本 1/1 綠。照決定不改，等診斷。
 >     - 峰值：取樣工作程序 4（含主程式）、記憶體 737／752／738 MB、系統可用最低 6617 MB；逐一計數漏收結束事件、不採信。
->   - **接下來**：③ test:affected 20 支（`--files` 列這段改到的 5 個檔）→ ② 補跑診斷最多 5 次（Dispatch 06:1x 准，抓到紅的樣本就停；一次性 `diagE2.mjs`，多印 pending／startTime）。
+>   - **③ test:affected（06:32～06:36，`.logs/hdr-20261119/aff3.res.log`）：20/20 綠、261 秒（預測 262、實際 264）**，行首 ✗ 0；`--files` 列 `origin/main..HEAD` 改到的 5 個檔（跟乾跑同一份、挑到同樣 20 支）。20 支的工作區守衛都是「跑完多出或變了 0 個」。最久：hometest 72、peektest 63、tabbartest 41、mascottest 24 秒。取樣峰值工作程序 4（含主程式）、記憶體 1269 MB、系統可用最低 6607 MB；逐一計數漏收 18 個結束事件、不採信。執行器寫的 `tools/test-times.json` 跟本筆一起 commit。這不是全套。
+>   - **接下來**：② 補跑診斷最多 5 次（Dispatch 06:1x 准，抓到紅的樣本就停；一次性 `diagE2.mjs`，多印 pending／startTime）→ 全綠交五行、等放行才推。
 > 之前 05:5x 守夜模式（寫之前 `date`＝05:54）：**9 個 commit 推上去了（Dispatch 05:4x 放行）；推完照指示停下、等 Yolin 早上看底部分頁小樣；等待期間只寫下一批的計畫（沒開瀏覽器、沒跑突變、沒跑測試）**。推送當下遠端 main＝`8fc0505`＝當時本機 HEAD；之後本機多本筆（只改 STATUS），沒推。
 >   - **上線紀錄（實測）**：`bash scripts/safe-push.sh` 回 0（05:43:20～05:43:26），範圍 `006fd2e..8fc0505` 9 個 commit，自查 5 類都 0 命中、對照組都命中、新增行 250 行兩邊相同；推送後 `git ls-remote` 的 main＝`8fc0505`＝本機 HEAD。線上 `sw.js` HTTP 200、`tripquest-v1.95.1`（這批沒改 App 程式，推不推都是這個版號；推上去的憑據是 safe-push 的遠端比對與 ls-remote）。沒碰 `workers/`、`js/merge.js`。
 >   - **Dispatch 05:4x 確認**：postertruthtest 的 `data/places/` 照我的建議留著（理由見下面 05:3x 那筆）。
