@@ -10,6 +10,7 @@
 //     主頁的子頁（找附近）底部亮「主頁」、返回回主頁
 //     H9–H11（v1.85.0）：「旅程結束了／任務全部完成了」那張卡上緣是小鳳打領結探頭（邊線對齊、不壓到上面）、
 //     一進主頁就慢慢探上來在動；主頁自己重畫（refreshPage）時圖照樣在、停在靜止圖，不會每重畫一次就再跳一次
+//     H9b／H10b（2026-11-19）：量「在動」的兩次取位置之間，瀏覽器真的畫了新的格（沒畫＝這一次沒量到，不是動畫壞了）
 //   M 舊位置 → 新位置（STATUS 的對照表）：任務頁原本上面那幾塊，每一樣在主頁找得到、任務頁不再有
 //     （新旅伴橫幅在 jointest／livesynctest、位置分享在 postest、天氣條的內容在 peektest／photoicontest 驗，都改從主頁讀）
 //     M4（v1.87.0）：主頁的旅伴列再搬一次 → 旅程設定「旅伴與電話」名單最上面（主頁沒有、設定頁有、點了跳出加入紀錄）
@@ -195,7 +196,11 @@ const homeLayout = (page) => page.evaluate(() => {
 });
 // v1.85.0：「旅程結束了／任務全部完成了」那張卡上緣的探頭圖（小鳳打領結，js/peeks.js 的 done）。
 //   邊線對齊：圖底往上 --pk-sink 就是卡片上緣（差 ≤ 1.5px）；整張在畫面裡；不壓到上一個區塊（沒有上一個區塊就比頁首的底）；
-//   動畫：一進主頁就量——有 pk-cheer、慢慢探上來（pk-soft）、有動畫在跑、隔 150ms 量兩次位置不一樣
+//   動畫：一進主頁就量——有 pk-cheer、慢慢探上來（pk-soft）、有動畫在跑、量兩次位置不一樣
+//   兩次之間（2026-11-19 起，同 mascottest 的 moveNow、peektest 的 animNow）：等瀏覽器真的畫了至少 2 格、時間軸往前走至少 150ms，最多等 3 秒；
+//   原本是 setTimeout 150ms——機器忙的時候計時器可能先到、中間一格都沒畫，兩次讀到同一格，看起來像「沒在動」。
+//   等不到回 frameOk false，另外兩條斷言 H9b／H10b「量的時候瀏覽器有畫新的格」紅（這一次沒量到），不跟「畫了新的格、位置沒變」（動畫壞了）混在一起。
+//   跑著的段數在量之前數（原本是等完才數；改成跟 mascottest 一樣量的當下數，等滿 3 秒時動畫可能已經播完）。
 const endPeek = (page) => page.evaluate(async () => {
   // openTrip 等到的 #view .page 可能還是上一頁：先等主頁真的畫出來（探頭圖跟主頁同一次 drawPage 放上去）
   for (let t0 = Date.now(); !document.querySelector('.trip-home') && Date.now() - t0 < 8000;) await new Promise((r) => setTimeout(r, 50));
@@ -203,8 +208,27 @@ const endPeek = (page) => page.evaluate(async () => {
   if (!card || !el) return { found: false, card: !!card };
   const snap = () => [...el.querySelectorAll('.pk-hop, .pk-wave, .pk-grip, .pk-wave-lines')].map((x) => { const s = getComputedStyle(x); return `${s.transform}|${s.opacity}`; }).join(';');
   const anims = el.getAnimations({ subtree: true });
+  const tl = () => { const t = document.timeline ? document.timeline.currentTime : null; return typeof t === 'number' ? t : null; };
+  const running = anims.filter((a) => a.playState === 'running').length;   // 量的當下
+  const tl1 = tl();
   const s1 = snap();
-  await new Promise((r) => setTimeout(r, 150));
+  const w0 = performance.now();
+  let frames = 0, stop = false;
+  const frameOk = await Promise.race([
+    new Promise((res) => {
+      const tick = () => {
+        if (stop) return;
+        frames++;
+        const now = tl();
+        if (frames >= 2 && tl1 != null && now != null && now - tl1 >= 150) res(true); else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }),
+    new Promise((res) => setTimeout(() => res(false), 3000)),
+  ]);
+  stop = true;
+  const waited = Math.round(performance.now() - w0);
+  const tl2 = tl();
   const s2 = snap();
   const cr = card.getBoundingClientRect(), r = el.getBoundingClientRect();
   const sink = parseFloat(el.style.getPropertyValue('--pk-sink'));
@@ -215,7 +239,8 @@ const endPeek = (page) => page.evaluate(async () => {
   const prevBottom = prev ? prev.getBoundingClientRect().bottom : document.getElementById('topbar').getBoundingClientRect().bottom;
   return {
     found: true, kind: el.getAttribute('data-peek'), cheer: el.classList.contains('pk-cheer'), soft: el.classList.contains('pk-soft'),
-    n: anims.length, running: anims.filter((a) => a.playState === 'running').length, moved: s1 !== '' && s1 !== s2,
+    n: anims.length, running, moved: s1 !== '' && s1 !== s2,
+    frameOk, frames, waited, tlAdv: tl1 != null && tl2 != null ? Math.round(tl2 - tl1) : null,
     edgeGap: Number.isFinite(sink) ? +(r.bottom - sink - cr.top).toFixed(2) : null, above: Math.round(cr.top - r.top),
     inView: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.width > 0,
     clear: r.top >= prevBottom - 1, prevName: (prev ? (prev.className || prev.tagName) : '頁首') + (skipped.length ? `（跳過高度 0 的 ${skipped.join('、')}）` : ''),
@@ -224,6 +249,7 @@ const endPeek = (page) => page.evaluate(async () => {
 const peekOk = (p) => p.found && p.kind === 'done' && p.edgeGap != null && Math.abs(p.edgeGap) <= 1.5 && p.above >= 20 && p.inView && p.clear;
 const peekMoving = (p) => p.found && p.cheer && p.soft && p.running >= 1 && p.moved;
 const peekBrief = (p) => (p.found ? `${p.kind}；邊線差 ${p.edgeGap}px、露出卡片上緣 ${p.above}px；在畫面裡 ${p.inView}；上一個區塊「${p.prevName}」沒壓到 ${p.clear}；pk-cheer ${p.cheer}、慢慢探 ${p.soft}；動畫 ${p.n} 段、跑著的 ${p.running}；位置變了 ${p.moved}` : `沒有探頭圖${p.card ? '' : '（卡也不在）'}`);
+const frameBrief = (p) => (p.found ? `${p.frameOk ? '有' : '沒有'}（畫了 ${p.frames} 格、時間軸走了 ${p.tlAdv}ms、等了 ${p.waited}ms）` : `沒量到（沒有探頭圖${p.card ? '' : '，卡也不在'}）`);
 
 // 結束後的「帳沒結清」是背景算的：等那一格算完（data-checked）再讀，才分得出「沒出現」與「還沒算完」
 async function homeAfterMoney(page) {
@@ -454,8 +480,13 @@ try {
   // H9／H10（v1.85.0）：那張卡上緣是小鳳打領結探頭、一進主頁就慢慢探上來在動
   yes(peekOk(pkEnd) && peekMoving(pkEnd),
     `H9 結束後「旅程結束了」那張卡：小鳳打領結從卡片上緣探頭（邊線對齊、整張在畫面裡、不壓到上面）、一進主頁就慢慢探上來在動（${peekBrief(pkEnd)}）`);
+  // H9b／H10b（2026-11-19）：量「在動」的那兩次取位置之間，瀏覽器真的畫了新的格——這兩條紅表示這一次沒量到，不是動畫壞了
+  yes(pkEnd.found && pkEnd.frameOk === true,
+    `H9b 結束後「旅程結束了」那張卡量動作的時候瀏覽器有畫新的格：兩次取位置之間畫了至少 2 格、時間軸走了至少 150ms（最多等 3 秒）（${frameBrief(pkEnd)}）`);
   yes(peekOk(pkAll) && peekMoving(pkAll),
     `H10 全部拍完「任務全部完成了」那張卡：小鳳打領結從卡片上緣探頭、一進主頁就慢慢探上來在動（${peekBrief(pkAll)}）`);
+  yes(pkAll.found && pkAll.frameOk === true,
+    `H10b 全部拍完「任務全部完成了」那張卡量動作的時候瀏覽器有畫新的格：兩次取位置之間畫了至少 2 格、時間軸走了至少 150ms（最多等 3 秒）（${frameBrief(pkAll)}）`);
   // H11：主頁自己重畫（router 對外的 refreshPage——現在在哪一站變了、AI 文案回來時走這條）不是導覽：圖照樣在、停在靜止圖，不會再跳一次
   const again = hk ? await page.evaluate(async () => {
     const old = document.querySelector('.trip-home');

@@ -1,7 +1,9 @@
 // 吉祥物（js/glyphs.js；2026-11-13 第三段）從使用者的入口驗（npm run mascottest；會開瀏覽器）
 //
-// 涵蓋的程式：js/glyphs.js、js/app.js（頁首）、js/ui.js（spinnerBox、celebrate）、js/addphoto.js、
-//   js/views/home.js、js/views/recap.js、js/views/settings.js、css/style.css、js/peeks.js（新姿勢的探頭圖）
+// 涵蓋的程式（路徑之間用半形逗號、括號也用半形：挑選器只認後面接半形分隔字元的路徑，接全形「、」「（」的整段不算——
+//   2026-11-19 查出這一行從 11-13 起就寫著設定頁，卻因為全形分隔字元，改設定頁、首頁、回顧頁、頁首、樣式表都不會挑到這支）：
+//   js/glyphs.js, js/app.js (頁首), js/ui.js (spinnerBox, celebrate), js/addphoto.js,
+//   js/views/home.js, js/views/recap.js, js/views/settings.js, css/style.css, js/peeks.js (新姿勢的探頭圖)
 //
 // 和紙、深色各跑一輪（各開一個全新的瀏覽器情境；深色那輪從底部分頁「設定」→「畫面顏色」點「深色」切過去）：
 //   M1 頁首：標題左邊是雪納瑞的頭（不是背包）、高 26（跟背包一樣）、在標題字左邊、不疊字；

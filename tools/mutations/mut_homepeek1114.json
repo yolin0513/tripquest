@@ -2,11 +2,11 @@
   {
     "name": "主頁：「旅程結束了／任務全部完成了」那張卡沒掛上探頭圖",
     "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/trip.js 拿掉 mountPeek(main, el)：圖做好了、也呼叫了 cheer，但沒放進卡片（v1.84.0 以前的樣子）。H9、H10 紅（沒有探頭圖）；H11 也紅（重畫之後一樣找不到圖——它要求圖在，才分得出「停在靜止圖」跟「根本沒有圖」）。H5、H6 只看字與按鈕，照樣綠。",
-    "expect": ["H9 結束後「旅程結束了」那張卡", "H10 全部拍完「任務全部完成了」那張卡", "H11 主頁自己重畫時探頭圖照樣在"],
+    "expect": ["H9 結束後「旅程結束了」那張卡", "H9b 結束後「旅程結束了」那張卡量動作", "H10 全部拍完「任務全部完成了」那張卡", "H10b 全部拍完「任務全部完成了」那張卡量動作", "H11 主頁自己重畫時探頭圖照樣在"],
     "file": "js/views/trip.js",
     "find": "mountPeek(main, endPeek);",
     "replace": "/* 突變：不掛上卡片 */",
-    "note": "v1.95.0（2026-11-18 17:22 事前改 find，mutlint 報死掉）：變數從 el 改名 endPeek（出發那一句也用探頭圖，要分開兩張），find 跟著換；拿掉的仍是「掛上卡片」那一行，預期不變（R已結束那一句照樣掛在卡上講——onCard 看的是圖做好了沒，不看掛上去了沒——H9 照樣紅在沒有探頭圖）。",
+    "note": "v1.95.0（2026-11-18 17:22 事前改 find，mutlint 報死掉）：變數從 el 改名 endPeek（出發那一句也用探頭圖，要分開兩張），find 跟著換；拿掉的仍是「掛上卡片」那一行，預期不變（R已結束那一句照樣掛在卡上講——onCard 看的是圖做好了沒，不看掛上去了沒——H9 照樣紅在沒有探頭圖）。預期複審（事前補 2026-11-19 03:1x，跑之前）：hometest 新加 H9b／H10b，沒有探頭圖時 endPeek 回 found false，這兩條跟著紅 → 補 H9b、H10b（11-13 第 978 次的輸出 H9、H10 都印「沒有探頭圖」）。",
     "cmd": "node scripts/hometest.mjs"
   },
   {
@@ -36,6 +36,15 @@
     "file": "css/style.css",
     "find": ".th-end > .gl-peek { right: 14px; bottom: calc(100% - var(--pk-sink) + var(--th-bd)); }",
     "replace": ".th-end > .gl-peek { right: 14px; }",
+    "cmd": "node scripts/hometest.mjs"
+  },
+  {
+    "name": "主頁：量探頭圖動作時等不到瀏覽器畫新的格（時間軸門檻改成 99999ms）",
+    "why": "（事前寫 2026-11-19 03:1x，跑之前；hometest 新加的 H9b／H10b「量動作的時候瀏覽器有畫新的格」要證明會紅）scripts/hometest.mjs 的 endPeek 把「時間軸走了至少 150ms」改成 99999ms：每一次都等滿 3 秒、frameOk false。只紅 H9b、H10b。H9、H10 照樣綠：跑著的段數在等之前就數好了；位置——預測探上來那段第一次取位置時還在播、等滿 3 秒時已經停在別的位置，兩次照樣不一樣（同 mascottest 那條 99999 的推論，這裡沒另外量過）。H11 量的是重畫之後，不經過 endPeek。",
+    "expect": ["H9b 結束後「旅程結束了」那張卡量動作", "H10b 全部拍完「任務全部完成了」那張卡量動作"],
+    "file": "scripts/hometest.mjs",
+    "find": "now - tl1 >= 150) res(true)",
+    "replace": "now - tl1 >= 99999) res(true)",
     "cmd": "node scripts/hometest.mjs"
   }
 ]
