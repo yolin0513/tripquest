@@ -109,10 +109,11 @@ export function peek(kind, k = 0.6) {
 // 邊線以下（手、道具、尾巴）每一張最多 20 個畫布單位＝12px：卡片、按鈕的字不被蓋到（產圖時的規矩）。
 // 阿灰（scout／point）頭頂的深灰帶、白下巴、point 伸出去那隻翅膀的深色翅尖，都直接畫成算好的形狀
 // （頭形 ∩ 帶子、頭形 ∩ 下巴橢圓、翅膀形 ∩ 長方形），不用 clipPath 裁：
-// 2026-11-18 在 Chromium 實測，「clipPath 裡是 <path>、而且包在轉過角度的 <g> 裡」會被裁成那條 path 的外接長方形
-// （scout 的頭轉 3°、point 的翅膀轉 -108°；拿掉旋轉就裁對；clipPath 裡是 <ellipse> 的轉了也裁對）。
-// Yolin：「阿灰頭上有一塊灰色長方形」。照規格裁的 librsvg（sharp）畫出來是對的，所以只看 sharp 的圖看不出來。
-// 算好的形狀跟照規格裁的逐畫素相同（8 倍放大比 0 畫素不同）。新畫的圖別再把 path 形的 clipPath 放進轉過的群組裡。
+// 2026-11-18 在 Chromium 實測：scout 的頭轉了 3°，頭頂那條帶子用 <path> 形的 clipPath 裁，被裁成那條 path 的外接長方形
+// （拿掉旋轉就裁對）；point 的翅尖（轉 -108°，也是 <path> 形的 clipPath）不套 CSS 時一樣裁錯，在 App 裡剛好裁對（原因沒查到）。
+// clipPath 裡是 <ellipse> 的，轉了角度也裁對。Yolin：「阿灰頭上有一塊灰色長方形」。照規格裁的 librsvg（sharp）畫出來是對的，
+// 所以只看 sharp 的圖看不出來。算好的形狀跟照規格裁的逐畫素相同（8 倍放大比 0 畫素不同）。
+// 新畫的圖別把 path 形的 clipPath 放進轉過角度的群組裡（scripts/cliptest.mjs 擋這種寫法）。
 export const POSE_K = 0.6;
 // side＝掛在宿主的哪一邊（CSS .pose-l／.pose-r／.pose-c）；宿主上面要留的空間由 ui.js 的 mountPose 處理。
 export function pose(kind, side = 'r') {

@@ -7,7 +7,7 @@
 //
 // 驗什麼（每一種時機都驗「該講時講」與「不該講時不講」）：
 //   S0  純函式的邊界（中午 12 點、別天、下雨／下雪、出發那天）——只是補充，使用者的路在下面
-//   出發當天早上（時區撥到當地 9 點）：主頁「今天是第 1 天」下面雪納瑞講一句（v1.95.0 起拿相機從對話框上緣探頭，S1b）；今天也會下雨，但一次只講一句（出發優先）；
+//   出發當天早上（時區撥到當地 9 點）：主頁「今天是第 1 天」下面雪納瑞講一句（v1.95.0 起從對話框上緣探頭，S1b；新姿勢起是揮手那一張 hello，第一版是拿相機的 cam）；今天也會下雨，但一次只講一句（出發優先）；
 //     那一句跟著版面排、不疊在別的區塊上；✕ 至少 44×44；出場只動 opacity／transform；
 //     按 ✕ → 這趟不再講出發那一句、換天氣那一句（今天可能會下雨）；下雨那一句關掉 → 同一天不再講；
 //     出發日改成明天、明天會下雨 → 照樣講「出發那天可能會下雨」（天氣那兩句照哪一天記）
@@ -311,10 +311,11 @@ try {
     const day = await page.evaluate(() => document.querySelector('.trip-home .th-day-n')?.textContent || '');
     yes(!!dep && dep.who === 'schnauzer' && dep.text === '今天出發！東西都帶齊了嗎？' && dep.prev === 'th-day' && dep.role === 'status' && day === '今天是第 1 天',
       `S1 出發當天早上：主頁「${day || '沒讀到'}」下面，雪納瑞講「今天出發！東西都帶齊了嗎？」（${dep ? `${dep.who}「${dep.text}」、上一個是 ${dep.prev}、role=${dep.role}` : brief(S)}）`);
-    // v1.95.0（吉祥物融入介面第一版，規劃 H1）：講話的鬍鬍拿相機從對話框上緣探頭（跟下雨那一句同一種擺法），不再站在左邊
-    yes(!!dep && dep.peek === 'cam' && dep.peekHidden && dep.peekW > 0 && dep.edgeGap != null && Math.abs(dep.edgeGap) <= 1
+    // v1.95.0（吉祥物融入介面第一版，規劃 H1）：講話的鬍鬍從對話框上緣探頭（跟下雨那一句同一種擺法），不再站在左邊。
+    // 新姿勢（Yolin 2026-11-18 晚上）起是揮手那一張（js/peeks.js 的 hello，融入九宮格第 8 格）；第一版是拿相機那張（cam）
+    yes(!!dep && dep.peek === 'hello' && dep.peekHidden && dep.peekW > 0 && dep.edgeGap != null && Math.abs(dep.edgeGap) <= 1
       && dep.peekOver.length === 0 && !dep.general && !dep.tail,
-      `S1b 出發那一句：拿相機的鬍鬍從對話框上緣探頭（${dep ? `探頭圖 ${dep.peek || '沒有'}、aria-hidden ${dep.peekHidden}、寬 ${dep.peekW}px、邊線差 ${dep.edgeGap}px、疊到 ${dep.peekOver.join('、') || '沒有'}、左邊那一隻 ${dep.general}、尾巴 ${dep.tail}` : '—'}）`);
+      `S1b 出發那一句：揮手的鬍鬍從對話框上緣探頭（${dep ? `探頭圖 ${dep.peek || '沒有'}、aria-hidden ${dep.peekHidden}、寬 ${dep.peekW}px、邊線差 ${dep.edgeGap}px、疊到 ${dep.peekOver.join('、') || '沒有'}、左邊那一隻 ${dep.general}、尾巴 ${dep.tail}` : '—'}）`);
     yes(!!S && S.length === 1 && !!dep && wxKind === 'rain',
       `S2 主頁一次最多一句：今天會下雨（天氣條提示 ${wxKind || '沒有'}），但只講出發那一句（主頁上：${brief(S)}）`);
     yes(!!dep && dep.over.length === 0 && dep.pos === 'static' && dep.h > 0,
@@ -336,9 +337,11 @@ try {
       `S6b 天氣那一句也不疊在別的區塊上（疊到：${rain ? rain.over.join('、') || '沒有' : '—'}）`);
     // v1.87.1（Yolin 看 v1.87.0 實機）：下雨那一句要配撐傘的那一隻（天氣頁那一張探頭圖），不是一般那一隻。
     // 期望（2026-11-14 事前寫）：對話框上緣探頭的是 rain（鬍鬍撐傘）、aria-hidden；邊線對在對話框外框上緣（差 ≤ 1px）；
-    // 圖不疊到天氣條；沒有左邊那一隻；對話框沒有尾巴。出發那一句（S1）照舊是左邊那一隻、沒有探頭圖。
+    // 圖不疊到天氣條；沒有左邊那一隻；對話框沒有尾巴。
+    // 原本還要求「出發那一句（S1）照舊是左邊那一隻、沒有探頭圖」（dep.peek === null && dep.general）；v1.95.0 起出發那一句也是探頭圖，
+    // 那一半跟 S1b 互相矛盾（第一版改 S1b 時漏改這裡，那時沒跑測試），2026-11-18 拿掉——出發那一句由 S1b 驗。訊息照舊印出發那一句的探頭圖。
     yes(!!rain && rain.peek === 'rain' && rain.peekHidden && rain.peekW > 0 && rain.edgeGap != null && Math.abs(rain.edgeGap) <= 1
-      && rain.peekOver.length === 0 && !rain.general && !rain.tail && !!dep && dep.peek === null && dep.general,
+      && rain.peekOver.length === 0 && !rain.general && !rain.tail,
       `S6c 下雨那一句：撐傘的那一隻從對話框上緣探頭（${rain ? `探頭圖 ${rain.peek || '沒有'}、寬 ${rain.peekW}px、邊線差 ${rain.edgeGap}px、疊到 ${rain.peekOver.join('、') || '沒有'}、左邊那一隻 ${rain.general}、尾巴 ${rain.tail}` : '—'}；出發那一句：探頭圖 ${dep ? dep.peek : '—'}、左邊那一隻 ${dep ? dep.general : '—'}）`);
     const closed2 = !!rain && await closeSay(page, rain.key);
     const ok3 = closed2 && await backToHome(page);

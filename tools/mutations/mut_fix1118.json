@@ -17,5 +17,131 @@
     "replace": "  const sp = store.spotsOf(tripId).map((s) => [s.id, s.emoji, s.day,",
     "cmd": "node scripts/legviewtest.mjs",
     "done": "^交通方式畫面：\\d+ 項通過"
+  },
+  {
+    "name": "裁切框掃描：不看引用處外面那幾層 g 的轉角",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）cliptest 的「外層轉角」分支拿掉（outer 一律 false）。合成樣本 a（外面的 g 帶 rotate）、c（外面的 g 帶 matrix）、d（polygon＋外層轉角）都變成沒事 → CT1 紅。CT3 兩條換回的舊寫法，引用處都在轉過的 g 裡（scout 的頭 rotate(3 100 136)、point 的翅膀 translate(132 147) rotate(-108)），抓不到 → 兩條都紅。CT2 真的檔現在本來就 0 個會出事，不紅。（事後補 2026-11-18 21:01，第一次跑之後：CT2 也紅——不是因為抓到會出事的，是 CT2 的前置「轉了角度的 ellipse 裁切框 ≥ 5」掉到 0 個：那 11 個轉角全靠外層 g 認出來。事前漏想；這條紅證明 CT2 的前置真的會擋「讀不到轉角」。expect 補上 CT2，這一項是事後寫的。）",
+    "expect": ["CT1 對照組", "CT2 真的檔", "CT3 真的檔的對照：阿灰望遠鏡", "CT3 真的檔的對照：指路阿灰"],
+    "file": "scripts/cliptest.mjs",
+    "find": "outer: stack.some(turns)",
+    "replace": "outer: false",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "裁切框掃描：不看引用的那個元素自己的轉角",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）self 一律 false。只有合成樣本 b（轉角寫在引用的那個元素自己身上）變成沒事 → 只紅 CT1。CT3 的兩個舊寫法轉角都在外層 g、不在元素自己身上，照樣抓到；CT2 不紅。",
+    "expect": ["CT1 對照組"],
+    "file": "scripts/cliptest.mjs",
+    "find": "self: turns(tfOf(own))",
+    "replace": "self: false",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "裁切框掃描：只認 rotate、matrix 不算會轉",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）turns() 最後一行改成只看剩下的字裡有沒有 rotate。只有合成樣本 c（外層 matrix(…)）變成沒事 → 只紅 CT1。真的檔與 CT3 的轉角都是 rotate，不受影響。",
+    "expect": ["CT1 對照組"],
+    "file": "scripts/cliptest.mjs",
+    "find": "  return rest.length > 0;",
+    "replace": "  return /rotate/.test(rest);",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "裁切框掃描：白名單放寬成「只有 path 會出事」",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）safe 改成「不是 path 就沒事」。只有合成樣本 d（polygon＋外層轉角）變成沒事 → 只紅 CT1。真的檔的裁切框只有 path、ellipse、circle、rect 四種，CT2、CT3 不受影響。",
+    "expect": ["CT1 對照組"],
+    "file": "scripts/cliptest.mjs",
+    "find": "const safe = SAFE_SHAPES.has(shape.toLowerCase());",
+    "replace": "const safe = shape.toLowerCase() !== 'path';",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "裁切框掃描：找不到引用當成沒事",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）unknown 一律 false（§5.13：判斷不了要停，這條把它改成放行）。合成樣本 i（path、沒有引用）從「判斷不了」變成「沒事」→ 只紅 CT1。真的檔現在 0 個判斷不了，CT2 不紅。",
+    "expect": ["CT1 對照組"],
+    "file": "scripts/cliptest.mjs",
+    "find": "unknown: !safe && refs.length === 0",
+    "replace": "unknown: false",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "裁切框掃描：rotate(0 …) 也算會轉",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）拿掉剝掉 rotate(0 …) 那一步。合成樣本 f（path 包在 rotate(0 100 136) 裡）變成會出事 → 紅 CT1。真的檔裡 rotate(0 …) 的群組（scout 的 rotate(0 133 148)、board 的 rotate(0 100 136)）裡面的裁切框，照 11-18 的盤點都是 ellipse 或不在那一層（board 的 i0 定義與引用不在轉過的 g 裡），推論 CT2 不紅——如果 CT2 也紅，代表盤點漏了，要回頭查。",
+    "expect": ["CT1 對照組"],
+    "file": "scripts/cliptest.mjs",
+    "find": ".replace(/\\brotate\\(\\s*-?0+(?:\\.0+)?(?=[\\s,)])[^)]*\\)/g, '')",
+    "replace": ".replace(/^$/g, '')",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "裁切框掃描：</g> 不關掉外層（轉角一直延續到行尾）",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）遇到 </g> 不 pop。合成樣本 h（定義在轉過的 g 裡、那個 g 關掉之後才引用）變成會出事 → 紅 CT1。真的檔：glyphs.js 全身阿灰那一行，轉過的兩隻腳（ellipse 裁切框）畫完之後才畫頭頂帶（path 形的 i3），不關掉外層的話頭頂帶會被當成在轉過的 g 裡 → CT2 也紅。CT3 本來就抓得到，不紅。（事後補 2026-11-18 21:01，第一次跑之後：CT2 紅了 5 個（peeks.js 280、318、330 的 i0，glyphs.js 246 的 i3、251 的 i0），CT3 兩條也紅——CT3 要求換回之後「剛好抓到 1 個」，現在連那 5 個一起抓到。事前說 CT3 不紅是錯的；expect 補上 CT3 兩條，這兩項是事後寫的。）",
+    "expect": ["CT1 對照組", "CT2 真的檔", "CT3 真的檔的對照：阿灰望遠鏡", "CT3 真的檔的對照：指路阿灰"],
+    "file": "scripts/cliptest.mjs",
+    "find": "if (g[1]) stack.pop(); else",
+    "replace": "if (g[1]) { /* 不關 */ } else",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "阿灰望遠鏡頭頂改回 clipPath 裁（11-18 以前的寫法）：靜態掃描",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）js/peeks.js 裡 scout 那張（只有它的頭包在 rotate(3 100 136) 裡，find 從那裡開始才唯一；point 的頭頂帶字串一樣）把算好的頭頂帶與下巴換回 clipPath 寫法。CT2 抓到 1 個會出事（scout 那一行的 i3 <path>）→ 紅；CT3 的阿灰望遠鏡那條找不到算好的形狀（出現 0 次）→ 紅。CT1、CT3 的指路阿灰不受影響。（事後補 2026-11-18 21:01，第一次跑之後：CT3 的指路阿灰也紅——它換回翅尖之後掃整支檔，scout 那一行已經被這條改壞，抓到 2 個（330 i3、334 i4），不是「剛好 1 個」。事前說不受影響是錯的；expect 補上，這一項是事後寫的。）",
+    "expect": ["CT2 真的檔", "CT3 真的檔的對照：阿灰望遠鏡", "CT3 真的檔的對照：指路阿灰"],
+    "file": "js/peeks.js",
+    "find": "rotate(3 100 136)\"><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#2f2c2a\" stroke=\"#2f2c2a\" stroke-width=\"7.6\" stroke-linejoin=\"round\"/><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#c3bdb7\"/><path d=\"M51.41 80.56 C58.52 61.24 76.25 50 100 50 C123.75 50 141.48 61.24 148.59 80.56 Q100 67.44 51.41 80.56 Z\" fill=\"#9a948f\"/><path d=\"M70.95 133.75 A30 17 0 0 1 129.05 133.75 C121.02 136.68 111.18 138 100 138 C88.82 138 78.98 136.68 70.95 133.75 Z\" fill=\"#fffdf9\"/>",
+    "replace": "rotate(3 100 136)\"><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#2f2c2a\" stroke=\"#2f2c2a\" stroke-width=\"7.6\" stroke-linejoin=\"round\"/><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#c3bdb7\"/><defs><clipPath id=\"i3\"><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" /></clipPath></defs><g clip-path=\"url(#i3)\"><path d=\"M40 84 Q100 64 160 84 V40 H40 Z\" fill=\"#9a948f\"/><ellipse cx=\"100\" cy=\"138\" rx=\"30\" ry=\"17\" fill=\"#fffdf9\"/></g>",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "阿灰望遠鏡頭頂改回 clipPath 裁（11-18 以前的寫法）：建立行程頁截圖量",
+    "why": "（事前寫 2026-11-18 20:56，跑之前；會開瀏覽器）同上一條的改法，改跑 peektest。P9 兩輪（和紙、深色）建立行程頁的阿灰頭頂，兩個上角量到深灰帶（方框）→ 兩條「建立行程頁的阿灰望遠鏡」紅。兩條對照組：頁面上本來就是舊寫法，直接量、量得到方框 → 不紅。P1～P8 與動畫那幾條不看阿灰的頭頂，不紅；項數不變（P9 的例外收成 ✗、不丟出去）。",
+    "expect": ["［和紙］ P9 建立行程頁的阿灰望遠鏡", "［深色］ P9 建立行程頁的阿灰望遠鏡"],
+    "file": "js/peeks.js",
+    "find": "rotate(3 100 136)\"><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#2f2c2a\" stroke=\"#2f2c2a\" stroke-width=\"7.6\" stroke-linejoin=\"round\"/><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#c3bdb7\"/><path d=\"M51.41 80.56 C58.52 61.24 76.25 50 100 50 C123.75 50 141.48 61.24 148.59 80.56 Q100 67.44 51.41 80.56 Z\" fill=\"#9a948f\"/><path d=\"M70.95 133.75 A30 17 0 0 1 129.05 133.75 C121.02 136.68 111.18 138 100 138 C88.82 138 78.98 136.68 70.95 133.75 Z\" fill=\"#fffdf9\"/>",
+    "replace": "rotate(3 100 136)\"><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#2f2c2a\" stroke=\"#2f2c2a\" stroke-width=\"7.6\" stroke-linejoin=\"round\"/><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" fill=\"#c3bdb7\"/><defs><clipPath id=\"i3\"><path d=\"M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z\" /></clipPath></defs><g clip-path=\"url(#i3)\"><path d=\"M40 84 Q100 64 160 84 V40 H40 Z\" fill=\"#9a948f\"/><ellipse cx=\"100\" cy=\"138\" rx=\"30\" ry=\"17\" fill=\"#fffdf9\"/></g>",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "指路阿灰的翅尖改回 clipPath 裁（11-18 以前的寫法）：靜態掃描",
+    "why": "（事前寫 2026-11-18 20:56，跑之前）js/peeks.js 裡 point 的翅尖（算好的形狀只出現在這一張）換回 clipPath 寫法。CT2 抓到 1 個會出事（point 那一行的 i4 <path>）→ 紅；CT3 的指路阿灰那條找不到算好的形狀 → 紅。這條沒有瀏覽器版：翅尖舊寫法在 App 裡剛好裁對（11-18 實測），截圖量不出來，只能擋寫法。（事後補 2026-11-18 21:01，第一次跑之後：CT3 的阿灰望遠鏡也紅——同上一條的道理反過來，point 那一行已經被改壞，scout 換回之後抓到 2 個。expect 補上，這一項是事後寫的。）",
+    "expect": ["CT2 真的檔", "CT3 真的檔的對照：阿灰望遠鏡", "CT3 真的檔的對照：指路阿灰"],
+    "file": "js/peeks.js",
+    "find": "<path d=\"M10.6 39.2 C7.83 46.96 3.65 53.08 0 56 C-3.65 53.08 -7.83 46.96 -10.6 39.2 Z\" fill=\"#6f6965\"/>",
+    "replace": "<defs><clipPath id=\"i4\"><path d=\"M0 0 C13 0 15 16 13 30 C11 42 5 52 0 56 C-5 52 -11 42 -13 30 C-15 16 -13 0 0 0 Z\" /></clipPath></defs><g clip-path=\"url(#i4)\"><rect x=\"-20\" y=\"39.2\" width=\"40\" height=\"56\" fill=\"#6f6965\"/></g>",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "動作：空白頁的白兔揮完手停在歪 4 度（新姿勢的 pk-wave）",
+    "why": "（事前寫 2026-11-18 21:1x，跑之前；接手 mut_move1114 原本「按鈕上的小鳳揮完翅膀停在歪 4 度」那一段——新姿勢起 pk-wave 是空白頁白兔舉著的手，按鈕上那一張改成星星）pk-wave 最後一格從 rotate(0deg) 改成 rotate(4deg)。只紅和紙那輪「白兔揮完停回原位」（手相對於整張圖的矩陣差）；「揮手兩下」照樣 2 次（數的是往 −16 度那一邊，4 度不算）；回顧的白熊、按鈕上的小鳳沒有 pk-wave。",
+    "expect": ["［和紙］ M9 白兔揮完停回原位"],
+    "file": "css/style.css",
+    "find": "@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); }",
+    "replace": "@keyframes pk-wave { 0% { transform: rotate(0deg); } 100% { transform: rotate(4deg); }",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：切換主題時山雀不跳",
+    "why": "（事前寫 2026-11-18 21:1x，跑之前；新斷言 mascottest M6b 要證明會紅）js/views/settings.js 拿掉 if (hop) pk.cheer(el)：按了切換主題，坐在那一排上的山雀也不跳。只紅深色那輪「M6b 按「深色」切換主題那一刻」（等 4 秒等不到 pk-cheer）；和紙那輪的 M6b（進設定頁不跳）照樣綠；M6 照樣量得到圖。",
+    "expect": ["［深色］ M6b "],
+    "file": "js/views/settings.js",
+    "find": "    if (hop) pk.cheer(el);",
+    "replace": "    /* 突變：切換主題不跳 */",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "動作：進設定頁山雀也跳",
+    "why": "（事前寫 2026-11-18 21:1x，跑之前；M6b 的另一個方向）js/views/settings.js 不看 hop、每次畫設定頁都 cheer：一進設定頁就跳（Yolin 的規矩：設定頁不打招呼）。只紅和紙那輪「M6b 進設定頁山雀不跳」；深色那輪按深色那一刻照樣跳，M6b 照樣綠；M9 不量設定頁。",
+    "expect": ["［和紙］ M6b "],
+    "file": "js/views/settings.js",
+    "find": "    if (hop) pk.cheer(el);",
+    "replace": "    pk.cheer(el);   // 突變：進設定頁也跳",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "徽章：按鈕上換回小鳳打領結（第一版那一張）",
+    "why": "（事前寫 2026-11-18 21:1x，跑之前；mascottest M9 的徽章那一張從 done 改認 star，要證明會紅）js/addphoto.js 的 showNewBadges 換回第一版的 m.peek(m.DONE_PEEK, 0.4)。紅和紙那輪「解鎖新徽章的小鳳從按鈕上緣跳上來」（探頭圖 done ≠ star）、深色那輪「減少動態效果」（同一條也比 star）。位置那兩條推論照樣綠（同一條 .celebrate .btn > .gl-peek 的 CSS、圖比較小、不會更靠近上面那一行）；跳完停回原位照樣綠。",
+    "expect": ["［和紙］ M9 解鎖新徽章的小鳳從按鈕上緣跳上來", "［深色］ M9 減少動態效果"],
+    "file": "js/addphoto.js",
+    "find": "        btnPeek = m.pose('star', 'c');",
+    "replace": "        btnPeek = m.peek(m.DONE_PEEK, 0.4);   // 突變：換回打領結",
+    "cmd": "node scripts/mascottest.mjs"
   }
 ]

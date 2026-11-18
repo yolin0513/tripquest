@@ -192,10 +192,10 @@
   },
   {
     "name": "H1：出發那一句的鬍鬍不從對話框上緣探頭",
-    "why": "（事前寫 2026-11-18 17:15，跑之前；v1.95.0 吉祥物融入介面第一版）js/views/trip.js 不給出發那一句探頭圖（departPeek 一直是 null）：照舊站在對話框左邊、對話框有尾巴。只紅「S1b 出發那一句」（探頭圖沒有、左邊那一隻 true、尾巴 true）；S1 不看是誰站著、照樣綠；S3／S4／S5 照樣綠（跟著版面排、✕、出場動畫都在）。",
+    "why": "（事前寫 2026-11-18 17:15，跑之前；v1.95.0 吉祥物融入介面第一版）js/views/trip.js 不給出發那一句探頭圖（departPeek 一直是 null）：照舊站在對話框左邊、對話框有尾巴。只紅「S1b 出發那一句」（探頭圖沒有、左邊那一隻 true、尾巴 true）；S1 不看是誰站著、照樣綠；S3／S4／S5 照樣綠（跟著版面排、✕、出場動畫都在）。（2026-11-18 21:14 只換錨點，跑之前：新姿勢起出發那一句是揮手那一張 pk.pose('hello', 'l')，原本那一行不在了。departPeek 一直是 null 時，「畫面上沒有別張探頭圖」那條規則會改在今天那張卡上放阿灰望遠鏡（H3）——saytest 不量那張卡，推論不影響其他條；預期不變。）",
     "expect": ["S1b 出發那一句"],
     "file": "js/views/trip.js",
-    "find": "  if (!sayEnd && todayDay === 1 && pk) departPeek = pk.peekFit('cam', WHO_PX);",
+    "find": "  if (!sayEnd && todayDay === 1 && pk) departPeek = pk.pose('hello', 'l');",
     "replace": "  /* 突變：出發那一句不探頭 */",
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   },

@@ -1,18 +1,23 @@
 // 吉祥物（js/glyphs.js；2026-11-13 第三段）從使用者的入口驗（npm run mascottest；會開瀏覽器）
 //
 // 涵蓋的程式：js/glyphs.js、js/app.js（頁首）、js/ui.js（spinnerBox、celebrate）、js/addphoto.js、
-//   js/views/home.js、js/views/recap.js、js/views/settings.js、css/style.css
+//   js/views/home.js、js/views/recap.js、js/views/settings.js、css/style.css、js/peeks.js（新姿勢的探頭圖）
 //
 // 和紙、深色各跑一輪（各開一個全新的瀏覽器情境；深色那輪從底部分頁「設定」→「畫面顏色」點「深色」切過去）：
 //   M1 頁首：標題左邊是雪納瑞的頭（不是背包）、高 26（跟背包一樣）、在標題字左邊、不疊字；
 //      頁首高度跟「同一頁換回背包」量到的一樣（頁首高度不變——貼門檻的版面測試靠這個）；首頁、設定頁、旅程頁都看一次
-//   M2 空白頁：全新的 App「我的旅程」沒有旅程 → 空白那一塊是白兔、看得到、原本的 🧳 不在了
+//   M2 空白頁：全新的 App「我的旅程」沒有旅程 → 白兔、看得到、原本的 🧳 不在了
+//      新姿勢（Yolin 2026-11-18 晚上）起：白兔從「＋ 建立新旅程」按鈕上緣探頭揮手（js/peeks.js 的 hi），空白那一塊不再站一隻
 //   M3 載入中：「回顧」分頁按「最終回顧」→ 整理回顧時（天氣請求被攔住、確定還在等）轉圈上面是鷹、在轉圈上方
-//   M4 行程回顧：放行天氣請求之後 → 回顧標題上面是白熊
+//   M4 行程回顧：放行天氣請求之後 → 白熊
+//      新姿勢起：白熊趴在大數字那一區的上緣、舉一塊空白小白板（board），標題上面不再站一隻
 //   M5 完成任務：任務頁那一站「從相簿選」一張照片 → 慶祝畫面是玄鳳、沒有打勾的圓
 //      （2026-11-13 第四段之二起：有照片時玄鳳改成從照片上緣探頭——js/peeks.js 的 done；那一站用沒有對得上類別的龍山寺。
 //       各類別換哪一張、邊線對不對齊，由 scripts/peektest.mjs 驗；這裡只驗「出場的是玄鳳」與主題、無障礙）
-//   M6 設定頁：底部分頁「設定」→「關於」卡裡是山雀
+//   M6 設定頁：底部分頁「設定」→ 山雀
+//      新姿勢起：山雀坐在「畫面顏色」那一排按鈕的上緣（perch），「關於」卡裡不再站一隻；
+//      M6b 進設定頁不跳（和紙那輪）、按「深色」切換主題那一刻跳一下（深色那輪，還沒打開減少動態效果之前）
+//   新姿勢的探頭圖沒有地面陰影：M7 只驗白邊（同 M5 完成任務那一張）；data-peek 是「哪一張」，換成「哪一隻」（POSE_WHO）才跟其他出場處比
 //   M7 主題：和紙下身體沒有白邊、地面陰影與動作線看得到；深色下身體套白邊濾鏡（濾鏡真的在那張圖裡）、陰影與動作線不畫
 //   M8 六個出場處六隻、各不相同（六隻平等、不重複）；每一張 aria-hidden、沒有 <text>／<title>（不寫名字）；
 //      圖裡的 id 在整頁唯一、每個 url(#…) 都指到同一張圖裡面（同一頁好幾張時不會指到別張的裁切框）
@@ -22,6 +27,8 @@
 //      v1.95.0（吉祥物融入介面第一版，規劃 B1）：解鎖新徽章的小鳳不再站在標題上彈跳，改從「太棒了」按鈕上緣探頭、跳上來
 //      （js/addphoto.js 的 showNewBadges → js/ui.js 的 celebrate 的 btnPeek；探頭圖與 cheer 跟完成任務那一刻同一張——那一張的動畫細節由 peektest 驗）。
 //      這裡驗：在按鈕上、標題上面沒有整隻、跳上來、跳完停回原位、邊線對在按鈕框線外緣而且置中、不蓋到上面那行字與按鈕的字（兩輪都量位置）。
+//      新姿勢起：按鈕上那一張換成小鳳雙翅抱一枚星星（star）；空白頁的白兔、回顧的白熊也改成探頭圖跳上來（cheer），
+//      揮手數「pk-wave」那一層往外揮到底幾次、白熊量「pk-hop」那一層第 0 格在下面（從大數字那一區後面跳上來，不是淡入）。
 //      兩次取位置之間等瀏覽器真的畫了新的格（v1.95.0 起；原本是 setTimeout 150ms，機器忙時兩次可能讀到同一格——同 peektest 的 animNow）。
 //      深色那輪同時打開設定頁的「減少動態效果」：同樣四個時刻都不動（系統設定那個入口由 peektest 驗：兩支共用 glyphs.js 的 reducedMotion）
 import { spawn } from 'node:child_process';
@@ -48,6 +55,20 @@ const photoPath = join(mkdtempSync(join(tmpdir(), 'tq-mascot-')), 'p.png');
 writeFileSync(photoPath, PNG);
 
 const EXPECT = { header: 'schnauzer', empty: 'bunny', loading: 'hawk', done: 'cockatiel', recap: 'bear', settings: 'tit' };
+// 新姿勢的探頭圖：data-peek（哪一張）→ 哪一隻（docs/DESIGN_吉祥物融入介面.md 6.2 的九宮格）
+const POSE_WHO = { hi: 'bunny', board: 'bear', perch: 'tit', star: 'cockatiel' };
+// 三處新姿勢掛在哪裡（js/views/home.js、recap.js、settings.js；js/ui.js 的 mountPose 給宿主標 .pose-host）。
+// 選擇器只認宿主、不認哪一張：掛錯張（例如設定頁也掛白熊那張）照樣量得到，由 POSE_WHO 換成哪一隻，M2／M4／M6 與 M8「各不相同」才抓得到
+const EMPTY = '.home-new.pose-host > svg.gl-peek';
+const RECAP = '.recap-nums.pose-host > svg.gl-peek';
+const PERCH = '.theme-seg-wrap.pose-host > svg.gl-peek';
+// 等一張圖身上的動畫都播完（最多 4 秒）再量位置：跳上來的途中圖還在宿主後面，中間那一點可能點到宿主
+const settle = (page, sel) => page.evaluate((s) => {
+  const el = document.querySelector(s);
+  if (!el) return false;
+  return Promise.race([Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)).then(() => true, () => false),
+    new Promise((r) => setTimeout(() => r(false), 4000))]);
+}, sel);
 
 // 量一張吉祥物：種類、大小、看不看得到、白邊／陰影／動作線的狀態、無障礙、id 與引用
 const probe = (page, sel) => page.evaluate((s) => {
@@ -63,12 +84,15 @@ const probe = (page, sel) => page.evaluate((s) => {
   const dupIds = ids.filter((id) => document.querySelectorAll(`[id="${CSS.escape(id)}"]`).length !== 1);
   const refs = [...el.innerHTML.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
   const strayRefs = refs.filter((id) => !el.querySelector(`[id="${CSS.escape(id)}"]`));
-  const mid = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  // 被蓋：中間與上下左右各偏 15% 共五點，沒有一點點到這張圖（探頭圖的中間可能剛好是透明的地方，點到底下的宿主；2026-11-18 新姿勢起改五點）
+  const pts = [[0.5, 0.5], [0.35, 0.5], [0.65, 0.5], [0.5, 0.35], [0.5, 0.65]];
+  const hits = pts.map(([fx, fy]) => document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy));
   return {
-    found: true, kind: el.getAttribute('data-mascot'), cls: el.getAttribute('class') || '',
+    found: true, kind: el.getAttribute('data-mascot'), peek: el.getAttribute('data-peek'), cls: el.getAttribute('class') || '',
+    host: (el.parentElement?.textContent || '').trim().slice(0, 24),
     w: Math.round(r.width), h: Math.round(r.height * 10) / 10, top: r.top, bottom: r.bottom, left: r.left, right: r.right,
     inView: r.top >= 0 && r.bottom <= innerHeight && r.width > 0,
-    covered: !mid || !(mid === el || el.contains(mid)),
+    covered: !hits.some((m) => m && (m === el || el.contains(m))),
     filter: filt, rimOk: !!(fid && el.querySelector(`filter[id="${CSS.escape(fid[1])}"]`)),
     shadow: vis('.mc-shadow'), extra: vis('.mc-extra'),
     aria: el.getAttribute('aria-hidden'), texty: el.querySelectorAll('text, title').length,
@@ -80,14 +104,16 @@ const brief = (p) => p.found ? `${p.kind}，${p.w}×${p.h}` : '沒找到';
 
 // M9 動作（v1.85.0，js/glyphs.js 的 moveMascot）：會動的層——.mc-body（整隻一起：熊淡入跳出來）、.mc-look（鷹繞腳底轉）、
 // .pk-wave-r（白兔舉著的那隻手）、.pk-wave-lines（揮動線）；v1.95.0 解鎖新徽章改成探頭圖（js/peeks.js 的 cheer），再加
-// .pk-hop（邊線以上那層跳上來）、.pk-wave（翅膀）、.pk-grip（扣在按鈕上的手）。一出來就量：取兩次看有沒有變、keyframes 用到哪些屬性、
+// .pk-hop（邊線以上那層跳上來）、.pk-wave（翅膀；新姿勢起是白兔舉著的手）、.pk-grip（扣在按鈕上的手）、.pk-sway、.pk-shine（見下）。一出來就量：取兩次看有沒有變、keyframes 用到哪些屬性、
 // 會一直重複的有幾段；整隻那一層倒回第 0 格量透明度與往下的位移（量完照常往下播）。
 // 兩次之間（v1.95.0 起，同 peektest 的 animNow 2026-11-17 那次改法）：等瀏覽器真的畫了至少 2 格、時間軸往前走至少 150ms，最多等 3 秒；
 //   原本是 setTimeout 150ms——機器忙的時候計時器可能先到、中間一格都沒畫，兩次讀到同一格，看起來像「沒在動」。
 //   等不到回 frameOk false，另一條斷言「量的時候瀏覽器有畫新的格」紅（這一次沒量到），不跟「畫了新的格、位置沒變」（動畫壞了）混在一起。
 //   跑著的段數在量的當下數（倒回第 0 格那段量完會 play()，播完的動畫一 play() 就從頭重播，事後數永遠是全部）。
 const KF_META = ['offset', 'computedOffset', 'easing', 'composite'];   // getKeyframes() 每一格都帶的欄位，不是被動畫的屬性
-const MOVE_CLS = ['mc-body', 'mc-look', 'pk-wave-r', 'pk-wave-lines', 'pk-hop', 'pk-wave', 'pk-grip'];
+// 新姿勢（2026-11-18）再加 .pk-sway（回顧白熊舉的白板）、.pk-shine（解鎖徽章小鳳抱的星星）：沒加的話這兩張只有 pk-hop 那 0.6 秒會動，
+// 「有動」可能量不到、「停回原位」也比不到星星那一層
+const MOVE_CLS = ['mc-body', 'mc-look', 'pk-wave-r', 'pk-wave-lines', 'pk-hop', 'pk-wave', 'pk-grip', 'pk-sway', 'pk-shine'];
 const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
   const el = document.querySelector(s);
   if (!el) return { found: false };
@@ -123,7 +149,8 @@ const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
   const count = {};
   for (const c of cls) count[c] = el.querySelectorAll('.' + c).length;
   let start = null;
-  const body = el.querySelector('.mc-body');
+  // 整隻那一層：全身圖是 .mc-body；探頭圖（cheer 過的）是 .pk-hop（從宿主後面跳上來那一層）
+  const body = el.querySelector('.mc-body') || el.querySelector('.pk-hop');
   if (body && anims.length) {
     // 倒回第 0 格量一下，量完放回原本播到的那一格接著播（不是從頭重播）
     const was = anims.map((a) => a.currentTime);
@@ -287,6 +314,10 @@ async function round(theme) {
       await toSettings(page);
       await clickText(page, '.theme-seg button', '深色');
       await page.waitForFunction(() => document.documentElement.dataset.theme === undefined, { timeout: 5000 });
+      // M6b（新姿勢）：按「深色」那一刻設定頁重畫，坐在那一排上的山雀跳一下（這時還沒打開減少動態效果）
+      const hop = await page.waitForFunction((s) => { const el = document.querySelector(s); return el && el.classList.contains('pk-cheer') ? 'pk-cheer' : false; }, { timeout: 4000 }, PERCH)
+        .then((h) => h.jsonValue(), () => page.evaluate((s) => { const el = document.querySelector(s); return el ? `有圖、沒有 pk-cheer（${el.getAttribute('class')}）` : '沒找到那張圖'; }, PERCH));
+      yes(hop === 'pk-cheer', `${tag} M6b 按「深色」切換主題那一刻，坐在那一排上的山雀跳一下（${hop}）`);
       // 深色那輪同時打開「減少動態效果」（設定頁的開關）：M9 驗四個時刻都不動；其餘 M1～M8 照舊（它們不看動畫）
       await clickText(page, 'label.switch-row', '減少動態效果');
       const rm = await page.evaluate(() => new Promise((r) => { const t0 = Date.now(); const k = () => (document.documentElement.classList.contains('reduce-motion') || Date.now() - t0 > 5000 ? r(document.documentElement.classList.contains('reduce-motion')) : setTimeout(k, 50)); k(); }));
@@ -304,31 +335,38 @@ async function round(theme) {
     const bh = await barHeights(page);
     yes(bh.back && bh.now > 0 && Math.abs(bh.now - bh.withPack) < 0.5, `${tag} M1 頁首高度跟換回背包時一樣（頭 ${bh.now}、背包 ${bh.withPack}）`);
 
-    // ---- M2 空白頁 ----
-    const em = await probe(page, '.empty .empty-mascot svg.gl-mascot');
+    // ---- M2 空白頁（新姿勢：白兔從「＋ 建立新旅程」上緣探頭揮手）----
+    await settle(page, EMPTY);
+    const em = await probe(page, EMPTY);
+    em.kind = POSE_WHO[em.peek] || em.kind;
     seen.empty = em.kind;
     const bag = await page.evaluate(() => (document.querySelector('.empty')?.textContent || '').includes('🧳'));
-    yes(em.found && em.kind === EXPECT.empty && em.h >= 100 && em.inView && !em.covered && !bag,
-      `${tag} M2 全新的 App 沒有旅程 → 空白那一塊是白兔、看得到、🧳 不在了（${brief(em)}；在畫面裡 ${em.inView}、被蓋 ${em.covered}；🧳 ${bag}）`);
-    themeCheck(tag, '空白頁', em, washi, true);
+    const standing = await page.evaluate(() => document.querySelectorAll('.empty-mascot, .empty svg.gl-mascot').length);
+    yes(em.found && em.kind === EXPECT.empty && /建立新旅程/.test(em.host) && em.h >= 100 && em.inView && !em.covered && !bag && standing === 0,
+      `${tag} M2 全新的 App 沒有旅程 → 白兔從「＋ 建立新旅程」上緣探頭、看得到、空白那一塊沒有站著的那一隻、🧳 不在了（${brief(em)}；探頭圖 ${em.peek ?? '無'}、掛在「${em.host ?? ''}」；在畫面裡 ${em.inView}、被蓋 ${em.covered}；站著的 ${standing} 隻；🧳 ${bag}）`);
+    themeCheck(tag, '空白頁', em, washi, false);
     hygiene(tag, '空白頁', em);
     // M9：白兔只在「真的導覽到這一頁」時揮手（上面頁首那幾項量完已經揮完了）——到設定頁再按回「我的旅程」，一回來就量
-    const EMPTY = '.empty .empty-mascot svg.gl-mascot';
     if (washi) {
       await toSettings(page);
       await toHome(page, '.empty');
       mv.empty = await moveNow(page, EMPTY);
-      mvEnd.empty = await moveEnd(page, EMPTY, '.pk-wave-r');
+      mvEnd.empty = await moveEnd(page, EMPTY, '.pk-wave');
     } else mv.empty = await moveNow(page, EMPTY);
 
     // ---- M6 設定頁 ----
     await toSettings(page);
     await header(page, tag, '設定頁');
-    const st = await probe(page, '.card.about .about-mascot svg.gl-mascot');
+    // 新姿勢：山雀坐在「畫面顏色」那一排按鈕的上緣；進設定頁不跳（M6b，和紙那輪；深色那輪的 M6b 在上面切主題那一刻量）
+    const perchHop = await page.evaluate((s) => { const el = document.querySelector(s); return el ? el.classList.contains('pk-cheer') : null; }, PERCH);
+    if (washi) yes(perchHop === false, `${tag} M6b 進設定頁山雀不跳（設定頁不打招呼；只有按了切換主題才跳）（pk-cheer ${perchHop ?? '沒找到那張圖'}）`);
+    const st = await probe(page, PERCH);
+    st.kind = POSE_WHO[st.peek] || st.kind;
     seen.settings = st.kind;
-    yes(st.found && st.kind === EXPECT.settings && st.h >= 80 && st.inView && !st.covered,
-      `${tag} M6 設定頁「關於」卡裡是山雀、看得到（${brief(st)}；在畫面裡 ${st.inView}、被蓋 ${st.covered}）`);
-    themeCheck(tag, '設定頁', st, washi, true);
+    const aboutOne = await page.evaluate(() => document.querySelectorAll('.card.about .about-mascot, .card.about svg.gl-mascot').length);
+    yes(st.found && st.kind === EXPECT.settings && /淺色|深色/.test(st.host) && st.h >= 80 && st.inView && !st.covered && aboutOne === 0,
+      `${tag} M6 設定頁的山雀坐在「畫面顏色」那一排上緣、看得到、「關於」卡裡沒有站著的那一隻（${brief(st)}；探頭圖 ${st.peek ?? '無'}、掛在「${st.host ?? ''}」；在畫面裡 ${st.inView}、被蓋 ${st.covered}；「關於」卡裡 ${aboutOne} 隻）`);
+    themeCheck(tag, '設定頁', st, washi, false);
     hygiene(tag, '設定頁', st);
 
     // ---- 造一趟已經結束的行程（回顧才開）：一站有座標的內建景點，任務照內建資料出 ----
@@ -433,16 +471,18 @@ async function round(theme) {
     hold = false;
     for (const r of held.splice(0)) await r.respond({ status: 503, contentType: 'text/plain', body: '' }).catch(() => {});
     await page.waitForSelector('.recap-head', { timeout: 30000 });
-    // M9：回顧換上畫面的這一刻白熊淡入跳出來（0.7 秒），一出來就量
-    const RECAP = '.recap-head .recap-mascot svg.gl-mascot';
+    // M9：回顧換上畫面的這一刻，舉白板的白熊從大數字那一區後面跳上來（新姿勢；第一版以前是標題上那一隻淡入跳出來），一出來就量
     mv.recap = await moveNow(page, RECAP);
     if (washi) mvEnd.recap = await moveEnd(page, RECAP);
+    await settle(page, RECAP);
     await sleep(300);
-    const rc = await probe(page, '.recap-head .recap-mascot svg.gl-mascot');
+    const rc = await probe(page, RECAP);
+    rc.kind = POSE_WHO[rc.peek] || rc.kind;
     seen.recap = rc.kind;
-    yes(rc.found && rc.kind === EXPECT.recap && rc.h >= 90 && rc.inView && !rc.covered,
-      `${tag} M4 回顧標題上面是白熊、看得到（${brief(rc)}；在畫面裡 ${rc.inView}、被蓋 ${rc.covered}）`);
-    themeCheck(tag, '行程回顧', rc, washi, true);
+    const headOne = await page.evaluate(() => document.querySelectorAll('.recap-head .recap-mascot, .recap-head svg.gl-mascot').length);
+    yes(rc.found && rc.kind === EXPECT.recap && /張照片|個地方/.test(rc.host) && rc.h >= 90 && rc.inView && !rc.covered && headOne === 0,
+      `${tag} M4 回顧的白熊趴在大數字那一區的上緣、看得到、標題上面沒有站著的那一隻（${brief(rc)}；探頭圖 ${rc.peek ?? '無'}、掛在「${rc.host ?? ''}」；在畫面裡 ${rc.inView}、被蓋 ${rc.covered}；標題上面 ${headOne} 隻）`);
+    themeCheck(tag, '行程回顧', rc, washi, false);
     hygiene(tag, '行程回顧', rc);
 
     // ---- M8 同一頁放兩張同一隻（現在沒有畫面這樣放，以後誰在同一頁放兩隻一樣的也不能撞 id）----
@@ -475,22 +515,24 @@ async function round(theme) {
     const M = { empty: mv.empty || none, loading: mv.loading || none, recap: mv.recap || none, badge: mv.badge || none };
     const ME = { empty: mvEnd.empty || none, recap: mvEnd.recap || none, badge: mvEnd.badge || none };
     const has = (m, mv1) => m.found && m.cls.split(' ').includes(`mc-move-${mv1}`);
+    // 新姿勢的探頭圖：跳上來（pk-cheer、不是慢慢探的 pk-soft）
+    const hops = (m) => m.found && m.cls.split(' ').includes('pk-cheer') && !m.cls.split(' ').includes('pk-soft');
     const settled = (e) => e.found && e.done === true && e.layers > 0 && e.diff != null && e.diff <= 0.01 && e.opacities.every((o) => o === '1');
     if (washi) {
       const c = M.empty.count || {};
-      yes(has(M.empty, 'wave') && M.empty.kind === 'bunny' && M.empty.running >= 1 && M.empty.moved && c['pk-wave-r'] === 3 && c['pk-wave-lines'] === 1 && ME.empty.swings === 2,
-        `${tag} M9 空白頁的白兔揮手兩下：一回到「我的旅程」就在揮、舉著的那隻手三段一起轉、揮動線跟著閃、往外揮到底 2 次（${moveBrief(M.empty)}；手 ${c['pk-wave-r'] ?? '無'} 段、揮動線 ${c['pk-wave-lines'] ?? '無'}；揮到底 ${ME.empty.swings} 次、最大 ${ME.empty.peak} 度）`);
-      yes(settled(ME.empty), `${tag} M9 白兔揮完停回原位：手與揮動線的位置矩陣跟撤掉動畫的靜止圖一樣、完全看得到（${endBrief(ME.empty)}）`);
+      yes(hops(M.empty) && M.empty.peek === 'hi' && M.empty.running >= 1 && M.empty.moved && c['pk-wave'] >= 1 && c['pk-wave-lines'] === 1 && ME.empty.swings === 2,
+        `${tag} M9 空白頁的白兔揮手兩下：一回到「我的旅程」就從按鈕上緣跳上來揮、舉著的那隻手在轉、揮動線跟著閃、往外揮到底 2 次（${moveBrief(M.empty)}；手 ${c['pk-wave'] ?? '無'} 段、揮動線 ${c['pk-wave-lines'] ?? '無'}；揮到底 ${ME.empty.swings} 次、最大 ${ME.empty.peak} 度）`);
+      yes(settled(ME.empty), `${tag} M9 白兔揮完停回原位：手、揮動線、跳上來那一層的位置矩陣跟撤掉動畫的靜止圖一樣、完全看得到（${endBrief(ME.empty)}）`);
       const st = M.recap.start || {};
-      yes(has(M.recap, 'popin') && M.recap.kind === 'bear' && M.recap.moved && st.opacity === 0 && st.dy > 0,
-        `${tag} M9 回顧的白熊從下面淡入、跳出來：回顧一換上畫面就在動、第 0 格是透明的而且在下面（${moveBrief(M.recap)}；第 0 格透明度 ${st.opacity ?? '無'}、往下 ${st.dy ?? '無'}）`);
-      yes(settled(ME.recap), `${tag} M9 白熊跳完停回原位：整隻的位置矩陣跟靜止圖一樣、完全看得到（${endBrief(ME.recap)}）`);
+      yes(hops(M.recap) && M.recap.peek === 'board' && M.recap.moved && st.dy > 0,
+        `${tag} M9 回顧的白熊從大數字那一區後面跳上來：回顧一換上畫面就在動、跳上來那一層第 0 格在下面（${moveBrief(M.recap)}；第 0 格往下 ${st.dy ?? '無'}、透明度 ${st.opacity ?? '無'}）`);
+      yes(settled(ME.recap), `${tag} M9 白熊跳完停回原位：會動的每一層位置矩陣跟靜止圖一樣、完全看得到（${endBrief(ME.recap)}）`);
       yes(has(M.loading, 'look') && M.loading.kind === 'hawk' && M.loading.endless >= 1 && M.loading.running >= 1 && M.loading.moved,
         `${tag} M9 載入中的鷹拿望遠鏡左右慢慢看、一直重複：還在整理時有動、動畫是無限次（${moveBrief(M.loading)}；無限次的 ${M.loading.endless ?? '無'} 段）`);
       const bc = M.badge.cls ? M.badge.cls.split(' ') : [];
-      yes(M.badge.got && M.badge.title === '解鎖新徽章！' && !M.badge.check && !M.badge.whole && M.badge.peek === 'done'
+      yes(M.badge.got && M.badge.title === '解鎖新徽章！' && !M.badge.check && !M.badge.whole && M.badge.peek === 'star'
         && bc.includes('pk-cheer') && !bc.includes('pk-soft') && M.badge.running >= 1 && M.badge.moved,
-        `${tag} M9 解鎖新徽章的小鳳從按鈕上緣跳上來：是玄鳳打領結那一張、標題上面沒有整隻也沒有打勾的圓、一出來就在跳（不是慢慢探）、兩次取位置不一樣（「${M.badge.title || '沒跳出來'}」；打勾 ${M.badge.check}；標題上面整隻 ${M.badge.whole}；${moveBrief(M.badge)}）`);
+        `${tag} M9 解鎖新徽章的小鳳從按鈕上緣跳上來：是小鳳抱星星那一張（新姿勢 star）、標題上面沒有整隻也沒有打勾的圓、一出來就在跳（不是慢慢探）、兩次取位置不一樣（「${M.badge.title || '沒跳出來'}」；打勾 ${M.badge.check}；標題上面整隻 ${M.badge.whole}；${moveBrief(M.badge)}）`);
       yes(settled(ME.badge), `${tag} M9 按鈕上的小鳳跳完停回原位：會動的每一層位置矩陣跟撤掉 pk-cheer 的靜止圖一樣、完全看得到（${endBrief(ME.badge)}）`);
       const fr = ['empty', 'loading', 'recap', 'badge'];
       yes(fr.every((k) => M[k].found && M[k].frameOk === true),
@@ -501,8 +543,8 @@ async function round(theme) {
         `${tag} M9 吉祥物的動作只用 transform 和 opacity：四個時刻每一段動畫的 keyframes 只動這兩個屬性（${four.map(([k, p]) => `${k} ${p.join('、') || '無'}`).join('；')}）`);
     } else {
       const four = ['empty', 'loading', 'recap', 'badge'].map((k) => [k, M[k]]);
-      yes(four.every(([, m]) => m.found && m.n === 0 && !/\b(mc-move|pk-cheer)\b/.test(m.cls)) && M.badge.title === '解鎖新徽章！' && M.badge.peek === 'done',
-        `${tag} M9 減少動態效果（設定頁的開關）：空白頁、載入中、回顧、解鎖新徽章都不動——沒有 mc-move／pk-cheer、0 段動畫；解鎖新徽章照樣是按鈕上的玄鳳（${four.map(([k, m]) => `${k}：${moveBrief(m)}`).join('；')}）`);
+      yes(four.every(([, m]) => m.found && m.n === 0 && !/\b(mc-move|pk-cheer)\b/.test(m.cls)) && M.badge.title === '解鎖新徽章！' && M.badge.peek === 'star',
+        `${tag} M9 減少動態效果（設定頁的開關）：空白頁、載入中、回顧、解鎖新徽章都不動——沒有 mc-move／pk-cheer、0 段動畫；解鎖新徽章照樣是按鈕上抱星星的小鳳（${four.map(([k, m]) => `${k}：${moveBrief(m)}`).join('；')}）`);
     }
     // B1 的位置（v1.95.0；兩輪都量）
     const P = (M.badge && M.badge.pos) || { found: false };

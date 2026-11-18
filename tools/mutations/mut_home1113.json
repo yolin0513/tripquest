@@ -51,11 +51,11 @@
   },
   {
     "name": "主頁：還沒出發不出倒數",
-    "why": "（事前寫 2026-11-13 19:58，跑之前）主頁的倒數那一塊條件改成 false（待買的條件照舊用 cd）。紅：H4、C3（還沒出發那一趟要讀到倒數）、C8（全買好了那一趟要讀到倒數）。不紅：C6（不讀倒數）、其餘。",
+    "why": "（事前寫 2026-11-13 19:58，跑之前）主頁的倒數那一塊條件改成 false（待買的條件照舊用 cd）。紅：H4、C3（還沒出發那一趟要讀到倒數）、C8（全買好了那一趟要讀到倒數）。不紅：C6（不讀倒數）、其餘。（2026-11-18 21:14 只換錨點，跑之前：新姿勢起倒數卡先做成 cdCard、再放進頁面（湯圓要坐在它上緣），原本那一行不在了；改那一行的條件，效果一樣是不出倒數卡（湯圓也就不放）。預期不變。）",
     "expect": ["H4 還沒出發", "C3 不出「今天接下來」", "C8 不放待買"],
     "file": "js/views/trip.js",
-    "find": "    cd ? h('div', { class: 'countdown', role: 'status' },",
-    "replace": "    false ? h('div', { class: 'countdown', role: 'status' },",
+    "find": "  const cdCard = cd ? h('div', { class: 'countdown', role: 'status' },",
+    "replace": "  const cdCard = false ? h('div', { class: 'countdown', role: 'status' },",
     "cmd": "node scripts/hometest.mjs"
   },
   {

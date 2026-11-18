@@ -1,20 +1,20 @@
 [
   {
     "name": "動作：空白頁的白兔不揮手",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/home.js 拿掉 moveMascot：空白頁照舊是白兔、但不動。和紙那輪紅「白兔揮手兩下」「白兔揮完停回原位」（會動的層 0 個，母體空）與「只用 transform 和 opacity」（四個時刻裡空白頁那一格沒有屬性，母體空）；深色那輪本來就要不動，照樣綠；其餘三個時刻不受影響。",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/home.js 拿掉 moveMascot：空白頁照舊是白兔、但不動。和紙那輪紅「白兔揮手兩下」「白兔揮完停回原位」（會動的層 0 個，母體空）與「只用 transform 和 opacity」（四個時刻裡空白頁那一格沒有屬性，母體空）；深色那輪本來就要不動，照樣綠；其餘三個時刻不受影響。（2026-11-18 21:14 改寫，跑之前：新姿勢起白兔是按鈕上的探頭圖、動作是 cheer，原本的 find（moveMascot）只剩圖載不到時的退路，改那裡測試走不到。改成拿掉那一行 cheer：照樣掛在按鈕上、但不動。預期一樣三條。）",
     "expect": ["［和紙］ M9 空白頁的白兔揮手兩下", "［和紙］ M9 白兔揮完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
     "file": "js/views/home.js",
-    "find": "if (fresh) moveMascot(page.querySelector('.empty-mascot svg.gl-mascot'));",
-    "replace": "/* 突變：空白頁的白兔不動 */",
+    "find": "      if (fresh) pk.cheer(el);\n",
+    "replace": "      /* 突變：空白頁的白兔不動 */\n",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
     "name": "動作：回顧的白熊不跳出來",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/recap.js 拿掉 moveMascot：回顧照舊是白熊、但不動。和紙那輪紅「白熊從下面淡入、跳出來」「白熊跳完停回原位」與「只用 transform 和 opacity」（回顧那一格母體空）；深色那輪照樣綠。",
-    "expect": ["［和紙］ M9 回顧的白熊從下面淡入、跳出來", "［和紙］ M9 白熊跳完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
+    "why": "（事前寫 2026-11-14 00:39，跑之前）js/views/recap.js 拿掉 moveMascot：回顧照舊是白熊、但不動。和紙那輪紅「白熊從下面淡入、跳出來」「白熊跳完停回原位」與「只用 transform 和 opacity」（回顧那一格母體空）；深色那輪照樣綠。（2026-11-18 21:14 改寫，跑之前：新姿勢起白熊是大數字那一區上的探頭圖、動作是 cheer，原本的 find 只剩圖載不到時的退路。改成拿掉 cheer 那兩行（if／else 一起拿，只拿一行會留下沒頭的 else）：照樣掛著、不動。預期紅和紙那輪「回顧的白熊從大數字那一區後面跳上來」（訊息改了，expect 跟著改）、「白熊跳完停回原位」、「只用 transform 和 opacity」。）",
+    "expect": ["［和紙］ M9 回顧的白熊從大數字那一區後面跳上來", "［和紙］ M9 白熊跳完停回原位", "［和紙］ M9 吉祥物的動作只用 transform 和 opacity"],
     "file": "js/views/recap.js",
-    "find": "moveMascot(out.querySelector('.recap-mascot svg.gl-mascot'));",
-    "replace": "/* 突變：回顧的白熊不動 */",
+    "find": "  if (board) pk.cheer(board);\n  else moveMascot(out.querySelector('.recap-mascot svg.gl-mascot'));",
+    "replace": "  /* 突變：回顧的白熊不動 */",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
@@ -72,12 +72,12 @@
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "動作：按鈕上的小鳳揮完翅膀停在歪 4 度",
-    "why": "（事前寫 2026-11-18 17:10，跑之前）pk-wave 最後一格從 rotate(0deg) 改成 rotate(4deg)：小鳳揮完翅膀停在歪的。只紅和紙那輪「按鈕上的小鳳跳完停回原位」——證明那條真的拿跳完的那一格跟撤掉 pk-cheer 的靜止圖比（moveEnd 撤動畫時沒撤 pk-cheer 的話，兩邊永遠一樣、這條不會紅）。白兔揮的是 pk-wave-r，不受影響；「從按鈕上緣跳上來」量的是一出來那兩格，照樣綠。peektest 若有同一個 find 的突變，那邊紅的是照片上的那一張。",
+    "name": "動作：按鈕上的小鳳抱的星星停在放大的樣子",
+    "why": "（2026-11-18 21:14 改寫並改名，跑之前；原名「按鈕上的小鳳揮完翅膀停在歪 4 度」，改 pk-wave 最後一格。新姿勢起按鈕上那一張是小鳳抱星星（star），動作是星星放大一下（pk-shine），沒有 pk-wave 那一層；pk-wave 現在是空白頁白兔的手，那一條另寫在 mut_fix1118.json）pk-shine 最後一格從 scale(1) 改成 scale(1.05)：星星放大完停在大一點的樣子。只紅和紙那輪「按鈕上的小鳳跳完停回原位」——證明那條真的拿跳完的那一格跟撤掉 pk-cheer 的靜止圖比；「從按鈕上緣跳上來」量的是一出來那兩格，照樣綠；別的時刻沒有 pk-shine。",
     "expect": ["［和紙］ M9 按鈕上的小鳳跳完停回原位"],
     "file": "css/style.css",
-    "find": "@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); }",
-    "replace": "@keyframes pk-wave { 0% { transform: rotate(0deg); } 100% { transform: rotate(4deg); }",
+    "find": "@keyframes pk-shine { 0%, 100% { transform: scale(1); }",
+    "replace": "@keyframes pk-shine { 0% { transform: scale(1); } 100% { transform: scale(1.05); }",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
@@ -90,21 +90,21 @@
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "動作：白熊第 0 格就看得到（沒有淡入）",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-popin 第一格 opacity 從 0 改成 1：白熊一開始就完整出現、只有往上跳。只紅「白熊從下面淡入、跳出來」（第 0 格透明度 1）；最後一格照樣 1、位置 0，停回原位不受影響；只用兩個屬性不變。",
-    "expect": ["［和紙］ M9 回顧的白熊從下面淡入、跳出來"],
+    "name": "動作：回顧的白熊第 0 格就在上面（沒有從後面跳上來）",
+    "why": "（2026-11-18 21:14 改寫並改名，跑之前；原名「白熊第 0 格就看得到（沒有淡入）」，改 mc-popin 第一格。新姿勢起回顧的白熊是探頭圖、從大數字那一區後面跳上來（pk-hop），mc-popin 只剩圖載不到時標題上那一隻用，測試走不到）pk-hop 第一格從 translateY(var(--pk-from)) 改成 translateY(0)：一開始就在原位、只往上彈一下。只紅和紙那輪「回顧的白熊從大數字那一區後面跳上來」（跳上來那一層第 0 格往下 0）；空白頁、解鎖新徽章不量第 0 格（照樣有動：彈一下、揮手、星星），停回原位不受影響。",
+    "expect": ["［和紙］ M9 回顧的白熊從大數字那一區後面跳上來"],
     "file": "css/style.css",
-    "find": "@keyframes mc-popin { 0% { opacity: 0; transform: translateY(36px); }",
-    "replace": "@keyframes mc-popin { 0% { opacity: 1; transform: translateY(36px); }",
+    "find": "@keyframes pk-hop { 0% { transform: translateY(var(--pk-from, 180px)); }",
+    "replace": "@keyframes pk-hop { 0% { transform: translateY(0); }",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "動作：白熊跳完停在半空",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）mc-popin 最後一格從 translateY(0) 改成 translateY(-8px)：跳完停在比靜止圖高 8 個單位。只紅「白熊跳完停回原位」（整隻的位置矩陣差 8）；第 0 格照樣透明、在下面，淡入那條不受影響。",
-    "expect": ["［和紙］ M9 白熊跳完停回原位"],
+    "name": "動作：探頭圖跳完停在半空（白熊、白兔、小鳳）",
+    "why": "（2026-11-18 21:14 改寫並改名，跑之前；原名「白熊跳完停在半空」，改 mc-popin 最後一格。新姿勢起回顧的白熊是探頭圖，mc-popin 只剩圖載不到時用）pk-hop 最後一格從 translateY(0) 改成 translateY(-6px)：跳完停在比靜止圖高 6 個單位。三個跳上來的時刻都用 pk-hop，停回原位那三條都紅：「白熊跳完停回原位」「白兔揮完停回原位」「按鈕上的小鳳跳完停回原位」（跳上來那一層的位置矩陣差 6）；第 0 格照樣在下面，「從大數字那一區後面跳上來」照樣綠。",
+    "expect": ["［和紙］ M9 白熊跳完停回原位", "［和紙］ M9 白兔揮完停回原位", "［和紙］ M9 按鈕上的小鳳跳完停回原位"],
     "file": "css/style.css",
-    "find": "65% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }",
-    "replace": "65% { opacity: 1; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(-8px); } }",
+    "find": "68% { transform: translateY(-6px); } 100% { transform: translateY(0); } }",
+    "replace": "68% { transform: translateY(-6px); } 100% { transform: translateY(-6px); } }",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
@@ -127,21 +127,21 @@
   },
   {
     "name": "動作：白兔只揮一下",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-wave-r 改成只往外揮一次（40% 到 16 度、80% 回 −9 度）：表上寫的是「揮手兩下」。只紅「白兔揮手兩下」（往外揮到底 1 次）；最後一格照樣 0，停回原位不受影響。peektest 另有一條同樣的突變（遮陽帽）。",
+    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-wave-r 改成只往外揮一次（40% 到 16 度、80% 回 −9 度）：表上寫的是「揮手兩下」。只紅「白兔揮手兩下」（往外揮到底 1 次）；最後一格照樣 0，停回原位不受影響。peektest 另有一條同樣的突變（遮陽帽）。（2026-11-18 21:14 改寫，跑之前：新姿勢起白兔是探頭圖 hi，舉著的手是 pk-wave（不是 pk-wave-r），改成 pk-wave 只往外揮一次（40% 到 −16 度、80% 回 9 度）。只紅「白兔揮手兩下」；別的時刻不數揮了幾下。pk-wave-r 那一條照舊由 peektest 的遮陽帽守。）",
     "expect": ["［和紙］ M9 空白頁的白兔揮手兩下"],
     "file": "css/style.css",
-    "find": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(16deg); } 40%, 80% { transform: rotate(-9deg); } }",
-    "replace": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(16deg); } 80% { transform: rotate(-9deg); } }",
+    "find": "@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); } 20%, 60% { transform: rotate(-16deg); } 40%, 80% { transform: rotate(9deg); } }",
+    "replace": "@keyframes pk-wave { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(-16deg); } 80% { transform: rotate(9deg); } }",
     "cmd": "node scripts/mascottest.mjs"
   },
   {
-    "name": "動作：白兔的手揮完沒回原位",
-    "why": "（事前寫 2026-11-14 00:39，跑之前）pk-wave-r 最後一格從 rotate(0deg) 改成 rotate(4deg)：手停在歪 4 度。只紅「白兔揮完停回原位」。選 4 度：數「揮到底幾次」的門檻是最大角度的 35%（約 5.6 度），4 度不會被多數成第三下。",
-    "expect": ["［和紙］ M9 白兔揮完停回原位"],
+    "name": "動作：遮陽帽北北的手揮完沒回原位（pk-wave-r）",
+    "why": "（2026-11-18 21:14 改寫並改名，跑之前；原名「白兔的手揮完沒回原位」，cmd 是 mascottest。新姿勢起空白頁的白兔改揮 pk-wave，mascottest 已經沒有任何一處用 pk-wave-r；pk-wave-r 仍在真的路上（完成任務照片上的遮陽帽北北、出發那一句的鬍鬍 hello），所以不刪，改由 peektest 的遮陽帽守。白兔的 pk-wave 停回原位那一條另寫在 mut_fix1118.json）pk-wave-r 最後一格從 rotate(0deg) 改成 rotate(4deg)：手停在歪 4 度。預期只紅 peektest「動畫・遮陽帽 動完停在正確位置」（零件相對於身體的矩陣差）；「揮兩下」照樣 2 次（4 度在數的門檻約 5.6 度以下）；別的五張沒有 pk-wave-r。",
+    "expect": ["動畫・遮陽帽 動完停在正確位置"],
     "file": "css/style.css",
     "find": "@keyframes pk-wave-r { 0%, 100% { transform: rotate(0deg); }",
     "replace": "@keyframes pk-wave-r { 0% { transform: rotate(0deg); } 100% { transform: rotate(4deg); }",
-    "cmd": "node scripts/mascottest.mjs"
+    "cmd": "node scripts/peektest.mjs"
   },
   {
     "name": "動作：白兔的揮動線最後停在半透明",
