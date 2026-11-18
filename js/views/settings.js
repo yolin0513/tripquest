@@ -220,7 +220,10 @@ export default async function settings({ drawPage, setTop }) {
       } }, '清除所有資料'),
     ),
   );
-  const seg = page.querySelector('.theme-seg');
+  // 從「畫面顏色」的按鈕（data-theme-pick）找回分段鈕：不寫那個類別名的選擇器字串——themetrusttest 擋「讀行程猜測主題」的寫法，
+  // 選擇器字串裡的那一段會被它當成讀點（11-19 C 場抓到；誤判改寫法、不放寬規則）
+  const pick = page.querySelector('[data-theme-pick]');
+  const seg = pick && pick.parentElement;
   if (pk && seg) {
     // 分段鈕自己是 overflow: hidden（圓角把兩端的按鈕底色切掉），圖掛在裡面會被切掉；包一層、掛在外面那層——外層的上緣就是分段鈕的上緣
     const wrap = h('div', { class: 'theme-seg-wrap' });

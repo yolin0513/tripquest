@@ -172,5 +172,14 @@
     "cmd": "node scripts/layouttest.mjs",
     "timeoutMs": 1500000,
     "timeoutBasis": "照 mut_measuretarget.json 同一個數：layouttest 改壞後乾淨實測最長 726 秒（帳本 seq 251）× 2、進位到百秒；這次修正前的程式實測 543.7 秒（C 場，.logs/C-1118.res.log）"
+  },
+  {
+    "name": "設定頁找分段鈕改回類別名選擇器（新姿勢第一版的寫法）",
+    "why": "（事後寫 2026-11-19 00:2x：預期照 C 場第三段 themetrusttest 跑修正前程式的實測紅）js/views/settings.js 用 querySelector 寫類別名字串找「畫面顏色」的分段鈕：themetrusttest 把字串裡那一段當成讀行程猜測主題的讀點，沒登記。只紅「每一處都登記了、每一條登記剛好對到一處」那一條（讀點 18＝登記 17）；畫面行為不變，mascottest 的 M6 照樣找得到山雀。",
+    "expect": ["每一處都登記了"],
+    "file": "js/views/settings.js",
+    "find": "  const pick = page.querySelector('[data-theme-pick]');\n  const seg = pick && pick.parentElement;",
+    "replace": "  const seg = page.querySelector('.theme-seg');",
+    "cmd": "node scripts/themetrusttest.mjs"
   }
 ]
