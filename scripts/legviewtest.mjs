@@ -105,8 +105,24 @@ const coverTxt = (what, c) => `${what}${c.before === null ? '原本不在畫面�
 // 新點法先把按鈕捲到中間，選項跟著到中間，直接量就量不到舊點法會點到什麼（18:14 第一次單跑就是這樣：兩格都「沒被蓋住」）。
 // 所以點完按鈕、捲回點之前的位置再量那一格，量完才捲到中間點。捲動只是平移，選項開著的版面不變。
 // 點不到（puppeteer 丟「Node is either not clickable…」）時不讓整支停：回 ok false、寫明點不到哪一個（2026-11-18）。
-//   原本例外往外丟到最外層，第八節後面的項全部不印——C 場 `js/legs.js` 兩條突變（選項名字改掉、八之二／八之五找不到那一格、
-//   選項面板一直開著、下一小節點「怎麼去」按鈕點不到）因此只跑 37／39、38／39 項，執行器判「沒跑完」。現在那一小節照常印自己的 ✗。
+//   原本例外往外丟到最外層，第八節後面的項全部不印——C 場 `js/legs.js` 兩條突變（選項名字改掉、八之二／八之五找不到那一格）
+//   因此只跑 37／39、38／39 項，執行器判「沒跑完」。現在那一小節照常印自己的 ✗。
+// 找不到要點的那一格時，再按一次按鈕把面板收起來、等它收好才回（2026-11-18 下午）。
+//   「怎麼去」按鈕一按打開、再按收起（js/views/trip.js legRow 的 onclick）。以前找不到就直接回、面板留著開：
+//   下一小節一按按鈕反而把它收起來，要點的那一格還在、但藏著，點不到 → 下一小節跟著紅
+//   （H3 帳本第 1707、1709 次實測：八之五、八之六紅在「點不到『鐵路』／『公車』那一格」）。
+//   這段註解原本寫成「下一小節點『怎麼去』按鈕點不到」，那是錯的——點不到的是選項，不是按鈕。
+//   現在每一小節開始時面板都是收著的，小節之間不帶面板狀態。收不起來照樣回 ok false，說明裡寫收不起來（不丟例外）。
+const closePick = async (spotId) => {
+  const row = `${DC} .tl-leg[data-spot="${spotId}"]`;
+  const open = await page.evaluate((r) => document.querySelector(`${r} .tl-leg-pick`)?.hidden === false, row);
+  if (!open) return '面板本來就收著';
+  const btn = await page.$(`${row} .tl-leg-btn`);
+  if (!btn) return '面板開著、找不到按鈕，收不起來';
+  try { await tapCentered(btn); } catch (e) { return `面板開著、按鈕點不到，收不起來（${e && e.message}）`; }
+  const shut = await page.waitForFunction((r) => document.querySelector(`${r} .tl-leg-pick`)?.hidden !== false, { timeout: 3000 }, row).then(() => true, () => false);
+  return shut ? '已把面板收起來' : '按了按鈕、3 秒內面板沒收起來';
+};
 const pickLeg = async (spotId, label) => {
   const btn = await page.$(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
   if (!btn) return { ok: false, cover: '找不到「怎麼去」按鈕' };
@@ -116,12 +132,11 @@ const pickLeg = async (spotId, label) => {
   const opt = await page.evaluateHandle((dc, id, label) => [...document.querySelectorAll(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-opt`)]
     .find((b) => b.querySelector('.tl-leg-name')?.textContent === label) || null, DC, spotId, label);
   const ok = !!(await opt.evaluate((b) => !!b));
-  if (ok) await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), y0);
-  let c2 = null;
-  if (ok) {
-    try { c2 = await tapCentered(opt.asElement()); } catch (e) { return { ok: false, cover: `${coverTxt('按鈕', c1)}、點不到「${label}」那一格（${e && e.message}）` }; }
-  }
-  return { ok, cover: `${coverTxt('按鈕', c1)}、${c2 ? coverTxt(`「${label}」那一格在點按鈕之前的捲動位置（＝舊點法會點的地方）`, c2) : `找不到「${label}」那一格`}` };
+  if (!ok) return { ok: false, cover: `${coverTxt('按鈕', c1)}、找不到「${label}」那一格（${await closePick(spotId)}）` };
+  await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), y0);
+  let c2;
+  try { c2 = await tapCentered(opt.asElement()); } catch (e) { return { ok: false, cover: `${coverTxt('按鈕', c1)}、點不到「${label}」那一格（${e && e.message}）` }; }
+  return { ok: true, cover: `${coverTxt('按鈕', c1)}、${coverTxt(`「${label}」那一格在點按鈕之前的捲動位置（＝舊點法會點的地方）`, c2)}` };
 };
 try {
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -211,11 +226,26 @@ try {
     blank0.hits.slice(0, 3).map((h) => `${h.where}［${h.kind}］${h.text}`).join('；'));
 
   // 二、從真實入口設：點「乙」前面那一列 → 選項打開 → 點「鐵路」（代號 train；2026-11-11 前叫「電車・捷運」）
+  // pickVia：點「怎麼去」按鈕打開選項（第二、六、七節用；第八節用檔頭的 pickLeg）。2026-11-18 下午改了兩處（同一族偶發：固定時間的等法、背景重畫換掉節點）：
+  //   · 等法：原本點完固定等 150ms 再讀選項開了沒；改成等到開了為止、最多 3 秒（開不了照樣回 false，只是多等）。
+  //     按鈕的 onclick 同步切 hidden（js/views/trip.js legRow），擋背景重畫看的也是同一個 hidden（legPickOpen）——
+  //     所以「一開就回」不會讓第七節的背景寫入落在選項打開之前（讀程式的推論）。
+  //   · 點法：page.click 先找到元素再點，中間背景重畫把那一列換掉就丟「Node is detached」（11-13 帳本第 1009 次原樣紅在這裡，
+  //     `.logs/mutate-base.1009.log` 的堆疊在 pickVia）。被換掉就重新找、重點，最多 3 次；有重點就印一行說明（不判定）；
+  //     3 次都被換掉、或別種例外，照舊往外丟。
   const pickVia = async (spotId) => {
-    await page.evaluate((dc, id) => document.querySelector(`${dc} .tl-leg[data-spot="${id}"]`).scrollIntoView({ block: 'center' }), DC, spotId);
-    await page.click(`${DC} .tl-leg[data-spot="${spotId}"] .tl-leg-btn`);
-    await sleep(150);
-    return page.evaluate((dc, id) => !document.querySelector(`${dc} .tl-leg[data-spot="${id}"] .tl-leg-pick`).hidden, DC, spotId);
+    const row = `${DC} .tl-leg[data-spot="${spotId}"]`;
+    for (let k = 1; ; k++) {
+      try {
+        await page.evaluate((r) => document.querySelector(r).scrollIntoView({ block: 'center' }), row);
+        await page.click(`${row} .tl-leg-btn`);
+        if (k > 1) console.log(`・pickVia：點的時候那一列被背景重畫換掉，重新找、第 ${k} 次才點到`);
+        break;
+      } catch (e) {
+        if (k >= 3 || !/detached/i.test(String(e && e.message))) throw e;
+      }
+    }
+    return page.waitForFunction((r) => document.querySelector(`${r} .tl-leg-pick`)?.hidden === false, { timeout: 3000 }, row).then(() => true, () => false);
   };
   const modeIs = (id, mode) => page.waitForFunction((dc, id, mode) => document.querySelector(`${dc} .tl-leg[data-spot="${id}"]`)?.dataset.mode === mode, { timeout: 8000 }, DC, id, mode).catch(() => {});
   const opened = await pickVia(B);
