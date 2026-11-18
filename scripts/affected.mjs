@@ -197,7 +197,14 @@ export function findOrphanPaths(paths, chainFiles, ok = ORPHAN_OK_PATHS) {
 // 原本這個樣式不認 scripts/ 底下的檔，改推送閘時挑選器就不會挑中驗它的那支測試（盤點實測）。
 // tools/ev/<名稱>.sh|.mjs 也算（2026-10-02）：evtest 在 OWN 列它真的去跑的那幾支；沒列的（ev2.sh、mk_*）照舊沒人認領→放大。
 // 只認逐檔寫出的路徑、不認 tools/ev/ 整個目錄——寫成目錄就會把 evtest 換成空殼的 ev2.sh、mk_* 也算成「有測試」。
-const REF_RE = /(?:^|[^A-Za-z0-9_.-])((?:js|css|workers|server|data|icons|media|scripts\/fixtures)\/[A-Za-z0-9_./-]*|scripts\/[A-Za-z0-9_-]+\.(?:sh|mjs)|tools\/ev\/[A-Za-z0-9_-]+\.(?:sh|mjs)|sw\.js|index\.html|manifest\.webmanifest)(?=$|['"`\s),;?#\]}])/g;
+// 全形標點也算分隔字元（2026-11-19）：測試檔頭常寫「js/app.js（頁首）、css/style.css；…」，原本只認半形，
+// 接全形「（」「）」「、」「；」「，」的路徑整段丟掉——普查當時鏈上 21 支、52 個（測試×路徑）因此沒被認到
+// （例：mascottest 檔頭從 11-13 起寫著設定頁，改設定頁卻挑不到它）。只收標點的區段，不收中日文字本身——
+// 下面五個區段直接寫全形字（頭尾各一個），碼位是：U+3001–303F（、。「」『』【】〔〕…；U+3000 全形空白本來就算在 \s 裡）、
+// U+FF01–FF0F（！（），．／…）、U+FF1A–FF20（：；？…）、U+FF3B–FF40（［］…）、U+FF5B–FF65（｛｜｝～…）；
+// 全形數字與英文字母（FF10–FF19、FF21–FF3A、FF41–FF5A）不收。不用 \u 跳脫：寫檔工具會把它換成字、看不見的全形空白混進原始碼。
+// 中文字照舊不算分隔——'/js/中文.js' 不能被截成 'js/'（上面那一段的理由）。
+const REF_RE = /(?:^|[^A-Za-z0-9_.-])((?:js|css|workers|server|data|icons|media|scripts\/fixtures)\/[A-Za-z0-9_./-]*|scripts\/[A-Za-z0-9_-]+\.(?:sh|mjs)|tools\/ev\/[A-Za-z0-9_-]+\.(?:sh|mjs)|sw\.js|index\.html|manifest\.webmanifest)(?=$|['"`\s),;?#\]}]|[、-〿]|[！-／]|[：-＠]|[［-｀]|[｛-･])/g;
 const HELPER_RE = /(?:from\s*|import\(\s*)['"]\.\/([A-Za-z0-9_-]+\.mjs)['"]/g;
 export function extractRefs(text, exists) {
   const out = new Set();

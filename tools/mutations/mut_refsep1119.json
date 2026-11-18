@@ -1,0 +1,62 @@
+[
+  {
+    "name": "挑選器：全形分隔拿掉 U+3001–303F 那一段",
+    "why": "（事前寫 2026-11-19 05:0x，跑之前）REF_RE 後面的分隔字元少了「、。」」那一段：接全形頓號的路徑又整段丟掉。紅 affectedtest 的「全形分隔 U+3001–303F」與真 repo 那條 washitest（檔頭寫 js/views/settings.js、…）；其他四段的合成樣本照樣綠（每段各自的字）、hometest 那條接的是全形括號照樣綠。",
+    "expect": ["全形分隔 U+3001–303F", "washitest 檔頭接全形頓號的 js/views/settings.js 解析得到（真 repo）"],
+    "file": "scripts/affected.mjs",
+    "find": "|[、-〿]",
+    "replace": "",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔拿掉 U+FF01–FF0F 那一段",
+    "why": "（事前寫 2026-11-19 05:0x，跑之前）少了「（），」那一段（普查時最多的就是接全形括號，30 個）。紅「全形分隔 U+FF01–FF0F」與真 repo 那條 hometest（檔頭寫 js/views/home.js（…））；washitest 那條接的是頓號照樣綠。",
+    "expect": ["全形分隔 U+FF01–FF0F", "hometest 檔頭接全形括號的 js/views/home.js 解析得到（真 repo）"],
+    "file": "scripts/affected.mjs",
+    "find": "|[！-／]",
+    "replace": "",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔拿掉 U+FF1A–FF20 那一段",
+    "why": "（事前寫 2026-11-19 05:0x，跑之前）少了「；：」那一段。只紅「全形分隔 U+FF1A–FF20」；兩條真 repo 都不是接這一段的字，照樣綠。",
+    "expect": ["全形分隔 U+FF1A–FF20"],
+    "file": "scripts/affected.mjs",
+    "find": "|[：-＠]",
+    "replace": "",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔拿掉 U+FF3B–FF40 那一段",
+    "why": "（事前寫 2026-11-19 05:0x，跑之前）少了「［］」那一段。只紅「全形分隔 U+FF3B–FF40」。",
+    "expect": ["全形分隔 U+FF3B–FF40"],
+    "file": "scripts/affected.mjs",
+    "find": "|[［-｀]",
+    "replace": "",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔拿掉 U+FF5B–FF65 那一段",
+    "why": "（事前寫 2026-11-19 05:0x，跑之前）少了「｛｜｝～」那一段。只紅「全形分隔 U+FF5B–FF65」。",
+    "expect": ["全形分隔 U+FF5B–FF65"],
+    "file": "scripts/affected.mjs",
+    "find": "|[｛-･]",
+    "replace": "",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔收太寬（連全形數字與英文字母也算分隔）",
+    "why": "（事前寫 2026-11-19 05:0x，跑之前）U+FF01–FF0F 那一段寫成 U+FF01–FF5A：全形數字、英文大小寫也算分隔，'/js/０x.js' 會被截成「引用整個 js 目錄」。只紅「全形分隔的區段外不算」（０、Ａ、ａ 三個變成目錄引用）；五段的正向樣本照樣綠。真 repo 的測試檔沒有路徑後面直接接全形英數，推論不會多出別的引用。",
+    "expect": ["全形分隔的區段外不算"],
+    "file": "scripts/affected.mjs",
+    "find": "|[！-／]",
+    "replace": "|[！-ｚ]",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  }
+]

@@ -66,6 +66,28 @@ console.log('\n[T9] 每支測試的直接引用');
   const r = extractRefs("fetch('https://api.example.com/data/2.5/x'); import('/js/沒有這個.js');",
     (p) => (fs.existsSync(path.join(ROOT, p)) ? 'file' : null));
   yes(r.length === 0, '對照組：不存在的路徑不算引用', JSON.stringify(r));
+  // 全形標點也算分隔字元（2026-11-19；普查時檔頭用的是「（」「）」「、」「；」「，」）：REF_RE 的五個區段各一條斷言、
+  // 各自的合成樣本——拿掉其中一個區段只紅它自己那一條。
+  const ex = (s) => extractRefs(s, (p) => { try { return fs.statSync(path.join(ROOT, p)).isDirectory() ? 'dir' : 'file'; } catch { return null; } });
+  const FW = [
+    ['U+3001–303F', ['、', '。', '」']],
+    ['U+FF01–FF0F', ['（', '）', '，']],
+    ['U+FF1A–FF20', ['；', '：']],
+    ['U+FF3B–FF40', ['］']],
+    ['U+FF5B–FF65', ['｜']],
+  ];
+  for (const [range, chs] of FW) {
+    const miss = chs.filter((c) => !ex(`// 涵蓋的程式：js/app.js${c}其他`).includes('js/app.js'));
+    yes(miss.length === 0, `全形分隔 ${range}：js/app.js 後面接「${chs.join('」「')}」認得到`, '沒認到：' + miss.join(''));
+  }
+  // 反向：五個區段外緊鄰的字（中文字、全形數字、全形英文大小寫、半形片假名、平假名）不算分隔——
+  // 算了的話 '/js/〇x.js' 這種會被截成「引用整個 js 目錄」，那支測試從此什麼都涵蓋、放大器 D 永遠不響
+  const NEG = ['中', '０', 'Ａ', 'ａ', 'ｦ', 'あ'];
+  const leak = NEG.filter((c) => ex(`import('/js/${c}x.js')`).length > 0);
+  yes(leak.length === 0, `全形分隔的區段外不算：'/js/' 後面接「${NEG.join('」「')}」都不會變成目錄引用`, '變成引用的：' + leak.join(''));
+  // 真 repo（走 loadRepo 的 refs）：兩支檔頭接全形字的路徑——2026-11-19 之前挑選器認不到
+  yes(refs.hometest.includes('js/views/home.js'), 'hometest 檔頭接全形括號的 js/views/home.js 解析得到（真 repo）', JSON.stringify(refs.hometest));
+  yes(refs.washitest.includes('js/views/settings.js'), 'washitest 檔頭接全形頓號的 js/views/settings.js 解析得到（真 repo）', JSON.stringify(refs.washitest));
 }
 
 // ---------- T10 閉包 ----------
