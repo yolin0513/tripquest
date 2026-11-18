@@ -9,7 +9,8 @@
   },
   {
     "name": "猜類別母體：漏認 themeForTrip",
-    "why": "預期紅對照組「沒登記的 themeForTrip」，真實結果也紅（recap.js 那條登記過期）——兩條都是同一個缺陷。",
+    "why": "預期紅對照組「沒登記的 themeForTrip」，真實結果也紅（recap.js 那條登記過期）——兩條都是同一個缺陷。（2026-11-18 11:0x 事前寫 expect：不採信模式（「9 條洞」修法甲）之後，對照組沒過時真實結果 2 項照跑、一律印成「不採信」，不再是原本的紅法。）",
+    "expect": ["對照組（沒登記的 themeForTrip）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/guesscensustest.mjs",
     "find": "export const NAMES_RE = /\\b(themeForSpot|themeForDay|themeForTrip|stayForSpot)\\s*\\(/;",
     "replace": "export const NAMES_RE = /\\b(themeForSpot|themeForDay|stayForSpot)\\s*\\(/;",
@@ -17,7 +18,8 @@
   },
   {
     "name": "猜類別母體：註解也算",
-    "why": "預期紅對照組「註解與定義不算」；真實結果也紅（aicontent.js 註解裡寫著 themeForSpot(第一站)）。",
+    "why": "預期紅對照組「註解與定義不算」；真實結果也紅（aicontent.js 註解裡寫著 themeForSpot(第一站)）。（2026-11-18 11:0x 事前寫 expect：不採信模式之後真實結果 2 項印成「不採信」。）",
+    "expect": ["對照組（註解與定義不算）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/guesscensustest.mjs",
     "find": "    if (t.startsWith('//')) return;",
     "replace": "    if (t.startsWith('// 不會有這種開頭')) return;",
@@ -25,7 +27,8 @@
   },
   {
     "name": "猜類別母體：過期的登記不報",
-    "why": "預期只紅對照組「登記過期」。",
+    "why": "預期只紅對照組「登記過期」。（2026-11-18 11:0x 事前寫 expect：另紅不採信模式印的真實結果 2 行。）",
+    "expect": ["對照組（登記過期）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/guesscensustest.mjs",
     "find": "    if (n === 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
     "replace": "    if (n < 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
@@ -33,7 +36,8 @@
   },
   {
     "name": "猜類別母體：類別不檢查",
-    "why": "登記成「印成字」也放行。預期只紅對照組「類別不准（印成字）」。",
+    "why": "登記成「印成字」也放行。預期只紅對照組「類別不准（印成字）」。（2026-11-18 11:0x 事前寫 expect：另紅不採信模式印的真實結果 2 行。）",
+    "expect": ["對照組（類別不准（印成字））", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/guesscensustest.mjs",
     "find": "    if (!KINDS.includes(r.kind)) problems.push(",
     "replace": "    if (false && !KINDS.includes(r.kind)) problems.push(",
@@ -41,7 +45,8 @@
   },
   {
     "name": "猜類別母體：一條登記對到兩行不報",
-    "why": "預期只紅對照組「一條登記對到兩行」。",
+    "why": "預期只紅對照組「一條登記對到兩行」。（2026-11-18 11:0x 事前寫 expect：另紅不採信模式印的真實結果 2 行。）",
+    "expect": ["對照組（一條登記對到兩行）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/guesscensustest.mjs",
     "find": "    if (n > 1) problems.push(`一條登記對到 ${n} 行",
     "replace": "    if (n > 99) problems.push(`一條登記對到 ${n} 行",

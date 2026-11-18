@@ -66,7 +66,8 @@
   },
   {
     "name": "登記制：漏認 storedThemeOf",
-    "why": "預期只紅對照組「沒登記的 storedThemeOf 呼叫」（js/ 底下現在沒有呼叫端，真實結果不受影響）。",
+    "why": "預期只紅對照組「沒登記的 storedThemeOf 呼叫」（js/ 底下現在沒有呼叫端，真實結果不受影響）。（2026-11-18 11:0x 事前寫 expect：對照組那一條照上一句；不採信模式（「9 條洞」修法甲）之後，對照組沒過時真實結果 2 項照跑、一律印成「不採信」，所以也紅那 2 行。）",
+    "expect": ["對照組（沒登記的 storedThemeOf 呼叫）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/themetrusttest.mjs",
     "find": "export const READ_RE = /\\.theme\\b|\\bstoredThemeOf\\s*\\(/;",
     "replace": "export const READ_RE = /\\.theme\\b/;",
@@ -74,7 +75,8 @@
   },
   {
     "name": "登記制：註解也算",
-    "why": "預期紅對照組「註解、定義、.themes 不算」；真實結果也紅（theme.js、trip.js 的註解寫著 spot.theme／s.theme）。",
+    "why": "預期紅對照組「註解、定義、.themes 不算」；真實結果也紅（theme.js、trip.js 的註解寫著 spot.theme／s.theme）。（2026-11-18 11:0x 事前寫 expect：不採信模式之後真實結果 2 項印成「不採信」，不再是原本的紅法。）",
+    "expect": ["對照組（註解、定義、.themes 不算）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/themetrusttest.mjs",
     "find": "    if (t.startsWith('//')) return;",
     "replace": "    if (t.startsWith('// 不會有這種開頭')) return;",
@@ -82,7 +84,8 @@
   },
   {
     "name": "登記制：類別不檢查",
-    "why": "登記成「印成字」也放行。預期只紅對照組「類別不准（印成字）」。",
+    "why": "登記成「印成字」也放行。預期只紅對照組「類別不准（印成字）」。（2026-11-18 11:0x 事前寫 expect：另紅不採信模式印的真實結果 2 行。）",
+    "expect": ["對照組（類別不准（印成字））", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/themetrusttest.mjs",
     "find": "    if (!KINDS.includes(r.kind)) problems.push(",
     "replace": "    if (false && !KINDS.includes(r.kind)) problems.push(",
@@ -108,7 +111,8 @@
   },
   {
     "name": "登記制：過期的登記不報",
-    "why": "預期只紅對照組「登記過期」。",
+    "why": "預期只紅對照組「登記過期」。（2026-11-18 11:0x 事前寫 expect：另紅不採信模式印的真實結果 2 行。）",
+    "expect": ["對照組（登記過期）", "不採信・母體非空", "不採信・每一處都登記了"],
     "file": "scripts/themetrusttest.mjs",
     "find": "    if (n === 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
     "replace": "    if (n < 0) problems.push(`登記過期（對不到任何一行）：${r.file}「${r.needle}」`);",
