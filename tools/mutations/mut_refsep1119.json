@@ -58,5 +58,25 @@
     "replace": "|[！-ｚ]",
     "cmd": "node scripts/affectedtest.mjs",
     "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔第一段收太寬（連平假名也算分隔）",
+    "why": "（事前寫 2026-11-19 05:1x，跑之前）U+3001–303F 那一段寫成 U+3001–309F：平假名也算分隔，'/js/あx.js' 會被截成「引用整個 js 目錄」。只紅「全形分隔的區段外不算」（あ 變成目錄引用）；五段的正向樣本照樣綠。",
+    "expect": ["全形分隔的區段外不算"],
+    "file": "scripts/affected.mjs",
+    "find": "|[、-〿]",
+    "replace": "|[、-ゟ]",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
+  },
+  {
+    "name": "挑選器：全形分隔最後一段收太寬（連半形片假名也算分隔）",
+    "why": "（事前寫 2026-11-19 05:1x，跑之前）U+FF5B–FF65 那一段寫成 U+FF5B–FF9F：半形片假名也算分隔，'/js/ｦx.js' 會被截成「引用整個 js 目錄」。只紅「全形分隔的區段外不算」（ｦ 變成目錄引用）；五段的正向樣本照樣綠。",
+    "expect": ["全形分隔的區段外不算"],
+    "file": "scripts/affected.mjs",
+    "find": "|[｛-･]",
+    "replace": "|[｛-ﾟ]",
+    "cmd": "node scripts/affectedtest.mjs",
+    "done": "^(✗ 有失敗|✓ 全部通過)（\\d+ 項）"
   }
 ]
