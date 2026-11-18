@@ -1,6 +1,16 @@
 # TripQuest 專案狀態（docs/STATUS.md）
 
-> 最後更新：2026-11-18 12:3x 上班模式：**「9 條洞＋6 條」推上去了（不升版號，線上仍是 v1.94.0）——這一段告一段落**，Dispatch 之後會請整理 compact 指示。
+> 最後更新：2026-11-18 15:0x 上班模式：**Yolin「開始清待辦」——分批、重負載清單、要決定的事已交 Dispatch，等放行；還沒動手**（只讀檔、跑秒級的一次性數數腳本）。
+>   - **查到的（實測）**：
+>     - motiontest R5 早就修好了：`77984c1`（在 origin/main 上）改成等條件成立、最多 3 秒（`waitClass`）。albumtest 在 v1.94.0 修過。「同一族偶發」只剩 playertest、photosynctest。
+>     - photosynctest **沒有任何突變**（從寬數：cmd 點名或目標檔是它，0 條）；playertest 2 條、motiontest 7 條。
+>     - hometest 受影響突變是 **51 條、約 64 分**（cmd 點名 51、目標檔 0；一次性 `.logs/fix1118/homecount.mjs`，對照組 0）。待辦原本寫的 45 條，推論是 11-17 規劃時「目標檔是 trip.js」那一部分（v1.94.0 規劃那一節「hometest 45」），被借成了全部。mascottest 34 條約 12 分、legviewtest 26 條約 22 分、itinpostertest 28 條約 23 分、affectedtest 13 條約 2.5 分（`.logs/fix1118/scope.mjs`：帳本最後一次耗時＋原樣）。
+>     - 底線 15 支乾跑預估 94 秒，其中 4 支開瀏覽器，所以每一批的測試鏈都算重負載。
+>     - legviewtest 的 `pickVia`（第二、六、七節用）還是「`page.click` 選擇器＋固定等 150ms」；11-13 那次「Node is detached」（第 1009 次）就紅在這裡。
+>     - 突變的 `why` 欄：在 `scripts/`、`tools/` 搜 `.why`，命中都是別的物件，沒看到讀突變 `why` 的地方（範圍內未見）。推論只改 `why` 不用重跑那幾條突變。
+>     - 改 `scripts/affected.mjs`：讀 `select()` 的推論是只挑底線＋affectedtest（affectedtest 本來就在底線）；動手時再乾跑確認。
+>   - **交出去的分批**：第一批 legviewtest（pickLeg 註解＋找不到就收面板，可選併 pickVia）＋v190ui `why`，約 25 分；第二批 playertest、photosynctest，約 9 分；第三批「挑選器兩個洞」先交設計、不吃機器；第四批 hometest、mascottest 的 150ms，突變約 80 分，建議排晚上。都不升版號。
+> 之前 12:3x 上班模式：**「9 條洞＋6 條」推上去了（不升版號，線上仍是 v1.94.0）——這一段告一段落**，Dispatch 之後會請整理 compact 指示。
 >   - **上線紀錄（12:32～12:34，實測）**：Dispatch 12:2x 三件照建議——(a) legviewtest 那句註解這批不動、下一批跟「找不到就收面板」合做（記進下面待辦）；(b) 推送前補 13 條預期過期（見下面「多紅的來源」那一條，`f9e2c9b`）；(c) 不重跑、補完就推。`bash scripts/safe-push.sh` 回 0：鎖定 `f9e2c9b`、範圍 `ba6fe3c..f9e2c9b` 7 個 commit、新增行 195（抽出與 git 算的一致）、五類自查對照組都命中、命中 0，遠端 main ＝ 本機 HEAD。一次性 `.logs/fix1118/livecheck-1118b.mjs`：改到的 20 支會上線的 0 支（同一個篩法套在 v1.94.0 那一段篩得出 11 支、含 sw.js）；線上 sw.js HTTP 200、VERSION `tripquest-v1.94.0`、跟新版逐位元組相同（這一段沒改 sw.js）；線上離線清單 136 個、改到的 20 支在上面的 0 支（清單含 index.html、js/legs.js；塞一支進複本抓得到）；部署到了——線上 `tools/mutations/mut_v190ui.json` 等於新版、不等於舊版。從入口餵錯的預期版本與錯的檔數，各自只紅在那一行、回 1。這一筆上線紀錄本身是推送之後的 commit，**還沒推**（下一次推送一起帶出去）。
 > 之前 12:1x：下一版「9 條洞＋6 條」做完、本機 commit。Dispatch 11:0x 准 H1 → H2 → H3、H4 改靜態核對、不升版號。commit：`de50573`、`0ebfed1`、`f31253b`、`70d868a`、`5d41550`、`f9e2c9b`。
 >   - **改了什麼**：① 五支測試（themetrusttest、guesscensustest、placeicontest、itinposterlayouttest、itinpostertest）改成「不採信模式」——對照組沒過時不再跳過／exit／丟例外，後面**照跑**、一律印成「✗ 不採信・…」、不算通過、結束碼 4，項數等於母體，執行器不動。（跟交給 Dispatch 的措辭「照樣印」不同：真實段是照跑、不是只印。）② legviewtest 的 `pickLeg` 點不到時回 ok false、不丟例外。③ 預期過期 4 條補行、標事後。④ 新突變 `mut_hole1118.json` 3 條（事前寫）。⑤ **多做的**：原本只有 `why` 的 9 條洞補了事前寫的 expect；`mut_legpick1111` 那 2 條補 expect。新的 3 條用「不採信・」整類開頭加首尾兩項——§5.22「一條預期對一個斷言」的刻意例外，理由寫在 `why`（那些行是同一個分支印的）。
@@ -159,7 +169,7 @@
 ## 目前進行中／交接（給下一個接手的 Session）
 
 ### 🗒 待辦：有空檔再做（Dispatch 2026-11-14 18:3x 記下；不擋上線）
-- **（2026-11-17 Dispatch 記下，v1.94.0 不做）hometest、mascottest 的「量之前等 150ms」改成 peektest 那種「等瀏覽器真的畫了新的格」**：改這兩支測試檔會讓它們的突變全部算受影響（hometest 45 條、約 56 分），另找時段做。做法照 peektest（2026-11-17 14:3x 那一節）。
+- **（2026-11-17 Dispatch 記下，v1.94.0 不做）hometest、mascottest 的「量之前等 150ms」改成 peektest 那種「等瀏覽器真的畫了新的格」**：改這兩支測試檔會讓它們的突變全部算受影響（hometest 45 條、約 56 分），另找時段做。做法照 peektest（2026-11-17 14:3x 那一節）。〔2026-11-18 15:0x 重數：hometest 是 **51 條、約 64 分**，mascottest 34 條、約 12 分；45 是 11-17 只數「目標檔是 trip.js」的那一部分（推論）。〕
 - **（2026-11-17 Dispatch 記下，另開工作）挑選器的兩個洞**：① 漏挑——用瀏覽器走畫面、原始碼沒寫到那支 js 的測試不會被挑到（v1.94.0 規劃時拿突變的目標檔對出 10 支：collapsetest、hometest、itinpostertest、itinviewtest、jointest、livesynctest、peektest、plantest、saytest、washitest）；② `tools/test-times.json` 沒有規則認領，`run-affected` 每跑一次就改寫它，所以幾乎每版都放大成全套。修法要另外規劃、配雙向突變（§5.18.1、§5.18.2）。〔2026-11-18 再撞到一次：「9 條洞＋6 條」那一批推送前，乾跑 `--base 0ebfed1` 只因為範圍含這個檔就放大成 97 支；Dispatch 12:2x 說規則另議、記進待辦。〕
 - **（2026-11-18 12:3x 記下，下次動到那個檔時順手做）`tools/mutations/mut_v190ui.json`「點的位置加亂數抖動」那條 `why` 的機制改成推論**：12:3x 補 expect 時寫成「點的位置每次不同，凡兩次畫出來逐像素相同的都會紅」，那是推論、沒驗，而且 P3b（吉祥物 0 隻）、P7、P8a（0 頁）看起來是連帶紅、不是逐像素比對本身。只改說明文字；動這個檔會讓 itinpostertest 算受影響，跟下一次動 itinpostertest 的工作一起做。
 - **（2026-11-18 Dispatch 12:2x 定，下一批）legviewtest `pickLeg`：改註解＋選項找不到就把面板收起來，合在一起做**：現在 `pickLeg` 上面那句註解寫「下一小節點『怎麼去』按鈕點不到」，實際是「怎麼去」按鈕一按打開、再按收起，點不到的是選項（H3 帳本第 1707 次實測，見交接「9 條洞＋6 條」那一塊）。找不到選項時面板留著開，狀態帶到下一小節，第八節各小節不獨立。動測試檔＝legviewtest 與它的 26 條突變算受影響，要重跑 H3（約 22 分、重負載，要許可）。`0ebfed1` 的 commit 訊息不改寫（改寫會讓 STATUS 與帳本引用的雜湊對不上），更正在 `70d868a`。
@@ -1655,6 +1665,7 @@
   - **待修（Dispatch：不要每次都當偶發放過）**：playertest 在全套裡紅過一次「Node is detached」（背景重畫），單跑兩次綠、根因沒查。跟之前 photosynctest、albumtest 的偶發是同一族（測試的等待寫法太短、碰上背景重畫把節點換掉）；三支之後一起修。偶發放久了，真的紅也會被當成偶發。
     **2026-11-14 加進這一族：motiontest R5**（Dispatch 交代記進來）——第一次紅在 v1.85.0 的全套。但它**不是偶發**：v1.85.0 起穩定重現（單跑 3/3 紅），根因是「固定等 200ms」貼著邊、首頁白兔揮手讓事件晚約 180ms；
     同族的地方是「等待寫成固定時間、不是等條件成立」。修法見交接「第四段」最後一條 v1.85.0 的 02:2x。
+    〔2026-11-18 15:0x 更正：**R5 已經修好**——`77984c1`（在 origin/main 上）改成等條件成立、最多 3 秒；albumtest 在 v1.94.0 修過。這一族還沒修的只剩 playertest、photosynctest。〕
 - **現況（09:3x，上班模式）：第三段（吉祥物）本機做完、等 Dispatch 核對資料放行才 `safe-push`**；一、二段已上線（線上 v1.79.0、遠端 `000a7f7`）。本機領先遠端 4 個 commit（`5e39ad7` STATUS、`e68b39a` 吉祥物、`c956cb3` v1.80.0、這一筆 STATUS）。〔03:1x 那時：停工等 08:00 週用量重置；08:00 重置後 Dispatch：「開工第三段」〕
 - **第三段（吉祥物）計畫——重置後的人照這個做**：
   1. **素材**：第 5 版六隻在 session 暫存區 `m9/base_*.svg`（鬍鬍＝`base_schnauzer.svg`、北北、棉棉、玄鳳、灰鷹、小山雀），深色白邊做法在 `gen5.mjs`（SVG 濾鏡沿剪影外擴 5、塗白、墊在原圖下）。暫存區不在 repo；session 不見了就照下面「第 5 版」那節的規格重畫。
