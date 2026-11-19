@@ -329,7 +329,7 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 
 | # | 要決定的事 | 現行的決議 | 這次的提議 | 誰決定 |
 |---|---|---|---|---|
-| 1 | **金鑰放哪、怎麼呼叫** | `docs/AI_INTEGRATION.md` 第二輪（3:0）：每個行程的建立者用自己的金鑰，瀏覽器直接呼叫供應商，Worker 退出 AI 路徑（`workers/ai.mjs` 已刪除） | Dispatch 轉達：金鑰放 Worker、不放前端 | 3 代理投票＋Yolin |
+| 1 | **金鑰放哪、怎麼呼叫** | `docs/AI_INTEGRATION.md` 第二輪（3:0）：每個行程的建立者用自己的金鑰，瀏覽器直接呼叫供應商，Worker 退出 AI 路徑（`workers/ai.mjs` 已刪除） | Dispatch 轉達：金鑰放 Worker、不放前端 | 3 代理投票＋Yolin。**2026-11-19 Dispatch 轉來決定（功能研究轉的）：GPT 生圖的金鑰可以放在 Worker、不放瀏覽器**；範圍、沒定下來的事（誰付費、要不要補投票）見 STATUS「等 Yolin 回覆」 |
 | 2 | **每趟生成** | 同一份文件第一輪第 6 題（3:0）：海報走「混合快取、不是每張都生成」——裝飾元素每種風格生成一次，commit 成靜態資產重複用 | 每趟行程各生一張背景、一張九宮格 | 3 代理投票＋Yolin |
 | 3 | **Yolin 的裁定要不要延伸到 App** | ART 第 7e 節：「照行程表畫不算猜」只限人工流程；App 自動產生的照設計原則 | App 照行程資料自動組提示詞、自動生圖 | Yolin |
 
