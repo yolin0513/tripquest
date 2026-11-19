@@ -552,6 +552,7 @@
   - 補丁 `patch-peek.mjs star=xf-star/xf-star-final.json`（先 `--dry` 看過 CHEER 那一行），`js/peeks.js` 43fe5fc0… → a70396cf…。node --check、cliptest（4 項）、mutlint（843 條、find 死掉 0）都回 0。**瀏覽器沒驗。**
   - 照實記（違規）：00:5x 列 npm 指令名稱時在 `node -p` 裡寫了一個正規式；找腳本時接了一次 `| grep`（唯讀；那一行還中斷回 134）。
 - **00:5x `patch-peek.mjs` 補烤串那種 `sel` 零件（寫之前 `date`＝00:52）**：CHEER.grill 是 `[{ tf … }, { sel: '.mc-extra', … }]`（煙跟著烤串繞同一點晃）。規則：零件種類要跟 CHEER 那一個相同（tf 對 tf、sel 對 sel）、sel 字串相同、sel 的 pivot 跟第一個 tf 零件逐字相同、有 sel 時 extra 不能空；個數改成 tf＋sel 一起數。`patchtest.mjs` 加情境 F～J（順序對、pivot 不同、順序顛倒、extra 空、少一個），10 種全符合。第一次跑 5 種不符——測試自己沿用了舊烤串的 fig，裡面有一個 clipPath 的 `id=`，被「含 id=」先擋下、紅在別的理由；改成合成的 fig 再跑。突變 `mutpatch.mjs`（預期事前寫）：拿掉種類檢查只紅 H、拿掉 pivot 檢查只紅 G、拿掉 extra 檢查只紅 I、個數只數 tf 紅 F～I，4 條都紅在預期；原樣先跑全符合、跑完 patch-peek 雜湊回到原樣。
+- **01:0x 拍照圖示補丁 `.logs/v199/patch-icon.mjs`**（給棉棉相簿鈕 `ICON.lib` 用，照 patch-cam2 改成通用：`lib=<json>:bold`、`--dry`、`--over`、`--ctl`）：I1 ICON 表裡那一鍵剛好 1 次、現在那段跟 11cee6f 相同或已是新的、不然停（回 3）；I2 新字串 ≥ 200 字、不含單引號／id=／clipPath／class=／NaN；I3 換的段以外逐字相同；I4 讀回比雜湊。`icontest.mjs` 7 種情境（正常、含 id=、太短、--ctl、欄位名錯、已換過的 cam 不加 --over 要停、加了放行）全符合、glyphs.js 都沒動。
 - **小鳳全身 `xf-art` 的派工提示寫好了**（`.logs/v199/prompt-xfart.txt`，提到的範本檔都確認存在）：CPU 名額滿、等一個子代理交件再派。
 - **總表腳本**改成可以挑哪一隻（`node .logs/v199/sheet-huhu.mjs cockatiel` → `sheet-xf.png`，5 列）：兩張疊起來比列高高時整列加高；「換了／還沒換」兩個方向都實際出現過（小鳳現在 1 換、4 沒換；鬍鬍 7 換）。
 - **鬍鬍總表** `.logs/v199/sheet-huhu.png`（1650×1790，7 列全部「換了」）：00:2x 修了「實際大小」那欄——探頭圖變寬後右邊被切掉，改成照最寬那張（137 px）算欄寬（S4），兩張疊起來不准超出列高（S5），各有對照組；交 Dispatch outputs。
