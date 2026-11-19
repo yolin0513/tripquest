@@ -559,6 +559,7 @@
   - **我替它定的**：尾巴不接到閉眼（甲，照 art7 的位置；接到眼腳要改形狀）——實際大小差 1 px 以內（推論）。預覽 `cam/prev-cam.png`、放大 `cam/zoom-new-muzzle-washi.png` 看過。
   - 補丁 `patch-peek.mjs cam=cam/cam-new.json --over`（不加 `--over` 實跑回 3、停在 K1「跟 11cee6f 不同」——等於「別蓋掉已換過的」那一條正反兩向都走過一次）；`js/peeks.js` 62999fbe… → 829fe07f…。node --check、cliptest、mutlint（843、find 死掉 0：突變 `mut_arttransparent1113` 的 find 是 fig 開頭那段外框，這次沒變）都回 0。**瀏覽器沒驗。**
   - 拍照子代理收工、名額空出 → 01:1x 派 v1.100.0 第一張阿灰望遠鏡 `hawk-scout`（共用提示 `.logs/v1100/prompt-base.txt` 填上那一列）。
+  - **鬍鬍總表第二版交 Dispatch outputs**（`TripQuest_v199_鬍鬍_新舊並排_v2.png`，1650×1792、1,082,880 bytes、兩邊 sha256 相同、檔名名單掃描 0；第一版不覆蓋）：跟第一版只差拍照那一列（有口鼻線）。重畫後整張看過。
 - **00:5x `patch-peek.mjs` 補烤串那種 `sel` 零件（寫之前 `date`＝00:52）**：CHEER.grill 是 `[{ tf … }, { sel: '.mc-extra', … }]`（煙跟著烤串繞同一點晃）。規則：零件種類要跟 CHEER 那一個相同（tf 對 tf、sel 對 sel）、sel 字串相同、sel 的 pivot 跟第一個 tf 零件逐字相同、有 sel 時 extra 不能空；個數改成 tf＋sel 一起數。`patchtest.mjs` 加情境 F～J（順序對、pivot 不同、順序顛倒、extra 空、少一個），10 種全符合。第一次跑 5 種不符——測試自己沿用了舊烤串的 fig，裡面有一個 clipPath 的 `id=`，被「含 id=」先擋下、紅在別的理由；改成合成的 fig 再跑。突變 `mutpatch.mjs`（預期事前寫）：拿掉種類檢查只紅 H、拿掉 pivot 檢查只紅 G、拿掉 extra 檢查只紅 I、個數只數 tf 紅 F～I，4 條都紅在預期；原樣先跑全符合、跑完 patch-peek 雜湊回到原樣。
 - **00:5x 拍照圖示補丁 `.logs/v199/patch-icon.mjs`**（給棉棉相簿鈕 `ICON.lib` 用，照 patch-cam2 改成通用：`lib=<json>:bold`、`--dry`、`--over`、`--ctl`）：I1 ICON 表裡那一鍵剛好 1 次、現在那段跟 11cee6f 相同或已是新的、不然停（回 3）；I2 新字串 ≥ 200 字、不含單引號／id=／clipPath／class=／NaN；I3 換的段以外逐字相同；I4 讀回比雜湊。`icontest.mjs` 7 種情境（正常、含 id=、太短、--ctl、欄位名錯、已換過的 cam 不加 --over 要停、加了放行）全符合、glyphs.js 都沒動。
 - **小鳳全身 `xf-art` 的派工提示寫好了**（`.logs/v199/prompt-xfart.txt`，提到的範本檔都確認存在）：CPU 名額滿、等一個子代理交件再派。
