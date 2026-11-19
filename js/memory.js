@@ -729,7 +729,7 @@ export function computeMapLayout(ctx, spots, { totalSpots = null, lookup = null 
   return { box, bc, pts, cluster, overview, zoomView, subtitle, north: { x: box.x1 - 26, y: box.y0 - 44 } };
 }
 
-function drawLabel(ctx, L, dotX, dotY) {
+export function drawLabel(ctx, L, dotX, dotY) {
   if (L.leader) {
     ctx.strokeStyle = 'rgba(255,255,255,0.45)';
     ctx.lineWidth = 2;
@@ -1019,7 +1019,7 @@ export async function createPlayer(canvas, tripId, opts = {}) {
 export function videoSupported() {
   return typeof MediaRecorder !== 'undefined' && !!pickMime();
 }
-function pickMime() {
+export function pickMime() {
   for (const m of ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']) {
     try { if (MediaRecorder.isTypeSupported(m)) return m; } catch { /* noop */ }
   }

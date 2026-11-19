@@ -1,0 +1,227 @@
+[
+  {
+    "name": "預告片：全黑那一段從 2 拍變 3 拍",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailerplan.js 的 SEC_BEATS.silence 2 → 3：段落字串變成 silence:3、全片 122 拍＝73.2 秒。只紅 TR01。TR12 的「約 1 分 13 秒」是四捨五入（73.2 → 73），不受影響；TR13 拖的是片頭 7.9～11.0 秒，在全黑那一段前面，不受影響。",
+    "expect": ["TR01 段落順序"],
+    "file": "js/trailerplan.js",
+    "find": "route: 6, silence: 2, title: 10,",
+    "replace": "route: 6, silence: 3, title: 10,",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：字卡的起點晚半拍（不在拍點上）",
+    "why": "（事前寫 2026-11-19 11:4x；取代 11:3x 寫的「畫面比拍點早 0.3 秒換」——那條在跑之前就查出會連帶紅 TR04：lt 變負的時候也滿足白閃的 lt < 0.16，快剪第一次白閃釘在量測起點、第二次提早到約 +0.92 秒，間隔不到 1.15）js/trailerplan.js 的 push 把字卡的 t0 往後挪半拍（b0、段落的拍數、總長都不變）：字卡起點 = (b + 0.5) × 0.6，不是 0.6 的整數倍。只紅 TR02 的「起點都是 0.6 的整數倍」那一半。字卡在鋪陳段、不是硬切（TR02 量的硬切在加速與快剪），段落字串與總長不變（TR01、TR12 不受影響）；平穩版第 2 張照片是 9.6～12.0 秒、字卡在 12.0 之後，TR13 拖的 7.9／8.6／11.0 秒不受影響。",
+    "expect": ["TR02 切點在拍點上"],
+    "file": "js/trailerplan.js",
+    "find": "  const push = (s) => { s.b0 = b; s.t0 = b * BEAT;",
+    "replace": "  const push = (s) => { s.b0 = b; s.t0 = (b + (s.kind === 'card' ? 0.5 : 0)) * BEAT;",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：加速與快剪的硬切變成淡出淡入",
+    "why": "（事前寫 2026-11-19 11:4x；同上，取代那條會連帶紅 TR04 的）js/trailer.js 拿掉 if (shot.dip)：每一張照片頭尾都淡 0.15 秒，硬切不再是硬切——切點前 0.1 秒（亮度 0.67）與前 0.06 秒（0.4）差很多，「同一個鏡頭裡相鄰兩格差很少」不成立。只紅 TR02 的「畫面真的在那一刻換」那一半。白閃畫在照片上面、不受淡出影響（TR04 不受影響）；一般版快剪每張 35%／55%（0.21／0.33 秒）亮度都是 1，照樣在推鏡（TR05 對照組照樣不同）；平穩版快剪本來就淡、加速每張 1.8 秒，35%／55% 亮度都是 1（TR05、TR13 不受影響）。",
+    "expect": ["TR02 切點在拍點上"],
+    "file": "js/trailer.js",
+    "find": "      if (shot.dip) a = Math.min(clamp01(lt / DIP), clamp01((shot.dur - lt) / DIP));",
+    "replace": "      a = Math.min(clamp01(lt / DIP), clamp01((shot.dur - lt) / DIP));",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：冷開場多寫一行季節（猜出來的字）",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 drawCold 在年月、地區後面多一行「夏天」——規劃 3.3 明訂不寫季節（南半球的 8 月是冬天），這正是設計原則禁止的猜測變成看得到的字。「夏天」不在 TR03 從造的資料算出來的登記表裡 → 只紅 TR03。冷開場不是硬切，TR02 不受影響。",
+    "expect": ["TR03 畫面上的"],
+    "file": "js/trailer.js",
+    "find": "  let lines = [tl.tx.ym, tl.tx.region].filter(Boolean);",
+    "replace": "  let lines = [tl.tx.ym, tl.tx.region, '夏天'].filter(Boolean);",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "量法本身：TR03 的拆字器一律說「有登記」",
+    "why": "（事前寫 2026-11-19 11:3x）scripts/trailertest.mjs 的 leftover 最後一行改成一律回空字串：任何字都被判成來自登記的來源——TR03 在這種情況下照樣綠，這就是 TR14 對照組要抓的。只紅 TR14（「夏天去花蓮」「說走就走的冒險」被判有登記）；TR03 照樣過（這正是它擋不住的情況，所以才有 TR14）。",
+    "expect": ["TR14 TR03 的檢查器"],
+    "file": "scripts/trailertest.mjs",
+    "find": "    return reg.some((v) => frag && v.includes(frag)) ? '' : r;",
+    "replace": "    return '';",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：快剪每一拍都白閃",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailerplan.js 快剪的 flash 拿掉 k % 2 === 0：16 張每張都閃，相鄰兩次只隔 0.6 秒（規劃 3.2：每 2 拍最多一次，光敏安全）。只紅 TR04。平穩版的 flash 還是 !calm → 0 次；TR02 切點後 0.02 秒是全白、前後照樣差很多；TR05 一般版取的是每張 35%／55%（快剪 0.21／0.33 秒，白閃 0.16 秒已結束），不受影響。",
+    "expect": ["TR04 白閃"],
+    "file": "js/trailerplan.js",
+    "find": "flash: !calm && k % 2 === 0, dip: calm });",
+    "replace": "flash: !calm, dip: calm });",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：平穩版照樣推鏡",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 drawPhoto 拿掉 tl.calm ? 1：平穩版的照片也推近（平移還是 0）。紅 TR05（平穩版同一張 35% 與 55% 不同）與 TR13（相簿頁開了減少動態效果，拖進度條到第一張的 7.9 與 8.6 秒，畫面不同）——兩條都在驗平穩版不動，預期一起紅。彩蛋 k0＝k1＝1、片名卡不經過這裡。",
+    "expect": ["TR05 平穩版", "TR13 減少動態效果"],
+    "file": "js/trailer.js",
+    "find": "  const kb = tl.calm ? 1 : k0 + (k1 - k0) * e;",
+    "replace": "  const kb = k0 + (k1 - k0) * e;",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：平穩版片名照樣收字距",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 drawTitle 拿掉 tl.calm ? 0.06：平穩版片名的字距照樣從寬收到 0.06（「東岸慢慢走」5 個字、92px，起始字距會夾在上限 0.32）。只紅 TR05（片名卡 2.0 與 4.0 秒不同）；TR13 只拖到照片，不受影響。",
+    "expect": ["TR05 平穩版"],
+    "file": "js/trailer.js",
+    "find": "  const em = tl.calm ? 0.06 : tl._titleEm + (0.06 - tl._titleEm)",
+    "replace": "  const em = tl._titleEm + (0.06 - tl._titleEm)",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：下黑邊的照片說明變成彩色字",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 照片說明的顏色 #f2f2f2 → #ffe08a：下黑邊出現非灰階的像素。只紅 TR06（下黑邊有彩色）。TR03 只看字、不看顏色。",
+    "expect": ["TR06 黑邊"],
+    "file": "js/trailer.js",
+    "find": "maxW: 940, maxLines: 2, color: '#f2f2f2', alpha: capA });",
+    "replace": "maxW: 940, maxLines: 2, color: '#ffe08a', alpha: capA });",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：上黑邊少畫 8px",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 上黑邊畫成 BAR − 8：冷開場整張先塗成 #0d1014（比黑亮一點），上黑邊最下面 8 列露出那個顏色；TR06 從 1.3 秒起取樣，冷開場（到 4.8 秒）有 7 格，那幾格上黑邊不是全黑。其他鏡頭整張先塗純黑、畫面被裁在 232 以下，露出來的還是黑——所以只有冷開場那幾格會抓到。只紅 TR06。",
+    "expect": ["TR06 黑邊"],
+    "file": "js/trailer.js",
+    "find": "  ctx.fillRect(0, 0, W, bh);\n  ctx.fillRect(0, H - bh, W, bh);",
+    "replace": "  ctx.fillRect(0, 0, W, bh - 8);\n  ctx.fillRect(0, H - bh, W, bh);",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "相簿頁：照片不夠時預告片按鈕照樣能按",
+    "why": "（事前寫 2026-11-19 11:3x）js/views/album.js 的預告片按鈕拿掉 disabled: !tInfo.ok：7 張的行程按鈕看起來能按（說明照樣寫原因；setStyle 裡還有一道擋，所以按了也不會換——但畫面上是一個按了沒反應的按鈕，共用慣例第 4 節不准）。只紅 TR07。",
+    "expect": ["TR07 照片少於"],
+    "file": "js/views/album.js",
+    "find": "h('button', { class: 'len-btn' + (tr ? ' on' : ''), disabled: !tInfo.ok, onclick: () => setStyle('trailer') },",
+    "replace": "h('button', { class: 'len-btn' + (tr ? ' on' : ''), onclick: () => setStyle('trailer') },",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：照片門檻 8 → 7",
+    "why": "（事前寫 2026-11-19 11:4x）js/trailerplan.js 的 MIN_PHOTOS 8 → 7：門檻那兩道擋（trailer.js 的 all.length < MIN_PHOTOS 與 planTrailer 的 n >= MIN_PHOTOS - 1）讀同一個常數，一起放寬——單獨拿掉任一道是等價突變（另一道照樣擋，程式旁有註解），這一條證明兩道合起來會紅。7 張的行程按鈕能按、說明不寫原因、建播放器不丟錯（建得出來：鋪陳 6、加速 0、快剪 0、路線段照放）。只紅 TR07；36 張的主資料與 8 張的行程不受影響，畫面上不畫 MSG_FEW（TR03 不受影響）。",
+    "expect": ["TR07 照片少於"],
+    "file": "js/trailerplan.js",
+    "find": "export const MIN_PHOTOS = 8;",
+    "replace": "export const MIN_PHOTOS = 7;",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：降級門檻壞掉、夠快的手機也被降級",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 DegradeMeter 門檻從 30ms 變成 9ms：餵每格 12ms（夠快）的控制器也會依序降級。只紅 TR08（夠快那一組事件數不是 0）。慢的那一組順序不變；相簿頁播放只有 TR08 有，不影響別條。",
+    "expect": ["TR08 自動降級"],
+    "file": "js/trailer.js",
+    "find": "    if (avg <= this.limit) return null;",
+    "replace": "    if (avg <= this.limit * 0.3) return null;",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "相簿頁：降級了卻不顯示說明",
+    "why": "（事前寫 2026-11-19 11:3x）js/views/album.js 的 onDegrade 拿掉 degradeLine.hidden = false：畫面真的降級了（等級照記），但說明那一行一直藏著——使用者看到畫面變樸素卻不知道為什麼。只紅 TR08（相簿頁播放放慢後讀不到說明）；控制器那一半照樣過。",
+    "expect": ["TR08 自動降級"],
+    "file": "js/views/album.js",
+    "find": "    degradeLine.textContent = degradeNote(info.off) + '。';\n    degradeLine.hidden = false;\n",
+    "replace": "    degradeLine.textContent = degradeNote(info.off) + '。';\n",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "原本的風格：推鏡幅度 0.055 → 0.06",
+    "why": "（事前寫 2026-11-19 11:3x）js/memory.js 原本風格 cover 照片的 Ken Burns 從 0.055 改成 0.06：原本的風格畫面變了（這一版承諾一行都不改）。TR09 取的 12 個時刻裡有 cover 照片的 50% 與片尾前的時刻 → 跟 d50955a 不同。只紅 TR09；預告片只借 memory.js 的純函式（挑照片、排字、版面、標籤、錄影格式），不經過這一行。",
+    "expect": ["TR09 原本的風格逐格相同"],
+    "file": "js/memory.js",
+    "find": "    const kb = (1 + 0.055 * easeInOut(p)) * sT;",
+    "replace": "    const kb = (1 + 0.06 * easeInOut(p)) * sT;",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "量法本身：TR09 的基準指到新版",
+    "why": "（事前寫 2026-11-19 11:3x）scripts/trailertest.mjs 的 BASE_COMMIT 改成 HEAD：git archive 拿到的是這一版（有 trailer.js、drawLabel 有 export），拿新版跟新版比一定相同——TR09 的「先證明它真的是舊版」必須擋下、判情境未成立。只紅 TR09（訊息是「基準沒做出來（情境未成立，不算過）」，開頭同樣是「TR09 原本的風格逐格相同」）。拿掉那道證明、同時指到 HEAD 會照樣綠——那是這道證明存在的理由，不另列突變。（事後補 2026-11-19 13:3x：12:3x 加「TR09 前置」時漏改這條的 expect，基準沒做出來那條路也沒印前置，② 判沒跑完；測試補印前置之後這條會紅兩行，expect 加上「TR09 前置」。這一項的依據是事後。）",
+    "expect": ["TR09 前置", "TR09 原本的風格逐格相同"],
+    "file": "scripts/trailertest.mjs",
+    "find": "const BASE_COMMIT = 'd50955a';",
+    "replace": "const BASE_COMMIT = 'HEAD';",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "時鐘：音訊在走卻照牆上時鐘畫",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 makeClock 在音訊時鐘前進時回牆上時鐘的時間：畫面跟配樂各走各的（規劃 3.4 要畫面看音訊時鐘）。只紅 TR10（拿到 1.0 不是 1.5）。TR11 的停住那段：牆上 1600 時音訊沒前進、超過半秒 → 照舊改看牆上時鐘、從 1.5 接著走到 1.9；一開始沒在走那段不經過這一行 → 不受影響。",
+    "expect": ["TR10 時鐘"],
+    "file": "js/trailer.js",
+    "find": "        if (a > lastA + 1e-4) { lastA = a; lastW = w; return Math.min(total, a); }",
+    "replace": "        if (a > lastA + 1e-4) { lastA = a; lastW = w; return Math.min(total, offset + (w - wall) / 1000); }",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "時鐘：音訊停住永遠等它",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 makeClock 拿掉「停住超過半秒就改看牆上時鐘」：音訊卡住時畫面一直停在 1.5（錄影迴圈會永遠等不到片尾）。只紅 TR11；TR10 那一刻音訊有前進、不經過這裡。",
+    "expect": ["TR11 時鐘"],
+    "file": "js/trailer.js",
+    "find": "        if (w - lastW <= stallMs) return Math.min(total, lastA);\n        audio = null; offset = lastA; wall = w;",
+    "replace": "        return Math.min(total, lastA);",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "時鐘：沒在走的音訊也拿來當時鐘",
+    "why": "（事前寫 2026-11-19 11:3x）js/trailer.js 的 makeClock.begin 拿掉 music.running() 的判斷：一開始就沒在走的音訊也被當成時鐘，前半秒畫面停在起點，之後才改看牆上時鐘、從起點重新算——比牆上時鐘慢 1 秒（拿到 3 不是 4）。只紅 TR11；TR10 的音訊本來就在走。",
+    "expect": ["TR11 時鐘"],
+    "file": "js/trailer.js",
+    "find": "      audio = music && typeof music.running === 'function' && music.running() ? music : null;",
+    "replace": "      audio = music && typeof music.running === 'function' ? music : null;",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片配樂：音訊時鐘不走",
+    "why": "（事前寫 2026-11-19 11:4x）js/music.js 的 createTrailerScore 的 time() 一律回 offset（0）：配樂照樣在響，但它報的時間不動——畫面的時鐘等半秒之後改看牆上時鐘（照 TR11 的設計），2 秒後已經不跟音訊。只紅 TR15（2 秒後 audioClock 是 false；時間照樣往前走約 2 秒）。其他測試都沒播預告片配樂（TR08 播的是沒有音樂、TR10／TR11 是假的時鐘）。",
+    "expect": ["TR15 時鐘"],
+    "file": "js/music.js",
+    "find": "    time() { return started ? ctx.currentTime - origin : offset; },",
+    "replace": "    time() { return offset; },",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "相簿頁：預告片選的配樂寫進 trip.musicStyle",
+    "why": "（事前寫 2026-11-19 11:3x）js/views/album.js 的 saveMusic 在預告片風格也呼叫 store.patch：預告片選的配樂蓋掉經典風格的配樂、還會同步到其他人（規劃第 7 節選甲：只存在這支手機）。只紅 TR12（選「溫柔」之後 trip.musicStyle 變了）。",
+    "expect": ["TR12 相簿頁"],
+    "file": "js/views/album.js",
+    "find": "    if (vstyle === 'trailer') setTrailerPref(tripId, { music: v });\n    else store.patch(tripId, { musicStyle: v }).catch(() => {});",
+    "replace": "    if (vstyle === 'trailer') setTrailerPref(tripId, { music: v });\n    store.patch(tripId, { musicStyle: v }).catch(() => {});",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "相簿頁：減少動態效果時預覽照樣是完整版",
+    "why": "（事前寫 2026-11-19 11:3x）js/views/album.js 的 ensurePlayer 建預告片播放器時 calm 一律 false：說明寫「預覽做成平穩版」，實際播的卻是有推鏡的完整版。只紅 TR13（拖到第一張的 7.9 與 8.6 秒畫面不同；完整版的第一張在 7.2～9.6 秒，兩個時刻仍在同一張）。TR05 直接建播放器、不經過相簿頁，不受影響。",
+    "expect": ["TR13 減少動態效果"],
+    "file": "js/views/album.js",
+    "find": "? await createTrailerPlayer(canvas, tripId, { calm: reducedMotion(), level: degradeLevel, onDegrade })",
+    "replace": "? await createTrailerPlayer(canvas, tripId, { calm: false, level: degradeLevel, onDegrade })",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "預告片：加速的照片也淡到黑（dip 漏到不該有的地方）",
+    "why": "（事前寫 2026-11-19 12:3x）js/trailerplan.js 的加速照片也帶 dip:true：加速、快剪的切點前一張都會淡到黑。守的是 TR02 12:0x 新加的「前一張淡到黑的切點最多 1 個」——那些切點不再要求同一鏡頭裡不變，只靠這個上限擋；變成約 10 個 → 只紅 TR02。TR04 量的是快剪 45.6 秒之後，加速最後一張的淡出在 45.45～45.6 秒，不在量測範圍；TR05 量每張的 35%／55%（加速每張 1.2～1.8 秒，離頭尾都超過 0.15 秒），亮度都是 1；TR13 拖的是鋪陳第一張。",
+    "expect": ["TR02 切點在拍點上"],
+    "file": "js/trailerplan.js",
+    "find": "    push({ kind: 'photo', section: 'accel', idx: pi++, beats: accelBeats(k) });",
+    "replace": "    push({ kind: 'photo', section: 'accel', idx: pi++, beats: accelBeats(k), dip: true });",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "量法本身：TR09 第二份目前版本種的照片順序顛倒（前置要擋）",
+    "why": "（事前寫 2026-11-19 12:3x）scripts/trailertest.mjs 的第二份目前版本拿顛倒順序的照片位元組去種：三份種出來的照片不同。守的是 TR09 前置（12:2x 新加：照片位元組不同就不比，不能把「照片不同」當成「程式改了」）。紅 TR09 前置，以及 TR09 那一行改印「前置不成立，沒比」（同一個開頭）。目前與基準那兩份照片相同，其餘不受影響。",
+    "expect": ["TR09 前置", "TR09 原本的風格逐格相同"],
+    "file": "scripts/trailertest.mjs",
+    "find": "    const cur2 = await classicFrames(CUR_WEB2, 0, files);",
+    "replace": "    const cur2 = await classicFrames(CUR_WEB2, 0, [...files].reverse());",
+    "cmd": "node scripts/trailertest.mjs"
+  },
+  {
+    "name": "量法本身：TR09 第二份目前版本量的時刻整體晚 0.05 秒（應判相同的對照組要擋）",
+    "why": "（事前寫 2026-11-19 12:3x）scripts/trailertest.mjs 的第二份目前版本 shift 0 → 0.05：照片一樣、程式一樣，只有量的時刻不同，推鏡中的照片畫面會變。守的是 TR09 12:1x 新加的「目前版本另一個全新來源量的必須 12/12 相同」。目前對基準照樣 12/12 相同、前置照樣過 → 只紅 TR09 那一行（對照組少於 12）。",
+    "expect": ["TR09 原本的風格逐格相同"],
+    "file": "scripts/trailertest.mjs",
+    "find": "    const cur2 = await classicFrames(CUR_WEB2, 0, files);",
+    "replace": "    const cur2 = await classicFrames(CUR_WEB2, 0.05, files);",
+    "cmd": "node scripts/trailertest.mjs"
+  }
+]

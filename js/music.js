@@ -267,6 +267,179 @@ export function createMusic(styleKey = 'gentle', { seed = 20260907 } = {}) {
   };
 }
 
+// ---------- 預告片配樂（v1.97.0；規劃 docs/DESIGN_回顧影片預告片風格.md 3.4） ----------
+// 跟畫面讀同一張拍點表（js/trailerplan.js 的 planTrailer）：每一個鏡頭的起點都排一個音，所以切點一定在拍子上。
+// 上面四種合成配樂不動；這一首另外寫，不放進 STYLES（相簿頁的合成配樂按鈕照 STYLES 列，不該多出這一顆）。
+//
+// 畫面的時鐘：預覽與錄影用這首時，畫面看 time()（音訊時鐘），不看 performance.now()——錄影時主執行緒在畫圖，
+// 兩個時鐘會差開幾十毫秒，快剪一拍 0.6 秒看得出來。音訊時鐘沒在走（瀏覽器不准自動播放、被系統暫停）時
+// running() 是 false，呼叫端退回 performance.now()（js/trailer.js 的 clock）。
+//
+// 拖進度條（seek）：已經排進去的音沒辦法取消，所以每次 seek 換一條新的匯流（bus），舊的那條淡掉、斷開。
+export function createTrailerScore(plan, { seed = 20261119 } = {}) {
+  if (!plan || !plan.shots?.length) return null;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  const ctx = new Ctx();
+  const beat = plan.total / plan.beats;
+  const STEP = beat / 2;
+  const totalSteps = plan.beats * 2;
+
+  const master = ctx.createGain();
+  master.gain.value = 0.0001;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.ratio.value = 5; comp.attack.value = 0.005; comp.release.value = 0.25;
+  master.connect(comp);
+  const dest = ctx.createMediaStreamDestination();
+  comp.connect(dest);
+  comp.connect(ctx.destination);
+
+  const noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 2), ctx.sampleRate);
+  { const d = noiseBuf.getChannelData(0); const r = rng(seed); for (let i = 0; i < d.length; i++) d[i] = r() * 2 - 1; }
+
+  let bus = null;
+  function newBus() {
+    if (bus) {
+      const old = bus;
+      try { old.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.03); } catch { /* noop */ }
+      setTimeout(() => { try { old.disconnect(); } catch { /* noop */ } }, 400);
+    }
+    bus = ctx.createGain();
+    bus.gain.value = 1;
+    bus.connect(master);
+  }
+  newBus();
+
+  function tone(wave, f0, t, dur, gain, { f1 = 0, attack = 0.01 } = {}) {
+    if (!(f0 > 0) || gain <= 0.0005) return;
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = wave;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 > 0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + Math.min(attack, dur * 0.5));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(bus);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(t, dur, gain, { type = 'bandpass', f0 = 1000, f1 = 0, q = 1, attack = 0.005 } = {}) {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const fl = ctx.createBiquadFilter(); fl.type = type; fl.Q.value = q;
+    fl.frequency.setValueAtTime(f0, t);
+    if (f1 > 0) fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + Math.min(attack, dur * 0.5));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(fl); fl.connect(g); g.connect(bus);
+    src.loop = true;                       // 往上升的聲音有 4.8 秒，雜訊只有 2 秒：循環接著放
+    src.start(t); src.stop(t + dur + 0.06);
+  }
+  const kick = (t, g) => tone('sine', 110, t, 0.32, g, { f1: 38, attack: 0.004 });
+  const boom = (t, g) => { tone('sine', 62, t, 3.2, g, { f1: 28, attack: 0.006 }); noise(t, 1.4, g * 0.5, { type: 'lowpass', f0: 600, f1: 80, q: 0.7 }); };
+  // 長音：A 小調（A1 55Hz 起），跟著段落換和聲
+  const A = (semi) => 55 * Math.pow(2, semi / 12);
+  function pad(t, dur, notes, gain) { notes.forEach((n, i) => tone(i ? 'triangle' : 'sine', A(n), t, dur, gain * (i ? 0.55 : 1), { attack: Math.min(0.8, dur * 0.3) })); }
+
+  const secAt = (b) => { for (const s of plan.sections) if (b >= s.b0 && b < s.b1) return s; return null; };
+  const shotStart = new Set(plan.shots.map((s) => s.b0));
+  const flashBeat = new Set(plan.shots.filter((s) => s.flash).map((s) => s.b0));
+  const CHORD = { cold: [0, 7], studio: [0, 7, 12], build: [0, 12, 15, 19], accel: [-2, 10, 14, 17], title: [-4, 8, 12, 15], egg: [12, 19, 24], end: [-4, 8, 12, 15, 19] };
+
+  // 每一個八分音符排一次。section 開頭的長音一次排到段落結束（seek 到段落中間時由 sustainFrom 補上）
+  function scheduleStep(s, t) {
+    const b = s >> 1, on = (s & 1) === 0;
+    const sec = secAt(b);
+    if (!sec) return;
+    const left = (sec.b1 - b) * beat;
+    const name = sec.name;
+    if (on && b === sec.b0) {
+      if (CHORD[name]) pad(t, left + 0.4, CHORD[name], name === 'build' || name === 'accel' ? 0.05 : 0.07);
+      if (name === 'studio') noise(t, left, 0.16, { f0: 300, f1: 5000, q: 1.6, attack: left * 0.7 });
+      if (name === 'title') boom(t, 0.55);
+      if (name === 'egg') tone('sine', A(48), t, 3.4, 0.06, { attack: 0.01 });
+    }
+    if (name === 'cold' && on && b === sec.b1 - 1) kick(t, 0.22);                          // 冷開場最後一記輕的重拍
+    if (name === 'build' && on) tone('sine', A(12), t, 0.18, 0.09, { attack: 0.004 });      // 規律的脈動
+    if (name === 'accel') {
+      tone('sine', A(on ? 12 : 24), t, 0.14, on ? 0.1 : 0.05, { attack: 0.004 });          // 節奏加密：半拍一下
+      if (on) kick(t, 0.16);
+      const riser = sec.b1 - 8;                                                             // 結尾 8 拍往上升
+      if (on && b === riser) { noise(t, 8 * beat, 0.12, { f0: 400, f1: 7000, q: 2, attack: 8 * beat * 0.9 }); tone('sawtooth', A(24), t, 8 * beat, 0.03, { f1: A(48), attack: 8 * beat * 0.8 }); }
+    }
+    if (name === 'montage') {
+      if (on) { kick(t, 0.34); tone('sine', A(0), t, beat * 0.9, 0.12, { attack: 0.004 }); }
+      if (on && (b - sec.b0) % 2 === 1) noise(t, 0.16, 0.14, { f0: 1800, q: 0.9 });
+      if (on && flashBeat.has(b)) noise(t, 0.5, 0.08, { type: 'highpass', f0: 5000, q: 0.5 });
+    }
+    // 其他段落的切點也落一個輕音，讓「換畫面」聽得到（鋪陳、加速、彩蛋、片尾）
+    if (on && shotStart.has(b) && b !== sec.b0 && (name === 'build' || name === 'accel')) tone('triangle', A(31), t, 0.25, 0.035, { attack: 0.004 });
+  }
+  // 從段落中間開始（seek、從暫停的地方接著播）：把這一段的長音補到段落結束
+  function sustainFrom(b, t) {
+    const sec = secAt(b);
+    if (!sec || b === sec.b0 || !CHORD[sec.name]) return;
+    pad(t, (sec.b1 - b) * beat + 0.4, CHORD[sec.name], sec.name === 'build' || sec.name === 'accel' ? 0.05 : 0.07);
+  }
+
+  let origin = 0;            // 影片第 0 秒對應的 ctx.currentTime
+  let offset = 0;            // 還沒開始時停在第幾秒
+  let nextStep = 0;
+  let started = false, stopped = false, timer = null;
+
+  function pump() {
+    if (stopped) return;
+    const horizon = ctx.currentTime + 0.25;
+    let guard = 0;
+    while (nextStep < totalSteps && origin + nextStep * STEP < horizon && guard++ < 64) {
+      const t = origin + nextStep * STEP;
+      if (t >= ctx.currentTime - 0.02) scheduleStep(nextStep, Math.max(t, ctx.currentTime));
+      nextStep++;
+    }
+    timer = setTimeout(pump, 60);
+  }
+  function placeAt(sec) {
+    origin = ctx.currentTime + 0.06 - sec;
+    nextStep = Math.max(0, Math.ceil(sec / STEP - 1e-6));
+    sustainFrom(Math.floor(sec / beat), ctx.currentTime + 0.06);
+  }
+  const settle = (p, ms) => Promise.race([Promise.resolve(p).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+
+  return {
+    stream: dest.stream,
+    style: 'trailer',
+    plan,
+    async start() {
+      // 不准自動播放的瀏覽器裡 resume() 可能永遠不回來：最多等 1.5 秒，之後由 running() 判斷要不要退回牆上時鐘
+      if (ctx.state === 'suspended') await settle(ctx.resume(), 1500);
+      started = true;
+      placeAt(offset);
+      master.gain.setValueAtTime(0.0001, ctx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.3);
+      pump();
+    },
+    running() { return started && !stopped && ctx.state === 'running'; },
+    time() { return started ? ctx.currentTime - origin : offset; },
+    seek(sec) {
+      offset = Math.max(0, sec || 0);
+      if (!started || stopped) return;
+      newBus();
+      placeAt(offset);
+    },
+    progress() { /* 段落由拍點表決定，不看進度 */ },
+    async pause() { await settle(ctx.suspend(), 800); },
+    async resume() { await settle(ctx.resume(), 800); },
+    async fadeOutStop(sec = 1.2) {
+      try { master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + sec); } catch { /* noop */ }
+      stopped = true;
+      clearTimeout(timer);
+      await new Promise((r) => setTimeout(r, sec * 1000 + 120));
+      try { await ctx.close(); } catch { /* noop */ }
+    },
+    stop() { stopped = true; clearTimeout(timer); try { ctx.close(); } catch { /* noop */ } },
+  };
+}
+
 // 使用者自選音樂檔 → 回傳可加進錄影的音訊軌
 export async function musicFromFile(file) {
   const Ctx = window.AudioContext || window.webkitAudioContext;

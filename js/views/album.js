@@ -6,6 +6,11 @@ import {
   collectSlides, estimateDuration, LENGTHS, DEFAULT_LENGTH, ALBUM_INLINE_LIMIT,
 } from '../memory.js';
 import { STYLES } from '../music.js';
+import {
+  createTrailerPlayer, recordTrailer, trailerInfo, trailerPref, setTrailerPref,
+  TRAILER_MUSIC, MSG_FEW, degradeNote,
+} from '../trailer.js';
+import { reducedMotion } from '../glyphs.js';
 import { TRACKS, CATEGORIES, tracksOfCat, trackById, trackLabel, trackMusic, ensureTrackCached, isTrackStyle, TRACK_LICENSE_URL } from '../tracks.js';
 import { downloadBlob, nativeShare } from '../share.js';
 import { publishAlbum, unpublishAlbum, albumInfo, canPublish } from '../albumshare.js';
@@ -37,6 +42,17 @@ export default async function album(tripId, { drawPage, setTop }) {
   let music = store.getRaw(tripId)?.musicStyle || 'track:warm';
   let musicFile = null;
   let length = store.getRaw(tripId)?.videoLength || DEFAULT_LENGTH;
+  // 預告片風格（v1.97.0）：選擇與它的配樂只存在這支手機（js/trailer.js 的 trailerPref；規劃第 7 節選甲：不同步）。
+  // 經典風格的配樂照舊存在 trip.musicStyle（會同步）；兩種風格各記各的，換來換去不會互相蓋掉。
+  let tInfo = trailerInfo(tripId, { calm: reducedMotion() });
+  let vstyle = tInfo.ok ? trailerPref(tripId).style : 'classic';
+  if (vstyle === 'trailer') music = trailerPref(tripId).music;
+  let exportFull = false;          // 減少動態效果時：存成影片預設平穩版，按「改做完整版」才做完整版（規劃第 5 節選甲）
+  let degradeLevel = 0;            // 自動降級（這支手機畫太慢）：預覽降過的，錄影從同一級開始
+  function saveMusic(v) {
+    if (vstyle === 'trailer') setTrailerPref(tripId, { music: v });
+    else store.patch(tripId, { musicStyle: v }).catch(() => {});
+  }
 
   const canvas = h('canvas', { class: 'album-canvas' });
   // 進度條可以拖：預覽是逐幀繪製（drawAt 是「時間 → 畫面」的純函式），
@@ -48,6 +64,11 @@ export default async function album(tripId, { drawPage, setTop }) {
   const playBtn = h('button', { class: 'btn btn-primary btn-block btn-big', onclick: togglePlay }, '▶ 播放預覽');
   const lenPick = h('div', { class: 'len-pick' });
   const lenNote = h('p', { class: 'form-hint' });
+  const lenLabel = h('div', { class: 'section-label' }, '影片長度');
+  const stylePick = h('div', { class: 'len-pick style-pick' });
+  const styleNote = h('p', { class: 'muted style-note', style: 'margin:6px 0 0;line-height:1.5' });
+  const exportRow = h('div', { class: 'tr-export', hidden: true });
+  const degradeLine = h('p', { class: 'muted tr-degrade', style: 'margin:8px 0 0', hidden: true });
   const musicPick = h('div', { class: 'music-pick' });
   const fileInput = h('input', { type: 'file', accept: 'audio/*', hidden: true });
   const meta = h('p', { class: 'muted center', style: 'margin:10px 0' });
@@ -90,6 +111,55 @@ export default async function album(tripId, { drawPage, setTop }) {
         : `這趟的照片不多，精華版一張都不會少。${dupNote}`)
       : `全部 ${e.total} 張不重複的照片都放進去，約 ${mmss(e.seconds)}。${dupNote}影片是即時錄的，所以錄多久就要等多久。`;
     meta.textContent = `${e.photos} 張照片 · 約 ${mmss(e.seconds)}`;
+    if (vstyle === 'trailer') meta.textContent = `${tInfo.photos} 張照片 · 約 ${mmss(tInfo.seconds)}`;
+  }
+
+  // ---------- 風格：經典｜預告片 ----------
+  function drawStyle() {
+    tInfo = trailerInfo(tripId, { calm: reducedMotion() });
+    const tr = vstyle === 'trailer';
+    stylePick.replaceChildren(
+      h('button', { class: 'len-btn' + (tr ? '' : ' on'), onclick: () => setStyle('classic') },
+        h('span', { class: 'len-t' }, '經典'), h('span', { class: 'len-s' }, '一張一張慢慢看')),
+      h('button', { class: 'len-btn' + (tr ? ' on' : ''), disabled: !tInfo.ok, onclick: () => setStyle('trailer') },
+        h('span', { class: 'len-t' }, '預告片'), h('span', { class: 'len-s' }, tInfo.ok ? `約 ${mmss(tInfo.seconds)}` : '照片不夠')),
+    );
+    // 做不出來就照實寫（共用慣例第 4 節），不顯示一個按了沒反應的按鈕
+    styleNote.textContent = !tInfo.ok
+      ? `${MSG_FEW}（現在 ${tInfo.total} 張）。`
+      : tr
+        ? `從 ${tInfo.total} 張裡挑 ${tInfo.photos} 張，約 ${mmss(tInfo.seconds)}：上下黑邊、切黑、快剪，像電影預告片。`
+          + (reducedMotion() ? '已照你的「減少動態效果」設定，預覽做成平穩版：照片不推不移、沒有白閃。' : '')
+        : '';
+    lenLabel.hidden = tr; lenPick.hidden = tr; lenNote.hidden = tr;
+    exportRow.hidden = !(tr && reducedMotion());
+    if (!exportRow.hidden) {
+      exportRow.replaceChildren(
+        h('p', { class: 'muted', style: 'margin:8px 0 6px' }, exportFull
+          ? '存成影片時做完整版（有推鏡與白閃）。'
+          : '存成影片時，已照你的「減少動態效果」設定做成平穩版。'),
+        h('button', { class: 'btn btn-ghost btn-block tr-full', onclick: () => { exportFull = !exportFull; drawStyle(); } },
+          exportFull ? '改回平穩版' : '改做完整版'),
+      );
+    }
+    if (tr) meta.textContent = `${tInfo.photos} 張照片 · 約 ${mmss(tInfo.seconds)}`;
+  }
+  function setStyle(s) {
+    // 「照片不夠就不換」這一道與預告片按鈕的 disabled 互為備援：單獨移除這一道不會讓任何測試紅（按鈕按不到），移除前要確認 disabled 仍在
+    if (vstyle === s || (s === 'trailer' && !tInfo.ok)) return;
+    stopPreview(true);
+    vstyle = s;
+    setTrailerPref(tripId, { style: s });
+    musicFile = null;
+    music = s === 'trailer' ? trailerPref(tripId).music : (store.getRaw(tripId)?.musicStyle || 'track:warm');
+    degradeLevel = 0; degradeLine.hidden = true; degradeLine.textContent = '';
+    drawLenPick(); drawStyle(); drawMusicPick();
+    resetPlayer();
+  }
+  function onDegrade(info) {
+    degradeLevel = info.level;
+    degradeLine.textContent = degradeNote(info.off) + '。';
+    degradeLine.hidden = false;
   }
 
   // ---------- 配樂試聽 ----------
@@ -120,7 +190,7 @@ export default async function album(tripId, { drawPage, setTop }) {
   async function pickTrack(tk) {
     music = 'track:' + tk.id; musicFile = null;
     drawMusicPick();
-    store.patch(tripId, { musicStyle: music }).catch(() => {});
+    saveMusic(music);
     try { await ensureTrackCached(tk.id); }               // 先下載進快取 → 之後離線也能錄
     catch { toast('配樂下載不了（可能沒網路）。錄影時若還是不行，會自動改用合成音樂。', 4600); }
   }
@@ -198,17 +268,25 @@ export default async function album(tripId, { drawPage, setTop }) {
       }, allOpen ? '收起完整曲庫 ▴' : `📚 看完整曲庫（${TRACKS.length} 首）▾`),
       allWrap,
       h('p', { class: 'mp-head' }, '🎛️ 合成音樂（不用下載，離線一定有）'),
+      // 預告片配樂只在預告片風格出現：它跟畫面讀同一張拍點表，經典風格用不到
+      ...(vstyle === 'trailer' ? [h('button', {
+        class: 'tr-music' + (music === TRAILER_MUSIC ? ' on' : ''),
+        onclick: () => { music = TRAILER_MUSIC; musicFile = null; stopPreview(); drawMusicPick(); saveMusic(TRAILER_MUSIC); },
+      }, '🎬 預告片配樂（會對拍）')] : []),
       ...SYNTH_OPTS.map((o) => h('button', {
         class: music === o.id ? 'on' : '',
-        onclick: () => { music = o.id; musicFile = null; stopPreview(); drawMusicPick(); store.patch(tripId, { musicStyle: o.id }).catch(() => {}); },
+        onclick: () => { music = o.id; musicFile = null; stopPreview(); drawMusicPick(); saveMusic(o.id); },
       }, o.label)),
       h('button', { class: music === 'file' ? 'on' : '', onclick: () => { stopPreview(); fileInput.click(); } },
         musicFile ? '🎧 ' + musicFile.name : '🎧 用我手機裡的音樂'),
       h('button', {
         class: music === 'none' ? 'on' : '',
-        onclick: () => { music = 'none'; musicFile = null; stopPreview(); drawMusicPick(); store.patch(tripId, { musicStyle: 'none' }).catch(() => {}); },
+        onclick: () => { music = 'none'; musicFile = null; stopPreview(); drawMusicPick(); saveMusic('none'); },
       }, '🔇 沒有音樂'),
       h('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:2px', onclick: showMusicSources }, '🎼 音樂來源與授權'),
+      // 規劃 3.4：只有預告片配樂知道拍子在哪；內建曲目與自己的音樂照固定秒數剪，照實講
+      ...(vstyle === 'trailer' && music !== TRAILER_MUSIC && music !== 'none' ? [h('p', { class: 'muted tr-beat', style: 'margin:6px 0 0' },
+        '這首不會對拍：畫面照固定的秒數剪。要對拍請選「🎬 預告片配樂」。')] : []),
     );
   }
 
@@ -258,8 +336,13 @@ export default async function album(tripId, { drawPage, setTop }) {
     h('div', { class: 'album-frame' }, canvas, bar, timeLbl),
     meta,
     playBtn,
+    degradeLine,
 
-    h('div', { class: 'section-label' }, '影片長度'),
+    h('div', { class: 'section-label' }, '風格'),
+    stylePick,
+    styleNote,
+
+    lenLabel,
     lenPick,
     lenNote,
 
@@ -267,6 +350,7 @@ export default async function album(tripId, { drawPage, setTop }) {
     musicPick,
     fileInput,
 
+    exportRow,
     videoSupported()
       ? h('button', { class: 'btn btn-soft btn-block btn-big', style: 'margin-top:14px', onclick: doVideo }, '🎬 存成影片檔')
       : h('p', { class: 'form-hint' }, '這支手機不支援直接存影片，請用下面的相片分享網址（一樣好看、一樣能傳）。'),
@@ -279,6 +363,7 @@ export default async function album(tripId, { drawPage, setTop }) {
   ));
 
   drawLenPick();
+  drawStyle();
   drawMusicPick();
   drawShare();
 
@@ -349,7 +434,11 @@ export default async function album(tripId, { drawPage, setTop }) {
     ensurePlayer().then((p) => { p.seek(1.4); updateBar(); });
   }
   async function ensurePlayer() {
-    if (!player) player = await createPlayer(canvas, tripId, { length });
+    if (!player) {
+      player = vstyle === 'trailer'
+        ? await createTrailerPlayer(canvas, tripId, { calm: reducedMotion(), level: degradeLevel, onDegrade })
+        : await createPlayer(canvas, tripId, { length });
+    }
     return player;
   }
   async function togglePlay() {
@@ -471,7 +560,8 @@ export default async function album(tripId, { drawPage, setTop }) {
   async function doVideo() {
     stopPreview();
     if (player?.playing) { player.pause(); clearInterval(barIv); syncBtn(); }
-    const est = estimateDuration(tripId, length);
+    const isTr = vstyle === 'trailer';
+    const est = isTr ? { seconds: tInfo.seconds } : estimateDuration(tripId, length);
     const overlay = h('div', { class: 'record-overlay' },
       h('div', { class: 'spinner' }),
       h('div', { class: 'record-pct' }, '準備中…'),
@@ -482,18 +572,24 @@ export default async function album(tripId, { drawPage, setTop }) {
     let recMusic = musicFile ? 'none' : music;
     if (!musicFile && isTrackStyle(recMusic)) {
       try { await ensureTrackCached(recMusic.slice(6)); }
-      catch { recMusic = 'gentle'; toast('配樂下載不了（沒網路），這支先用合成音樂。', 4600); }
+      catch { recMusic = isTr ? TRAILER_MUSIC : 'gentle'; toast('配樂下載不了（沒網路），這支先用合成音樂。', 4600); }
     }
     try {
-      const { blob, ext } = await recordVideo(tripId, {
-        length,
-        music: recMusic,
-        musicFile,
-        onProgress: (r) => { pct.textContent = Math.round(r * 100) + '%'; },
-      });
+      const onProgress = (r) => { pct.textContent = Math.round(r * 100) + '%'; };
+      const { blob, ext } = isTr
+        ? await recordTrailer(tripId, {
+          music: recMusic, musicFile, onProgress, onDegrade, level: degradeLevel,
+          calm: reducedMotion() && !exportFull,
+        })
+        : await recordVideo(tripId, {
+          length,
+          music: recMusic,
+          musicFile,
+          onProgress,
+        });
       overlay.remove();
       if (!t.albumMade) store.patch(tripId, { albumMade: true }).catch(() => {});
-      const file = new File([blob], `${t.title || 'trip'}-回憶.${ext}`, { type: blob.type });
+      const file = new File([blob], `${t.title || 'trip'}-${isTr ? '預告片' : '回憶'}.${ext}`, { type: blob.type });
       if (await nativeShare({ title: t.title, text: '我們的旅程回憶', files: [file] })) return;
       downloadBlob(blob, file.name);
       toast(ext === 'webm' ? '已存 .webm（有些相簿 App 需轉檔）' : '已存成影片');
