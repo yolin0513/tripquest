@@ -2,6 +2,8 @@
 
 2026-11-17 立。Yolin 確認吉祥物動作丙版的方向之後，經 Dispatch 交辦。Yolin 原話：「請將這段產圖方式記下來，以後照著方式生圖，甚至未來如果有串接 gpt api key 的話就可以在 App 內生圖片了。」
 
+**2026-11-19 改**：參考圖改用 GPT 生過的圖，不再用 App 向量匯出的（Yolin 的決定，Dispatch 轉達；第 3.3 節、步驟 3、2.1 新的第一段）。
+
 **這份管什麼**：
 - 每趟行程用人工做一張「這趟專屬的行程海報」：步驟、提示詞範本、檢查的比重、腳本放在哪。
 - 將來在 App 內自動跑同一套流程需要什麼。這部分**只寫規劃，沒有投票、沒有實作**（第 4 節）。
@@ -22,7 +24,7 @@
   │                         ├─ ② 吉祥物動作九宮格        每趟都寫，1:1、洋紅底
   │                         └─ ③ 4×4 美食或景色          需要時才寫，1:1、洋紅底
   │
-  ├─ Yolin 在 GPT 生圖（先上傳六隻總表＋鬍鬍大圖）→ 用下載鈕存原檔
+  ├─ Yolin 在 GPT 生圖（先上傳 GPT 生過的參考圖，第 3.3 節）→ 用下載鈕存原檔
   │
   └─ Claude：收件 → 切圖／去背／改色 → 疊字（從行程表讀）
              → 補上背景沒畫到的動作 → 檢查 → 成品 PNG（2048×3072）
@@ -58,9 +60,10 @@
 ### 步驟 3：生圖（Yolin，在 ChatGPT）
 
 1. 開一個**新對話**。
-2. **先上傳兩張參考圖**，都在 Dispatch outputs 的 `TripQuest_吉祥物參考圖/`：
-   - `00_六隻總表.png`
-   - `03_鬍鬍_白色迷你雪納瑞_正面全身.png`：鬍鬍屢次被畫成灰色，所以多給他一張大圖。
+2. **先上傳參考圖：一律用 GPT 生過的圖**，在 Dispatch outputs 的 `TripQuest_生圖收件/`。挑哪幾張照第 3.3 節，寫提示詞的人在那份提示詞的「怎麼生」裡寫明檔名。
+   - **2026-11-19 的決定**（Yolin，經 Dispatch 轉達）：以後都用 GPT 生過的圖當參考圖，不再用 App 向量匯出的 `TripQuest_吉祥物參考圖/`。**原因**：Yolin 喜歡的就是 GPT 的畫風；App 匯出的向量正要照 GPT 的圖改掉，不能再拿來當正本。
+   - 11-19 以前這一步上傳的是 `TripQuest_吉祥物參考圖/` 的 `00_六隻總表.png` 和 `03_鬍鬍_白色迷你雪納瑞_正面全身.png`（鬍鬍屢次被畫成灰色，所以多給他一張大圖）。北海道那一輪就是這樣生的。
+   - **還缺海報用的參考圖**：GPT 生過的圖裡，目前沒有一張畫出六隻的全身（第 3.3 節）。下一趟要生 ① 背景之前，先跟 Dispatch／Yolin 定要用哪幾張。
 3. 把提示詞整段貼上、送出，不用另外加話。
 4. 比例：背景選直式 2:3；九宮格與 4×4 選正方形 1:1。
 5. 用**下載鈕**存原檔，不要截圖。
@@ -132,9 +135,9 @@
 
 ## 2. 提示詞範本
 
-**記號**：`〔換：…〕` 是每趟要換的地方，其餘照抄。提示詞用英文寫，角色名字用中文，跟參考圖一致。
+**記號**：`〔換：…〕` 是每趟要換的地方，其餘照抄。提示詞用英文寫，角色名字用中文。原本是為了跟參考圖底下印的名字一致；11-19 改用 GPT 生過的參考圖，圖上沒有字，名字照舊用中文，跟 2.1 的描述一致。
 
-**照抄的部分核對過**（2026-11-17，實測）：本節各程式碼區塊裡〔〕之間的英文固定片段，用一次性的程式逐段比對北海道兩份原文（含吉祥物的背景 v3、九宮格），44 段全部對得上。對照組 3 個都判對：改一個字判不符、原文的一句判符合、全新的一句判不符。另有 15 段太短或以中文為主，沒有比。
+**照抄的部分核對過**（2026-11-17，實測）：本節各程式碼區塊裡〔〕之間的英文固定片段，用一次性的程式逐段比對北海道兩份原文（含吉祥物的背景 v3、九宮格），44 段全部對得上。對照組 3 個都判對：改一個字判不符、原文的一句判符合、全新的一句判不符。另有 15 段太短或以中文為主，沒有比。這項核對針對的是 2.1 的「11-19 以前」那一塊；11-19 另加的新第一段不在這 44 段裡（新第一段的出處見 2.1）。
 
 **不要沿用原檔裡的建議**：北海道那兩份原檔寫著「先用九宮格（A），含吉祥物的背景（B）當備案」，那是丙版定案以前寫的。現在的做法是**以含吉祥物的背景為主，九宮格只補背景沒畫到的動作**。
 
@@ -150,9 +153,27 @@
 
 ### 2.1 ①②共用：兩段參考圖描述（照抄）
 
-這兩段描述的是吉祥物本身，跟行程無關，**每趟一字不改**。裡面一個一個寫死了 11-16 畫錯過的四處：鬍鬍灰毛白眉、北北多口袋、湯圓橘嘴與棕色、阿灰的大黑望遠鏡。
+這兩段描述的是吉祥物本身，跟行程無關。
 
-九宮格版的第一段多一句 `same clean sticker style with thick, even, dark charcoal outlines and flat solid colors`，並把 `mentioned below` 寫成 `listed below`。其餘相同。
+- **第二段（六隻的描述，`The six characters, as in the reference:` 起）每趟一字不改**，在下面「11-19 以前」那一塊。裡面一個一個寫死了 11-16 畫錯過的四處：鬍鬍灰毛白眉、北北多口袋、湯圓橘嘴與棕色、阿灰的大黑望遠鏡。
+- **第一段 11-19 換了新版**，因為參考圖改成 GPT 生過的圖（第 3.3 節），舊的第一段描述的是 App 匯出的總表。寫新提示詞用下面「11-19 起」那一塊；舊的第一段留著當紀錄。
+
+**11-19 起的第一段（參考圖是 GPT 生過的圖；🟡 待驗）**
+
+- **出處**：九姿勢那份提示詞（Dispatch outputs 的 `TripQuest_吉祥物九姿勢_九宮格提示詞_v2.md`）的第一段。〔〕以外照抄，〔〕裡是那份綁著它那兩張參考圖的地方。v1 把第二張參考圖寫成「整張都是白狗」，其實有 3 格是湯圓，v2 改正了。
+- **跟舊版的差別**：
+  - 開頭改成描述 GPT 的參考圖；
+  - 結尾加一句「只參考長相」，並點名參考圖裡有、這張不要出現的東西：GPT 的參考圖帶著自己的構圖和道具，不寫就可能被照畫；
+  - 拿掉「不要抄總表上的名字」：GPT 的參考圖上沒有字。
+- **待驗**：11-19 寫進範本時，還沒有任何一張用它生的圖回來。九姿勢那份是第一次用。
+- 參考圖不是兩張時，把 `two` 改掉。
+- 背景版（①）不寫 `same clean sticker style …` 那一句，因為背景的 STYLE 段另外寫了吉祥物的畫法。舊版的背景版寫 `mentioned below`，新版兩種都寫 `listed below`。
+
+```
+Use the two uploaded reference images. Both were drawn earlier for this same project and show the characters exactly as I want them: 〔換：每張參考圖是什麼。九姿勢那份（v2）是 the first is a 3×3 sheet of six original cute characters, each peeking over a light bar; the second is a 3×3 sheet of app icon designs, where six cells show the white dog drawn large and three show the round white bird〕. Draw the characters exactly as they look in the references: same body shape and proportions, same face, same colors, same outfits and accessories〔九宮格版才有：, same clean sticker style with thick, even, dark charcoal outlines and flat solid colors〕. Do not redesign them, do not change any color, do not add or remove clothes, pockets or accessories, and do not turn them into other characters or realistic animals. They may hold the small props listed below; their bodies, faces, colors and outfits stay exactly as in the reference. Use the references only for how the characters look: the poses, props, 〔換：有橫條才寫 bars and 〕background of this picture are the new ones described below, and 〔換：參考圖裡有、這張不要出現的東西。九姿勢那份是 the colored squares, maps, map pins and suitcase of the second reference〕 stay out of this picture.
+```
+
+**11-19 以前（參考圖是 App 匯出的總表＋鬍鬍大圖；北海道那一輪用的）**：第一段只留作紀錄；第二段（六隻的描述）照舊每趟照抄。九宮格版的第一段多一句 `same clean sticker style with thick, even, dark charcoal outlines and flat solid colors`，並把 `mentioned below` 寫成 `listed below`。其餘相同。
 
 ```
 Use the two uploaded reference images: a sheet of six original cute characters, and a large picture of one of them (the white dog). Draw the characters exactly as they look in the references: same body shape and proportions, same face, same colors, same outfits and accessories. Do not redesign them, do not change any color, do not add or remove clothes, pockets or accessories, and do not turn them into other characters or realistic animals. They may hold the small props mentioned below; their bodies, faces, colors and outfits stay exactly as in the reference. Do not copy the names or any other text from the reference sheet.
@@ -169,7 +190,7 @@ The six characters, as in the reference:
 ### 2.2 ① 專屬背景含吉祥物
 
 ```
-〔2.1 的兩段照抄〕
+〔2.1 的兩段照抄（第一段用 11-19 起的版本）〕
 
 A cozy hand-painted watercolor illustrated map of 〔換：地區，北海道那份是 Hokkaido, Japan〕, made as the background of a travel poster for an 〔換：天數，例 8-day〕 〔換：季節，例 summer〕 road trip in 〔換：月份，例 July〕. Portrait orientation, 2:3 (taller than wide). This picture is the background of the poster: the title, labels, route lines and boxes will be added on top of it later. So it has no text at all, and it keeps the empty areas described below. The six characters above are painted into the scenes on the map, as listed below.
 
@@ -219,7 +240,7 @@ NOT ALLOWED ANYWHERE: Absolutely no text of any kind: no letters, no words, no n
 ### 2.3 ② 吉祥物動作九宮格
 
 ```
-〔2.1 的兩段照抄（用九宮格版的第一段）〕
+〔2.1 的兩段照抄（第一段用 11-19 起的版本、九宮格版）〕
 
 Square image, 1:1. Exactly 9 separate cells arranged in a 3×3 grid of equal square cells. The entire background is one flat, solid, pure magenta color #FF00FF: no gradient, no texture, no noise, no vignette, no floor, no ground shadow, no scenery. Leave wide, clearly empty magenta gaps between neighboring cells, and an empty magenta margin around the outside of the whole grid. Do not draw grid lines, borders, frames, boxes, labels, captions or any text.
 
@@ -265,7 +286,8 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 
 - 第 7e 節的寫法規則照守：依據、會招來字的不畫、整張不畫路、溫泉只畫蒸氣、山整座綠到頂、動物只畫行程表有的、美食只畫在美食區、括號地名只定位。
 - 寫肯定句。否定句模型常不照做（ART 第 11 節）。
-- 參考圖底下印了名字與物種，提示詞要叫它別抄。
+- 參考圖上有字，提示詞就要叫它別抄。11-19 以前的參考圖（App 匯出的總表）底下印了名字與物種，所以舊的第一段和 2.2 的 NOT ALLOWED 都寫了 `Do not copy the names …`。11-19 起改用 GPT 生過的圖，圖上沒有字，新的第一段拿掉了這句。2.2 NOT ALLOWED 那句留著，推論無害。
+- 參考圖帶著自己的構圖和道具（GPT 的圖都是），第一段結尾要點名哪些不要出現（2.1 新的第一段）。
 
 ---
 
@@ -290,20 +312,37 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 | 畫錯的地方 | 見過幾次（實測） | 提示詞已經怎麼防 | 畫錯了怎麼辦 |
 |---|---|---|---|
 | **畫出字**（含抄參考圖底下的名字） | 11-16 整張含字的行程圖，215 字錯 4、看不清 3；11-17 不含吉祥物的背景與九宮格都沒有字 | 多處明寫不准有字；括號裡的地名寫明不要寫出來 | **一律重生**（字就是資訊）。連兩次有字，就刪掉括號地名再試 |
-| **鬍鬍變灰**（毛淺灰、眉毛白） | 11-16 兩張都是；11-17 九宮格又是 | 寫死「全身純白、只有眉毛灰」；多上傳一張他的大圖 | 整隻顏色不對算明顯的錯。九宮格用 `art-recolor` 改回白毛灰眉（兩次實測可行，耳朵會跟著變白），或重生那一格；背景裡的話，改色或重生由 Dispatch 定 |
+| **鬍鬍變灰**（毛淺灰、眉毛白） | 11-16 兩張都是；11-17 九宮格又是 | 寫死「全身純白、只有眉毛灰」；多上傳一張他的大圖（11-19 起是 GPT 生的 `App圖示_3x3_2026-11-19.png`，第 3.3 節） | 整隻顏色不對算明顯的錯。九宮格用 `art-recolor` 改回白毛灰眉（兩次實測可行，耳朵會跟著變白），或重生那一格；背景裡的話，改色或重生由 Dispatch 定 |
 | 北北多口袋、湯圓嘴變橘或帶棕色、阿灰的望遠鏡變大變黑 | 11-16 那兩張（連鬍鬍在內，六隻錯了四隻） | 每一處都一個一個寫死 | 認得出是哪一隻，就照新比重不追；認不出就重生或換格 |
 | **多一隻、同一隻兩次、六隻以外的角色** | — | 「各一次、只在列出的地方」 | 背景：明顯的錯，重生。九宮格：那一格不用 |
 | 相機擋住臉 | 11-17 九宮格 | 寫「拿在胸前、整張臉露出來」 | 查不到毛色時，以能不能認出是鬍鬍為準 |
 | 吉祥物畫得很小 | 11-17 含吉祥物的背景（六隻都小） | 寫了占整張高度 6～8% | 不重生。補上去的動作跟著背景的大小走（步驟 7） |
-| 尾巴、船槳、白煙伸進格縫 | — | 「每格的東西縮在中間 75%」 | `art-slice` 把那一整列標壞、回 4，好的格照切。壞的格重生，或用 App 的向量動作圖頂替 |
+| 尾巴、船槳、白煙伸進格縫 | — | 「每格的東西縮在中間 75%」 | `art-slice` 把那一整列標壞、回 4，好的格照切。壞的格重生，或用 App 的向量動作圖頂替（11-19 決定之前寫的：App 的向量正要照 GPT 的圖重描，重描前的舊向量畫風不同，要重看） |
 | 底色不是一整片洋紅 | — | 寫死 `#FF00FF`、不准漸層與地板 | `art-slice` 回 3、整張不能切，只能重生。顏色有點偏但整片一樣沒關係（實測是 `#FA05FA` 左右） |
 | 美食區道數不對或順序不對 | — | 「8 道、照順序」 | 標籤一定要貼著它說的那道菜：圖跟字對不上就是明顯的錯 |
 | 白煙沒碰到木桶或碗、地標位置偏、島比要求大 | 11-17 的 4×4（熱氣沒碰到碗）、11-17 不含吉祥物的背景（島比要求大） | 寫了 | 不追；只要框放得下 |
 | 淺色的山頂看起來像雪頂 | 11-17 不含吉祥物的背景、11-17 的 4×4 | 「整座綠或灰藍到頂」 | 不帶字的小項，照新比重不追。原本「要正式用再重生」的那張背景，這項也取消了（Dispatch 2026-11-17 確認） |
 
-### 3.3 參考圖只用自己的
+### 3.3 參考圖只用自己的：GPT 生過的圖
 
-- 只上傳 App 自己的六隻吉祥物：從 App 的向量（`js/glyphs.js` 的 `mascot()`、`js/peeks.js` 的 `peekFlat()`）直接畫大匯出，不是別人的圖。
+- **2026-11-19 起，參考圖一律用 GPT 生過的圖**（Yolin 的決定，Dispatch 11-19 轉達：「以後都改成用 GPT 生過的圖當參考圖」）。
+  - **原因**：Yolin 喜歡的就是 GPT 的畫風（圓嘟嘟、毛茸茸）。App 匯出的向量正要照 GPT 的圖改掉，不能再拿來當正本。
+  - **11-19 以前的寫法**（留作紀錄）：「只上傳 App 自己的六隻吉祥物：從 App 的向量（`js/glyphs.js` 的 `mascot()`、`js/peeks.js` 的 `peekFlat()`）直接畫大匯出」。那 13 張在 Dispatch outputs 的 `TripQuest_吉祥物參考圖/`（第 5 節）。不刪，但不再上傳；要比「App 舊的樣子」時才拿出來看。
+- **挑哪幾張**（這四條是 Session 11-19 的讀法，Dispatch 還沒確認）：
+  - 只用 GPT 生過、**造型驗過是對的**圖：那一隻的臉完整露出，顏色、衣服跟 2.1 的描述一致（鬍鬍白毛灰眉、阿灰小的淺藍望遠鏡……）。畫錯的圖拿去當參考，會把錯傳下去。
+  - 用 `art-recolor` 改過色的圖不當參考：改色只救得了毛色，眉毛、耳朵改不好（步驟 5），等於帶著另一種錯。
+  - 張數越少越好：每多一張，就多一份可能被照畫的構圖。
+  - 參考圖都帶著自己的構圖和道具，提示詞第一段要寫「只參考長相」，並點名哪些不要出現（2.1 新的第一段）。
+- **目前有哪幾張**（11-19 盤點；檔案在 Dispatch outputs 的 `TripQuest_生圖收件/`，`art-inbox/` 有同一份，sha256 對過）：
+
+  | 檔 | 有誰 | 能不能當參考 |
+  |---|---|---|
+  | `吉祥物融入九宮格-第一次.png` | 六隻都在，每隻都從橫條後面探頭 | **能**，九姿勢那份用了。看不到腳和尾巴 |
+  | `App圖示_3x3_2026-11-19.png` | 第 1、2、3、7、8、9 格是鬍鬍（畫得大），第 4、5、6 格是湯圓 | **能**，九姿勢那份用了。鬍鬍的毛團最清楚，v1.98.0 的圖示就是描第 1 格。有色塊、地圖、圖釘、行李箱，要在第一段點名不要出現 |
+  | `吉祥物動作九宮格-第一次.png` | 六隻都在，做行程裡的動作（阿灰那格是全身） | **不能**：鬍鬍是灰的、相機擋臉，正是要防的錯 |
+  | `底部分頁九宮格-第一次.png` | 六隻都在，各抱著分頁的東西 | 能，但九姿勢那份沒用：內容跟融入九宮格重疊 |
+
+- **🟡 缺口：還沒有海報用的參考圖**。行程海報的背景（①）要畫整隻（坐船、泡湯、滑雪），可是上面能用的兩張，一張只露上半身，一張只有鬍鬍和湯圓、大多只畫到胸口。腳、尾巴、下半身目前只能靠 2.1 的文字描述。九姿勢那張生回來後，第 7 格（鬍鬍正面全身）可以補上鬍鬍；其餘五隻的全身，要不要讓 GPT 另生一張「六隻正面全身」，由 Dispatch／Yolin 定（要多生一次圖）。**下一趟生 ① 背景之前要先定。**
 - **不上傳別人的作品當參考**，例如喜歡的海報、別的角色。可能被照抄、被拒，也有著作權的問題。版面一律用文字描述。當初海報參考 1、2 裡的角色屬於特定作品，提示詞裡絕不提。
 - 版面示意圖也不上傳，只給 Yolin／Dispatch 看。上傳了會被照畫。
 
@@ -350,11 +389,11 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 |---|---|---|
 | 1 整理行程表 | 從 store 讀標題、天數、每天的景點，`js/itinposter/model.js` 已經在收這些。方位：人工時是 Claude 憑地理知識寫粗略方位，App 沒有這種知識，可以改用景點座標算相對位置（推論、沒做）。美食：App 只有景點庫的必吃，使用者自己打的美食沒有類別 | 部分有 |
 | 2 寫提示詞 | 第 2 節的範本加一支填空函式。**只填對得上景點庫的景點**：使用者自己打字的景點可能是住家、親戚家，不送出去，也符合設計原則 | 沒有 |
-| 3 生圖 | 呼叫影像 API：背景 1024×1536、九宮格 1024×1024。參考圖要一起送，可以在手機上用 `mascot()`／`peekFlat()` 當場畫出來，不用另存檔（推論）。API 收不收參考圖、參考圖怎麼計費：**沒查證** | 沒有 |
+| 3 生圖 | 呼叫影像 API：背景 1024×1536、九宮格 1024×1024。參考圖要一起送，可以在手機上用 `mascot()`／`peekFlat()` 當場畫出來，不用另存檔（推論）。**11-19 決定之前寫的，要重看**：參考圖改成 GPT 生過的圖（第 3.3 節）之後，App 要把那幾張點陣圖帶著；等向量照 GPT 重描完，當場畫的向量能不能當參考，到時再評估。API 收不收參考圖、參考圖怎麼計費：**沒查證** | 沒有 |
 | 4 收件 | 存在手機上（IndexedDB）。要不要同步給旅伴另外決定（圖很大） | 沒有 |
 | 5 切圖、去背 | `art-slice`／`art-keyout` 現在是 node＋sharp，要改寫成瀏覽器 canvas 版，自帶的對照組一起搬 | 只有 node 版 |
 | 6 疊字 | 重用 `js/itinposter` 的版面與繪製（字本來就照行程資料畫，見第 4.6 節） | 部分有 |
-| 7 補動作 | 用九宮格切出來的動作；或乾脆用 App 自己的向量動作圖（`peekFlat`）——不花錢，造型一定對 | 向量版有 |
+| 7 補動作 | 用九宮格切出來的動作；或乾脆用 App 自己的向量動作圖（`peekFlat`）——不花錢，造型一定對（11-19 決定之前寫的，要重看：向量正要照 GPT 的圖重描，重描完造型才會跟 GPT 的一致） | 向量版有 |
 | 8 檢查 | 字：我們自己畫，正確性由結構保證，再加現有的海報測試。圖：App 判斷不了，只能給使用者看預覽（第 4.3 節） | 沒有 |
 | 9 成品 | 跟現有的行程海報一樣存 PNG／PDF | 有 |
 
@@ -442,7 +481,7 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 | `scripts/artselftest.mjs` | 從命令列入口驗上面三支 | 常設測試 |
 | `scripts/arttransparenttest.mjs` | 吉祥物的圖不准有鋪滿畫布的底色（會開瀏覽器） | 常設測試 |
 | `js/itinposter/`（`model.js`、`layout.js`、`draw.js`、`index.js`、`legicons.js`） | App 現行的行程海報：程式畫、字從行程資料來、全在手機上做。將來 API 版的疊字與退路都靠它 | `scripts/itinposterlayouttest.mjs`、`scripts/itinpostertest.mjs` |
-| `js/glyphs.js` 的 `mascot()`、`js/peeks.js` 的 `peekFlat()` | 參考圖的來源（向量）；`peekFlat` 也是現成的動作圖 | App 既有的測試 |
+| `js/glyphs.js` 的 `mascot()`、`js/peeks.js` 的 `peekFlat()` | 11-19 以前是參考圖的來源（向量），11-19 起不是了（第 3.3 節）；`peekFlat` 也是現成的動作圖 | App 既有的測試 |
 | `docs/ART_生圖素材.md`、本檔 | 規則細節、流程與範本 | — |
 
 ### 5.2 在 `.logs/` 裡（一次性、不進版控）
@@ -467,7 +506,7 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
 
 **其他位置**：
 - **收件的原圖**：`art-inbox/`（`.gitignore` 第 33 行）。`.logs/` 是第 9 行。
-- **參考圖成品**：Dispatch outputs 的 `TripQuest_吉祥物參考圖/`，共 13 張：總表、六隻正面全身、六張動作圖。不在 repo。
+- **參考圖成品**：Dispatch outputs 的 `TripQuest_吉祥物參考圖/`，共 13 張：總表、六隻正面全身、六張動作圖。不在 repo。**11-19 起不再上傳**，參考圖改用 GPT 生過的圖（第 3.3 節）；這 13 張留著，要比「App 舊的樣子」時才看。
 - **參考圖的匯出腳本**：當時是暫存腳本，已經不在了。做法記在 STATUS 的「吉祥物參考圖、D 第二版、北海道整張行程圖提示詞」那一節：在 node 裡塞一個最小的 `document` 替身，呼叫 `mascot()`／`peekFlat()` 產 SVG，sharp 用 density 直接畫大。要再匯出就照那段重寫。
 
 **要不要整理進 repo（待決，現在不做）**：疊字（overlay）與補動作的腳本如果要每趟重用，要先做四件事：寫死的座標改成讀設定檔；字數改成從行程表數；補自帶的對照組；登記進測試鏈。在那之前，每趟照第 1 節，從最近一支複製來改。
