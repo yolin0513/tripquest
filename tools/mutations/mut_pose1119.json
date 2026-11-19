@@ -163,11 +163,11 @@
   },
   {
     "name": "零件表：阿灰望遠鏡的轉頭零件對不上（圖改過、表沒跟著改）",
-    "why": "（事前寫 2026-11-19 01:1x）js/peeks.js 的 CHEER.scout 那一段的 transform 字串差一個數字：cheer 找不到那個零件，只跳上來、不轉頭，不報錯。紅 PS03、PS15（主頁的阿灰）與 PS30（補充的零件表）；PS01、PS02、PS14 只看哪一張與位置，不受影響。",
+    "why": "（事前寫 2026-11-19 01:1x；2026-11-20 02:01 事後：v1.100.0 阿灰望遠鏡換成描圖、零件改成 translate(128.33 117.16)，find／replace 跟著改、一樣只差一個數字，預期不變；新圖上還沒在瀏覽器跑過這一條）js/peeks.js 的 CHEER.scout 那一段的 transform 字串差一個數字：cheer 找不到那個零件，只跳上來、不轉頭，不報錯。紅 PS03、PS15（主頁的阿灰）與 PS30（補充的零件表）；PS01、PS02、PS14 只看哪一張與位置，不受影響。",
     "expect": ["PS03", "PS15", "PS30"],
     "file": "js/peeks.js",
-    "find": "  scout: { parts: [{ tf: 'rotate(0 133 148)', pivot: [133, 148], cls: 'pk-scan' }], nod: true },",
-    "replace": "  scout: { parts: [{ tf: 'rotate(0 133 149)', pivot: [133, 148], cls: 'pk-scan' }], nod: true },",
+    "find": "  scout: { parts: [{ tf: 'translate(128.33 117.16)', pivot: [128.33, 117.16], cls: 'pk-scan' }], nod: true },",
+    "replace": "  scout: { parts: [{ tf: 'translate(128.33 117.17)', pivot: [128.33, 117.16], cls: 'pk-scan' }], nod: true },",
     "cmd": "node scripts/posetest.mjs"
   }
 ]
