@@ -1,0 +1,137 @@
+[
+  {
+    "name": "分頁頭像：照片那格的裁切圈回到第一版 cx 110（Yolin 說偏左的那一版）",
+    "why": "（事前寫 2026-11-19 08:1x）js/tabicons.js 鬍鬍的裁切圈圓心從 100 改回 110：圓心在身體中線右邊 10 個畫布單位，看起來就是鬍鬍偏左（30px 時約 1.8px、26px 時約 1.6px）。只紅兩輪的 TI06；TI08 對照組是在這之上再往左挪 10 單位，照樣量得到偏左、不受影響。",
+    "expect": ["［和紙］ TI06", "［深色］ TI06"],
+    "file": "js/tabicons.js",
+    "find": "schnauzer: { crop: [100, 108, 82]",
+    "replace": "schnauzer: { crop: [110, 108, 82]",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：行程那格阿灰的裁切圈往右 8 單位",
+    "why": "（事前寫 2026-11-19 08:1x；08:2x 還沒跑過任何一次之前，從 6 單位改成 8 單位：置中門檻從 0.5 放寬到 0.7px，挪 6 單位在 26px 只有 1.05px、餘裕剩 0.35px）js/tabicons.js 阿灰的裁切圈圓心 100 → 108：身體偏左約 1.6px（30px）／1.4px（26px），超過 0.7px。證明 TI05 也守得住（不是只有照片那一格有量）。只紅兩輪的 TI05。",
+    "expect": ["［和紙］ TI05", "［深色］ TI05"],
+    "file": "js/tabicons.js",
+    "find": "hawk: { crop: [100, 120, 74]",
+    "replace": "hawk: { crop: [108, 120, 74]",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：主頁與分帳兩隻對調",
+    "why": "（事前寫 2026-11-19 08:1x）js/tabicons.js 的 TAB_MASCOT 把主頁換成棉棉、分帳換成湯圓：每一隻照自己的裁切圈畫、各自還是置中，只有順序錯。只紅兩輪的 TI01（不挑鬍鬍與阿灰對調，因為那樣 TI08 對照組挪的那一隻會跑到別格、TI08 也紅，分不出是哪一條擋的）。",
+    "expect": ["［和紙］ TI01", "［深色］ TI01"],
+    "file": "js/tabicons.js",
+    "find": "export const TAB_MASCOT = Object.freeze({ 主頁: 'tit', 任務: 'cockatiel', 行程: 'hawk', 照片: 'schnauzer', 分帳: 'bunny' });",
+    "replace": "export const TAB_MASCOT = Object.freeze({ 主頁: 'bunny', 任務: 'cockatiel', 行程: 'hawk', 照片: 'schnauzer', 分帳: 'tit' });",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：選中那一格不放大",
+    "why": "（事前寫 2026-11-19 08:1x）js/app.js 的 tabItem 一律畫 26px：亮著那一格跟其他格一樣大。只紅兩輪的 TI02；TI03～TI07 的置中不比大小（大小歸 TI02 管），不受影響。",
+    "expect": ["［和紙］ TI02", "［深色］ TI02"],
+    "file": "js/app.js",
+    "find": "    const b = tabBadge(kind, active ? 30 : 26);",
+    "replace": "    const b = tabBadge(kind, 26);",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：切分頁不跳",
+    "why": "（事前寫 2026-11-19 08:1x）js/app.js 拿掉加 tab-hop 那一行：五次切換都沒有跳。只紅兩輪的 TI10；TI11、TI12、TI15 本來就要不跳，不受影響。",
+    "expect": ["［和紙］ TI10", "［深色］ TI10"],
+    "file": "js/app.js",
+    "find": "    if (active && tabHop) b.classList.add('tab-hop');\n",
+    "replace": "",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：同一格裡換子頁面也整列重畫",
+    "why": "（事前寫 2026-11-19 08:1x）js/app.js 的 tabsFor 拿掉「跟上一次一樣就不重畫」：行程 → 調整每天的行程時整列重建、而且新的那一隻又跳一次。只紅兩輪的 TI11。renderTabs 只在開 App 與 hashchange 時叫，直接打開（TI15）只叫一次、仍是第一次畫，預期不受影響。",
+    "expect": ["［和紙］ TI11", "［深色］ TI11"],
+    "file": "js/app.js",
+    "find": "  if (sig === tabSig) return false;\n",
+    "replace": "",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：減少動態效果時照樣跳",
+    "why": "（事前寫 2026-11-19 08:1x）js/app.js 的 tabsFor 拿掉 !reducedMotion()：開了減少動態效果，切分頁照樣加 tab-hop（全域規則把時間壓到 0.01ms，但 class 與動畫還在）。只紅深色那一輪的 TI12（和紙那一輪不開減少動態效果）。",
+    "expect": ["［深色］ TI12"],
+    "file": "js/app.js",
+    "find": "  tabHop = tabSig !== null && !!on && !reducedMotion();",
+    "replace": "  tabHop = tabSig !== null && !!on;",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：開 App 第一次畫就跳",
+    "why": "（事前寫 2026-11-19 08:1x）js/app.js 的 tabsFor 拿掉 tabSig !== null：直接打開旅程的頁面（重新整理）時亮著那一格也跳。只紅兩輪的 TI15；每一輪都先從首頁開（那一層沒有亮著的旅程分頁、本來就不跳），其餘不受影響。",
+    "expect": ["［和紙］ TI15", "［深色］ TI15"],
+    "file": "js/app.js",
+    "find": "  tabHop = tabSig !== null && !!on && !reducedMotion();",
+    "replace": "  tabHop = !!on && !reducedMotion();",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：跳的時候連透明度一起動",
+    "why": "（事前寫 2026-11-19 08:1x）css/style.css 的 @keyframes tab-hop 第一格加 opacity：動畫不再只動 transform。只紅兩輪的 TI10。",
+    "expect": ["［和紙］ TI10", "［深色］ TI10"],
+    "file": "css/style.css",
+    "find": "@keyframes tab-hop { 0% { transform: translateY(0); }",
+    "replace": "@keyframes tab-hop { 0% { transform: translateY(0); opacity: .6; }",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "照片空白頁：揮手的鬍鬍沒登記身體中線",
+    "why": "（事前寫 2026-11-19 08:1x；08:30 point、puzzle 一起登記之後改成只拿掉 hello 那一項，原本是整個表清空；08:45 湯圓不登記（Dispatch 選甲），find／replace 跟著拿掉 puzzle，預期不變）js/peeks.js 的 POSE_MID 拿掉 hello：--pk-dx 不設，圖照圖框置中，身體回到按鈕中線左邊約 12px（修之前的樣子）。只紅兩輪的 TI13；TI14 對照組本來就把 --pk-dx 撥回 0，point 照舊，不受影響。",
+    "expect": ["［和紙］ TI13", "［深色］ TI13"],
+    "file": "js/peeks.js",
+    "find": "const POSE_MID = Object.freeze({ hello: 100, point: 100 });",
+    "replace": "const POSE_MID = Object.freeze({ point: 100 });",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "沒有景點：指路的阿灰沒登記身體中線",
+    "why": "（事前寫 2026-11-19 08:30；08:45 湯圓不登記（Dispatch 選甲），find／replace 跟著拿掉 puzzle，預期不變）js/peeks.js 的 POSE_MID 拿掉 point：照圖框置中，身體回到按鈕中線左邊約 7.8px（主頁與任務頁都是）。只紅兩輪的 TI16；TI17 對照組本來就撥回 0，不受影響。",
+    "expect": ["［和紙］ TI16", "［深色］ TI16"],
+    "file": "js/peeks.js",
+    "find": "const POSE_MID = Object.freeze({ hello: 100, point: 100 });",
+    "replace": "const POSE_MID = Object.freeze({ hello: 100 });",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "照片空白頁：空白區塊的置中規則不吃 --pk-dx",
+    "why": "（事前寫 2026-11-19 08:1x；08:30 point、puzzle 也登記之後 expect 加 TI16、TI18——三隻都掛在空白區塊的按鈕上、吃同一條；08:45 事後：湯圓不登記（Dispatch 選甲）、TI18 拿掉，expect 拿掉 TI18，只是刪掉已不存在的那一項）css/style.css 的 .empty .btn > .gl-peek 改回 left: 50%：--pk-dx 有設、但這一條（同權重、寫在 .pose-c 後面，空白區塊實際吃這一條）不用它，登記了的兩隻都回到修之前的位置。紅兩輪的 TI13、TI16。只改 .pose-host > .gl-peek.pose-c 那一條是等價突變（被這一條蓋過），不列。",
+    "expect": ["［和紙］ TI13", "［深色］ TI13", "［和紙］ TI16", "［深色］ TI16"],
+    "file": "css/style.css",
+    "find": ".empty .btn > .gl-peek { left: calc(50% + var(--pk-dx, 0px)); transform: translateX(-50%);",
+    "replace": ".empty .btn > .gl-peek { left: 50%; transform: translateX(-50%);",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "分頁頭像：首頁那一層也換成頭像",
+    "why": "（事前寫 2026-11-19 08:1x）js/tabicons.js 的 TAB_MASCOT 多登記「我的旅程」：首頁那一層的第一格也變成湯圓頭像（3.12 說這次不動那一層）。只紅兩輪的 TI09；那一層沒有亮著的旅程分頁、不跳，旅程那一層五格不變。",
+    "expect": ["［和紙］ TI09", "［深色］ TI09"],
+    "file": "js/tabicons.js",
+    "find": "export const TAB_MASCOT = Object.freeze({ 主頁: 'tit',",
+    "replace": "export const TAB_MASCOT = Object.freeze({ 我的旅程: 'tit', 主頁: 'tit',",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "量法本身：鏡射軸一律回答範圍正中間（量法壞掉、什麼都說置中）",
+    "why": "（事前寫 2026-11-19 08:1x；08:30 加 TI16～TI19；08:45 事後：湯圓不登記（Dispatch 選甲）、TI18／TI19 拿掉，expect 拿掉那兩項，只是刪掉已不存在的項目）scripts/tabicontest.mjs 的 mirrorAxis 不再找最對得上的那條線、直接回 (lo+hi)/2：分頁頭像的範圍以圓心為中心，所以 TI03～TI07 照樣過——這就是對照組要抓的情況。紅兩輪的 TI08（挪過的圖量成 0）、TI14／TI17（撥回 0 的圖量成 0）；空白區塊那兩隻的範圍以圖框為中心，圖框被 --pk-dx 推過（hello 右 12、point 右 7.8px），量出來就等於那個位移，所以 TI13、TI16 也紅。",
+    "expect": ["［和紙］ TI08", "［深色］ TI08", "［和紙］ TI13", "［深色］ TI13", "［和紙］ TI14", "［深色］ TI14", "［和紙］ TI16", "［深色］ TI16", "［和紙］ TI17", "［深色］ TI17"],
+    "file": "scripts/tabicontest.mjs",
+    "find": "    if (!best || s < best.score) best = { axis: a2 / 2, score: s };",
+    "replace": "    if (!best) best = { axis: (lo + hi) / 2, score: s };",
+    "cmd": "node scripts/tabicontest.mjs"
+  },
+  {
+    "name": "配色：選中那格的淡色底沒登記「上面沒有字」",
+    "why": "（事前寫 2026-11-19 09:57；Dispatch 選甲：登記並配「拿掉登記就紅」）scripts/palettetest.mjs 拿掉 #tabbar .tab.active .ti-mc::before 那一條登記：P3 拿繼承來的 --primary-text 對那塊淡色底算，深色 3.06 不到 4.5（全套第 5 場補跑 run5b 實際紅的就是這一行）。只紅「P2／P3 深色」那一行；和紙那條是 33% 的底、本來就過，不用登記也過；P4「登記了卻沒用到」不受影響（拿掉的就是那一條登記本身）。",
+    "expect": ["P2／P3 深色"],
+    "file": "scripts/palettetest.mjs",
+    "find": "  '#tabbar .tab.active .ti-mc::before': NO_TEXT + '（底部分頁選中那一格、頭像後面的淡色圓角底；content 空、字在頭像下面）',\n",
+    "replace": "",
+    "cmd": "node scripts/palettetest.mjs"
+  }
+]

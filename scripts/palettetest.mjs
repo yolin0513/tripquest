@@ -48,6 +48,10 @@ const ALL_THEMES = {
   '.poster-frame': NO_TEXT + '（海報畫布的外框，裡面是 canvas）',
   '.rm-cursor': NO_TEXT + '（當日地圖回放的游標圓點）',
   '.apx-cam': NO_TEXT + '（任務列的拍照鈕：2026-11-13 第四段起是相機圖示、顏色寫在圖裡；原本是 📷）',
+  // v1.96.0（Dispatch 2026-11-19 選甲）：只設了底色，P3 就拿繼承來的字色（#tabbar .tab.active 的 --primary-text）對它算，深色 3.06。
+  // 但它是 content '' 的空色塊，疊在頭像（svg）後面，上面沒有字；分頁名稱在頭像下面、是 #tabbar .tab.active 那一條（照樣在算、有過）。
+  // 頭像外圈（--primary-text，非文字元件要 ≥ 3）對深色實際的 25% 淡色底 3.43（一次性 .logs/tab-20261119/tint-sweep.mjs）。
+  '#tabbar .tab.active .ti-mc::before': NO_TEXT + '（底部分頁選中那一格、頭像後面的淡色圓角底；content 空、字在頭像下面）',
   '#sosFab': EMOJI + '（🆘，index.html；2026-11-05 以前誤列在「深色既有的對比不足」）',
   '.qbig-photo.has-img .qbig-emoji': EMOJI,
   '.quest-focus-photo.has-img .qf-emoji': EMOJI,

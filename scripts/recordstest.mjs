@@ -209,7 +209,8 @@ async function buy() {
     const cards = [...new Set(['.fl-entry', '.stay-entry', '.buy-entry'].map((s) => document.querySelector(s)?.closest('.info-card')).filter(Boolean))];
     return { on: on.join(','), cards: cards.length, rows: cards[0] ? cards[0].querySelectorAll('.info-row').length : 0 };
   });
-  yes(it.on === '🗓️行程', `行程分頁：底部亮的是「行程」（亮著：${it.on || '沒有'}）`);
+  // v1.96.0 起旅程那一層的分頁圖示是吉祥物頭像（svg、沒有字），亮著那一格的文字只剩「行程」
+  yes(it.on === '行程', `行程分頁：底部亮的是「行程」（亮著：${it.on || '沒有'}）`);
   yes(it.cards === 1 && it.rows === 3, `航班／住宿／待買合成一張卡（${it.cards} 張卡、${it.rows} 列）`);
   let entry = await page.$eval('.buy-entry', (e) => e.textContent);
   yes(entry === '🛒 待買清單', `一項都沒有：入口只寫名字、不寫 0 項（${entry}）`);

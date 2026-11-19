@@ -5,7 +5,8 @@ import * as store from './store.js';
 import { mount, h, toast, smoothScrollTo } from './ui.js';
 import { apply as applyPrefs } from './prefs.js';
 import { initIdentity } from './identity.js';
-import { mascotHead } from './glyphs.js';
+import { mascotHead, reducedMotion } from './glyphs.js';
+import { TAB_MASCOT, tabBadge } from './tabicons.js';
 
 const backBtn = document.getElementById('backBtn');
 const topTitle = document.getElementById('topTitle');
@@ -96,9 +97,21 @@ function tripIdOfPath(p) {
   return null;
 }
 
+// v1.96.0 旅程那一層的五格換成吉祥物圓形頭像（js/tabicons.js；docs/DESIGN_吉祥物融入介面.md 3.12）：照分頁的字對哪一隻，
+// 表上沒有的（「我的旅程」「設定」那一層）照舊用表情符號。選中 30px、未選中 26px。
+// 切到別格時，新選中那一格的那隻跳一下（只動 transform）：renderTabs 算好這一次要不要跳，放在 tabHop。
+let tabHop = false;
 function tabItem(icon, label, href, active) {
-  const el = h('a', { class: 'tab' + (active ? ' active' : ''), href: '#' + href },
-    h('span', { class: 'ti' }, icon), h('span', {}, label));
+  const kind = TAB_MASCOT[label];
+  let ti;
+  if (kind) {
+    const b = tabBadge(kind, active ? 30 : 26);
+    if (active && tabHop) b.classList.add('tab-hop');
+    ti = h('span', { class: 'ti ti-mc' }, b);
+  } else {
+    ti = h('span', { class: 'ti' }, icon);
+  }
+  const el = h('a', { class: 'tab' + (active ? ' active' : ''), href: '#' + href }, ti, h('span', {}, label));
   // 已經在這一頁時再按同一個分頁 → 回到最上面。
   //
   // 判斷「已經在這一頁」一定要比對**完整網址**，不能用 active。
@@ -112,6 +125,17 @@ function tabItem(icon, label, href, active) {
     smoothScrollTo(0);
   });
   return el;
+}
+
+// 上一次畫的分頁列：哪一層、哪一趟、亮著哪一格（v1.96.0）。
+//   一樣就不重畫——同一格裡進子頁面（景點頁、任務、海報……）不必整列重建，剛開始跳的那一隻也不會被換掉；
+//   不一樣、而且不是第一次畫（開 App、重新整理不跳）、新的那一格有亮、沒開減少動態效果 → 新亮的那一隻跳一下。
+let tabSig = null;
+function tabsFor(sig, on) {
+  if (sig === tabSig) return false;
+  tabHop = tabSig !== null && !!on && !reducedMotion();
+  tabSig = sig;
+  return true;
 }
 
 function renderTabs() {
@@ -131,6 +155,8 @@ function renderTabs() {
     const isItin = /^\/trip\/[^/]+\/(itinerary|plan|flights|stays|buy|memories|album|badges|recap|poster|itinposter)$/.test(p);
     const isPhotos = p === `${base}/people`;
     const isSplit = p === `${base}/expenses`;
+    const on = isHome ? '主頁' : isTasks ? '任務' : isItin ? '行程' : isPhotos ? '照片' : isSplit ? '分帳' : '';
+    if (!tabsFor(`trip|${tid}|${on}`, on)) return;
     mount(tabbar,
       tabItem('🏠', '主頁', `${base}/home`, isHome),
       tabItem('📋', '任務', base, isTasks),
@@ -139,11 +165,14 @@ function renderTabs() {
       tabItem('💰', '分帳', `${base}/expenses`, isSplit),
     );
   } else {
+    const home = p === '/' || p === '/new' || p === '/join';
+    if (!tabsFor(`top|${home ? 'home' : p === '/settings' ? 'settings' : ''}`, '')) return;
     mount(tabbar,
-      tabItem('🗺️', '我的旅程', '/', p === '/' || p === '/new' || p === '/join'),
+      tabItem('🗺️', '我的旅程', '/', home),
       tabItem('⚙️', '設定', '/settings', p === '/settings'),
     );
   }
+  tabHop = false;
 }
 window.addEventListener('hashchange', renderTabs);
 

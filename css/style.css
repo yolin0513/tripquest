@@ -221,7 +221,11 @@ html[data-theme="washi"] .gl-peek .mc-fig { filter: none; }
 .has-peek.pose-host { margin-top: calc(var(--pk-rise) + 8px); }
 .pose-host > .gl-peek.pose-l { left: 14px; right: auto; transform: none; }
 .pose-host > .gl-peek.pose-r { right: 14px; left: auto; transform: none; }
-.pose-host > .gl-peek.pose-c { left: 50%; right: auto; transform: translateX(-50%); }
+/* 置中：對齊的是身體中線（--pk-dx：js/peeks.js 的 pose() 照 POSE_MID 算，沒登記的是 0＝照圖框置中）；後面兩條置中規則
+   （.empty .btn > .gl-peek、.celebrate .btn > .gl-peek）同一個寫法，誰蓋過誰結果都一樣。登記了的兩隻（照片空白頁的鬍鬍、沒有景點的阿灰）
+   都掛在空白區塊的按鈕上，實際吃的是 .empty 那一條（同權重、寫在後面）：只把這一條改回 50% 不會有測試紅（等價突變），
+   tabicontest TI13／TI16 守的是 .empty 那一條。 */
+.pose-host > .gl-peek.pose-c { left: calc(50% + var(--pk-dx, 0px)); right: auto; transform: translateX(-50%); }
 .pose-host > .gl-peek { bottom: calc(100% - var(--pk-sink) + 2px); }   /* 跟按鈕、卡片的邊框對齊（邊框 1.5～2px） */
 .theme-seg-wrap { position: relative; }
 /* 吉祥物的動畫：v1.83.0 只有完成任務那一刻（小鳳從照片後面跳上來、揮翅膀）；Yolin 看了實機：「效果不錯，推廣到其他時刻」，
@@ -403,6 +407,20 @@ html[data-theme="washi"] .say-peek .say-text { --say-bd: 2.5px; }
 #tabbar .tab.active { color: var(--primary-text); }
 #tabbar .tab.active .ti { transform: translateY(-1px); }
 #tabbar .tab:active { opacity: 0.6; }
+/* 旅程那一層的五格：吉祥物圓形頭像（v1.96.0，js/tabicons.js；docs/DESIGN_吉祥物融入介面.md 3.12）。
+   未選中 26px、細線（--line）；選中 30px、圈換主色、後面一塊淡色底、往上 2px（字變主色是上面那一條）。
+   選中與未選中不只靠顏色：大一號、有淡色底、往上 2px。分頁列高度 76px 不變。
+   切到別格時新選中那一隻跳一下（.tab-hop，js/app.js 的 renderTabs；只動 transform；減少動態效果時不掛）。
+   跳的是裡面的 svg，不是 .ti——.ti 選中時有靜態的往上 2px，動畫蓋過去會把它吃掉。 */
+#tabbar .tab .ti-mc { position: relative; display: grid; place-items: center; width: 52px; height: 36px; font-size: 0; }
+#tabbar .tab .mc-tab { position: relative; z-index: 1; display: block; }
+#tabbar .tab .mc-tab .mc-badge-ring { stroke: var(--line); stroke-width: 1.5px; }
+#tabbar .tab.active .ti-mc { transform: translateY(-2px); }
+#tabbar .tab.active .ti-mc::before { content: ''; position: absolute; inset: 0; border-radius: 18px; background: color-mix(in srgb, var(--primary) 33%, transparent); }
+html:not([data-theme="washi"]) #tabbar .tab.active .ti-mc::before { background: color-mix(in srgb, var(--primary) 25%, transparent); }
+#tabbar .tab.active .mc-tab .mc-badge-ring { stroke: var(--primary-text); stroke-width: 2.5px; }
+#tabbar .tab .mc-tab.tab-hop { animation: tab-hop .5s cubic-bezier(.3, .7, .4, 1) both; }
+@keyframes tab-hop { 0% { transform: translateY(0); } 40% { transform: translateY(-7px); } 70% { transform: translateY(0); } 85% { transform: translateY(-2px); } 100% { transform: translateY(0); } }
 
 /* ---------- 回顧與成就 hub ---------- */
 .mem-card {
@@ -518,7 +536,7 @@ button.card { appearance: none; font: inherit; }
 /* v1.95.0 照片頁空白（規劃 P1）：鬍鬍拿相機從「回任務清單」按鈕上緣探頭（js/views/people.js；靜止、不動）。
    按鈕上面留出牠露出來的高度；邊線對在框線外緣（.btn 的框線 2px，絕對定位從框線內側算）。 */
 .empty .btn.has-peek { margin-top: calc(var(--pk-rise) + 10px); }
-.empty .btn > .gl-peek { left: 50%; transform: translateX(-50%); bottom: calc(100% - var(--pk-sink) + 2px); }
+.empty .btn > .gl-peek { left: calc(50% + var(--pk-dx, 0px)); transform: translateX(-50%); bottom: calc(100% - var(--pk-sink) + 2px); }
 .center-fill { display: flex; align-items: center; justify-content: center; min-height: 46vh; }
 
 /* ---------- Spinner ---------- */
@@ -1333,7 +1351,7 @@ body.pv-open { overflow: hidden; }
 /* v1.95.0 解鎖徽章（規劃 B1）：小鳳從「太棒了」按鈕上緣探頭、跳上來揮翅膀（js/ui.js 的 celebrate 的 btnPeek）。
    按鈕上面留出牠露出來的高度＋14；邊線對在框線外緣（.btn 的框線 2px）。 */
 .celebrate .btn.has-peek { margin-top: calc(var(--pk-rise) + 14px); }
-.celebrate .btn > .gl-peek { left: 50%; transform: translateX(-50%); bottom: calc(100% - var(--pk-sink) + 2px); }
+.celebrate .btn > .gl-peek { left: calc(50% + var(--pk-dx, 0px)); transform: translateX(-50%); bottom: calc(100% - var(--pk-sink) + 2px); }
 .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 96; }
 .confetti i {
   position: absolute; top: -20px; width: 11px; height: 15px; border-radius: 2px;

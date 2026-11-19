@@ -117,10 +117,24 @@ export function peek(kind, k = 0.6) {
 // 所以只看 sharp 的圖看不出來。算好的形狀跟照規格裁的逐畫素相同（8 倍放大比 0 畫素不同）。
 // 新畫的圖別把 path 形的 clipPath 放進轉過角度的群組裡（scripts/cliptest.mjs 擋這種寫法）。
 export const POSE_K = 0.6;
+// 置中掛（.pose-c）時對齊宿主中線的是「身體中線」、不是圖框中間（v1.96.0）：
+// 揮手的鬍鬍（hello）圖框裡含舉起的手與揮動線，圖框中間在 x 120、身體中線在 100（鼻子 cx 100），
+// 照圖框置中，身體在按鈕中線左邊 20 單位＝12px——Yolin 2026-11-19 回報底部分頁「照片」那格的鬍鬍偏左，Dispatch 要照片空白頁這隻一起量、偏就修。
+// 指路阿灰（point）：圖框裡含伸出去指路的那隻翅膀，圖框中間 113、身體中線 100（身體 path 對 100 對稱）→ 沒登記時身體在左 7.8px。
+// Dispatch 2026-11-19 08:2x：阿灰這版一起對準。沒登記的照圖框置中（--pk-dx 0）。scripts/tabicontest.mjs TI13～TI17 在瀏覽器裡量。
+// 搔頭湯圓（puzzle，邀請讀不到）刻意不登記：整個身體繞 (100,170) 轉了 12°（歪頭），剪影沒有左右對稱的中線；深色主題描的白邊
+//   又把量到的鏡射軸推右 5 個畫布單位（同一個位置和紙量到右 1.33px、深色右 4.83px）——沒有一個量法在兩個主題都量得準，
+//   證明不了「對準」。Dispatch 2026-11-19 選甲：維持照圖框置中（v1.96.0 之前的樣子）。要登記牠，先找到兩個主題一致的量法。
+const POSE_MID = Object.freeze({ hello: 100, point: 100 });
 // side＝掛在宿主的哪一邊（CSS .pose-l／.pose-r／.pose-c）；宿主上面要留的空間由 ui.js 的 mountPose 處理。
 export function pose(kind, side = 'r') {
   const el = peek(kind, POSE_K);
   el.classList.add('pose', `pose-${side}`);
+  const mid = POSE_MID[kind];
+  if (side === 'c' && mid != null) {
+    const [x, , w] = PEEK[kind].vb;
+    el.style.setProperty('--pk-dx', `${((x + w / 2 - mid) * POSE_K).toFixed(1)}px`);   // 往右挪多少，身體中線才落在宿主中線
+  }
   return el;
 }
 

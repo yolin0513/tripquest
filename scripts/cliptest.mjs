@@ -1,6 +1,6 @@
 // 畫在字串裡的圖：path 形的裁切框不准用在轉過角度的地方（node scripts/cliptest.mjs；秒級、不開瀏覽器、不連網；2026-11-18）
 //
-// 涵蓋的程式：js/peeks.js、js/glyphs.js（探頭圖、全身吉祥物、拍照圖示的 SVG 字串）
+// 涵蓋的程式：js/peeks.js, js/glyphs.js, js/tabicons.js（探頭圖、全身吉祥物、拍照圖示、底部分頁五格頭像的 SVG 字串；tabicons 是 v1.96.0 加的）
 //
 // 為什麼（Yolin 2026-11-18：「阿灰頭上有一塊灰色長方形，那是什麼？」）：Chromium 實測，阿灰望遠鏡（PEEK.scout）的頭轉了 3°，
 // 頭頂深灰帶用 <path> 形的 clipPath 照圓頭裁，結果被裁成那條 path 的外接長方形——頭頂多一塊方形、白下巴被切平。拿掉旋轉就裁對；
@@ -24,7 +24,7 @@
 //       h 定義在轉過的 g 裡、那個 g 關掉之後才引用（只看引用處；g 要照 </g> 關掉）；
 //       判斷不了的：i path、引用不在同一行
 //       每一個分支各有一條突變只紅它的樣本（tools/mutations/mut_fix1118.json，cmd 是這一支）。
-//   CT2 真的檔：兩支各讀到幾個 clipPath（兩支都非 0、合計 ≥ 20）、轉了角度的 ellipse 裁切框幾個（≥ 5：證明真的檔上讀得到轉角）、
+//   CT2 真的檔：三支各讀到幾個 clipPath（每一支都非 0、合計 ≥ 20）、轉了角度的 ellipse 裁切框幾個（≥ 5：證明真的檔上讀得到轉角）、
 //       會出事 0 個、判斷不了 0 個
 //   CT3 真的檔的對照：把 js/peeks.js 裡 scout 頭頂算好的帶子與下巴、point 的翅尖，在記憶體裡換回 11-18 以前的 clipPath 寫法，
 //       必須各抓到 1 個、點名在換的那一行（證明這支讀得到真的圖的結構，不是只在合成樣本上有用）
@@ -32,7 +32,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const FILES = ['js/peeks.js', 'js/glyphs.js'];
+const FILES = ['js/peeks.js', 'js/glyphs.js', 'js/tabicons.js'];
 let pass = 0, fail = 0;
 const yes = (cond, msg) => { if (cond) { pass++; console.log('✓ ' + msg); } else { fail++; console.log('✗ ' + msg); } };
 
