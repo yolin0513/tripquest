@@ -358,7 +358,9 @@ const animEnd = (page, ps = PEEK_SEL, swingSel = null) => page.evaluate(async (p
 const ANIM_WANT = {
   eat: { label: '捧麵', soft: false, layers: { 'pk-steam': 1, 'pk-grip': 1 }, parts: 0, fades: 2 },
   grill: { label: '烤串', soft: false, layers: { 'pk-sway': 2, 'pk-grip': 1 }, parts: 2, fades: 1, swing: '.pk-sway', swingWord: '晃兩下' },
-  hat: { label: '遮陽帽', soft: false, layers: { 'pk-wave-r': 3, 'pk-wave-lines': 1, 'pk-grip': 1 }, parts: 3, fades: 2, swing: '.pk-wave-r', swingWord: '揮兩下' },
+  // v1.100.0（2026-11-20 02:4x）北北遮陽帽換新圖：舉起來的手在新圖裡只畫成一段（fig 裡 transform 是那個 tf 的元素 1 個、front 0 個；
+  //   舊圖分 3 段），所以 .pk-wave-r 3 → 1、零件 3 → 1。換圖後這支沒在瀏覽器跑過（推論：wrapPart 每找到一個 transform＝tf 的元素包一次）。
+  hat: { label: '遮陽帽', soft: false, layers: { 'pk-wave-r': 1, 'pk-wave-lines': 1, 'pk-grip': 1 }, parts: 1, fades: 2, swing: '.pk-wave-r', swingWord: '揮兩下' },
   cam: { label: '相機', soft: false, layers: { 'pk-flash': 1, 'pk-grip': 1 }, parts: 0, fades: 2 },
   rain: { label: '撐傘', soft: true, layers: { 'pk-tilt': 1, 'pk-grip': 1 }, parts: 1, fades: 1 },
   snow: { label: '雪板', soft: true, layers: { 'pk-slide': 1 }, parts: 1, fades: 0 },
