@@ -24,10 +24,17 @@
 //       h 定義在轉過的 g 裡、那個 g 關掉之後才引用（只看引用處；g 要照 </g> 關掉）；
 //       判斷不了的：i path、引用不在同一行
 //       每一個分支各有一條突變只紅它的樣本（tools/mutations/mut_fix1118.json，cmd 是這一支）。
-//   CT2 真的檔：三支各讀到幾個 clipPath（每一支都非 0、合計 ≥ 20）、轉了角度的 ellipse 裁切框幾個（≥ 5：證明真的檔上讀得到轉角）、
+//   CT2 真的檔：三支各讀到幾個 clipPath（每一支都非 0、合計 ≥ 11）、轉了角度的 ellipse 裁切框幾個（≥ 2：證明真的檔上讀得到轉角）、
 //       會出事 0 個、判斷不了 0 個
-//   CT3 真的檔的對照：把 js/peeks.js 裡 scout 頭頂算好的帶子與下巴、point 的翅尖，在記憶體裡換回 11-18 以前的 clipPath 寫法，
-//       必須各抓到 1 個、點名在換的那一行（證明這支讀得到真的圖的結構，不是只在合成樣本上有用）
+//       下限 2026-11-20 從「≥ 20、≥ 5」改成「≥ 11、≥ 2」：v1.99.0～v1.100.0 吉祥物換成照參考圖描的向量，描圖不用 clipPath，
+//       這一版要換的 14 段（PEEK 10、TAB_ART 3、ICON.lib 1）裡的 clipPath 會歸 0。新下限是數出來的：把那 14 段從三支檔的複本挖掉、
+//       在複本上跑這一支，CT2 自己數到合計 11（peeks 3／glyphs 7／tabicons 1）、轉角 ellipse 2（.logs/v1100/ct2floor.mjs；對照組：
+//       不挖的複本數到的跟 repo 直接跑相同）。換的過程中數字只會往下掉到這裡、不會更低，所以中途每個 commit 都過得了。
+//   CT3 真的檔的對照：在 js/peeks.js 的 scout、point 那兩張 fig 那一行的開頭，於記憶體裡插一個「外層轉 3°、裡面 path 形 clipPath」的群組
+//       （就是 11-18 出事的那種寫法），插之前整支檔會出事 0 個、插了必須剛好抓到 1 個、點名在插的那一行、id 是插的那個
+//       （證明這支讀得到真的圖的結構，不是只在合成樣本上有用）。
+//       2026-11-20 從「換回」改成「插入」：原本是把 11-18 算好的頭頂帶、翅尖字串換回 clipPath 寫法，v1.100.0 那兩張換成描圖後字串不在了。
+//       插入不依賴圖裡畫了什麼，換圖前後都成立。
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -100,35 +107,32 @@ const all = rows.flatMap((r) => (r.list || []).map((x) => ({ ...x, f: r.f })));
 const risky = all.filter((x) => x.risky), unknown = all.filter((x) => x.unknown);
 const turnedSafe = all.filter((x) => x.safe && x.turned && x.shape === 'ellipse').length;
 const counts = rows.map((r) => `${r.f} ${r.list ? r.list.length : '讀不到'} 個`).join('、');
-yes(unread.length === 0 && rows.every((r) => r.list.length > 0) && all.length >= 20 && turnedSafe >= 5 && risky.length === 0 && unknown.length === 0,
-  `CT2 真的檔：path 形的裁切框沒有用在轉過角度的地方（${counts}，合計 ${all.length}（要 ≥ 20）；轉了角度的 ellipse 裁切框 ${turnedSafe} 個（要 ≥ 5，證明讀得到轉角）；`
+yes(unread.length === 0 && rows.every((r) => r.list.length > 0) && all.length >= 11 && turnedSafe >= 2 && risky.length === 0 && unknown.length === 0,
+  `CT2 真的檔：path 形的裁切框沒有用在轉過角度的地方（${counts}，合計 ${all.length}（要 ≥ 11）；轉了角度的 ellipse 裁切框 ${turnedSafe} 個（要 ≥ 2，證明讀得到轉角）；`
   + `會出事 ${risky.map((x) => `${x.f}:${x.line} ${x.id} <${x.shape}>`).join('、') || '0 個'}；判斷不了 ${unknown.map((x) => `${x.f}:${x.line} ${x.id} <${x.shape}>`).join('、') || '0 個'}）`);
 
-// ---- CT3 真的檔的對照：換回 11-18 以前的寫法 ----
-const BAND = '<path d="M51.41 80.56 C58.52 61.24 76.25 50 100 50 C123.75 50 141.48 61.24 148.59 80.56 Q100 67.44 51.41 80.56 Z" fill="#9a948f"/><path d="M70.95 133.75 A30 17 0 0 1 129.05 133.75 C121.02 136.68 111.18 138 100 138 C88.82 138 78.98 136.68 70.95 133.75 Z" fill="#fffdf9"/>';
-const OLD_BAND = '<defs><clipPath id="i3"><path d="M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z" /></clipPath></defs><g clip-path="url(#i3)"><path d="M40 84 Q100 64 160 84 V40 H40 Z" fill="#9a948f"/><ellipse cx="100" cy="138" rx="30" ry="17" fill="#fffdf9"/></g>';
-const TIP = '<path d="M10.6 39.2 C7.83 46.96 3.65 53.08 0 56 C-3.65 53.08 -7.83 46.96 -10.6 39.2 Z" fill="#6f6965"/>';
-const OLD_TIP = '<defs><clipPath id="i4"><path d="M0 0 C13 0 15 16 13 30 C11 42 5 52 0 56 C-5 52 -11 42 -13 30 C-15 16 -13 0 0 0 Z" /></clipPath></defs><g clip-path="url(#i4)"><rect x="-20" y="39.2" width="40" height="56" fill="#6f6965"/></g>';
-function revert(kind, from, to) {
+// ---- CT3 真的檔的對照：在真的圖裡插一個 11-18 出事的那種寫法 ----
+// 插的群組：外層 rotate(3 100 136)（11-18 阿灰望遠鏡的頭就是轉這個角度）、裡面 path 形的 clipPath 照圓頭裁頭頂帶。
+const INJECT = (id) => `<g transform="rotate(3 100 136)"><defs><clipPath id="${id}"><path d="M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z" /></clipPath></defs><g clip-path="url(#${id})"><path d="M40 84 Q100 64 160 84 V40 H40 Z" fill="#9a948f"/></g></g>`;
+function inject(kind, id) {
   const text = src['js/peeks.js'];
   if (!text) return { ok: false, why: '讀不到 js/peeks.js' };
   const lines = text.split('\n');
   const start = lines.findIndex((l) => new RegExp(`^\\s*${kind}: \\{ vb: \\[`).test(l));
   if (start < 0) return { ok: false, why: `找不到 ${kind} 開頭那一行` };
-  // 這一張的範圍：從開頭那一行到下一張的開頭（找不到下一張就往下 6 行）
-  let end = lines.findIndex((l, i) => i > start && /^\s*[a-z]+: \{ vb: \[/.test(l));
-  if (end < 0) end = Math.min(lines.length, start + 6);
-  const at = [];
-  for (let i = start; i < end; i++) for (let k = lines[i].indexOf(from); k >= 0; k = lines[i].indexOf(from, k + 1)) at.push(i);
-  if (at.length !== 1) return { ok: false, why: `${kind} 那一張（第 ${start + 1}～${end} 行）裡算好的形狀出現 ${at.length} 次（要剛好 1 次）` };
-  lines[at[0]] = lines[at[0]].replace(from, to);
+  const fi = lines.findIndex((l, i) => i > start && i <= start + 3 && l.startsWith("    fig: '"));
+  if (fi < 0) return { ok: false, why: `${kind} 那一張開頭往下 3 行內找不到 fig 那一行` };
+  const before = scanLines(text).filter((x) => x.risky).length;
+  lines[fi] = lines[fi].replace("    fig: '", "    fig: '" + INJECT(id));
+  // 情境成立的痕跡：插的引用真的在那一行（插失敗就不能拿「抓到 0 個」當結論）
+  if (!lines[fi].includes(`clip-path="url(#${id})"`)) return { ok: false, why: '插入後那一行讀不到插的引用（情境未成立）' };
   const hits = scanLines(lines.join('\n')).filter((x) => x.risky);
-  return { ok: true, line: at[0] + 1, hits };
+  return { ok: true, line: fi + 1, before, hits };
 }
-for (const [kind, from, to, label] of [['scout', BAND, OLD_BAND, '阿灰望遠鏡頭頂帶與下巴'], ['point', TIP, OLD_TIP, '指路阿灰的翅尖']]) {
-  const r = revert(kind, from, to);
-  yes(r.ok && r.hits.length === 1 && r.hits[0].line === r.line,
-    `CT3 真的檔的對照：${label}（${kind}）換回 11-18 以前的 clipPath 寫法 → 抓到 1 個、在換的那一行（${r.ok ? `換在第 ${r.line} 行；抓到 ${r.hits.map((x) => `第 ${x.line} 行 ${x.id} <${x.shape}>`).join('、') || '0 個'}` : r.why}）`);
+for (const [kind, label] of [['scout', '阿灰望遠鏡'], ['point', '指路阿灰']]) {
+  const id = 'ct3' + kind, r = inject(kind, id);
+  yes(r.ok && r.before === 0 && r.hits.length === 1 && r.hits[0].line === r.line && r.hits[0].id === id,
+    `CT3 真的檔的對照：${label}（${kind}）那一張插一個轉過角度的 path 形裁切框 → 抓到 1 個、在插的那一行（${r.ok ? `插在第 ${r.line} 行；插之前會出事 ${r.before} 個；抓到 ${r.hits.map((x) => `第 ${x.line} 行 ${x.id} <${x.shape}>`).join('、') || '0 個'}` : r.why}）`);
 }
 
 console.log(`\n${pass} 項通過${fail ? `，${fail} 項失敗` : ''}`);
