@@ -577,7 +577,7 @@
   - 線上 `sw.js` 的 VERSION 是 tripquest-v1.98.0；第一次 curl 還是 v1.97.0（Pages 延遲）。
   - 會上線的 8 支逐位元組跟新版相同（`livecmp198.log`；對照組 ①～④ 各 8）。
   - 已裝到主畫面的圖示可能不會自己換。
-  - 之後只推過文件 commit；遠端 main 在 `878b619`，這一則的 commit 推完再更新。
+  - 之後只推過文件 commit。這一則的 commit `60097a0` 在 19:08 用 `safe-push` 推上去：回 0，範圍 `878b619..60097a0`，自查通過，遠端 main＝本機。
 - **照實記**：
   - **又猜了時間**：`verbatim9.mjs`、`deliver.mjs`、`headswap.mjs` 的註解寫成「19:0x」，`date` 其實是 18:51，已改成 18:5x。這是同一天第三次猜時間。
   - `s2/zoomcrop.mjs` 第一次把路徑寫成相對 repo 根目錄，回 1（找不到檔）；改成相對它自己的目錄重跑。
