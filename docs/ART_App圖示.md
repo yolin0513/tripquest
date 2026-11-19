@@ -152,6 +152,11 @@ NOT ALLOWED ANYWHERE: no text of any kind (no letters, no words, no numbers, no 
    - 配對照組：故意把主體放大到出圈，必須紅。
 6. 照每版流程升版號、跑受影響的測試，等放行再推。
 
+**v1.98.0 照這幾步做完（2026-11-19）**：Yolin 選第 1 格（鬍鬍捧相機），第 3 版直接描第 1 格原圖、不加外框。
+- 第 4 步：向量原稿在 `icons/src/icon.svg`（一般）與 `icons/src/icon-maskable.svg`；`npm run icons`（`scripts/make-icons.mjs`）從原稿畫出四張 PNG。改原稿就重跑它。
+- 第 5 步：`scripts/icontest.mjs`（測試鏈最後一支）：尺寸、沒有透明、maskable 主體在安全圓內、PNG 跟原稿重畫的一樣、manifest 與 index.html 宣告的尺寸與連結；每一道各一個對照組（放大 1.25 倍出圈那個就是這裡寫的「故意把主體放大到出圈」）。突變 `tools/mutations/mut_icon1119.json`。
+- 描圖的方法與當時的檢查記在 `docs/STATUS.md` v1.98.0 那一節；一次性腳本與 GPT 原圖不進 repo。
+
 **【推論】已經裝在手機桌面上的圖示不一定會跟著換**：
 - iPhone 加到主畫面的圖示，多半要移除再加一次才會換；
 - Android 由 Chrome 自己找時間更新，時間不一定。

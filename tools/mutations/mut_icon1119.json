@@ -1,0 +1,92 @@
+[
+  {
+    "name": "圖示測試：IC1 不再比尺寸",
+    "why": "（事前寫 2026-11-19 17:0x）scripts/icontest.mjs 的 IC1 永遠不報。repo 自己的四張尺寸本來就對，IC1 照樣過；K1 對照組（icon-192 換成 191 見方）還是會被 IC4、IC5 抓到，但斷言要的是失敗清單裡有 IC1——只紅 K1 對照組。這條證明「弄壞尺寸時別道也紅」不會蓋掉 IC1 自己那一道。",
+    "expect": ["K1 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "if (m.width !== t.size || m.height !== t.size) bad('IC1'",
+    "replace": "if (false) bad('IC1'",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示測試：IC2 不再看透明通道",
+    "why": "（事前寫 2026-11-19 17:0x）IC2 永遠不報。repo 的四張本來就沒有透明，IC2 照樣過；K2（apple-touch-icon 加上透明通道）只有 IC2 會抓（IC4 比之前先拿掉 alpha），所以只紅 K2 對照組。",
+    "expect": ["K2 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "if (m.hasAlpha || m.channels !== 3) bad('IC2'",
+    "replace": "if (false) bad('IC2'",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示測試：安全圓放寬成直徑 100%",
+    "why": "（事前寫 2026-11-19 17:0x）SAFE_R 從 0.4×512 改成 0.5×512（256）。repo 的 maskable 最遠點約 200.6，照樣過；K3（放大 1.25 倍）最遠點約 251，沒超過 256，IC3 不報、只剩 IC4 抓到——只紅 K3 對照組。K3b（整張底色）靠主體下限，不受影響。",
+    "expect": ["K3 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "const SAFE_R = 0.4 * 512,",
+    "replace": "const SAFE_R = 0.5 * 512,",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示測試：IC3 不看主體下限",
+    "why": "（事前寫 2026-11-19 17:0x）拿掉「主體 ≥ 20000 點」。repo 的 maskable 主體約 8.3 萬點，照樣過；K3b（整張只有底色）最遠點 0、不出圈，IC3 不報、只剩 IC4——只紅 K3b 對照組。證明「沒有畫素出圈」不會因為母體是空的而成立。",
+    "expect": ["K3b 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "if (n < MIN_SUBJECT) bad('IC3'",
+    "replace": "if (false) bad('IC3'",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示測試：IC4 不再比對原稿",
+    "why": "（事前寫 2026-11-19 17:0x）IC4 算出不同的點數之後不報。repo 四張跟原稿重畫的都是 0 點，照樣過；K4（相機改紅色畫的，尺寸、透明都對）只有 IC4 抓得到——只紅 K4 對照組。K1、K3、K3b 另有 IC1、IC3 抓，不受影響。",
+    "expect": ["K4 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "if (dp > 0) bad('IC4'",
+    "replace": "if (false) bad('IC4'",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示測試：IC5 不比 manifest 宣告的 sizes",
+    "why": "（事前寫 2026-11-19 17:0x）manifest 的 sizes 跟實際尺寸不同時不報。repo 本來就對，照樣過；K5（192 那張寫成 180x180）只有這一道抓——只紅 K5 對照組。K1 的 IC1 還在，不受影響。",
+    "expect": ["K5 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "if (ic.sizes !== `${m.width}x${m.height}`) bad('IC5'",
+    "replace": "if (false) bad('IC5'",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示測試：IC5 不看 index.html 連結指到的檔",
+    "why": "（事前寫 2026-11-19 17:0x）index.html 的圖示連結指到不存在或不在表上的檔時不報（連結個數那一道還在）。repo 本來就對，照樣過；K5b（apple-touch-icon 指到不存在的檔，連結仍是 1 個）只有這一道抓——只紅 K5b 對照組。",
+    "expect": ["K5b 對照組"],
+    "file": "scripts/icontest.mjs",
+    "find": "if (!names.includes(base) || !fs.existsSync(path.join(root, hit[0].href))) bad('IC5'",
+    "replace": "if (false) bad('IC5'",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "圖示原稿：maskable 相機改深藍、沒重跑 npm run icons",
+    "why": "（事前寫 2026-11-19 17:0x）icons/src/icon-maskable.svg 的相機機身 #6fb7e3 → #3f86b8，icons/ 的 PNG 沒跟著重畫。IC4 抓到 maskable 那張跟原稿不同；K0 的複本也帶著改過的原稿，所以 K0 也紅。其餘對照組各自要的那一道照樣在（K3 的放大圖是從改過的原稿畫的，IC3 照樣抓）。",
+    "expect": ["IC4", "K0 原樣"],
+    "file": "icons/src/icon-maskable.svg",
+    "find": "fill=\"#6fb7e3\"",
+    "replace": "fill=\"#3f86b8\"",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "manifest：maskable 那張的 purpose 拿掉 maskable",
+    "why": "（事前寫 2026-11-19 17:0x）manifest.webmanifest 的 \"purpose\": \"maskable\" 改成 \"any\"：Android 會把一般圖示的構圖拿去切圓，耳朵可能被切掉。IC5 抓到；K0 的複本也帶著改過的 manifest，K0 也紅。",
+    "expect": ["IC5", "K0 原樣"],
+    "file": "manifest.webmanifest",
+    "find": "\"purpose\": \"maskable\"",
+    "replace": "\"purpose\": \"any\"",
+    "cmd": "node scripts/icontest.mjs"
+  },
+  {
+    "name": "index.html：apple-touch-icon 連結的 rel 寫錯",
+    "why": "（事前寫 2026-11-19 17:0x）rel=\"apple-touch-icon\" 改成 rel=\"apple-touch-icon-precomposed\"：IC5 數到 rel=\"apple-touch-icon\" 0 個（應 1）。K0 的複本也帶著改過的 index.html，K0 也紅。K5b 要替換的 href 還在，照樣造得出來。",
+    "expect": ["IC5", "K0 原樣"],
+    "file": "index.html",
+    "find": "rel=\"apple-touch-icon\"",
+    "replace": "rel=\"apple-touch-icon-precomposed\"",
+    "cmd": "node scripts/icontest.mjs"
+  }
+]
