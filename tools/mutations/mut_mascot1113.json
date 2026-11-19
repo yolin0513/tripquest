@@ -4,7 +4,7 @@
     "why": "（事前寫 2026-11-13）mascotHead 回背包：頁首沒有雪納瑞的頭。預期紅兩輪的 M1 全部（首頁、設定頁、旅程頁的頭與高度，頁首高度量不到頭）、M7／M8 頁首的頭、M8 六個出場處（頁首那格沒看到）。",
     "expect": ["［和紙］ M1 ", "［和紙］ M7 頁首的頭", "［和紙］ M8 頁首的頭", "［和紙］ M8 六個出場處", "［深色］ M1 ", "［深色］ M7 頁首的頭", "［深色］ M8 頁首的頭", "［深色］ M8 六個出場處"],
     "file": "js/glyphs.js",
-    "find": "  return figure(MASCOT_SPOT.header, HEAD_VB, false, Math.round(hgt * 128 / 116), hgt, 'gl-mascot gl-mascot-head');",
+    "find": "  return figure(MASCOT_SPOT.header, HEAD_VB, false, Math.round(hgt * 150 / 110), hgt, 'gl-mascot gl-mascot-head');",
     "replace": "  return backpack(hgt);",
     "cmd": "node scripts/mascottest.mjs"
   },
