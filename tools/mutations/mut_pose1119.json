@@ -169,5 +169,86 @@
     "find": "  scout: { parts: [{ tf: 'translate(128.33 117.16)', pivot: [128.33, 117.16], cls: 'pk-scan' }], nod: true },",
     "replace": "  scout: { parts: [{ tf: 'translate(128.33 117.17)', pivot: [128.33, 117.16], cls: 'pk-scan' }], nod: true },",
     "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "首頁（v1.100.0 第 9 格）：有旅程時照舊是棉棉揮手、沒換成行李箱",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/home.js 不分有沒有旅程、一律放 hi：首頁已經有旅程時「＋ 建立新旅程」上還是棉棉。只紅 PS31（posetest 沒有驗「沒有旅程」那一格，那一格照樣是 hi、不受影響）。",
+    "expect": ["PS31"],
+    "file": "js/views/home.js",
+    "find": "      const el = trips.length ? pk.pose('suitcase', 'c') : pk.pose('hi', 'r');",
+    "replace": "      const el = pk.pose('hi', 'r');",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "行程分頁（v1.100.0 第 7 格）：地圖第一次進來不跳",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/trip.js 行程分頁那一行拿掉 cheer：鬍鬍抱地圖靜靜站著，這次開 App 第一次進來也不跳。只紅 PS32；PS33（第二次進來本來就不跳）不受影響。",
+    "expect": ["PS32"],
+    "file": "js/views/trip.js",
+    "find": "      if (go) { const el = pk.pose('map', 'c'); mountPose(go, el); if (poseOnce('map')) pk.cheer(el); }",
+    "replace": "      if (go) { const el = pk.pose('map', 'c'); mountPose(go, el); }",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "行程分頁（v1.100.0 第 7 格）：地圖每次進來都跳",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/trip.js 行程分頁那一行拿掉 poseOnce、每次都 cheer：切到主頁再回來又跳一次。只紅 PS33；PS32（第一次本來就跳）不受影響。",
+    "expect": ["PS33"],
+    "file": "js/views/trip.js",
+    "find": "      if (go) { const el = pk.pose('map', 'c'); mountPose(go, el); if (poseOnce('map')) pk.cheer(el); }",
+    "replace": "      if (go) { const el = pk.pose('map', 'c'); mountPose(go, el); pk.cheer(el); }",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "行程分頁（v1.100.0 第 7 格）：有景點也放地圖",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/trip.js 的 itinerary 不看有沒有景點、一律載 peeks.js：有景點的「📅 調整每天的行程」上也站著鬍鬍抱地圖，推擠每天的行程。只紅 PS34（二日遊的行程分頁）；那時 poseOnce('map') 已經在 PS32 用掉，圖不跳，PS22～PS24 的頭像不受影響。",
+    "expect": ["PS34"],
+    "file": "js/views/trip.js",
+    "find": "  const pk = spots.length ? null : await import('../peeks.js').catch(() => null);",
+    "replace": "  const pk = await import('../peeks.js').catch(() => null);",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "旅程設定（v1.100.0 第 3 格）：分享鈕上的鬍鬍第一次進來不揮手",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/trip.js 的 settings 拿掉 cheer：鬍鬍掛相機靜靜站著。只紅 PS35；PS36（第二次本來就不動）不受影響。",
+    "expect": ["PS35"],
+    "file": "js/views/trip.js",
+    "find": "  if (pk) { const el = pk.pose('share', 'r'); mountPose(shareBtn, el); if (poseOnce('share')) pk.cheer(el); }",
+    "replace": "  if (pk) { const el = pk.pose('share', 'r'); mountPose(shareBtn, el); }",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "旅程設定（v1.100.0 第 3 格）：分享鈕上的鬍鬍每次進來都揮手",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/trip.js 的 settings 拿掉 poseOnce、每次都 cheer：重新打開 App（同一個分頁）再進設定又揮一次。只紅 PS36；PS35 不受影響。",
+    "expect": ["PS36"],
+    "file": "js/views/trip.js",
+    "find": "  if (pk) { const el = pk.pose('share', 'r'); mountPose(shareBtn, el); if (poseOnce('share')) pk.cheer(el); }",
+    "replace": "  if (pk) { const el = pk.pose('share', 'r'); mountPose(shareBtn, el); pk.cheer(el); }",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "poseOnce：不記「這次開 App 已經動過」",
+    "why": "（事前寫 2026-11-20 10:1x）js/views/trip.js 的 poseOnce 拿掉「已經記過就回 false」：地圖、分享兩張每次進來都動。紅 PS33（行程分頁第二次）與 PS36（設定第二次）——兩條共用這一個函式，這是兩邊共同依靠的那一環，另列一條；PS32、PS35（第一次）不受影響。",
+    "expect": ["PS33", "PS36"],
+    "file": "js/views/trip.js",
+    "find": "    if (sessionStorage.getItem(key)) return false;\n",
+    "replace": "",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "零件表：分享鈕鬍鬍的揮手零件對不上（圖改過、表沒跟著改）",
+    "why": "（事前寫 2026-11-20 10:1x）js/peeks.js 的 CHEER.share 那一段的 transform 字串差一個數字：cheer 找不到揮手那隻手，只跳上來、不揮手，不報錯。紅 PS35（設定頁第一次進來）與 PS30（補充的零件表）；PS36 不 cheer、不受影響。",
+    "expect": ["PS30", "PS35"],
+    "file": "js/peeks.js",
+    "find": "  share: { parts: [{ tf: 'translate(143.01 164.61)', pivot: [143.01, 164.61], cls: 'pk-wave-r' }], extra: 'pk-wave-lines' },",
+    "replace": "  share: { parts: [{ tf: 'translate(143.01 164.62)', pivot: [143.01, 164.61], cls: 'pk-wave-r' }], extra: 'pk-wave-lines' },",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "和紙主題：按鈕內圈的白色虛線蓋到扣住按鈕的手",
+    "why": "（事前寫 2026-11-20 10:1x）js/peeks.js 的 pose() 拿掉 z-index: 1：圖跟按鈕的 ::after 都是 auto，照 DOM 順序虛線畫在手上面（2026-11-20 截圖放大看到的那個樣子）。只紅 PS37；其餘新姿勢的斷言只看位置與動畫、不看疊的順序。",
+    "expect": ["PS37"],
+    "file": "js/peeks.js",
+    "find": "  el.style.zIndex = '1';\n",
+    "replace": "",
+    "cmd": "node scripts/posetest.mjs"
   }
 ]

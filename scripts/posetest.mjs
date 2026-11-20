@@ -3,7 +3,8 @@
 // 涵蓋的程式：js/views/trip.js（主頁 tripHome 放哪一張、一次只放一張、天氣讓位、按 ✕ 之後；任務頁沒有景點那一格；
 //   進度條頭像；行程分頁「行程｜回顧」的頭像）、js/views/expenses.js（棉棉：沒旅伴、還沒有花費、總帳卡；存檔只丟硬幣、換幣別不動）、
 //   js/views/people.js（照片頁還沒有照片：鬍鬍揮手）、js/views/join.js（邀請讀不到：湯圓搔頭、不動）、
-//   js/peeks.js（pose、cheer 的零件表）、js/ui.js（mountPose）、css/style.css（.pose-host、.tp-bar、.tp-run、.seg-head）
+//   js/peeks.js（pose、cheer 的零件表、pose 的 z-index）、js/ui.js（mountPose）、css/style.css（.pose-host、.tp-bar、.tp-run、.seg-head、和紙 .btn::after）、
+//   js/views/home.js（首頁有旅程時的行李箱，v1.100.0）
 // v1.95.0 推上線時這些新行為沒有專門的斷言（STATUS 寫明是已知缺口，Dispatch 選甲「推完下一件就補」），這支補上。
 // 不重複：首頁空白白兔、回顧白熊、設定頁山雀、徽章「太棒了」上的星星由 mascottest 驗；完成任務照片上那五張由 peektest 驗；
 //   主頁講一句的位置與 ✕ 由 saytest 驗；「旅程結束了」卡上小鳳的邊線與動畫由 hometest 驗（這支只補縮放）。
@@ -39,7 +40,16 @@
 //     PS27 整頁沒有橫向捲動
 //     PS28 完成一個任務、慶祝畫面按「繼續下一個」：頭像從舊的進度滑到新的進度（tp-slide，起點終點照兩次的進度）
 //   PS29 邀請連結讀不到：「回首頁」上湯圓搔頭（puzzle）、不動（錯誤時不跳）
-//   PS30 補充（直接呼叫 peeks.js，不是使用者的路）：九張新姿勢 cheer 之後每一張該有的零件都包到了（圖改過、零件對不上時 cheer 只跳上來不報錯）
+//   PS30 補充（直接呼叫 peeks.js，不是使用者的路）：十二張新姿勢 cheer 之後每一張該有的零件都包到了（圖改過、零件對不上時 cheer 只跳上來不報錯）
+//   v1.100.0 第 3／7／9 格（2026-11-20 寫；js/views/home.js、js/views/trip.js 的 itinerary／settings、js/peeks.js 的 pose）
+//     PS31 首頁已經有旅程（打開 App）：「＋ 建立新旅程」上鬍鬍從行李箱探頭（suitcase）、跳上來
+//     PS32 還沒排景點的行程分頁：「＋ 去安排景點」上鬍鬍抱地圖（map）、這次開 App 第一次進來跳上來
+//     PS33 切到主頁再回行程分頁：地圖照樣在、不跳（sessionStorage 記著這次 App 已經跳過）
+//     PS34 有景點的行程分頁：「📅 調整每天的行程」上沒有地圖（前置：那顆按鈕在、字對）
+//     PS35 旅程設定：「🔗 把任務分享給旅伴」上鬍鬍掛相機揮手（share）、第一次進來揮手（揮手＋揮動線）
+//     PS36 重新打開 App（同一個分頁、重新整理）再進旅程設定：鬍鬍照樣在、不動
+//     PS37 和紙主題：「回任務清單」上鬍鬍的手伸過按鈕內圈的白色虛線（前置），圖疊在虛線上面——按鈕的 ::after 跟圖是兄弟，
+//          照 CSS 的畫法 z-index 大的在上、一樣大照 DOM 順序（::after 在最後）；圖的 z-index 必須比虛線大（2026-11-20 截圖放大看到虛線蓋在手上）
 //
 // 時區用 emulateTimezone 撥（不在 App 裡留測試開關，共用慣例 §5.13）。不打真網路（§5.6）：Open-Meteo 回自己造的預報（可以先攔住、再放行），其餘外站 503。
 // 每一條斷言不管前面成不成都會印（等不到的畫面記成 ✗、不丟例外）：突變執行器要「項數跟原樣一樣」才算跑滿。
@@ -204,7 +214,8 @@ const pb = (p) => !p.host ? '找不到宿主' : !p.found ? `宿主在、沒有�
 const placed = (p) => p.found && p.pose && p.hostCls && p.hidden && p.rimGap != null && Math.abs(p.rimGap) <= 2.5 && p.clear >= -0.5 && p.sink <= 12.5 && p.inView;
 // 這一張該有的零件（js/peeks.js 的 CHEER；pk-hop 每一張都有）
 const WANT = { hi: ['pk-wave', 'pk-wave-lines'], purse: ['pk-wave', 'pk-coin'], hello: ['pk-wave-r', 'pk-wave-lines'], perch: ['pk-flap'], board: ['pk-sway'],
-  scout: ['pk-scan', 'pk-nod'], point: ['pk-wave'], star: ['pk-shine'], puzzle: [] };
+  scout: ['pk-scan', 'pk-nod'], point: ['pk-wave'], star: ['pk-shine'], puzzle: [],
+  suitcase: [], map: [], share: ['pk-wave-r', 'pk-wave-lines'] };   // v1.100.0 第 9／7／3 格：行李箱、地圖只跳上來（CHEER 是空的），分享跟 hello 同一個揮手
 const hasParts = (p, kind) => !!p.found && ['pk-hop', ...WANT[kind]].every((c) => p.parts.includes(c));
 // 跳上來（導覽進來）：cheer、沒有 still、零件齊、跳那一層真的在動
 const hopped = (p, kind, soft = false) => p.found && p.kind === kind && p.cheer && !p.still && p.soft === soft && hasParts(p, kind) && p.hopRun > 0;
@@ -256,6 +267,17 @@ try {
     await makeTrip(page, '還沒排景點', dateIn(tz, 3), dateIn(tz, 5), []);
     await makeTrip(page, '已經結束', dateIn(tz, -3), dateIn(tz, -1), ITEMS);
     await makeTrip(page, '沒有旅伴', dateIn(tz, -1), dateIn(tz, 1), [], { member: false });
+
+    // ---- PS31 第 9 格：首頁已經有旅程（打開 App＝導覽進來）→「＋ 建立新旅程」上鬍鬍從行李箱探頭、跳上來 ----
+    {
+      await page.goto(`${ORIGIN}/`, { waitUntil: 'networkidle0' });
+      const ok31 = await soft(page.waitForSelector('.trip-card', { timeout: 15000 })) && await soft(page.waitForSelector('.home-new.pose-host > svg.gl-peek', { timeout: 10000 }));
+      await sleep(300);
+      const n31 = ok31 ? await page.evaluate(() => document.querySelectorAll('.trip-card').length) : 0;
+      const P31 = ok31 ? await poseOn(page, '.home-new') : NO;
+      yes(ok31 && n31 >= 1 && P31.kind === 'suitcase' && placed(P31) && hopped(P31, 'suitcase'),
+        `PS31 首頁已經有旅程（打開 App）：「＋ 建立新旅程」上鬍鬍從行李箱探頭、跳上來（旅程卡 ${n31} 張；${pb(P31)}）`);
+    }
 
     // ---- PS01～PS03 第 2 天：下一站卡上的阿灰 ----
     let ok = await openTrip(page, '二日遊');
@@ -320,6 +342,35 @@ try {
     yes(ok && P.kind === 'point' && placed(P) && hopped(P, 'point'),
       `PS11 同一趟的任務頁：「＋ 去安排景點」上的阿灰指路、跳上來（${pb(P)}）`);
 
+    // ---- PS32～PS33 第 7 格：還沒排景點的行程分頁 → 鬍鬍抱地圖（這次開 App 第一次跳、之後不跳）----
+    // 這個瀏覽情境在這之前沒進過任何一趟沒有景點的行程分頁（sessionStorage 的 tripquest.poseOnce.map 還沒寫）
+    ok = ok && await tab(page, '行程', '.itin-edit', '去安排景點');
+    P = ok ? await poseOn(page, '.itin-edit', '去安排景點') : NO;
+    yes(ok && P.kind === 'map' && placed(P) && hopped(P, 'map'),
+      `PS32 還沒排景點的行程分頁：「＋ 去安排景點」上鬍鬍抱地圖、這次開 App 第一次進來跳上來（${pb(P)}）`);
+    // 主頁沒有 .itin-edit：等的是新畫的行程分頁、不是上一頁
+    ok = ok && await tab(page, '主頁', '.trip-home') && await tab(page, '行程', '.itin-edit.pose-host', '去安排景點');
+    P = ok ? await poseOn(page, '.itin-edit', '去安排景點') : NO;
+    yes(ok && P.kind === 'map' && placed(P) && !P.cheer && P.names.length === 0,
+      `PS33 切到主頁再回行程分頁：地圖照樣在、不跳（${pb(P)}）`);
+
+    // ---- PS35～PS36 第 3 格：旅程設定的分享鈕 → 鬍鬍掛相機揮手（這次開 App 第一次揮、之後不動）----
+    // 從頁首右上的「設定」進（行程分頁、主頁都有這顆）；等到分享鈕上掛了圖才算進到了
+    const toSettings = async () => await tap(page, '[aria-label="旅程設定"]', '設定')
+      && await soft(page.waitForFunction(() => /\/settings$/.test(location.hash)
+        && [...document.querySelectorAll('.btn')].some((b) => b.textContent.includes('把任務分享給旅伴') && b.querySelector(':scope > svg.gl-peek')), { timeout: 15000 }));
+    ok = ok && await toSettings();
+    await sleep(300);
+    P = ok ? await poseOn(page, '.btn', '把任務分享給旅伴') : NO;
+    yes(ok && P.kind === 'share' && placed(P) && hopped(P, 'share'),
+      `PS35 旅程設定：「🔗 把任務分享給旅伴」上鬍鬍掛相機揮手、第一次進來揮手（${pb(P)}）`);
+    // openTrip 重新載入首頁（同一個分頁，sessionStorage 留著）＝重新打開 App、還在同一次使用裡
+    ok = ok && await openTrip(page, '還沒排景點', false) && await toSettings();
+    await sleep(300);
+    P = ok ? await poseOn(page, '.btn', '把任務分享給旅伴') : NO;
+    yes(ok && P.kind === 'share' && placed(P) && !P.cheer && P.names.length === 0,
+      `PS36 重新打開 App（同一個分頁）再進旅程設定：鬍鬍照樣在、不動（${pb(P)}）`);
+
     // ---- PS12 旅程結束：卡上小鳳的縮放 ----
     ok = await openTrip(page, '已經結束', false);
     P = ok ? await poseOn(page, '.trip-home .th-end') : NO;
@@ -340,6 +391,23 @@ try {
     P = ok ? await poseOn(page, '.page .empty .btn', '回任務清單') : NO;
     yes(ok && P.kind === 'hello' && placed(P) && hopped(P, 'hello'),
       `PS21 照片頁還沒有照片：「回任務清單」上鬍鬍揮手、跳上來（${pb(P)}）`);
+
+    // ---- PS37 和紙主題（這個瀏覽情境的預設）：圖疊在按鈕內圈的白色虛線上面 ----
+    // 虛線是按鈕的 ::after（絕對定位），跟圖是兄弟：z-index 大的在上，一樣大就照 DOM 順序（::after 在最後、蓋在圖上）。
+    // 前置：真的是和紙、虛線真的在、手真的伸過虛線那一條（沒伸過的話疊在哪都看不出來）。
+    const D = ok ? await page.evaluate(() => {
+      const host = [...document.querySelectorAll('.page .empty .btn')].find((b) => b.textContent.includes('回任務清單'));
+      const el = host && host.querySelector(':scope > svg.gl-peek');
+      if (!el) return null;
+      const a = getComputedStyle(host, '::after'), s = getComputedStyle(el), hs = getComputedStyle(host);
+      const z = (v) => (v === 'auto' ? 0 : parseInt(v, 10));
+      const r = el.getBoundingClientRect(), b = host.getBoundingClientRect();
+      return { theme: document.documentElement.dataset.theme || '', dash: a.content !== 'none' && a.borderTopStyle === 'dashed',
+        dashY: +(parseFloat(hs.borderTopWidth) + parseFloat(a.top) + parseFloat(a.borderTopWidth)).toFixed(1), reach: +(r.bottom - b.top).toFixed(1),
+        svgZ: z(s.zIndex), afterZ: z(a.zIndex), pos: s.position };
+    }) : null;
+    yes(!!D && D.theme === 'washi' && D.dash && D.reach > D.dashY && D.pos === 'absolute' && D.svgZ > D.afterZ,
+      `PS37 和紙主題：「回任務清單」上鬍鬍的手伸過按鈕內圈的白色虛線（前置），圖疊在虛線上面（${D ? `主題 ${D.theme}、虛線 ${D.dash}（下緣離按鈕上緣 ${D.dashY}px）、手伸到 ${D.reach}px、圖 z ${D.svgZ}（${D.pos}）、虛線 z ${D.afterZ}` : '沒有圖'}）`);
 
     // ---- PS17～PS20 分帳（二日遊，一位旅伴）----
     // 「＋ 記第一筆」不在 .empty 裡：是它後面的兄弟、直接掛在 .page 底下（上一塊＝.empty 那幾行字）
@@ -382,6 +450,13 @@ try {
 
     // ---- PS22～PS24 行程分頁「行程｜回顧」的頭像 ----
     ok = await tab(page, '行程', '.itin-seg button.on');
+    // ---- PS34 有景點的行程分頁沒有地圖（地圖只在還沒排景點時出現，PS32 驗過它會出現）----
+    const M34 = ok ? await page.evaluate(() => {
+      const e = document.querySelector('.itin-edit');
+      return { edit: !!e, txt: e ? e.textContent.trim() : '', maps: document.querySelectorAll('svg.gl-peek[data-peek="map"]').length };
+    }) : null;
+    yes(!!M34 && M34.edit && M34.txt.includes('調整每天的行程') && M34.maps === 0,
+      `PS34 有景點的行程分頁：「📅 調整每天的行程」上沒有地圖（前置：按鈕在 ${M34 ? M34.edit : false}、字「${M34 ? M34.txt : ''}」；整頁地圖 ${M34 ? M34.maps : '?'} 張）`);
     const seg = () => page.evaluate(() => [...document.querySelectorAll('.itin-seg button')].map((b) => {
       const hd = b.querySelector('.seg-head');
       return { t: b.textContent.trim(), on: b.classList.contains('on'), vis: !!hd && getComputedStyle(hd).display !== 'none' && hd.getBoundingClientRect().width > 0,
@@ -535,8 +610,8 @@ try {
       return out;
     }, WANT).catch((e) => ({ err: String(e) }));
     const bad = T.err ? [T.err] : Object.entries(T).filter(([k, v]) => (k === 'puzzle' ? (v.moved || v.cheer) : (!v.moved || v.parts.length))).map(([k, v]) => `${k}：動了 ${v.moved}、缺 ${v.parts.join(' ') || '無'}`);
-    yes(!T.err && Object.keys(T).length === 9 && bad.length === 0,
-      `PS30 補充（直接呼叫 peeks.js）：九張新姿勢 cheer 之後零件都包到了、puzzle 不動（查了 ${T.err ? 0 : Object.keys(T).length} 張；不對的：${bad.join('；') || '沒有'}）`);
+    yes(!T.err && Object.keys(T).length === 12 && bad.length === 0,
+      `PS30 補充（直接呼叫 peeks.js）：十二張新姿勢 cheer 之後零件都包到了、puzzle 不動（查了 ${T.err ? 0 : Object.keys(T).length} 張；不對的：${bad.join('；') || '沒有'}）`);
     await ctx.close();
   }
 } catch (e) {
