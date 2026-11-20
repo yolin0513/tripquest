@@ -32,6 +32,7 @@
 //      新姿勢起：按鈕上那一張換成小鳳雙翅抱一枚星星（star）；空白頁的白兔、回顧的白熊也改成探頭圖跳上來（cheer），
 //      揮手數「pk-wave」那一層往外揮到底幾次、白熊量「pk-hop」那一層第 0 格在下面（從大數字那一區後面跳上來，不是淡入）。
 //      兩次取位置之間等瀏覽器真的畫了新的格（v1.95.0 起；原本是 setTimeout 150ms，機器忙時兩次可能讀到同一格——同 peektest 的 animNow）。
+//      2026-11-21 起量之前先等每一段起跑（scripts/animwait.mjs，跟 peektest 共用）；等不到算這一次沒量到，也是「量的時候瀏覽器有畫新的格」那條紅。
 //      深色那輪同時打開設定頁的「減少動態效果」：同樣四個時刻都不動（系統設定那個入口由 peektest 驗：兩支共用 glyphs.js 的 reducedMotion）
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +42,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
 import { clickText } from './userclick.mjs';
+import { waitAnims, waitedOk, waitBrief } from './animwait.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5813;
@@ -116,7 +118,7 @@ const KF_META = ['offset', 'computedOffset', 'easing', 'composite'];   // getKey
 // 新姿勢（2026-11-18）再加 .pk-sway（回顧白熊舉的白板）、.pk-shine（解鎖徽章小鳳抱的星星）：沒加的話這兩張只有 pk-hop 那 0.6 秒會動，
 // 「有動」可能量不到、「停回原位」也比不到星星那一層
 const MOVE_CLS = ['mc-body', 'mc-look', 'pk-wave-r', 'pk-wave-lines', 'pk-hop', 'pk-wave', 'pk-grip', 'pk-sway', 'pk-shine'];
-const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
+const moveNowRaw = (page, sel) => page.evaluate(async (s, meta, cls) => {
   const el = document.querySelector(s);
   if (!el) return { found: false };
   const q = cls.map((c) => '.' + c).join(', ');
@@ -169,6 +171,16 @@ const moveNow = (page, sel) => page.evaluate(async (s, meta, cls) => {
     frameOk, frames, waited, tlAdv: tl1 != null && tl2 != null ? Math.round(tl2 - tl1) : null,
   };
 }, sel, KF_META, MOVE_CLS);
+// 2026-11-21（Dispatch 00:5x）：量之前先等每一段動畫真的起跑——跟 peektest 的 animNow 用同一個函式（scripts/animwait.mjs，不各寫一份）。
+//   理由見那支：「一出來就量」的時候動畫常常還在等起跑（pending、currentTime 0），兩次取位置都停在第 0 格，看起來像沒在動。
+//   等不到（最多 READY_MS）＝這一次沒量到：M9「量的時候瀏覽器有畫新的格」那條紅、訊息寫「逾時」，不跟「有動」混在一起。
+//   上面原本的 evaluate 一字不動（只改名 moveNowRaw），moveNow 先等、再量，把等的標記（wait）附在結果上。
+//   第 68 行的 settle 是另一件事（等播完才量位置），不在這次範圍、照舊。
+const READY_MS = 2000;
+const moveNow = async (page, sel) => {
+  const wait = await waitAnims(page, sel, 'ready', READY_MS);
+  return { ...(await moveNowRaw(page, sel)), wait };
+};
 // 動完：等每一段動畫結束（最多 6 秒），會動的每一層相對於整張圖的位置矩陣，跟拿掉 mc-move（動畫撤掉＝靜止圖）比；透明度都要是 1。
 // swingSel：結束之後一格一格倒回去（每 20ms）讀那一層的角度（手）或上下位移（整隻），數「往同一邊到底」幾次（揮兩下、彈兩下＝2）。
 const moveEnd = (page, sel, swingSel = null) => page.evaluate(async (s, cls, swingSel) => {
@@ -212,7 +224,8 @@ const moveEnd = (page, sel, swingSel = null) => page.evaluate(async (s, cls, swi
 }, sel, MOVE_CLS, swingSel);
 const moveBrief = (m) => (m.found ? `${m.kind || (m.peek ? `探頭圖 ${m.peek}` : '?')}；${m.cls.split(' ').filter((c) => c.startsWith('mc-move-') || c.startsWith('pk-')).join(' ') || '沒有 mc-move／pk-cheer'}；動畫 ${m.n} 段、量的當下跑著的 ${m.running}；位置變了 ${m.moved}` : '沒找到');
 // 「量的時候瀏覽器有畫新的格」那條的數字（通過時也印：§5.20）
-const frameBrief = (k, m) => `${k} ${m.found ? `${m.frameOk ? '有' : '沒有'}（畫了 ${m.frames} 格、時間軸走了 ${m.tlAdv}ms、等了 ${m.waited}ms）` : '沒量到'}`;
+const frameBrief = (k, m) => `${k} ${m.found ? `${m.frameOk ? '有' : '沒有'}（畫了 ${m.frames} 格、時間軸走了 ${m.tlAdv}ms、等了 ${m.waited}ms）` : '沒量到'}`
+  + `，量之前${waitedOk(m.wait, 'ready') ? '' : '沒'}等到起跑（${waitBrief(m.wait)}）`;
 const endBrief = (e) => (e.found ? `結束了 ${e.done}；${e.layers} 層、相對於整張圖的矩陣差 ${e.diff}；透明度 ${(e.opacities || []).join('、') || '無'}` : '沒找到');
 
 // M7：這一輪的主題下，白邊／陰影／動作線該是什麼樣子
@@ -540,8 +553,9 @@ async function round(theme) {
         `${tag} M9 解鎖新徽章的小鳳從按鈕上緣跳上來：是小鳳抱星星那一張（新姿勢 star）、標題上面沒有整隻也沒有打勾的圓、一出來就在跳（不是慢慢探）、兩次取位置不一樣（「${M.badge.title || '沒跳出來'}」；打勾 ${M.badge.check}；標題上面整隻 ${M.badge.whole}；${moveBrief(M.badge)}）`);
       yes(settled(ME.badge), `${tag} M9 按鈕上的小鳳跳完停回原位：會動的每一層位置矩陣跟撤掉 pk-cheer 的靜止圖一樣、完全看得到（${endBrief(ME.badge)}）`);
       const fr = ['empty', 'loading', 'recap', 'badge'];
-      yes(fr.every((k) => M[k].found && M[k].frameOk === true),
-        `${tag} M9 量的時候瀏覽器有畫新的格：四個時刻兩次取位置之間都畫了至少 2 格、時間軸走了至少 150ms（最多等 3 秒）；這條紅表示這一次沒量到，不是動畫壞了（${fr.map((k) => frameBrief(k, M[k])).join('；')}）`);
+      yes(fr.every((k) => M[k].found && M[k].frameOk === true && waitedOk(M[k].wait, 'ready')),
+        `${tag} M9 量的時候瀏覽器有畫新的格：四個時刻兩次取位置之間都畫了至少 2 格、時間軸走了至少 150ms（最多等 3 秒）；這條紅表示這一次沒量到，不是動畫壞了（${fr.map((k) => frameBrief(k, M[k])).join('；')}）`
+        + `；2026-11-21 起量之前先等每一段起跑（最多 ${READY_MS}ms），等不到也是這條紅`);
       const ONLY = ['transform', 'opacity'];
       const four = ['empty', 'loading', 'recap', 'badge'].map((k) => [k, M[k].props || []]);
       yes(four.every(([, p]) => p.length > 0 && p.every((x) => ONLY.includes(x))),

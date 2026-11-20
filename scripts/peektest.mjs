@@ -29,12 +29,13 @@
 //   P8 每一張探頭圖：aria-hidden、沒有 <text>／<title>、id 整頁唯一、引用都指到自己那張；同一頁放好幾張時 id 也不撞
 //   P9 建立行程頁（js/views/create.js）「產生拍照任務」上緣的阿灰望遠鏡：頭上沒有灰色方框（2026-11-18；2026-11-20 換圖後重寫；
 //      和紙、深色各一次；附同一頁的對照組；2026-11-20 加「截圖前後框一樣才算數」的靜止檢查與它的對照組。說明見 headCorners 上面）
+//      2026-11-21：改成等阿灰的動畫自己播完再量（不再 finish()；scripts/animwait.mjs），加「量之前等自己播完」「等不到的對照組」兩條
 //   主題：和紙不套白邊、動作線看得到；深色一輪白邊真的有套上、動作線不畫（跟 glyphs.js 的吉祥物同一條規矩）、
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
 //         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、主頁一樣沒有拍照鈕
 //   動畫（v1.83.0 起；js/peeks.js 的 cheer()、css/style.css 的 .pk-cheer）：完成任務那一刻小鳳打領結那張從照片後面跳上來、揮翅膀——
 //     和紙那輪 P3 的「古蹟 → 小鳳打領結」：慶祝畫面一出來就量（兩次取位置不一樣＝有動；兩次之間瀏覽器要畫了新的格、時間軸走了至少 150ms，
-//     沒畫就另一條「量的時候瀏覽器有畫新的格」紅——2026-11-17 加，七張都有）；每一段動畫的 keyframes 只動 transform、opacity；
+//     沒畫就另一條「量的時候瀏覽器有畫新的格」紅——2026-11-17 加，七張都有；2026-11-21 起量之前先等每一段起跑，等不到也是這條紅）；每一段動畫的 keyframes 只動 transform、opacity；
 //     等每一段都結束，身體、翅膀沒有殘留的位移（框跟撤掉動畫的靜止圖一樣）、扣在照片上的手與揮動線都完全看得到（不會卡在半空）
 //     減少動態效果那輪：設定頁的開關、系統設定（瀏覽器模擬 prefers-reduced-motion）各完成一個任務——照舊探頭（靜止圖）、0 段動畫
 //   動畫（v1.85.0 推廣；Yolin：「效果不錯，推廣到其他時刻」）：P3 的另外四張（捧麵蒸氣、烤串晃兩下、遮陽帽揮兩下、相機閃一下）、
@@ -56,6 +57,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import puppeteer from 'puppeteer';
 import { clickText, userClick } from './userclick.mjs';
+import { waitAnims, waitedOk, waitBrief } from './animwait.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WEB = 5823;
@@ -231,7 +233,7 @@ const KF_META = ['offset', 'computedOffset', 'easing', 'composite'];   // getKey
 const LAYER_CLS = ['pk-hop', 'pk-wave', 'pk-wave-r', 'pk-sway', 'pk-tilt', 'pk-slide', 'pk-grip', 'pk-wave-lines', 'pk-steam', 'pk-flash'];
 const PART_SEL = '.pk-wave, .pk-wave-r, .pk-sway, .pk-tilt, .pk-slide';
 const FADE_SEL = '.pk-grip, .pk-wave-lines, .pk-steam, .pk-flash';
-const animNow = (page, ps = PEEK_SEL) => page.evaluate(async (ps, meta, cls) => {
+const animNowRaw = (page, ps = PEEK_SEL) => page.evaluate(async (ps, meta, cls) => {
   const el = document.querySelector(ps);
   if (!el) return { found: false };
   const sel = cls.map((c) => '.' + c).join(', ');
@@ -298,6 +300,18 @@ const animNow = (page, ps = PEEK_SEL) => page.evaluate(async (ps, meta, cls) => 
     layers: { hop: count['pk-hop'], wave: count['pk-wave'], grip: count['pk-grip'], lines: count['pk-wave-lines'] },
   };
 }, ps, KF_META, LAYER_CLS);
+// 2026-11-21（Dispatch 00:5x）：量之前先等每一段動畫真的起跑（scripts/animwait.mjs，跟 mascottest 共用同一個函式）。
+//   .logs/v1100/diagP9.mjs 00:33 那一場實測：慶祝畫面那 4 張「一出來就量」時，20 次裡 19 次第一次取位置還在等起跑
+//   （pending true、startTime null、currentTime 0，第二次才起跑）；2203 那次撐傘兩次都停在 0、時間軸卻走了 200ms（推論是還沒起跑，這次沒重現）。
+//   等不到（最多 READY_MS）＝這一次沒量到：「量的時候瀏覽器有畫新的格」那條紅、訊息寫「逾時」，不跟「有動」（動畫壞了）混在一起；
+//   結尾另印一行沒量到幾次（說明行）。上面原本的 evaluate 一字不動（只改名 animNowRaw）：animNow 先等、再量，把等的標記（wait）附在結果上。
+const READY_MS = 2000;
+const unmeasured = [];   // 沒量到（等動畫逾時）的那幾次：結尾印一行
+const animNow = async (page, ps = PEEK_SEL) => {
+  const wait = await waitAnims(page, ps, 'ready', READY_MS);
+  if (wait && wait.found && !waitedOk(wait, 'ready')) unmeasured.push(`${ps} 等起跑逾時`);
+  return { ...(await animNowRaw(page, ps)), wait };
+};
 // 動完：等圖上每一段動畫都結束（最多 6 秒），量會動的那幾層停在哪；
 // 再拿掉 pk-cheer（動畫整個撤掉＝靜止圖）量一次——兩次要一樣，才算停在靜止圖的位置、沒卡在半空。
 // 比的是位置矩陣（getScreenCTM），不是框：身體那層包著翅膀，比框的話翅膀沒轉回來身體的框也跟著變、身體沒落定翅膀的框也跟著移，
@@ -369,14 +383,15 @@ const ANIM_WANT = {
 // 這條紅＝這一次沒量到（機器太忙、瀏覽器沒畫），不是動畫壞了；這條綠、「有動」紅＝畫了新的格但位置沒變，才是動畫的問題。
 // 通過的時候也印畫了幾格、時間軸走了多少、等了多久（§5.20：通過時也印算過的東西）。
 const frameMsg = (label, A) => `${label}：兩次取位置之間瀏覽器畫了至少 2 格、時間軸往前走至少 150ms（最多等 3 秒）；這條紅表示這一次沒量到，不是動畫壞了`
-  + `（畫了 ${A.frames} 格、時間軸走了 ${A.tlAdv}ms、等了 ${A.waited}ms）`;
+  + `（畫了 ${A.frames} 格、時間軸走了 ${A.tlAdv}ms、等了 ${A.waited}ms）`
+  + `；量之前先等每一段起跑（2026-11-21；最多 ${READY_MS}ms，等不到也算這一次沒量到）：${waitBrief(A.wait)}`;
 // 一張的五條（swing 有寫的再加一條「兩下」）：量的時候瀏覽器有畫新的格、有動、跳之前藏在後面、只用 transform／opacity、動完停在正確位置
 function animChecks(kind, A, E) {
   const w = ANIM_WANT[kind], L = `動畫・${w.label}`;
   const cnt = A.count || {};
   const layerBad = LAYER_CLS.filter((c) => c !== 'pk-hop' && (cnt[c] || 0) !== (w.layers[c] || 0));
   const total = LAYER_CLS.reduce((s, c) => s + (cnt[c] || 0), 0);
-  yes(A.found && A.frameOk === true, frameMsg(`${L} 量的時候瀏覽器有畫新的格`, A));
+  yes(A.found && A.frameOk === true && waitedOk(A.wait, 'ready'), frameMsg(`${L} 量的時候瀏覽器有畫新的格`, A));
   yes(A.found && A.kind === kind && A.cheer === true && A.soft === w.soft && A.running >= 1 && A.moved === true
     && cnt['pk-hop'] === 1 && layerBad.length === 0 && A.n === total,
     `${L} 有動：一出來就有動畫在跑、兩次取位置（中間時間軸走了至少 150ms）不一樣、${w.soft ? '慢慢探上來' : '跳上來'}、會動的層跟登記的一樣（${A.kind}；pk-cheer ${A.cheer}；慢慢探 ${A.soft}；動畫 ${A.n} 段、量的當下跑著的 ${A.running}、播完的 ${A.finished}、層數合計 ${total}；位置變了 ${A.moved}；`
@@ -507,7 +522,14 @@ const P9_PTS = [[60, 55], [57, 59]], P9_CHEEK = [88, 124], P9_CHEEK_RGB = [216, 
 //   失敗時印最後一次是哪一道沒過；通過時也印層數與 .pk-hop 的 transform，下次再紅分得出身體在不在原位。〕
 const LAYERS = ':scope > g, g[class]';
 const JOLT_SEL = 'g.mc-fig';
-async function headCorners(page, { jolt = '' } = {}) {
+// 〔2026-11-21 改（Dispatch 00:5x 選甲）：量之前等阿灰的每一段動畫自己播完（scripts/animwait.mjs 的 until 'finished'，最多 P9_WAIT_MS），
+//   不再對整頁動畫 finish()。起因（.logs/v1100/diagP9.mjs 00:33 那一場）：finish() 把三段動畫從半途跳到最後，之後截圖跟畫面對不上——
+//   剛 finish() 完量的 10 次，臉頰位置跟穩定的那次差 0.33～2.28 畫素（和紙一次紅），自己播完才量的那 1 次只差 0.22。
+//   等不到＝這一次沒量到：回 off「沒量到：…」（獨立字樣，不跟「量到方框」「沒靜止」混在一起），主斷言跟著紅；結尾的說明行另外數。
+//   waitMs 只給「等不到的對照組」用（圖一出來就量、最多等 1ms，必須判成沒量到）。
+//   阿灰的動畫（css/style.css .pk-cheer .pk-hop 0.6 秒、.pk-scan 延遲 0.55＋1.6 秒）都是有限次的；建立行程「產生中…」那段無限次的（.pk-busy）不在這條路上。〕
+const P9_WAIT_MS = 6000;
+async function headCorners(page, { jolt = '', waitMs = P9_WAIT_MS } = {}) {
   let r = null, r2 = null, shot = null, shot2 = null, tries = 0, why = '';
   const sharp = (await import('sharp')).default;
   // 在頁面裡讀：外框、每一層的框、.pk-hop 的 transform、還在動（或還沒開始）的動畫數（page.evaluate 直接傳這個函式，不經 eval）
@@ -526,13 +548,16 @@ async function headCorners(page, { jolt = '' } = {}) {
     if (box.left < 0 || box.top < 0 || rr.x + rr.w > rr.vw || rr.y + rr.h > rr.vh) return null;
     return sharp(png).extract(box).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   };
+  const there = await page.evaluate((s) => { const el = document.querySelector(s); if (!el) return false; el.parentElement.scrollIntoView({ block: 'center' }); return true; }, SCOUT_SEL);
+  if (!there) return null;
+  const w = await waitAnims(page, SCOUT_SEL, 'finished', waitMs);
+  if (!waitedOk(w, 'finished')) return { off: `沒量到：等不到阿灰的動畫自己播完（${waitBrief(w)}）`, wait: w };
   for (; tries < 3; tries++) {
     if (tries) await new Promise((res) => setTimeout(res, 400));
     const found = await page.evaluate(async (s) => {
       const el = document.querySelector(s);
       if (!el) return false;
       el.parentElement.scrollIntoView({ block: 'center' });
-      document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* 一直重複的動畫不能 finish：照跑 */ } });
       await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
       return true;
     }, SCOUT_SEL);
@@ -578,13 +603,26 @@ async function headCorners(page, { jolt = '' } = {}) {
   //   affected-rest-1150 深色那次框跟過的那幾次一模一樣、第 1 次量就靜止，正中央 216,165,154（差 4），照樣有一格掉出臉頰
   //   （同一張圖每次畫出來的抗鋸齒不完全一樣；靜止檢查擋不到這種）。正中央落在臉頰上，裁切與比例就是對的。九點裡幾點是臉頰色照印。
   const midN = M.filter((c) => near(P9_CHEEK_RGB)([c])).length;
+  // 臉頰重心（2026-11-21 加，說明用、不是斷言）：臉頰正中央 ±8 單位裡接近臉頰色（差 < 30）的畫素平均位置，單位是畫布單位。
+  //   P9 診斷量的就是這個（剛 finish() 完量的跟穩定的差 0.33～2.28 畫素）；改成等自己播完之後照印，主斷言那次跟對照組那次應該一樣。
+  let gx = 0, gy = 0, gn = 0;
+  for (let y = Math.round((P9_CHEEK[1] - 8 - r.vb[1]) * ky); y <= Math.round((P9_CHEEK[1] + 8 - r.vb[1]) * ky); y++) {
+    for (let x = Math.round((P9_CHEEK[0] - 8 - r.vb[0]) * kx); x <= Math.round((P9_CHEEK[0] + 8 - r.vb[0]) * kx); x++) {
+      if (x < 0 || y < 0 || x >= info.width || y >= info.height) continue;
+      const i = (y * info.width + x) * 3;
+      if (near(P9_CHEEK_RGB)([[data[i], data[i + 1], data[i + 2]]])) { gx += x; gy += y; gn++; }
+    }
+  }
+  const cheekAt = gn ? `${(gx / gn / kx + r.vb[0]).toFixed(2)},${(gy / gn / ky + r.vb[1]).toFixed(2)}（${gn} 點）` : '沒有臉頰色的點';
   return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)([M[4]]), midN,
-    still: true, tries: tries + 1, pos };
+    still: true, tries: tries + 1, pos, wait: w, cheekAt };
 }
 async function scoutHead(page, tag) {
-  let go = false, now = null, how = '沒到建立行程頁', old = null, jolt = null, joltIn = null, joltPaint = null;
+  let go = false, now = null, how = '沒到建立行程頁', old = null, jolt = null, joltIn = null, joltPaint = null, early = null;
   try {
     go = (await toHome(page)) && (await tap(page, '.home-new', '建立新旅程')) && (await soft(page.waitForSelector(SCOUT_SEL, { timeout: 15000 })));
+    // 等不到的對照組（2026-11-21）：圖一出來就量、最多只等 1ms——阿灰的動畫要 2 秒多才播完，必須判成「沒量到」、不能量下去
+    if (go) early = await headCorners(page, { waitMs: 1 });
     if (go) now = await headCorners(page);
     if (go) jolt = await headCorners(page, { jolt: 'svg' });
     if (go) joltIn = await headCorners(page, { jolt: 'inner' });
@@ -608,7 +646,12 @@ async function scoutHead(page, tag) {
     console.log(`  ${tag} P9 例外：${String(e && e.message || e).split('\n')[0]}`);
   }
   // 框的座標與第幾次量才靜止：事後（2026-11-20）加印，紅的時候分得出是不是量的位置跑掉
-  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}（九點裡 ${c.midN} 點是臉頰色）；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素；${c.pos}，第 ${c.tries} 次量才靜止`);
+  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}（九點裡 ${c.midN} 點是臉頰色）；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素；${c.pos}，第 ${c.tries} 次量才靜止`
+    + `；臉頰重心 ${c.cheekAt}；${waitBrief(c.wait)}`);
+  // 沒量到（等不到動畫自己播完）的那幾次記進結尾的說明行；early 是故意等不到的對照組，不算
+  for (const [k, c] of [['主斷言', now], ['靜止對照組', jolt], ['只挪裡面', joltIn], ['只改畫面', joltPaint], ['舊寫法對照組', old]]) {
+    if (c && String(c.off || '').startsWith('沒量到：')) unmeasured.push(`${tag} P9 ${k} 等播完逾時`);
+  }
   yes(!!now && !now.off && now.scaleOk && now.mid && !now.corner,
     `${tag} P9 建立行程頁的阿灰望遠鏡：頭上沒有灰色方框，左上角兩個取樣點不是深灰帶（前置：臉頰對得上）（到了建立行程頁 ${go}；${say(now)}）`);
   // 三個對照組各只打到自己那一道（§5.3）：挪整張→外框變了；只挪裡面→外框一樣、裡面變了、兩張截圖一樣；只改畫面→框都一樣、兩張截圖不一樣
@@ -623,6 +666,14 @@ async function scoutHead(page, tag) {
     `${tag} P9 只改畫面的對照組：第一張截圖之後把 .mc-fig 的透明度調一點、框都不動，必須判成沒靜止、而且是「兩張截圖不一樣」那一道擋的（${say(joltPaint)}）`);
   yes(!!old && !old.off && old.scaleOk && old.mid && old.corner,
     `${tag} P9 對照組：同一頁塞回 11-18 以前的 clipPath 寫法，量得到方框（取樣點是深灰帶）（${how || '塞不回去'}；${say(old)}）`);
+  // 2026-11-21 加的兩條（headCorners 開頭的等待）：
+  //   「等自己播完」是「沒量到」的標籤：等不到時主斷言也紅（off＝沒量到），這條讓突變執行器看得到「多紅的是沒量到」，不會被算成抓到。
+  //   它跟主斷言的 !now.off 是同一件事的兩面，沒有只紅它的突變（mut_wait1121 的 W6 讓 P9 七條一起紅）——照實寫，不硬湊。
+  yes(!!now && waitedOk(now.wait, 'finished'),
+    `${tag} P9 量之前等阿灰的每一段動畫自己播完：不再 finish()、最多等 ${P9_WAIT_MS}ms；這條紅表示這一次沒量到，不是方框（${now ? waitBrief(now.wait) : '沒量到'}）`);
+  const ew = early ? early.wait : null;
+  yes(!!early && String(early.off || '').startsWith('沒量到：') && !!ew && ew.found === true && ew.timeout === true && ew.before > 0,
+    `${tag} P9 等不到的對照組：圖一出來就量、最多只等 1ms，必須判成「沒量到」、不能量下去（前置：等之前還有段數沒播完，> 0 才算情境成立）（${early ? say(early) : '沒量到'}）`);
 }
 
 async function washiRound() {
@@ -700,7 +751,7 @@ async function washiRound() {
 
     // ---- 動畫（v1.83.0）：完成任務那一刻小鳳打領結那張跳上來、揮翅膀 ----
     const A = doneAnim, E = doneEnd, L = A.layers || {};
-    yes(A.found && A.frameOk === true, frameMsg('動畫 完成任務那一刻量的時候瀏覽器有畫新的格', A));
+    yes(A.found && A.frameOk === true && waitedOk(A.wait, 'ready'), frameMsg('動畫 完成任務那一刻量的時候瀏覽器有畫新的格', A));
     yes(A.found && A.kind === 'done' && A.cheer === true && A.running >= 1 && A.moved === true,
       `動畫 完成任務那一刻有動：慶祝畫面一出來，小鳳打領結那張有動畫在跑、兩次取位置（中間時間軸走了至少 150ms）不一樣（${A.kind}；pk-cheer ${A.cheer}；動畫 ${A.n} 段、量的當下跑著的 ${A.running}、播完的 ${A.finished}；位置變了 ${A.moved}；各段播到（毫秒／總長）${A.at1} → ${A.at2}）`);
     // 母體：每一層一段動畫（身體 1、手 1、翅膀每一段各 1、揮動線 1——和紙才畫揮動線）
@@ -999,4 +1050,6 @@ try {
   await browser.close();
   web.kill();
 }
+// 沒量到（2026-11-21）：等動畫起跑／自己播完逾時的那幾次，不算綠、也不是動畫壞了——對應的「量的時候瀏覽器有畫新的格」「P9 量之前等…」那幾條已經紅；這裡另外數（說明行）
+console.log(`\n  沒量到（等動畫逾時）：${unmeasured.length} 次${unmeasured.length ? `——${unmeasured.join('、')}` : ''}`);
 console.log(`\n${pass} 項通過` + (process.exitCode ? '，有失敗' : ''));

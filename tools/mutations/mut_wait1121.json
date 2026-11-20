@@ -1,0 +1,129 @@
+[
+  {
+    "name": "等待函式：不真的等（Promise 換成馬上兌現）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；秒級、不開瀏覽器）scripts/animwait.mjs 的 waitAnimsIn 不等 ready／finished，馬上當成兌現。晚到的那一段等之後還沒到 → 靠 after > 0 那道備援判成逾時（不會被當成等到了），AW1、AW3（晚到要真的等到、等了 150～1400ms）紅；等不到的 AW2、AW4 照樣逾時、AW5 沒有動畫照樣過、AW6 不經過這段。",
+    "expect": ["AW1 等起跑・晚到", "AW3 等播完・晚到"],
+    "file": "scripts/animwait.mjs",
+    "find": "    Promise.all(list.map((a) => (until === 'ready' ? a.ready : a.finished))).then(() => true, () => false),",
+    "replace": "    Promise.resolve(true),   // 突變：不真的等，馬上當成兌現",
+    "cmd": "node scripts/animwaittest.mjs"
+  },
+  {
+    "name": "等待函式：逾時當成等到了（timeout 恆為 false）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；秒級、不開瀏覽器）waitAnimsIn 回傳的 timeout 寫死 false。等不到的那一段：AW2、AW4 要求 timeout === true，紅；waitedOk 還有「等之後 0 段」那一道，判定照樣不算等到（不會變成綠的量測），但這兩條連標記都要對才過。AW1、AW3、AW5 本來就不逾時、照過；AW6 用合成標記、不經過這段。",
+    "expect": ["AW2 等起跑・等不到", "AW4 等播完・等不到"],
+    "file": "scripts/animwait.mjs",
+    "find": "timeout: !done || after > 0 };",
+    "replace": "timeout: false };   // 突變：逾時當成等到了",
+    "cmd": "node scripts/animwaittest.mjs"
+  },
+  {
+    "name": "判定 waitedOk：不看逾時",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；秒級）waitedOk 拿掉 !w.timeout。只有 AW6 的「逾時（段數 0）」那一格（例如等的時候動畫被取消）只靠這一道擋，變成「算」→ AW6 紅、訊息「不對的：逾時（段數 0）」。AW2、AW4 的標記等之後還剩 1 段，靠段數那一道照樣不算，不紅。",
+    "expect": ["AW6 判定 waitedOk"],
+    "file": "scripts/animwait.mjs",
+    "find": "w.until === until && !w.timeout && w.after === 0;",
+    "replace": "w.until === until && w.after === 0;",
+    "cmd": "node scripts/animwaittest.mjs"
+  },
+  {
+    "name": "判定 waitedOk：不看等之後還剩幾段",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；秒級）waitedOk 拿掉 w.after === 0。只有 AW6 的「還剩 1 段（沒標逾時）」那一格只靠這一道擋 → AW6 紅、訊息「不對的：還剩 1 段（沒標逾時）」。AW2、AW4 有標逾時，靠逾時那一道照樣不算。",
+    "expect": ["AW6 判定 waitedOk"],
+    "file": "scripts/animwait.mjs",
+    "find": "&& !w.timeout && w.after === 0;",
+    "replace": "&& !w.timeout;",
+    "cmd": "node scripts/animwaittest.mjs"
+  },
+  {
+    "name": "判定 waitedOk：不看等的是起跑還是播完",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；秒級）waitedOk 拿掉 w.until === until。只有 AW6 的「等的是起跑」那一格（要的是播完）只靠這一道擋 → AW6 紅、訊息「不對的：等的是起跑」。AW1～AW5 呼叫時種類都對，不受影響。",
+    "expect": ["AW6 判定 waitedOk"],
+    "file": "scripts/animwait.mjs",
+    "find": "w.found === true && w.until === until && ",
+    "replace": "w.found === true && /* 突變：不看等的是哪一種 */ ",
+    "cmd": "node scripts/animwaittest.mjs"
+  },
+  {
+    "name": "判定 waitedOk：不看找不找得到圖",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；秒級）waitedOk 拿掉 w.found === true。只有 AW6 的「找不到圖」那一格（合成標記沒標逾時）只靠這一道擋 → AW6 紅、訊息「不對的：找不到圖」。真的頁面上找不到圖時 waitAnimsIn 同時回 timeout true，另有逾時那一道（推論，見 animwait.mjs 第 25 行）。",
+    "expect": ["AW6 判定 waitedOk"],
+    "file": "scripts/animwait.mjs",
+    "find": "!!w && w.found === true && ",
+    "replace": "!!w && /* 突變：不看找不找得到圖 */ ",
+    "cmd": "node scripts/animwaittest.mjs"
+  },
+  {
+    "name": "peektest：量動畫之前不等起跑（等待被拿掉）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）animNow 不呼叫等待函式、標記換成 null。量本身照舊，所以只有要求「等到起跑」的那七條「量的時候瀏覽器有畫新的格」紅（六張＋完成任務那一刻）；有動、藏在後面、只用 transform／opacity、動完停回原位不看標記、不紅。已知風險（推論）：不等起跑正是這次要補的那種偶發——極少數時候「有動」也會多紅（00:33 那一場 20 次第一次讀 19 次還在等起跑，但「有動」紅過的只有 2203 那 1 次）。",
+    "expect": ["動畫・捧麵 量的時候瀏覽器有畫新的格", "動畫・烤串 量的時候瀏覽器有畫新的格", "動畫・遮陽帽 量的時候瀏覽器有畫新的格",
+      "動畫・相機 量的時候瀏覽器有畫新的格", "動畫・撐傘 量的時候瀏覽器有畫新的格", "動畫・雪板 量的時候瀏覽器有畫新的格",
+      "動畫 完成任務那一刻量的時候瀏覽器有畫新的格"],
+    "file": "scripts/peektest.mjs",
+    "find": "  const wait = await waitAnims(page, ps, 'ready', READY_MS);",
+    "replace": "  const wait = null;   // 突變：不等起跑（等待被拿掉）",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "peektest：等起跑逾時的標記（逾時路徑不能算成綠）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）animNow 的等待換成一個合成的逾時標記（找得到圖、1 段沒起跑、逾時）——模擬等了 2 秒還沒起跑。量本身照舊，所以只有那七條「量的時候瀏覽器有畫新的格」紅（訊息寫「逾時」），結尾說明行「沒量到（等動畫逾時）：9 次」（和紙 7 張＋減少動態那輪完成任務 2 次也呼叫 animNow，01:07 寫完再核才改，仍在跑之前）；其餘照過。跟上一條分開：上一條是標記不在，這一條是標記在、但說逾時。",
+    "expect": ["動畫・捧麵 量的時候瀏覽器有畫新的格", "動畫・烤串 量的時候瀏覽器有畫新的格", "動畫・遮陽帽 量的時候瀏覽器有畫新的格",
+      "動畫・相機 量的時候瀏覽器有畫新的格", "動畫・撐傘 量的時候瀏覽器有畫新的格", "動畫・雪板 量的時候瀏覽器有畫新的格",
+      "動畫 完成任務那一刻量的時候瀏覽器有畫新的格"],
+    "file": "scripts/peektest.mjs",
+    "find": "  const wait = await waitAnims(page, ps, 'ready', READY_MS);",
+    "replace": "  const wait = { until: 'ready', ms: READY_MS, found: true, n: 1, before: 1, after: 1, waited: READY_MS, timeout: true };   // 突變：等起跑逾時",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "peektest：P9 量之前不等阿灰播完（等待被拿掉）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）headCorners 的等待標記換成 null。waitedOk 判不算 → 每一次都回「沒量到：…沒等（標記不在）」：主斷言、靜止檢查的三個對照組、舊寫法對照組、「量之前等自己播完」都紅；「等不到的對照組」要求標記在而且等之前還有段數，標記不在也紅 → 兩個主題各 7 條、共 14 條。",
+    "expect": ["［和紙］ P9 建立行程頁的阿灰望遠鏡", "［和紙］ P9 靜止檢查的對照組", "［和紙］ P9 只挪裡面那層的對照組", "［和紙］ P9 只改畫面的對照組",
+      "［和紙］ P9 對照組", "［和紙］ P9 量之前等阿灰的每一段動畫自己播完", "［和紙］ P9 等不到的對照組",
+      "［深色］ P9 建立行程頁的阿灰望遠鏡", "［深色］ P9 靜止檢查的對照組", "［深色］ P9 只挪裡面那層的對照組", "［深色］ P9 只改畫面的對照組",
+      "［深色］ P9 對照組", "［深色］ P9 量之前等阿灰的每一段動畫自己播完", "［深色］ P9 等不到的對照組"],
+    "file": "scripts/peektest.mjs",
+    "find": "  const w = await waitAnims(page, SCOUT_SEL, 'finished', waitMs);",
+    "replace": "  const w = null;   // 突變：不等阿灰播完（等待被拿掉）",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "peektest：P9 等播完逾時的標記（逾時路徑不能算成綠）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）headCorners 的等待換成合成的逾時標記（找得到圖、1 段沒播完、逾時）。每一次都回「沒量到：…逾時」：主斷言、三個靜止對照組、舊寫法對照組、「量之前等自己播完」紅；「等不到的對照組」要的正是這個樣子（沒量到、標記在、等之前 1 段）→ 照過。兩個主題各 6 條、共 12 條；結尾說明行數到 10 次（每個主題 5 次，等不到的對照組不算）。跟上一條分開：只差「等不到的對照組」那兩條。",
+    "expect": ["［和紙］ P9 建立行程頁的阿灰望遠鏡", "［和紙］ P9 靜止檢查的對照組", "［和紙］ P9 只挪裡面那層的對照組", "［和紙］ P9 只改畫面的對照組",
+      "［和紙］ P9 對照組", "［和紙］ P9 量之前等阿灰的每一段動畫自己播完",
+      "［深色］ P9 建立行程頁的阿灰望遠鏡", "［深色］ P9 靜止檢查的對照組", "［深色］ P9 只挪裡面那層的對照組", "［深色］ P9 只改畫面的對照組",
+      "［深色］ P9 對照組", "［深色］ P9 量之前等阿灰的每一段動畫自己播完"],
+    "file": "scripts/peektest.mjs",
+    "find": "  const w = await waitAnims(page, SCOUT_SEL, 'finished', waitMs);",
+    "replace": "  const w = { until: 'finished', ms: waitMs, found: true, n: 1, before: 1, after: 1, waited: waitMs, timeout: true };   // 突變：等播完逾時",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "peektest：P9 等不到也照樣量下去（不看逾時）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）headCorners 只在標記不在時才回沒量到，逾時照樣量下去。正常的路上主斷言那次等得到、不受影響；只有「等不到的對照組」（最多等 1ms）會量下去、回的不是「沒量到：」→ 兩個主題各 1 條、共 2 條紅。",
+    "expect": ["［和紙］ P9 等不到的對照組", "［深色］ P9 等不到的對照組"],
+    "file": "scripts/peektest.mjs",
+    "find": "  if (!waitedOk(w, 'finished')) return",
+    "replace": "  if (!w) /* 突變：逾時照樣量下去 */ return",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "mascottest：量動作之前不等起跑（等待被拿掉）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）moveNow 不呼叫等待函式、標記換成 null。量本身照舊，所以只有和紙那輪要求「等到起跑」的 M9「量的時候瀏覽器有畫新的格」紅；深色那輪（減少動態效果）不看標記。已知風險（推論）：同 peektest 那條，極少數時候「有動」也會多紅（E：11-19 判過的已知多紅就是這一種）。",
+    "expect": ["［和紙］ M9 量的時候瀏覽器有畫新的格"],
+    "file": "scripts/mascottest.mjs",
+    "find": "  const wait = await waitAnims(page, sel, 'ready', READY_MS);",
+    "replace": "  const wait = null;   // 突變：不等起跑（等待被拿掉）",
+    "cmd": "node scripts/mascottest.mjs"
+  },
+  {
+    "name": "mascottest：等起跑逾時的標記（逾時路徑不能算成綠）",
+    "why": "（事前寫 2026-11-21 01:05，跑之前；會開瀏覽器）moveNow 的等待換成合成的逾時標記（找得到圖、1 段沒起跑、逾時）。只有和紙那輪 M9「量的時候瀏覽器有畫新的格」紅（訊息寫「沒等到起跑…逾時」）；其餘照過。",
+    "expect": ["［和紙］ M9 量的時候瀏覽器有畫新的格"],
+    "file": "scripts/mascottest.mjs",
+    "find": "  const wait = await waitAnims(page, sel, 'ready', READY_MS);",
+    "replace": "  const wait = { until: 'ready', ms: READY_MS, found: true, n: 1, before: 1, after: 1, waited: READY_MS, timeout: true };   // 突變：等起跑逾時",
+    "cmd": "node scripts/mascottest.mjs"
+  }
+]
