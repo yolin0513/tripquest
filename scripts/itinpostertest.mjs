@@ -12,7 +12,8 @@
 //   P2a 沒有景點的一趟沒有那顆按鈕；P2b 直接開海報那一頁寫「還沒有排景點」、沒有預覽
 //   P3a 預覽跟成品是同一份（同一份版面另外畫一張，逐像素相同），不是空白；P3b 每天一隻吉祥物真的畫出來了（v1.89）
 //   （v1.89）P3c 海報上的吉祥物沒有接縫：手掌的深色外框在邊線附近沒有夾在深色中間的一列淡線（量畫出來的像素；
-//         對照：App 的 peek() 分上下兩層的畫法，在同一個量法下量得到那條線）
+//         對照：App 的 peek() 分上下兩層的畫法，在同一個量法下量得到那條線；2026-11-20 起扣掉同一張圖拿掉裁切、
+//         整張畫一層時也有的淡線——那是圖本身，見 P3c 那段）
 //   P4 真的字寬排出來的 4 組（2 版型 × 2 張數）跑 itinposterlayouttest 同一組版面檢查（B1～B15）
 //   （v1.89）P10a 沒開過行程分頁的一趟（路線快取裡沒有）直接開海報：不連路線服務、車程與約幾點到留白（不猜）；
 //         P10b 開過行程分頁（畫面補上「約 N 分」「約幾點到」）再按進海報：每天一張的站卡寫的跟行程分頁一樣
@@ -233,6 +234,12 @@ function initHooks() {
     // 一段範圍裡「夾在兩列深色中間的一列淡線」：同一欄，上一列、下一列都深（亮度 < 90），這一列比兩邊都亮 20 以上。
     // 回傳有 3 個以上這種像素的列：[列, 個數]。手掌深色外框上的接縫（兩層在交接處各自反鋸齒）就是這個樣子
     seams(cv, x0, x1, r0, r1) {
+      const by = new Map();
+      for (const [r] of window.__ck.seamPx(cv, x0, x1, r0, r1)) by.set(r, (by.get(r) || 0) + 1);
+      return [...by].filter(([, n]) => n >= 3);
+    },
+    // （2026-11-20）同一個判準、逐像素回傳 [列, 欄]（欄是畫布座標）；seams 照列數 3 個以上。P3c 用它扣掉「圖本身就有的淡線」
+    seamPx(cv, x0, x1, r0, r1) {
       x0 = Math.max(0, Math.round(x0)); x1 = Math.min(cv.width, Math.round(x1));
       r0 = Math.max(1, Math.round(r0)); r1 = Math.min(cv.height - 1, Math.round(r1));
       if (x1 <= x0 || r1 <= r0) return [];
@@ -241,9 +248,7 @@ function initHooks() {
       const L = (x, r) => { const i = ((r - r0 + 1) * W + x) * 4; return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; };
       const out = [];
       for (let r = r0; r < r1; r++) {
-        let n = 0;
-        for (let x = 0; x < W; x++) { const a = L(x, r - 1), b = L(x, r + 1), c = L(x, r); if (a < 90 && b < 90 && c - Math.max(a, b) > 20) n++; }
-        if (n >= 3) out.push([r, n]);
+        for (let x = 0; x < W; x++) { const a = L(x, r - 1), b = L(x, r + 1), c = L(x, r); if (a < 90 && b < 90 && c - Math.max(a, b) > 20) out.push([r, x0 + x]); }
       }
       return out;
     },
@@ -687,11 +692,30 @@ try {
       const ip = await import('./js/itinposter/index.js');
       const pk = await import('./js/peeks.js');
       const m = await ip.gatherModel(tid, { forecast: await ip.tripForecast(tid) });
-      const out = { pages: 0, peeks: 0, rows: [], ctl: [], ctlN: 0, ctlErr: [] };
+      const out = { pages: 0, peeks: 0, rows: [], own: [], ctl: [], ctlN: 0, ctlErr: [] };
       // 量哪一段：兩層的交接處——App 的畫法下層從邊線往上 1 個畫布單位開始、上層到邊線為止——往上多 2 px、往下 2 px。
       // 不量更上面：烤串那張在邊線往上約 4 個單位，扣子與吊帶的外框之間本來就有一條細縫（peekFlat 與 peek 都有，
       // 2026-11-14 量過：k 1.39 時同一列 8 個像素，兩種畫法一樣），那是圖本身，不是接縫
       const band = (edge, k) => [edge - k - 2, edge + 2];
+      // 扣掉圖本身就有的淡線（事後，2026-11-20；寫完才 date＝13:42，照實記；③ affected-rest2-1154 紅在這裡）：v1.100.0 的新烤串，
+      //   鈕扣外框的底跟圖最底下那條墨線之間只隔一列吊帶的藍（.logs/v1100/grillseam.mjs 離線量：只畫身體那一層就有，前景在那一列是空的），
+      //   落在量的這一段裡，k 1.9／2.03 量到 3 個像素——跟上面那條扣子與吊帶的細縫同一類，是圖本身。不登記哪一張例外（排除制），改成：
+      //   同一張圖「拿掉所有裁切、整張畫成一層」畫在同一個位置當參考，參考圖上同一個像素也是淡線的不算；剩下的照原規則（同一列 3 個以上）。
+      //   參考圖不直接用 peekFlat：v189 那條突變改的就是 peekFlat（把前景拆成兩層），拿它當參考會把要抓的接縫一起扣掉；
+      //   拿掉裁切之後前景是整塊（拆成兩層的也是兩份疊在一起），交接處不會有淡線。對照組也走同一個扣法（見下面）。
+      const load = (el) => new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im); im.onerror = () => rej(new Error('載不到'));
+        im.src = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' }));
+      });
+      const unclip = (el) => { const c = el.cloneNode(true); c.querySelectorAll('[clip-path]').forEach((g) => g.removeAttribute('clip-path')); return c; };
+      const realSeams = (cv, ref, x0, x1, r0, r1) => {
+        const own = new Set(window.__ck.seamPx(ref, x0, x1, r0, r1).map(([r, x]) => `${r},${x}`));
+        const by = new Map();
+        for (const [r, x] of window.__ck.seamPx(cv, x0, x1, r0, r1)) if (!own.has(`${r},${x}`)) by.set(r, (by.get(r) || 0) + 1);
+        return [...by].filter(([, n]) => n >= 3);
+      };
+      const paperCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.fillStyle = '#fbf6ec'; x.fillRect(0, 0, w, h); return c; };
       // 海報真的畫出來的每一張：每一隻吉祥物（v1.93：全部一張照畫面那樣帶頁首插圖）
       const art = await ip.headerArtReady();
       for (const [kind, split] of [['route', 'one'], ['route', 'day'], ['band', 'one'], ['band', 'day']]) {
@@ -702,33 +726,36 @@ try {
           for (const o of pg.ops.filter((x) => x.op === 'peek')) {
             out.peeks++;
             const s = window.__ck.seams(cv, o.x, o.x + o.w, ...band(o.edge, o.k));
-            if (s.length) out.rows.push(`${kind}/${split} 第 ${o.day} 天 ${o.kind}（k ${o.k.toFixed(2)}）：${s.map(([y, n]) => `第 ${y} 列 ${n} 個`).join('、')}`);
+            if (!s.length) continue;
+            const ref = paperCanvas(cv.width, cv.height);
+            ref.getContext('2d').drawImage(await load(unclip(pk.peekFlat(o.kind, o.k))), o.x, o.y, o.w, o.h);
+            const real = realSeams(cv, ref, o.x, o.x + o.w, ...band(o.edge, o.k));
+            const who = `${kind}/${split} 第 ${o.day} 天 ${o.kind}（k ${o.k.toFixed(2)}）`;
+            if (real.length) out.rows.push(`${who}：${real.map(([y, n]) => `第 ${y} 列 ${n} 個`).join('、')}`);
+            else out.own.push(`${who} ${s.map(([y, n]) => `第 ${y} 列 ${n} 個`).join('、')}`);
           }
         }
       }
-      // 對照：App 的 peek()（分上下兩層）拿掉白邊，照海報同一條路（序列化 → 圖片 → 畫到畫布）畫成海報上的大小，同一個量法要量得到
-      const load = (el) => new Promise((res, rej) => {
-        const im = new Image();
-        im.onload = () => res(im); im.onerror = () => rej(new Error('載不到'));
-        im.src = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(el)], { type: 'image/svg+xml' }));
-      });
+      // 對照：App 的 peek()（分上下兩層）拿掉白邊，照海報同一條路（序列化 → 圖片 → 畫到畫布）畫成海報上的大小，
+      // 同一個量法、同一個扣法（扣掉它自己拿掉裁切後的參考圖也有的淡線）要量得到——證明扣法沒把兩層的接縫一起扣掉
       for (const kind of pk.PEEK_KINDS) for (const k of [1.9, 2.4]) {
         try {
           const el = pk.peek(kind, k);
           el.querySelectorAll('[filter]').forEach((g) => g.removeAttribute('filter'));
-          const im = await load(el);
-          const cv = document.createElement('canvas');
-          cv.width = Math.round(im.width); cv.height = Math.round(im.height);
-          const x = cv.getContext('2d'); x.fillStyle = '#fbf6ec'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(im, 0, 0, cv.width, cv.height);
+          const im = await load(el), imR = await load(unclip(el));
+          const cv = paperCanvas(Math.round(im.width), Math.round(im.height));
+          cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+          const ref = paperCanvas(cv.width, cv.height);
+          ref.getContext('2d').drawImage(imR, 0, 0, cv.width, cv.height);
           const E = pk.peekGeom(kind).rise * k;
           out.ctlN++;
-          if (window.__ck.seams(cv, 0, cv.width, ...band(E, k)).length) out.ctl.push(`${kind}×${k}`);
+          if (realSeams(cv, ref, 0, cv.width, ...band(E, k)).length) out.ctl.push(`${kind}×${k}`);
         } catch (e) { out.ctlErr.push(`${kind}×${k}：${e.message}`); }
       }
       return out;
     }, S.t);
     say('P3c', r.pages >= 8 && r.peeks >= 12 && r.rows.length === 0 && r.ctl.length > 0 && r.ctlErr.length === 0,
-      `海報 ${r.pages} 張、吉祥物 ${r.peeks} 隻，有接縫的 ${r.rows.length} 隻；對照（App 分兩層的畫法）${r.ctlN} 張裡量到接縫的 ${r.ctl.length} 張：${r.ctl.join('、') || '沒有——量法量不到這種缺陷'}`,
+      `海報 ${r.pages} 張、吉祥物 ${r.peeks} 隻，有接縫的 ${r.rows.length} 隻；扣掉圖本身就有的淡線 ${r.own.length} 隻（${r.own.join('、') || '無'}）；對照（App 分兩層的畫法，同一個扣法）${r.ctlN} 張裡量到接縫的 ${r.ctl.length} 張：${r.ctl.join('、') || '沒有——量法量不到這種缺陷'}`,
       [...r.rows, ...r.ctlErr].join('\n   '));
   });
 
