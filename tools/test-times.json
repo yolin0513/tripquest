@@ -1,6 +1,6 @@
 {
   "affectedtest": {
-    "sec": 11,
+    "sec": 9.9,
     "at": "2026-11-20"
   },
   "validate-places": {
@@ -72,7 +72,7 @@
     "at": "2026-11-19"
   },
   "tabbartest": {
-    "sec": 42.3,
+    "sec": 41.3,
     "at": "2026-11-20"
   },
   "videotest": {
@@ -108,7 +108,7 @@
     "at": "2026-11-20"
   },
   "membergonetest": {
-    "sec": 17.8,
+    "sec": 12,
     "at": "2026-11-20"
   },
   "curatedtest": {
@@ -140,11 +140,11 @@
     "at": "2026-11-19"
   },
   "albumtest": {
-    "sec": 39.4,
+    "sec": 37.2,
     "at": "2026-11-20"
   },
   "nearbytest": {
-    "sec": 12.6,
+    "sec": 9.5,
     "at": "2026-11-20"
   },
   "postest": {
@@ -156,7 +156,7 @@
     "at": "2026-11-19"
   },
   "emptytest": {
-    "sec": 15.7,
+    "sec": 15.6,
     "at": "2026-11-20"
   },
   "removetest": {
@@ -176,7 +176,7 @@
     "at": "2026-11-19"
   },
   "gatelint": {
-    "sec": 0.3,
+    "sec": 0.4,
     "at": "2026-11-20"
   },
   "chunktest": {
@@ -200,7 +200,7 @@
     "at": "2026-11-20"
   },
   "layouttest": {
-    "sec": 544.5,
+    "sec": 539.4,
     "at": "2026-11-20"
   },
   "workertest": {
@@ -216,11 +216,11 @@
     "at": "2026-11-19"
   },
   "mutcmdtest": {
-    "sec": 5.6,
+    "sec": 5.5,
     "at": "2026-11-20"
   },
   "mutlint": {
-    "sec": 1.7,
+    "sec": 1.4,
     "at": "2026-11-20"
   },
   "predicttest": {
@@ -236,7 +236,7 @@
     "at": "2026-11-19"
   },
   "convtest": {
-    "sec": 0.1,
+    "sec": 0.2,
     "at": "2026-11-20"
   },
   "motioncsstest": {
@@ -288,7 +288,7 @@
     "at": "2026-11-20"
   },
   "viewentrytest": {
-    "sec": 1.8,
+    "sec": 1.9,
     "at": "2026-11-20"
   },
   "dayjumptest": {
@@ -300,7 +300,7 @@
     "at": "2026-11-20"
   },
   "legviewtest": {
-    "sec": 36.7,
+    "sec": 37.1,
     "at": "2026-11-20"
   },
   "tagdaytest": {
@@ -344,7 +344,7 @@
     "at": "2026-11-19"
   },
   "mascottest": {
-    "sec": 24.8,
+    "sec": 24.9,
     "at": "2026-11-20"
   },
   "photoicontest": {
@@ -352,7 +352,7 @@
     "at": "2026-11-20"
   },
   "peektest": {
-    "sec": 70.6,
+    "sec": 77.2,
     "at": "2026-11-20"
   },
   "arttransparenttest": {
@@ -364,11 +364,11 @@
     "at": "2026-11-20"
   },
   "saytest": {
-    "sec": 44,
+    "sec": 44.6,
     "at": "2026-11-20"
   },
   "nullinserttest": {
-    "sec": 5.4,
+    "sec": 6,
     "at": "2026-11-20"
   },
   "itinposterlayouttest": {
@@ -406,5 +406,9 @@
   "icontest": {
     "sec": 1.8,
     "at": "2026-11-19"
+  },
+  "animwaittest": {
+    "sec": 1.1,
+    "at": "2026-11-20"
   }
 }
