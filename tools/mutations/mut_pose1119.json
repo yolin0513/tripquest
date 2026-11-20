@@ -250,5 +250,23 @@
     "find": "  el.style.zIndex = '1';\n",
     "replace": "",
     "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "不蓋字（Yolin 11-20 選甲）：照片頁「回任務清單」的字往上移到鬍鬍手底下",
+    "why": "（事前寫 2026-11-20 10:3x）js/views/people.js 那顆按鈕加行內樣式 align-items:flex-start、padding-top:2px：字從按鈕上緣下約 16px 移到約 4px，鬍鬍揮手的圖框伸進按鈕 14.4px，蓋到字。圖的位置（邊線差、邊線以下的深度、離上一塊）都不變——按鈕照樣 56px 高、圖照內距上緣定位——所以只有 placed() 裡新加的「不蓋到字」那一支擋得到。只紅 PS21；PS37 用同一顆按鈕，但只看虛線、圖伸過虛線與疊的順序，不受影響。",
+    "expect": ["PS21"],
+    "file": "js/views/people.js",
+    "find": "    const go = h('button', { class: 'btn btn-primary', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單');",
+    "replace": "    const go = h('button', { class: 'btn btn-primary', style: 'align-items:flex-start;padding-top:2px', onclick: () => navigate(`/trip/${tripId}`) }, '回任務清單');",
+    "cmd": "node scripts/posetest.mjs"
+  },
+  {
+    "name": "不蓋字（Yolin 11-20 選甲）：分帳空白頁「去旅程設定加旅伴」的字往上移到棉棉手底下",
+    "why": "（事前寫 2026-11-20 10:3x）js/views/expenses.js 那顆按鈕的行內樣式加 align-items:flex-start、padding-top:2px（margin-top 掛圖後照舊被拿掉）：字移到按鈕上緣下約 4px，棉棉揮手的圖框伸進按鈕 14.4px，蓋到字；圖的位置不變。只紅 PS16（還沒有旅伴那一頁只有 PS16 量）。",
+    "expect": ["PS16"],
+    "file": "js/views/expenses.js",
+    "find": "    const go = h('button', { class: 'btn btn-primary', style: 'margin-top:10px', onclick: () => navigate(`/trip/${tripId}/settings`) }, '去旅程設定加旅伴');",
+    "replace": "    const go = h('button', { class: 'btn btn-primary', style: 'margin-top:10px;align-items:flex-start;padding-top:2px', onclick: () => navigate(`/trip/${tripId}/settings`) }, '去旅程設定加旅伴');",
+    "cmd": "node scripts/posetest.mjs"
   }
 ]

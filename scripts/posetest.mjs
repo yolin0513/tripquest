@@ -24,12 +24,14 @@
 //     PS14 按 ✕ 關掉那一句、切到任務分頁再回主頁：下一站卡出現阿灰（v1.95.1 修的不一致——v1.95.0 這時一張都沒有）
 //     PS15 下午：沒有出發那一句，下一站卡有阿灰
 //   分帳（棉棉）
-//     PS16 沒有旅伴：「去旅程設定加旅伴」上棉棉揮手（hi）、跳上來
+//     PS16 沒有旅伴：「去旅程設定加旅伴」上棉棉揮手（hi）、跳上來；手伸進按鈕但不蓋到按鈕的字（2026-11-20 改：Yolin 選甲，見 placed 上面）
 //     PS17 有旅伴、還沒有花費：「＋ 記第一筆」上棉棉抱錢包（purse）、跳上來
 //     PS18 從那顆鈕記一筆、按儲存：總帳卡上的棉棉不再跳，只把硬幣丟進錢包（pk-still＋pk-coin-go；在動的只有硬幣）
 //     PS19 換顯示幣別（自己重畫）：棉棉不動
 //     PS20 切到主頁再回分帳（導覽進來）：照常跳上來
-//   PS21 照片頁還沒有照片：「回任務清單」上鬍鬍揮手（hello）、跳上來
+//   PS21 照片頁還沒有照片：「回任務清單」上鬍鬍揮手（hello）、跳上來；手伸進按鈕但不蓋到按鈕的字（同 PS16）
+//   用 placed() 的 15 條（PS02、PS07、PS10、PS11、PS14、PS15、PS16、PS17、PS21、PS29、PS31、PS32、PS33、PS35、PS36；2026-11-20 數的）都一起驗：
+//   邊線以下 ≤ 15.6px、不蓋到宿主裡的字
 //   行程分頁的頭像
 //     PS22 第一次畫：選中的「行程」前面是鷹、「回顧」的熊藏著；沒有冒出來的動畫；兩顆按鈕一樣高、至少 44px
 //     PS23 點「回顧」：熊出來、冒一下（seg-pop），鷹藏起來
@@ -195,6 +197,25 @@ const poseOn = (page, hostSel, text = null) => page.evaluate((hs, text, PARTS) =
   const vb = el.viewBox && el.viewBox.baseVal;
   const hop = el.querySelector('.pk-hop');
   const anims = el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running');
+  // 字（Yolin 2026-11-20 選甲：「吉祥物不准蓋到按鈕的字」）：宿主裡每一段字（不含圖自己）的外框，跟圖的外框交疊多高（textHit）。
+  // 字的外框用 Range 量，是字型的整個字身（比筆畫上下各寬一點）；圖的外框是整張圖框（含手下面留給深色白邊的透明區）——兩邊都往寬算，
+  // 寧可多擋。圖框外的白邊畫不出來（行內 svg 預設 overflow hidden）；哪天改成看得到，圖框各邊加寬 5 個畫布單位（白邊的半徑）。
+  // textN：量到幾段字（前置：0 段的話「沒蓋到」不證明什麼）；textTop：最上面那段字離宿主外框上緣幾 px；picBot：圖底離宿主外框上緣幾 px。
+  const pad = getComputedStyle(el).overflow === 'visible' && vb && vb.width ? 5 * (r.width / vb.width) : 0;
+  const tw = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.textContent.trim() && !el.contains(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+  let textN = 0, textTop = null, textHit = 0;
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+    const rg = document.createRange();
+    rg.selectNodeContents(n);
+    for (const q of rg.getClientRects()) {
+      if (!q.width || !q.height) continue;
+      textN++;
+      textTop = textTop == null ? q.top - b.top : Math.min(textTop, q.top - b.top);
+      const w = Math.min(q.right, r.right + pad) - Math.max(q.left, r.left - pad);
+      const hh = Math.min(q.bottom, r.bottom + pad) - Math.max(q.top, r.top - pad);
+      if (w > 0 && hh > 0) textHit = Math.max(textHit, hh);
+    }
+  }
   return {
     host: true, found: true, hostCls, kind: el.dataset.peek, pose: el.classList.contains('pose'),
     rimGap: Number.isFinite(sink) ? +(r.bottom - sink - b.top).toFixed(2) : null, sink, clear: +(r.top - above).toFixed(1), prev: prev ? prev.className || prev.tagName : '（父元素上緣）',
@@ -205,13 +226,20 @@ const poseOn = (page, hostSel, text = null) => page.evaluate((hs, text, PARTS) =
     hopRun: hop ? hop.getAnimations().length : 0,
     names: [...new Set(anims.map((a) => a.animationName || '?'))],
     hidden: el.getAttribute('aria-hidden') === 'true',
+    textN, textTop: textTop == null ? null : +textTop.toFixed(1), textHit: +textHit.toFixed(1), picBot: +(r.bottom + pad - b.top).toFixed(1),
   };
 }, hostSel, text, PARTS);
 const pb = (p) => !p.host ? '找不到宿主' : !p.found ? `宿主在、沒有圖（宿主留白 class ${p.hostCls}）`
   : `${p.kind}；宿主留白 ${p.hostCls}；邊線差 ${p.rimGap}、離上一塊（${p.prev}）${p.clear}、邊線以下 ${p.sink}px、在畫面裡 ${p.inView}；`
+    + `字 ${p.textN} 段、最上面離上緣 ${p.textTop}px、圖底離上緣 ${p.picBot}px、蓋到字 ${p.textHit}px；`
     + `cheer ${p.cheer}${p.soft ? '／soft' : ''}${p.still ? '／still' : ''}${p.coinGo ? '／coin-go' : ''}；零件 ${p.parts.join(' ') || '無'}；跳那層 ${p.hopRun} 段；在跑 ${p.names.join(' ') || '無'}`;
-// 幾何：邊線對在宿主上緣（差 ≤ 2.5：沒有邊框的宿主差 2）、不蓋到上一塊、邊線以下 ≤ 12.5px（0.6 × 20 個畫布單位）、整張在畫面裡
-const placed = (p) => p.found && p.pose && p.hostCls && p.hidden && p.rimGap != null && Math.abs(p.rimGap) <= 2.5 && p.clear >= -0.5 && p.sink <= 12.5 && p.inView;
+// 幾何：邊線對在宿主上緣（差 ≤ 2.5：沒有邊框的宿主差 2）、不蓋到上一塊、邊線以下 ≤ 15.6px、不蓋到宿主裡的字（前置：量到 ≥ 1 段字）、整張在畫面裡。
+//   邊線以下的上限（事後，2026-11-20；Yolin 11-20 對「邊線那題」選甲）：原本 12.5px（0.6 × 20.8 個畫布單位），鬍鬍揮手 hello、棉棉揮手 hi
+//   是 14.4px（PS21、PS16 會紅）。截圖實量兩張的和紙、深色都沒蓋到按鈕的字（STATUS 2026-11-20「09:5x ① 截圖場」），Yolin 選甲：
+//   上限放寬到 0.6 ×（20＋6）＝15.6px（合約 T2 前景墨最多到邊線以下 20 單位＋T9 給深色白邊留 6），圖不動；
+//   另外把「不准蓋到字」寫成檢查（textHit），以後哪張圖手伸太深碰到字會紅。這個上限是看過結果才訂的，不是事前寫的。
+const placed = (p) => p.found && p.pose && p.hostCls && p.hidden && p.rimGap != null && Math.abs(p.rimGap) <= 2.5 && p.clear >= -0.5 && p.sink <= 15.6
+  && p.textN > 0 && p.textHit === 0 && p.inView;
 // 這一張該有的零件（js/peeks.js 的 CHEER；pk-hop 每一張都有）
 const WANT = { hi: ['pk-wave', 'pk-wave-lines'], purse: ['pk-wave', 'pk-coin'], hello: ['pk-wave-r', 'pk-wave-lines'], perch: ['pk-flap'], board: ['pk-sway'],
   scout: ['pk-scan', 'pk-nod'], point: ['pk-wave'], star: ['pk-shine'], puzzle: [],
@@ -285,7 +313,7 @@ try {
     let L = ok ? await peeksIn(page) : [];
     yes(ok && P.found && P.kind === 'scout' && L.length === 1 && !await has(page, '.trip-home .countdown'),
       `PS01 旅程第 2 天的主頁：下一站卡上是阿灰拿望遠鏡、整頁只有這一張探頭圖（${pb(P)}；整頁 ${L.join('、') || '一張都沒有'}）`);
-    yes(placed(P), `PS02 下一站卡上的阿灰：邊線對在卡片上緣、不蓋到上一塊、邊線以下 ≤ 12.5px、整張在畫面裡（${pb(P)}）`);
+    yes(placed(P), `PS02 下一站卡上的阿灰：邊線對在卡片上緣、不蓋到上一塊、邊線以下 ≤ 15.6px、不蓋到卡片裡的字、整張在畫面裡（${pb(P)}）`);
     yes(hopped(P, 'scout', true), `PS03 下一站卡上的阿灰：導覽進來慢慢探上來（soft），零件有轉頭（pk-scan）與擺頭（pk-nod）（${pb(P)}）`);
 
     // ---- PS04～PS05 天氣讓位 ----
@@ -382,15 +410,17 @@ try {
     ok = await openTrip(page, '沒有旅伴', false);
     ok = ok && await tab(page, '分帳', '.page .empty .btn', '加旅伴');
     P = ok ? await poseOn(page, '.page .empty .btn', '加旅伴') : NO;
+    // 手扶在按鈕上緣、伸進按鈕 14.4px：深度上限 15.6px、不准蓋到按鈕的字（事後，Yolin 2026-11-20 對邊線那題選甲；說明在 placed 上面）
     yes(ok && P.kind === 'hi' && placed(P) && hopped(P, 'hi'),
-      `PS16 分帳、還沒有旅伴：「去旅程設定加旅伴」上棉棉揮手、跳上來（${pb(P)}）`);
+      `PS16 分帳、還沒有旅伴：「去旅程設定加旅伴」上棉棉揮手、跳上來，手伸進按鈕但不蓋到按鈕的字（${pb(P)}）`);
 
     // ---- PS21 照片頁還沒有照片（二日遊，還沒拍任何一張）----
     ok = await openTrip(page, '二日遊');
     ok = ok && await tab(page, '照片', '.page .empty .btn', '回任務清單');
     P = ok ? await poseOn(page, '.page .empty .btn', '回任務清單') : NO;
+    // 同 PS16：手伸進按鈕 14.4px，深度上限 15.6px、不准蓋到按鈕的字（事後，Yolin 2026-11-20 選甲）
     yes(ok && P.kind === 'hello' && placed(P) && hopped(P, 'hello'),
-      `PS21 照片頁還沒有照片：「回任務清單」上鬍鬍揮手、跳上來（${pb(P)}）`);
+      `PS21 照片頁還沒有照片：「回任務清單」上鬍鬍揮手、跳上來，手伸進按鈕但不蓋到按鈕的字（${pb(P)}）`);
 
     // ---- PS37 和紙主題（這個瀏覽情境的預設）：圖疊在按鈕內圈的白色虛線上面 ----
     // 虛線是按鈕的 ::after（絕對定位），跟圖是兄弟：z-index 大的在上，一樣大就照 DOM 順序（::after 在最後、蓋在圖上）。
