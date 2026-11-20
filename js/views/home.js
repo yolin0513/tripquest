@@ -29,7 +29,9 @@ export default async function home({ fresh = false, drawPage, setTop }) {
   const justInstalledEmpty = std && trips.length === 0;
   // 新姿勢（Yolin 2026-11-18 晚上）：還沒有旅程時，棉棉不再站在「還沒有旅程」上面，改從這一頁的主要按鈕上緣探頭揮手
   // （平常是「＋ 建立新旅程」；剛裝好那種情境是「貼上邀請連結」）。圖載不到：照舊站在字上面。
-  const pk = trips.length ? null : await import('../peeks.js').catch(() => null);
+  // v1.100.0 第 9 格（Yolin 2026-11-19 13:3x「全照建議」）：已經有旅程時，鬍鬍從行李箱探頭、立在「＋ 建立新旅程」上緣（置中），
+  // 導覽進來（fresh）跳一次——所以有沒有旅程都要載 peeks.js。圖載不到：有旅程時照舊沒有吉祥物。
+  const pk = await import('../peeks.js').catch(() => null);
 
   const page = h('div', { class: 'page' },
     h('div', { class: 'hero' },
@@ -78,7 +80,7 @@ export default async function home({ fresh = false, drawPage, setTop }) {
   if (pk) {
     const host = justInstalledEmpty ? page.querySelector('.join-hint .btn') : page.querySelector('.home-new');
     if (host) {
-      const el = pk.pose('hi', 'r');
+      const el = trips.length ? pk.pose('suitcase', 'c') : pk.pose('hi', 'r');
       mountPose(host, el);
       if (fresh) pk.cheer(el);
     }
