@@ -526,7 +526,7 @@ const JOLT_SEL = 'g.mc-fig';
 //   不再對整頁動畫 finish()。起因（.logs/v1100/diagP9.mjs 00:33 那一場）：finish() 把三段動畫從半途跳到最後，之後截圖跟畫面對不上——
 //   剛 finish() 完量的 10 次，臉頰位置跟穩定的那次差 0.33～2.28 畫素（和紙一次紅），自己播完才量的那 1 次只差 0.22。
 //   等不到＝這一次沒量到：回 off「沒量到：…」（獨立字樣，不跟「量到方框」「沒靜止」混在一起），主斷言跟著紅；結尾的說明行另外數。
-//   waitMs 只給「等不到的對照組」用（圖一出來就量、最多等 1ms，必須判成沒量到）。
+//   waitMs 只給「等不到的對照組」用（圖上自己掛一段 60 秒的動畫、最多等 50ms，必須判成沒量到；見 scoutHead）。
 //   阿灰的動畫（css/style.css .pk-cheer .pk-hop 0.6 秒、.pk-scan 延遲 0.55＋1.6 秒）都是有限次的；建立行程「產生中…」那段無限次的（.pk-busy）不在這條路上。〕
 const P9_WAIT_MS = 6000;
 async function headCorners(page, { jolt = '', waitMs = P9_WAIT_MS } = {}) {
@@ -615,14 +615,12 @@ async function headCorners(page, { jolt = '', waitMs = P9_WAIT_MS } = {}) {
   }
   const cheekAt = gn ? `${(gx / gn / kx + r.vb[0]).toFixed(2)},${(gy / gn / ky + r.vb[1]).toFixed(2)}（${gn} 點）` : '沒有臉頰色的點';
   return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)([M[4]]), midN,
-    still: true, tries: tries + 1, pos, wait: w, cheekAt };
+    still: true, tries: tries + 1, pos, wait: w, cheekAt, cheekPx: gn ? [gx / gn, gy / gn] : null };
 }
 async function scoutHead(page, tag) {
   let go = false, now = null, how = '沒到建立行程頁', old = null, jolt = null, joltIn = null, joltPaint = null, early = null;
   try {
     go = (await toHome(page)) && (await tap(page, '.home-new', '建立新旅程')) && (await soft(page.waitForSelector(SCOUT_SEL, { timeout: 15000 })));
-    // 等不到的對照組（2026-11-21）：圖一出來就量、最多只等 1ms——阿灰的動畫要 2 秒多才播完，必須判成「沒量到」、不能量下去
-    if (go) early = await headCorners(page, { waitMs: 1 });
     if (go) now = await headCorners(page);
     if (go) jolt = await headCorners(page, { jolt: 'svg' });
     if (go) joltIn = await headCorners(page, { jolt: 'inner' });
@@ -641,6 +639,14 @@ async function scoutHead(page, tag) {
         return el.querySelector(`clipPath[id="${p}-i3"]`) && fig.firstElementChild.getAttribute('transform') === 'rotate(3 100 136)' ? '塞回舊寫法' : '';
       }, SCOUT_SEL, OLD_HEAD('@@P@@'));
       if (how) old = await headCorners(page);
+    }
+    // 等不到的對照組（2026-11-21；01:1x 改成自己造情境，advisor 提醒）：在 .mc-fig 上掛一段 60 秒、不改畫面的動畫（透明度 1 → 1），
+    //   最多只等 50ms，必須判成「沒量到」、不能量下去；量完照 id 取消。不靠阿灰自己的動畫——突變把它拿掉（cheer 不跑、減少動態）時，
+    //   這條才不會跟著紅、混進別條的紅（同 JOLT_SEL 挪 .mc-fig 不挪 .pk-hop 的理由），也不必趕在動畫播完之前跑到。放在最後，碰不到主斷言。
+    if (go) {
+      const made = await page.evaluate((s, j) => { const h = document.querySelector(s)?.querySelector(j); if (!h) return false; h.animate([{ opacity: 1 }, { opacity: 1 }], { duration: 60000, id: 'p9-early-probe' }); return true; }, SCOUT_SEL, JOLT_SEL);
+      if (made) early = await headCorners(page, { waitMs: 50 });
+      await page.evaluate(() => document.getAnimations().filter((a) => a.id === 'p9-early-probe').forEach((a) => a.cancel()));
     }
   } catch (e) {
     console.log(`  ${tag} P9 例外：${String(e && e.message || e).split('\n')[0]}`);
@@ -669,11 +675,14 @@ async function scoutHead(page, tag) {
   // 2026-11-21 加的兩條（headCorners 開頭的等待）：
   //   「等自己播完」是「沒量到」的標籤：等不到時主斷言也紅（off＝沒量到），這條讓突變執行器看得到「多紅的是沒量到」，不會被算成抓到。
   //   它跟主斷言的 !now.off 是同一件事的兩面，沒有只紅它的突變（mut_wait1121 的 W6 讓 P9 七條一起紅）——照實寫，不硬湊。
+  // 臉頰重心差（說明用，不是這條的判準）：主斷言那次跟舊寫法對照組那次，同一張圖、同一個裁切，單位是截圖畫素
+  const dCheek = now && old && now.cheekPx && old.cheekPx ? now.cheekPx.map((v, i) => Math.abs(v - old.cheekPx[i]).toFixed(2)) : null;
   yes(!!now && waitedOk(now.wait, 'finished'),
-    `${tag} P9 量之前等阿灰的每一段動畫自己播完：不再 finish()、最多等 ${P9_WAIT_MS}ms；這條紅表示這一次沒量到，不是方框（${now ? waitBrief(now.wait) : '沒量到'}）`);
+    `${tag} P9 量之前等阿灰的每一段動畫自己播完：不再 finish()、最多等 ${P9_WAIT_MS}ms；這條紅表示這一次沒量到，不是方框（${now ? waitBrief(now.wait) : '沒量到'}；`
+    + `臉頰重心跟舊寫法對照組差 ${dCheek ? `x ${dCheek[0]}、y ${dCheek[1]} 畫素` : '算不出來'}）`);
   const ew = early ? early.wait : null;
   yes(!!early && String(early.off || '').startsWith('沒量到：') && !!ew && ew.found === true && ew.timeout === true && ew.before > 0,
-    `${tag} P9 等不到的對照組：圖一出來就量、最多只等 1ms，必須判成「沒量到」、不能量下去（前置：等之前還有段數沒播完，> 0 才算情境成立）（${early ? say(early) : '沒量到'}）`);
+    `${tag} P9 等不到的對照組：圖上掛一段 60 秒不改畫面的動畫、最多只等 50ms，必須判成「沒量到」、不能量下去（前置：等之前還有段數沒播完，> 0 才算情境成立）（${early ? say(early) : '沒造成情境（掛不上動畫或沒到建立行程頁）'}）`);
 }
 
 async function washiRound() {
