@@ -199,5 +199,23 @@
     "find": "P9_CHEEK = [88, 124],",
     "replace": "P9_CHEEK = [40, 60],",
     "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "P9 靜止檢查：不比裡面那幾層的框",
+    "why": "（事前寫 2026-11-20 14:5x，跑之前；會開瀏覽器）headCorners 的「裡面那幾層截圖前後一樣」恆成立：只挪 .mc-fig 的對照組外框不動、兩張截圖都挪過所以一樣，判成靜止 → 只紅兩個主題的「只挪裡面那層的對照組」。挪整張那個對照組靠外框擋、只改畫面那個靠兩張截圖擋，照樣綠；P9 本體與舊寫法對照組照樣綠。",
+    "expect": ["［和紙］ P9 只挪裡面那層的對照組", "［深色］ P9 只挪裡面那層的對照組"],
+    "file": "scripts/peektest.mjs",
+    "find": "    const inner = r.lays === r2.lays;",
+    "replace": "    const inner = true;",
+    "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "P9 靜止檢查：不比兩張截圖",
+    "why": "（事前寫 2026-11-20 14:5x，跑之前；會開瀏覽器）headCorners 判靜止時拿掉「兩張截圖逐畫素相同」：只改透明度的對照組框都不動、沒有動畫，判成靜止 → 只紅兩個主題的「只改畫面的對照組」。另外兩個對照組靠外框、裡面那幾層擋，照樣綠；P9 本體與舊寫法對照組照樣綠。",
+    "expect": ["［和紙］ P9 只改畫面的對照組", "［深色］ P9 只改畫面的對照組"],
+    "file": "scripts/peektest.mjs",
+    "find": "    if (outer && inner && r2.run === 0 && diff === 0) break;",
+    "replace": "    if (outer && inner && r2.run === 0) break;",
+    "cmd": "node scripts/peektest.mjs"
   }
 ]

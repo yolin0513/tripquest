@@ -496,42 +496,75 @@ const P9_PTS = [[60, 55], [57, 59]], P9_CHEEK = [88, 124], P9_CHEEK_RGB = [216, 
 //   當時判斷是圖還沒靜止就截了（原本只讀一次框、截圖後沒再核）。〔11:52 更正：這個判斷被推翻——affected-rest-1150 又紅一次，
 //   框一模一樣、第 1 次量就靜止；真正的原因是臉頰太小、九點太脆，改法見下面臉頰前置那段。靜止檢查留著：它擋的是另一種錯（量的位置跑掉）。〕
 //   jolt：靜止檢查的對照組——每次讀完框就把圖挪 2px（CSS translate，每次多挪 2px），必須判成沒靜止；量完拿掉。
-async function headCorners(page, { jolt = false } = {}) {
-  let r = null, r2 = null, shot = null, tries = 0;
+// 〔14:5x 補兩道（事後，2026-11-20；寫之前 date＝14:48、14:50）：④ 第 1 段 prefs 那條等價突變下，和紙 P9 本體臉頰點量到毛色 197,187,180，
+//   外框一樣、第 1 次就靜止。探查 .logs/v1100/p9live-1449.log 實測：外框不跟著裡面那幾層動（.pk-hop 停在 0 或 −6，外框都是 32.00,431.47）；
+//   正常的路上量的那一刻每一段動畫都 finished、每一層都在原位、阿灰只插進頁面一次（4/4）——那次為什麼量到毛色，沒有重現出來，根因未定。
+//   所以補的兩道是把看不到的地方補上，不是已證明的根因：
+//   ① 裡面那幾層（邊線上下兩層、帶 class 的每一層 g：.mc-fig、cheer() 包的 .pk-* …）的框，截圖前後要一樣；
+//   ② 連拍兩張，裁出那張圖要逐畫素相同（截到還沒更新的畫面也擋得到）。
+//   各配一個只打到自己的對照組：inner＝讀完框把 .mc-fig 挪 2n px（外框不動）；paint＝第一張之後把 .mc-fig 的透明度調一點（框都不動、只有畫面變）。
+//   挪 .mc-fig 不挪 .pk-hop：.mc-fig 是 peek() 畫的、cheer() 沒動也在——突變把跳上來拿掉時，對照組不會跟著紅、混進別條的紅。
+//   失敗時印最後一次是哪一道沒過；通過時也印層數與 .pk-hop 的 transform，下次再紅分得出身體在不在原位。〕
+const LAYERS = ':scope > g, g[class]';
+const JOLT_SEL = 'g.mc-fig';
+async function headCorners(page, { jolt = '' } = {}) {
+  let r = null, r2 = null, shot = null, shot2 = null, tries = 0, why = '';
+  const sharp = (await import('sharp')).default;
+  // 在頁面裡讀：外框、每一層的框、.pk-hop 的 transform、還在動（或還沒開始）的動畫數（page.evaluate 直接傳這個函式，不經 eval）
+  const read = (s, L) => {
+    const el = document.querySelector(s);
+    if (!el) return null;
+    const b = el.getBoundingClientRect(), hop = el.querySelector('.pk-hop');
+    const lays = [...el.querySelectorAll(L)].map((g) => { const q = g.getBoundingClientRect(); return `${g.getAttribute('class')}:${q.left.toFixed(2)},${q.top.toFixed(2)},${q.width.toFixed(2)},${q.height.toFixed(2)}`; }).join('|');
+    return { x: b.left, y: b.top, w: b.width, h: b.height, lays, nLays: el.querySelectorAll(L).length, hopTf: hop ? getComputedStyle(hop).transform : '沒有這一層',
+      run: el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running' || a.pending).length,
+      vw: innerWidth, vh: innerHeight, vb: el.getAttribute('viewBox').split(/\s+/).map(Number) };
+  };
+  const crop = async (png, rr) => {
+    const d = (await sharp(png).metadata()).width / rr.vw;
+    const box = { left: Math.round(rr.x * d), top: Math.round(rr.y * d), width: Math.round(rr.w * d), height: Math.round(rr.h * d) };
+    if (box.left < 0 || box.top < 0 || rr.x + rr.w > rr.vw || rr.y + rr.h > rr.vh) return null;
+    return sharp(png).extract(box).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  };
   for (; tries < 3; tries++) {
     if (tries) await new Promise((res) => setTimeout(res, 400));
-    r = await page.evaluate(async (s) => {
+    const found = await page.evaluate(async (s) => {
       const el = document.querySelector(s);
-      if (!el) return null;
+      if (!el) return false;
       el.parentElement.scrollIntoView({ block: 'center' });
       document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* 一直重複的動畫不能 finish：照跑 */ } });
       await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-      const b = el.getBoundingClientRect();
-      return { x: b.left, y: b.top, w: b.width, h: b.height, vw: innerWidth, vh: innerHeight, vb: el.getAttribute('viewBox').split(/\s+/).map(Number) };
+      return true;
     }, SCOUT_SEL);
+    if (!found) return null;
+    r = await page.evaluate(read, SCOUT_SEL, LAYERS);
     if (!r) return null;
-    if (jolt) await page.evaluate((s, n) => { document.querySelector(s).style.translate = `${2 * n}px 0`; }, SCOUT_SEL, tries + 1);
+    if (jolt === 'svg') await page.evaluate((s, n) => { document.querySelector(s).style.translate = `${2 * n}px 0`; }, SCOUT_SEL, tries + 1);
+    if (jolt === 'inner') await page.evaluate((s, j, n) => { const h = document.querySelector(s).querySelector(j); if (h) h.style.translate = `${2 * n}px 0`; }, SCOUT_SEL, JOLT_SEL, tries + 1);
     // 截整個畫面、再照「畫面座標 × 畫素比」裁：page.screenshot({clip}) 的座標不是照捲動後的畫面算的
     // （11-18 第一次跑 A 場，兩個主題、修好與對照組量到的四個點完全一樣——裁到別處；19:5x 拍截圖那一場也踩過同一個坑）
     shot = await page.screenshot();
-    r2 = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      if (!el) return null;
-      const b = el.getBoundingClientRect();
-      return { x: b.left, y: b.top, w: b.width, h: b.height, run: el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length };
-    }, SCOUT_SEL);
-    if (r2 && r2.run === 0 && ['x', 'y', 'w', 'h'].every((k) => Math.abs(r[k] - r2[k]) < 0.01)) break;
+    if (jolt === 'paint') await page.evaluate((s, j, n) => { const h = document.querySelector(s).querySelector(j); if (h) h.style.opacity = String(1 - 0.1 * n); }, SCOUT_SEL, JOLT_SEL, tries + 1);
+    r2 = await page.evaluate(read, SCOUT_SEL, LAYERS);
+    shot2 = await page.screenshot();
+    if (!r2) { why = '第二次讀框找不到圖'; continue; }
+    const c1 = await crop(shot, r), c2 = await crop(shot2, r);
+    if (!c1 || !c2) break;   // 圖不整張在畫面裡：下面照舊回「圖不整張在畫面裡」，不混進「沒靜止」
+    let diff = -1;
+    if (c1.data.length === c2.data.length) { diff = 0; for (let i = 0; i < c1.data.length; i += 3) if (c1.data[i] !== c2.data[i] || c1.data[i + 1] !== c2.data[i + 1] || c1.data[i + 2] !== c2.data[i + 2]) diff++; }
+    const outer = ['x', 'y', 'w', 'h'].every((k) => Math.abs(r[k] - r2[k]) < 0.01);
+    const inner = r.lays === r2.lays;
+    why = `外框${outer ? '一樣' : `變了（${r.x.toFixed(2)},${r.y.toFixed(2)} → ${r2.x.toFixed(2)},${r2.y.toFixed(2)}）`}；`
+      + `裡面那幾層（${r.nLays} 層）${inner ? '一樣' : '變了'}；還在動的動畫 ${r2.run} 個；`
+      + `兩張截圖${diff === 0 ? '一樣' : diff < 0 ? '裁不出來' : `不一樣（差 ${diff} 個畫素）`}`;
+    if (outer && inner && r2.run === 0 && diff === 0) break;
   }
-  if (jolt) await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.style.translate = ''; }, SCOUT_SEL);
-  const pos = `框 ${r.x.toFixed(2)},${r.y.toFixed(2)} ${r.w.toFixed(1)}×${r.h.toFixed(1)}`;
-  if (tries === 3) {
-    return { still: false, off: `沒靜止：試 3 次，量框前後不一樣或還有動畫（前 ${pos}；後 ${r2 ? `${r2.x.toFixed(2)},${r2.y.toFixed(2)}、還在動的動畫 ${r2.run} 個` : '找不到圖'}）` };
-  }
-  const sharp = (await import('sharp')).default;
-  const d = (await sharp(shot).metadata()).width / r.vw;
-  const box = { left: Math.round(r.x * d), top: Math.round(r.y * d), width: Math.round(r.w * d), height: Math.round(r.h * d) };
-  if (box.left < 0 || box.top < 0 || r.x + r.w > r.vw || r.y + r.h > r.vh) return { off: `圖不整張在畫面裡（${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.w)}×${Math.round(r.h)}，畫面 ${r.vw}×${r.vh}）` };
-  const { data, info } = await sharp(shot).extract(box).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (jolt) await page.evaluate((s, j) => { const el = document.querySelector(s); if (!el) return; el.style.translate = ''; const h = el.querySelector(j); if (h) { h.style.translate = ''; h.style.opacity = ''; } }, SCOUT_SEL, JOLT_SEL);
+  const pos = `框 ${r.x.toFixed(2)},${r.y.toFixed(2)} ${r.w.toFixed(1)}×${r.h.toFixed(1)}、裡面 ${r.nLays} 層、.pk-hop ${r.hopTf}`;
+  const cut = await crop(shot, r);
+  if (!cut) return { off: `圖不整張在畫面裡（${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.w)}×${Math.round(r.h)}，畫面 ${r.vw}×${r.vh}）` };
+  if (tries === 3) return { still: false, off: `沒靜止：試 3 次，最後一次 ${why}（${pos}）` };
+  const { data, info } = cut;
   const kx = info.width / r.vb[2], ky = info.height / r.vb[3];   // 1 畫布單位幾個截圖畫素
   const nine = (ax, ay) => {
     const cx = Math.round((ax - r.vb[0]) * kx), cy = Math.round((ay - r.vb[1]) * ky), out = [];
@@ -549,11 +582,13 @@ async function headCorners(page, { jolt = false } = {}) {
     still: true, tries: tries + 1, pos };
 }
 async function scoutHead(page, tag) {
-  let go = false, now = null, how = '沒到建立行程頁', old = null, jolt = null;
+  let go = false, now = null, how = '沒到建立行程頁', old = null, jolt = null, joltIn = null, joltPaint = null;
   try {
     go = (await toHome(page)) && (await tap(page, '.home-new', '建立新旅程')) && (await soft(page.waitForSelector(SCOUT_SEL, { timeout: 15000 })));
     if (go) now = await headCorners(page);
-    if (go) jolt = await headCorners(page, { jolt: true });
+    if (go) jolt = await headCorners(page, { jolt: 'svg' });
+    if (go) joltIn = await headCorners(page, { jolt: 'inner' });
+    if (go) joltPaint = await headCorners(page, { jolt: 'paint' });
     if (now) {
       how = await page.evaluate((s, SRC) => {
         const el = document.querySelector(s);
@@ -576,8 +611,16 @@ async function scoutHead(page, tag) {
   const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}（九點裡 ${c.midN} 點是臉頰色）；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素；${c.pos}，第 ${c.tries} 次量才靜止`);
   yes(!!now && !now.off && now.scaleOk && now.mid && !now.corner,
     `${tag} P9 建立行程頁的阿灰望遠鏡：頭上沒有灰色方框，左上角兩個取樣點不是深灰帶（前置：臉頰對得上）（到了建立行程頁 ${go}；${say(now)}）`);
-  yes(!!jolt && jolt.still === false && String(jolt.off).startsWith('沒靜止：'),
+  // 三個對照組各只打到自己那一道（§5.3）：挪整張→外框變了；只挪裡面→外框一樣、裡面變了、兩張截圖一樣；只改畫面→框都一樣、兩張截圖不一樣
+  const offOf = (c) => (c && c.still === false ? String(c.off) : '');
+  yes(offOf(jolt).startsWith('沒靜止：') && offOf(jolt).includes('外框變了'),
     `${tag} P9 靜止檢查的對照組：每次讀完框就把圖挪 2px，必須判成沒靜止（${say(jolt)}）`);
+  const oi = offOf(joltIn);
+  yes(oi.startsWith('沒靜止：') && oi.includes('外框一樣') && /裡面那幾層（\d+ 層）變了/.test(oi) && oi.includes('兩張截圖一樣'),
+    `${tag} P9 只挪裡面那層的對照組：每次讀完框就把 .mc-fig 挪 2px、外框不動，必須判成沒靜止、而且是「裡面那幾層變了」那一道擋的（${say(joltIn)}）`);
+  const op = offOf(joltPaint);
+  yes(op.startsWith('沒靜止：') && op.includes('外框一樣') && /裡面那幾層（\d+ 層）一樣/.test(op) && op.includes('兩張截圖不一樣'),
+    `${tag} P9 只改畫面的對照組：第一張截圖之後把 .mc-fig 的透明度調一點、框都不動，必須判成沒靜止、而且是「兩張截圖不一樣」那一道擋的（${say(joltPaint)}）`);
   yes(!!old && !old.off && old.scaleOk && old.mid && old.corner,
     `${tag} P9 對照組：同一頁塞回 11-18 以前的 clipPath 寫法，量得到方框（取樣點是深灰帶）（${how || '塞不回去'}；${say(old)}）`);
 }
