@@ -28,7 +28,7 @@
 //   P7 主頁的下一站卡沒有「拍照解任務」（v1.84.0；原本驗那顆鈕的相機圖示，鈕拿掉後改驗它不在）
 //   P8 每一張探頭圖：aria-hidden、沒有 <text>／<title>、id 整頁唯一、引用都指到自己那張；同一頁放好幾張時 id 也不撞
 //   P9 建立行程頁（js/views/create.js）「產生拍照任務」上緣的阿灰望遠鏡：頭上沒有灰色方框（2026-11-18；2026-11-20 換圖後重寫；
-//      和紙、深色各一次；附同一頁的對照組。說明見 headCorners 上面）
+//      和紙、深色各一次；附同一頁的對照組；2026-11-20 加「截圖前後框一樣才算數」的靜止檢查與它的對照組。說明見 headCorners 上面）
 //   主題：和紙不套白邊、動作線看得到；深色一輪白邊真的有套上、動作線不畫（跟 glyphs.js 的吉祥物同一條規矩）、
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
 //         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、主頁一樣沒有拍照鈕
@@ -489,20 +489,42 @@ const SCOUT_SEL = '.pose-host > svg.gl-peek[data-peek="scout"]';
 const OLD_HEAD = (p) => `<g transform="rotate(3 100 136)"><defs><clipPath id="${p}-i3"><path d="M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z"></path></clipPath></defs>`
   + `<g clip-path="url(#${p}-i3)"><path d="M40 84 Q100 64 160 84 V40 H40 Z" fill="#9a948f"></path><ellipse cx="100" cy="138" rx="30" ry="17" fill="#fffdf9"></ellipse></g></g>`;
 const P9_PTS = [[60, 55], [57, 59]], P9_CHEEK = [88, 124], P9_CHEEK_RGB = [216, 164, 152];
-async function headCorners(page) {
-  const r = await page.evaluate(async (s) => {
-    const el = document.querySelector(s);
-    if (!el) return null;
-    el.parentElement.scrollIntoView({ block: 'center' });
-    document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* 一直重複的動畫不能 finish：照跑 */ } });
-    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-    const b = el.getBoundingClientRect();
-    return { x: b.left, y: b.top, w: b.width, h: b.height, vw: innerWidth, vh: innerHeight, vb: el.getAttribute('viewBox').split(/\s+/).map(Number) };
-  }, SCOUT_SEL);
-  if (!r) return null;
-  // 截整個畫面、再照「畫面座標 × 畫素比」裁：page.screenshot({clip}) 的座標不是照捲動後的畫面算的
-  // （11-18 第一次跑 A 場，兩個主題、修好與對照組量到的四個點完全一樣——裁到別處；19:5x 拍截圖那一場也踩過同一個坑）
-  const shot = await page.screenshot();
+// 靜止檢查（事後，2026-11-20；寫完才 date＝11:14，照實記）：讀框 → 截圖 → 再讀框，兩次一樣、圖底下沒有在跑的動畫，這張截圖才算數；
+//   不一樣就等 0.4 秒重試，最多 3 次，到上限回「沒靜止：…」（獨立字樣，不跟「量到方框」混在一起）。
+//   起因：run2b-peek-1107 深色那次臉頰九宮格有一格掉出臉頰（中心 216,165,155，其他 10 次都是 217,164,153 或 216,164,152）——
+//   第一次量在圖還沒靜止時就截了；原本只讀一次框、截圖後沒再核。
+//   jolt：靜止檢查的對照組——每次讀完框就把圖挪 2px（CSS translate，每次多挪 2px），必須判成沒靜止；量完拿掉。
+async function headCorners(page, { jolt = false } = {}) {
+  let r = null, r2 = null, shot = null, tries = 0;
+  for (; tries < 3; tries++) {
+    if (tries) await new Promise((res) => setTimeout(res, 400));
+    r = await page.evaluate(async (s) => {
+      const el = document.querySelector(s);
+      if (!el) return null;
+      el.parentElement.scrollIntoView({ block: 'center' });
+      document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* 一直重複的動畫不能 finish：照跑 */ } });
+      await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      const b = el.getBoundingClientRect();
+      return { x: b.left, y: b.top, w: b.width, h: b.height, vw: innerWidth, vh: innerHeight, vb: el.getAttribute('viewBox').split(/\s+/).map(Number) };
+    }, SCOUT_SEL);
+    if (!r) return null;
+    if (jolt) await page.evaluate((s, n) => { document.querySelector(s).style.translate = `${2 * n}px 0`; }, SCOUT_SEL, tries + 1);
+    // 截整個畫面、再照「畫面座標 × 畫素比」裁：page.screenshot({clip}) 的座標不是照捲動後的畫面算的
+    // （11-18 第一次跑 A 場，兩個主題、修好與對照組量到的四個點完全一樣——裁到別處；19:5x 拍截圖那一場也踩過同一個坑）
+    shot = await page.screenshot();
+    r2 = await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { x: b.left, y: b.top, w: b.width, h: b.height, run: el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length };
+    }, SCOUT_SEL);
+    if (r2 && r2.run === 0 && ['x', 'y', 'w', 'h'].every((k) => Math.abs(r[k] - r2[k]) < 0.01)) break;
+  }
+  if (jolt) await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.style.translate = ''; }, SCOUT_SEL);
+  const pos = `框 ${r.x.toFixed(2)},${r.y.toFixed(2)} ${r.w.toFixed(1)}×${r.h.toFixed(1)}`;
+  if (tries === 3) {
+    return { still: false, off: `沒靜止：試 3 次，量框前後不一樣或還有動畫（前 ${pos}；後 ${r2 ? `${r2.x.toFixed(2)},${r2.y.toFixed(2)}、還在動的動畫 ${r2.run} 個` : '找不到圖'}）` };
+  }
   const sharp = (await import('sharp')).default;
   const d = (await sharp(shot).metadata()).width / r.vw;
   const box = { left: Math.round(r.x * d), top: Math.round(r.y * d), width: Math.round(r.w * d), height: Math.round(r.h * d) };
@@ -517,13 +539,15 @@ async function headCorners(page) {
   const near = (t) => (pts) => pts.every((c) => Math.abs(c[0] - t[0]) + Math.abs(c[1] - t[1]) + Math.abs(c[2] - t[2]) < 30);
   const isBand = near([154, 148, 143]);   // #9a948f
   const [A, B] = P9_PTS.map(([ax, ay]) => nine(ax, ay)), M = nine(...P9_CHEEK);
-  return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)(M) };
+  return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)(M),
+    still: true, tries: tries + 1, pos };
 }
 async function scoutHead(page, tag) {
-  let go = false, now = null, how = '沒到建立行程頁', old = null;
+  let go = false, now = null, how = '沒到建立行程頁', old = null, jolt = null;
   try {
     go = (await toHome(page)) && (await tap(page, '.home-new', '建立新旅程')) && (await soft(page.waitForSelector(SCOUT_SEL, { timeout: 15000 })));
     if (go) now = await headCorners(page);
+    if (go) jolt = await headCorners(page, { jolt: true });
     if (now) {
       how = await page.evaluate((s, SRC) => {
         const el = document.querySelector(s);
@@ -542,9 +566,12 @@ async function scoutHead(page, tag) {
   } catch (e) {
     console.log(`  ${tag} P9 例外：${String(e && e.message || e).split('\n')[0]}`);
   }
-  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素`);
+  // 框的座標與第幾次量才靜止：事後（2026-11-20）加印，紅的時候分得出是不是量的位置跑掉
+  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素；${c.pos}，第 ${c.tries} 次量才靜止`);
   yes(!!now && !now.off && now.scaleOk && now.mid && !now.corner,
     `${tag} P9 建立行程頁的阿灰望遠鏡：頭上沒有灰色方框，左上角兩個取樣點不是深灰帶（前置：臉頰對得上）（到了建立行程頁 ${go}；${say(now)}）`);
+  yes(!!jolt && jolt.still === false && String(jolt.off).startsWith('沒靜止：'),
+    `${tag} P9 靜止檢查的對照組：每次讀完框就把圖挪 2px，必須判成沒靜止（${say(jolt)}）`);
   yes(!!old && !old.off && old.scaleOk && old.mid && old.corner,
     `${tag} P9 對照組：同一頁塞回 11-18 以前的 clipPath 寫法，量得到方框（取樣點是深灰帶）（${how || '塞不回去'}；${say(old)}）`);
 }
