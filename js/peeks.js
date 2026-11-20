@@ -136,6 +136,11 @@ const POSE_MID = Object.freeze({ hello: 100, point: 100 });
 export function pose(kind, side = 'r') {
   const el = peek(kind, POSE_K);
   el.classList.add('pose', `pose-${side}`);
+  // 疊高一層（2026-11-20 截圖放大看到）：和紙主題的按鈕有一圈白色虛線（css/style.css 的 html[data-theme="washi"] .btn::after，
+  // 絕對定位、inset 4px），它在 DOM 順序上排在這張圖後面，兩邊 z-index 都是 auto 就照順序畫——虛線蓋在扣住按鈕上緣的手上面。
+  // 手本來就該在按鈕前面。只有 pose() 造的圖會掛到按鈕上（peek() 的探頭圖掛在卡片、照片上，沒有虛線），所以寫在這裡；
+  // 頂列、分頁列是 20，各頁黏頂的標題 2～5，這張圖照樣在它們底下。
+  el.style.zIndex = '1';
   const mid = POSE_MID[kind];
   if (side === 'c' && mid != null) {
     const [x, , w] = PEEK[kind].vb;
