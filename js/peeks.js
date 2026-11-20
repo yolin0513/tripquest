@@ -131,7 +131,11 @@ export const POSE_K = 0.6;
 //   證明不了「對準」。Dispatch 2026-11-19 選甲：維持照圖框置中（v1.96.0 之前的樣子）。要登記牠，先找到兩個主題一致的量法。
 //   v1.100.0（2026-11-20）換新圖：歪頭改成往右上、身體不再整個轉、左翅膀往外伸把圖框撐寬——照圖框置中時白球中點（畫布 x 109.75）
 //   在圖框中線（96.5）右邊 13.25 單位（×0.6≈7.9px；舊圖只偏 0.81）。照舊不登記（上面那個量法問題沒解），偏右這件列給 Yolin。
-const POSE_MID = Object.freeze({ hello: 100, point: 100 });
+// 2026-11-20 13:47 重訂（看過 ③ 的結果才訂＝事後）：v1.99.0／v1.100.0 換圖後，鬍鬍（hello）、阿灰（point）登記的都還是頭的中線 100，
+//   tabicontest 在瀏覽器量剪影的鏡射軸（TI13／TI16 的定義）：身體在按鈕中線右邊 hello 1.67px（兩個主題一樣）、point 1.83／1.67px
+//   （和紙／深色；主頁與任務頁一樣）＝畫布 2.78、2.92 單位（affected-rest3-1343）。新圖不是左右對稱的身體＋另外一隻手，
+//   鏡射軸被舉起來的手、伸出去的翅膀往右拉。照量法登記：hello 102.8、point 102.9（--pk-dx 9.6 → 7.9、12.6 → 10.9px）。
+const POSE_MID = Object.freeze({ hello: 102.8, point: 102.9 });
 // side＝掛在宿主的哪一邊（CSS .pose-l／.pose-r／.pose-c）；宿主上面要留的空間由 ui.js 的 mountPose 處理。
 export function pose(kind, side = 'r') {
   const el = peek(kind, POSE_K);

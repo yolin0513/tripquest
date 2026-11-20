@@ -83,19 +83,21 @@
   {
     "name": "照片空白頁：揮手的鬍鬍沒登記身體中線",
     "why": "（事前寫 2026-11-19 08:1x；08:30 point、puzzle 一起登記之後改成只拿掉 hello 那一項，原本是整個表清空；08:45 湯圓不登記（Dispatch 選甲），find／replace 跟著拿掉 puzzle，預期不變）js/peeks.js 的 POSE_MID 拿掉 hello：--pk-dx 不設，圖照圖框置中，身體回到按鈕中線左邊約 12px（修之前的樣子）。只紅兩輪的 TI13；TI14 對照組本來就把 --pk-dx 撥回 0，point 照舊，不受影響。",
+    "note": "2026-11-20 13:47 事後：POSE_MID 照 ③ 量到的鏡射軸重訂成 hello 102.8、point 102.9，find／replace 跟著換成新值（拿掉的照舊是 hello 那一項），預期不變。",
     "expect": ["［和紙］ TI13", "［深色］ TI13"],
     "file": "js/peeks.js",
-    "find": "const POSE_MID = Object.freeze({ hello: 100, point: 100 });",
-    "replace": "const POSE_MID = Object.freeze({ point: 100 });",
+    "find": "const POSE_MID = Object.freeze({ hello: 102.8, point: 102.9 });",
+    "replace": "const POSE_MID = Object.freeze({ point: 102.9 });",
     "cmd": "node scripts/tabicontest.mjs"
   },
   {
     "name": "沒有景點：指路的阿灰沒登記身體中線",
     "why": "（事前寫 2026-11-19 08:30；08:45 湯圓不登記（Dispatch 選甲），find／replace 跟著拿掉 puzzle，預期不變）js/peeks.js 的 POSE_MID 拿掉 point：照圖框置中，身體回到按鈕中線左邊約 7.8px（主頁與任務頁都是）。只紅兩輪的 TI16；TI17 對照組本來就撥回 0，不受影響。",
+    "note": "2026-11-20 13:47 事後：POSE_MID 照 ③ 量到的鏡射軸重訂成 hello 102.8、point 102.9，find／replace 跟著換成新值（拿掉的照舊是 point 那一項），預期不變。",
     "expect": ["［和紙］ TI16", "［深色］ TI16"],
     "file": "js/peeks.js",
-    "find": "const POSE_MID = Object.freeze({ hello: 100, point: 100 });",
-    "replace": "const POSE_MID = Object.freeze({ hello: 100 });",
+    "find": "const POSE_MID = Object.freeze({ hello: 102.8, point: 102.9 });",
+    "replace": "const POSE_MID = Object.freeze({ hello: 102.8 });",
     "cmd": "node scripts/tabicontest.mjs"
   },
   {
