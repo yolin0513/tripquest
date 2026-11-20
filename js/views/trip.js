@@ -2062,6 +2062,10 @@ export async function settings(tripId, { drawPage, setTop }) {
     if (wikiToggle.checked) enrichTrip(tripId).catch(() => {});
   });
 
+  // v1.100.0 第 3 格（Yolin 2026-11-19 13:3x「全照建議」）：鬍鬍掛著相機揮手，立在「🔗 把任務分享給旅伴」上緣（靠右）；
+  // 這次開 App 第一次進這一頁揮一次（poseOnce）。圖載不到：照舊只有按鈕。
+  const shareBtn = h('button', { class: 'btn btn-primary btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴');
+  const pk = await import('../peeks.js').catch(() => null);
   drawPage(h('div', { class: 'page form' },
     settingRow('旅程名稱', h('button', { class: 'btn btn-soft', onclick: async () => {
       const v = await promptDialog('旅程名稱', { value: t.title });
@@ -2078,7 +2082,7 @@ export async function settings(tripId, { drawPage, setTop }) {
 
     h('div', { class: 'section-label', style: 'margin:22px 2px 8px' }, '旅伴與電話'),
     // 分享＝邀請旅伴加入，放在旅伴名單正上方（v1.59.1 從行程頁移來）
-    h('button', { class: 'btn btn-primary btn-block', onclick: () => doShare(tripId) }, '🔗 把任務分享給旅伴'),
+    shareBtn,
     h('p', { class: 'form-hint', style: 'margin:4px 2px 10px' }, '旅伴點連結就能加入，照片會自動同步。'),
     posShareRow(tripId, t),
     memberEditor(tripId, t.groupId),
@@ -2115,6 +2119,7 @@ export async function settings(tripId, { drawPage, setTop }) {
         '🗑️ 從我的手機移除這趟旅程'),
     ),
   ));
+  if (pk) { const el = pk.pose('share', 'r'); mountPose(shareBtn, el); if (poseOnce('share')) pk.cheer(el); }
 }
 
 function settingRow(label, control) {
