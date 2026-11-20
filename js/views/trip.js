@@ -1857,6 +1857,18 @@ function memoriesCard(tripId, t, ended) {
       h('span', { class: 'imr-sub' }, '大家的表現與全部回顧')));
 }
 
+// 第 3、7 格（v1.100.0）：旅程設定、行程分頁拿不到 fresh（js/app.js 只給我的旅程、任務頁、主頁；不改 app.js），
+// 改成「這次開 App 第一次進這一頁動一次」（Yolin 2026-11-19 13:3x「全照建議」）：sessionStorage 記一筆，關掉 App 再開才會再動。
+// 鍵只帶 kind、不帶哪一趟（「進那頁」指頁的種類）。存不了（私密模式之類）就不動——寧可不動，也不要每重畫一次就動一次。
+function poseOnce(kind) {
+  const key = 'tripquest.poseOnce.' + kind;
+  try {
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+    return true;
+  } catch { return false; }
+}
+
 export async function itinerary(tripId, { drawPage, setTop } = {}) {
   const t = store.get(tripId);
   if (!t) { navigate('/', { replace: true }); return; }
@@ -1868,6 +1880,9 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
   const byDay = new Map();
   for (const s of spots) { const d = s.day || 1; if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(s); }
   const ended = tripEnded(t);
+  // v1.100.0 第 7 格（Yolin 2026-11-19 13:3x「全照建議」選甲）：還沒有景點時，鬍鬍抱著整張地圖立在「＋ 去安排景點」上緣、置中；
+  // 有景點就不放（不推擠每天的行程——11-13 任務頁天氣探頭圖就是因為推擠被拿掉）。圖載不到：照舊沒有吉祥物。
+  const pk = spots.length ? null : await import('../peeks.js').catch(() => null);
   // v1.86.0 最上面一排「行程｜回顧」（守夜模式照建議做；決定與替代方案見 STATUS）。
   // 預設：結束日過了 → 回顧；其餘（出發前、旅程中、沒設結束日、全部拍完但還沒結束）→ 行程。只看結束日，跟原本回顧排到最上面同一條。
   // 記住剛剛看哪一格：sessionStorage（重畫、返回、切分頁回來都停在那一格；關掉 App 再開回到預設）。
@@ -1934,6 +1949,10 @@ export async function itinerary(tripId, { drawPage, setTop } = {}) {
       // v1.88.0 行程海報（Yolin：放在行程頁籤的「行程」那一側；回顧那邊的海報不動）。沒有景點就不放（做不出東西）
       spots.length ? h('button', { class: 'btn btn-soft btn-block itin-poster-btn', onclick: () => navigate(`/trip/${tripId}/itinposter`) },
         '🗺️ 做成行程海報（圖片／PDF）') : null].filter(Boolean));
+    if (pk) {
+      const go = planPane.querySelector('.itin-edit');
+      if (go) { const el = pk.pose('map', 'c'); mountPose(go, el); if (poseOnce('map')) pk.cheer(el); }
+    }
     if (spots.length) planDays();
     if (ended) {
       planPane.append(h('details', { class: 'info-fold' },
