@@ -190,5 +190,14 @@
     "find": "  const pick = page.querySelector('[data-theme-pick]');\n  const seg = pick && pick.parentElement;",
     "replace": "  const seg = page.querySelector('.theme-seg');",
     "cmd": "node scripts/themetrusttest.mjs"
+  },
+  {
+    "name": "P9 臉頰前置：取樣點挪到臉頰外（圖左上角的空白處）",
+    "why": "（事前寫 2026-11-20 11:5x，跑之前；會開瀏覽器）peektest 的 P9_CHEEK 從 (88,124) 改成 (40,60)：新圖在那裡沒有墨，舊寫法的方框也蓋不到（方框 x 從 48 起），兩個主題都量到底色，不是臉頰色 → 前置不成立。四條要前置的都紅：兩輪的「建立行程頁的阿灰望遠鏡」、兩輪的「P9 對照組」。靜止檢查的對照組不看臉頰，不紅；P1～P8 與動畫那幾條不紅；項數不變。這條補的是 11-20 照實記的缺口：P9 臉頰前置沒有只紅它的突變（前置 11:52 改成只看正中央那一點）。",
+    "expect": ["［和紙］ P9 建立行程頁的阿灰望遠鏡", "［和紙］ P9 對照組", "［深色］ P9 建立行程頁的阿灰望遠鏡", "［深色］ P9 對照組"],
+    "file": "scripts/peektest.mjs",
+    "find": "P9_CHEEK = [88, 124],",
+    "replace": "P9_CHEEK = [40, 60],",
+    "cmd": "node scripts/peektest.mjs"
   }
 ]

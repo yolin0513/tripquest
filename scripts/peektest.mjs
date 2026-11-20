@@ -481,7 +481,8 @@ const makeTrip = (page, title, start, end, groups) => page.evaluate(async (ttl, 
 //   點是離線挑的（.logs/v1100/p9probe.mjs，sharp 照 peektest 同一個量法：0.6 px／單位、3×3 點，兩個主題、
 //   把 clipPath 換成外接長方形模擬 Chromium 畫錯的樣子；那一塊是 x 56～71、y 53～63，周圍 ±2 單位也成立才算；
 //   右上角被頭和白邊擠得只剩 1 格、不穩，不取）。那支探測的對照組：不塞舊寫法時找到的點是 0 個。
-//   前置：臉頰 (88,124) 九點都是臉頰的顏色（216,164,152，差 < 30）——座標對得上、真的量到這張圖（新圖兩個主題同色；離線量的）。
+//   前置：臉頰 (88,124) 正中央那一點是臉頰的顏色（216,164,152，差 < 30）——座標對得上、真的量到這張圖（新圖兩個主題同色；離線量的）。
+//   （原本要九點都是；2026-11-20 改成只看正中央，事後，理由見 headCorners 裡）
 // 對照組（同一頁、同一個量法）：在圖的開頭（.mc-fig 第一個）塞回 11-18 以前那一組「轉 3° 的群組＋path 形 clipPath 照圓頭裁頭頂帶與下巴」，
 //   取樣點必須量到深灰帶——證明這個大小、這個主題、這個瀏覽器下量得到方框（Chromium 哪天裁對了，這條會紅，P9 主斷言就不再證明什麼）。
 // 頁面上已經是舊寫法（例如突變把那一組塞進 PEEK.scout）就直接量、不再塞，對照組照樣成立，紅的只有主斷言。
@@ -492,7 +493,8 @@ const P9_PTS = [[60, 55], [57, 59]], P9_CHEEK = [88, 124], P9_CHEEK_RGB = [216, 
 // 靜止檢查（事後，2026-11-20；寫完才 date＝11:14，照實記）：讀框 → 截圖 → 再讀框，兩次一樣、圖底下沒有在跑的動畫，這張截圖才算數；
 //   不一樣就等 0.4 秒重試，最多 3 次，到上限回「沒靜止：…」（獨立字樣，不跟「量到方框」混在一起）。
 //   起因：run2b-peek-1107 深色那次臉頰九宮格有一格掉出臉頰（中心 216,165,155，其他 10 次都是 217,164,153 或 216,164,152）——
-//   第一次量在圖還沒靜止時就截了；原本只讀一次框、截圖後沒再核。
+//   當時判斷是圖還沒靜止就截了（原本只讀一次框、截圖後沒再核）。〔11:52 更正：這個判斷被推翻——affected-rest-1150 又紅一次，
+//   框一模一樣、第 1 次量就靜止；真正的原因是臉頰太小、九點太脆，改法見下面臉頰前置那段。靜止檢查留著：它擋的是另一種錯（量的位置跑掉）。〕
 //   jolt：靜止檢查的對照組——每次讀完框就把圖挪 2px（CSS translate，每次多挪 2px），必須判成沒靜止；量完拿掉。
 async function headCorners(page, { jolt = false } = {}) {
   let r = null, r2 = null, shot = null, tries = 0;
@@ -539,7 +541,11 @@ async function headCorners(page, { jolt = false } = {}) {
   const near = (t) => (pts) => pts.every((c) => Math.abs(c[0] - t[0]) + Math.abs(c[1] - t[1]) + Math.abs(c[2] - t[2]) < 30);
   const isBand = near([154, 148, 143]);   // #9a948f
   const [A, B] = P9_PTS.map(([ax, ay]) => nine(ax, ay)), M = nine(...P9_CHEEK);
-  return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)(M),
+  // 臉頰前置只看正中央那一點（事後，2026-11-20 寫之前 date＝11:52）：臉頰在截圖裡只有約 5×4 畫素，九點全要是臉頰色太脆——
+  //   affected-rest-1150 深色那次框跟過的那幾次一模一樣、第 1 次量就靜止，正中央 216,165,154（差 4），照樣有一格掉出臉頰
+  //   （同一張圖每次畫出來的抗鋸齒不完全一樣；靜止檢查擋不到這種）。正中央落在臉頰上，裁切與比例就是對的。九點裡幾點是臉頰色照印。
+  const midN = M.filter((c) => near(P9_CHEEK_RGB)([c])).length;
+  return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)([M[4]]), midN,
     still: true, tries: tries + 1, pos };
 }
 async function scoutHead(page, tag) {
@@ -567,7 +573,7 @@ async function scoutHead(page, tag) {
     console.log(`  ${tag} P9 例外：${String(e && e.message || e).split('\n')[0]}`);
   }
   // 框的座標與第幾次量才靜止：事後（2026-11-20）加印，紅的時候分得出是不是量的位置跑掉
-  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素；${c.pos}，第 ${c.tries} 次量才靜止`);
+  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}（九點裡 ${c.midN} 點是臉頰色）；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素；${c.pos}，第 ${c.tries} 次量才靜止`);
   yes(!!now && !now.off && now.scaleOk && now.mid && !now.corner,
     `${tag} P9 建立行程頁的阿灰望遠鏡：頭上沒有灰色方框，左上角兩個取樣點不是深灰帶（前置：臉頰對得上）（到了建立行程頁 ${go}；${say(now)}）`);
   yes(!!jolt && jolt.still === false && String(jolt.off).startsWith('沒靜止：'),
