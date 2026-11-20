@@ -482,7 +482,10 @@ async function round(theme) {
     rc.kind = POSE_WHO[rc.peek] || rc.kind;
     seen.recap = rc.kind;
     const headOne = await page.evaluate(() => document.querySelectorAll('.recap-head .recap-mascot, .recap-head svg.gl-mascot').length);
-    yes(rc.found && rc.kind === EXPECT.recap && /張照片|個地方/.test(rc.host) && rc.h >= 90 && rc.inView && !rc.covered && headOne === 0,
+    // 高度門檻（事後，2026-11-20 寫之前 date＝11:49）：90 → 75。北北舉板子換新圖（89ad3e0），畫布高 160 → 136，圖高 96 → 81.6px，
+    //   ③（affected-1121）兩個主題都只紅在這一項。90 是 e68b39a 為站著的那一隻訂的；照其他出場處的做法（實際高度往下留約一成：
+    //   空白頁 107→100、設定頁 86→80、完成任務 106→100、載入中 84→70），81.6 往下留一成取 75。
+    yes(rc.found && rc.kind === EXPECT.recap && /張照片|個地方/.test(rc.host) && rc.h >= 75 && rc.inView && !rc.covered && headOne === 0,
       `${tag} M4 回顧的白熊趴在大數字那一區的上緣、看得到、標題上面沒有站著的那一隻（${brief(rc)}；探頭圖 ${rc.peek ?? '無'}、掛在「${rc.host ?? ''}」；在畫面裡 ${rc.inView}、被蓋 ${rc.covered}；標題上面 ${headOne} 隻）`);
     themeCheck(tag, '行程回顧', rc, washi, false);
     hygiene(tag, '行程回顧', rc);
