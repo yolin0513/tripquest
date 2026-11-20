@@ -27,8 +27,8 @@
 //   P6 還沒出發、出發那天會下雨：「出發那天（M/D）可能下雨…」、天氣條沒有探頭圖
 //   P7 主頁的下一站卡沒有「拍照解任務」（v1.84.0；原本驗那顆鈕的相機圖示，鈕拿掉後改驗它不在）
 //   P8 每一張探頭圖：aria-hidden、沒有 <text>／<title>、id 整頁唯一、引用都指到自己那張；同一頁放好幾張時 id 也不撞
-//   P9 建立行程頁（js/views/create.js）「產生拍照任務」上緣的阿灰望遠鏡：頭頂深灰帶照圓頭裁、沒有方框（2026-11-18；和紙、深色各一次；
-//      附同一頁的對照組。說明見 headCorners 上面）
+//   P9 建立行程頁（js/views/create.js）「產生拍照任務」上緣的阿灰望遠鏡：頭上沒有灰色方框（2026-11-18；2026-11-20 換圖後重寫；
+//      和紙、深色各一次；附同一頁的對照組。說明見 headCorners 上面）
 //   主題：和紙不套白邊、動作線看得到；深色一輪白邊真的有套上、動作線不畫（跟 glyphs.js 的吉祥物同一條規矩）、
 //         白邊濾鏡的範圍罩得住每一層（不然白邊被切成直角，照片上多一塊白色方塊）、
 //         提醒卡與照片的邊線一樣對齊、天氣條一樣沒有探頭圖、主頁一樣沒有拍照鈕
@@ -472,15 +472,23 @@ const makeTrip = (page, title, start, end, groups) => page.evaluate(async (ttl, 
 }, title, start, end, groups);
 
 // P9 阿灰頭頂（2026-11-18；Yolin：「阿灰頭上有一塊灰色長方形，那是什麼？」）：建立行程頁「產生拍照任務」上緣的阿灰望遠鏡（scout）。
-// 那張的頭轉了 3°，頭頂深灰帶原本用 <path> 形的 clipPath 照圓頭裁，Chromium 裡被裁成外接長方形（頭頂一塊方形、白下巴切平）；
-// 照規格裁的 sharp 畫出來是對的，所以要在瀏覽器裡截圖量。量法：等動畫跑完、截那張圖，量頭的外接長方形兩個上角
-// （畫布座標 56,56、144,56：在外接長方形裡、在圓頭、外框、深色的白邊外面），各取周圍 3×3 點，九點都是深灰帶的顏色才算「是」
-// （抗鋸齒混出來的零星點不算）；前置：頭頂中間（100,60）九點都是深灰帶（座標對得上、真的量到頭頂）。
-// 對照組（同一頁、同一個量法）：把頭頂換回 11-18 以前的 clipPath 寫法，兩個上角必須量到深灰帶——證明這個大小、這個主題下量得到方框。
-// 頁面上已經是舊寫法（例如突變把它改回去）就直接量、不再換，對照組照樣成立，紅的只有上面那一條。寫法本身另由 scripts/cliptest.mjs 擋（秒級）。
+// 11-18 那張的頭轉了 3°，頭頂深灰帶用 <path> 形的 clipPath 照圓頭裁，Chromium 裡被裁成那條 path 的外接長方形 (48,50)–(152,138)
+// （頭上一塊方形）；照規格裁的 sharp 畫出來是對的，所以要在瀏覽器裡截圖量。寫法本身另由 scripts/cliptest.mjs 擋（秒級）。
+// 2026-11-20 重寫：v1.100.0 阿灰望遠鏡換成照參考圖描的向量（側臉、頭不轉、整張沒有 clipPath），舊的量法（頭頂中間 100,60、
+// 上角 56,56／144,56）與對照組要找的舊頭頂帶字串在新圖上都不在了。
+// 量法：等動畫跑完、截那張圖，取兩個點各周圍 3×3 點，九點都是深灰帶（#9a948f）的顏色才算「是」（抗鋸齒混出來的零星點不算）。
+//   取樣點 (60,55)、(57,59)：新圖左上角「新圖沒有墨（深色的白邊也碰不到）、舊寫法的外接長方形會蓋到、照規格裁的圓頭蓋不到」的那一塊。
+//   點是離線挑的（.logs/v1100/p9probe.mjs，sharp 照 peektest 同一個量法：0.6 px／單位、3×3 點，兩個主題、
+//   把 clipPath 換成外接長方形模擬 Chromium 畫錯的樣子；那一塊是 x 56～71、y 53～63，周圍 ±2 單位也成立才算；
+//   右上角被頭和白邊擠得只剩 1 格、不穩，不取）。那支探測的對照組：不塞舊寫法時找到的點是 0 個。
+//   前置：臉頰 (88,124) 九點都是臉頰的顏色（216,164,152，差 < 30）——座標對得上、真的量到這張圖（新圖兩個主題同色；離線量的）。
+// 對照組（同一頁、同一個量法）：在圖的開頭（.mc-fig 第一個）塞回 11-18 以前那一組「轉 3° 的群組＋path 形 clipPath 照圓頭裁頭頂帶與下巴」，
+//   取樣點必須量到深灰帶——證明這個大小、這個主題、這個瀏覽器下量得到方框（Chromium 哪天裁對了，這條會紅，P9 主斷言就不再證明什麼）。
+// 頁面上已經是舊寫法（例如突變把那一組塞進 PEEK.scout）就直接量、不再塞，對照組照樣成立，紅的只有主斷言。
 const SCOUT_SEL = '.pose-host > svg.gl-peek[data-peek="scout"]';
-const OLD_HEAD = (p) => `<defs><clipPath id="${p}-i3"><path d="M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z"></path></clipPath></defs>`
-  + `<g clip-path="url(#${p}-i3)"><path d="M40 84 Q100 64 160 84 V40 H40 Z" fill="#9a948f"></path><ellipse cx="100" cy="138" rx="30" ry="17" fill="#fffdf9"></ellipse></g>`;
+const OLD_HEAD = (p) => `<g transform="rotate(3 100 136)"><defs><clipPath id="${p}-i3"><path d="M100 50 C131.2 50 152 69.4 152 101 C152 127.7 131.2 138 100 138 C68.8 138 48 127.7 48 101 C48 69.4 68.8 50 100 50 Z"></path></clipPath></defs>`
+  + `<g clip-path="url(#${p}-i3)"><path d="M40 84 Q100 64 160 84 V40 H40 Z" fill="#9a948f"></path><ellipse cx="100" cy="138" rx="30" ry="17" fill="#fffdf9"></ellipse></g></g>`;
+const P9_PTS = [[60, 55], [57, 59]], P9_CHEEK = [88, 124], P9_CHEEK_RGB = [216, 164, 152];
 async function headCorners(page) {
   const r = await page.evaluate(async (s) => {
     const el = document.querySelector(s);
@@ -506,9 +514,10 @@ async function headCorners(page) {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const i = ((cy + dy) * info.width + cx + dx) * 3; out.push([data[i], data[i + 1], data[i + 2]]); }
     return out;
   };
-  const isBand = (pts) => pts.every((c) => Math.abs(c[0] - 154) + Math.abs(c[1] - 148) + Math.abs(c[2] - 143) < 30);   // #9a948f
-  const L = nine(56, 56), R = nine(144, 56), M = nine(100, 60);
-  return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: L[4], R: R[4], M: M[4], corner: isBand(L) || isBand(R), mid: isBand(M) };
+  const near = (t) => (pts) => pts.every((c) => Math.abs(c[0] - t[0]) + Math.abs(c[1] - t[1]) + Math.abs(c[2] - t[2]) < 30);
+  const isBand = near([154, 148, 143]);   // #9a948f
+  const [A, B] = P9_PTS.map(([ax, ay]) => nine(ax, ay)), M = nine(...P9_CHEEK);
+  return { kx, ky, scaleOk: Math.abs(kx - ky) <= 0.05 * kx, L: A[4], R: B[4], M: M[4], corner: isBand(A) || isBand(B), mid: near(P9_CHEEK_RGB)(M) };
 }
 async function scoutHead(page, tag) {
   let go = false, now = null, how = '沒到建立行程頁', old = null;
@@ -519,27 +528,25 @@ async function scoutHead(page, tag) {
       how = await page.evaluate((s, SRC) => {
         const el = document.querySelector(s);
         if (el.querySelector('clipPath[id$="-i3"]')) return '頁面上本來就是舊寫法';
-        const band = el.querySelector('path[d^="M51.41 80.56"]');
-        const bib = band && band.nextElementSibling;
-        const f = el.querySelector('[filter]');
-        const p = f && (f.getAttribute('filter').match(/#(pk\d+)-rim/) || [])[1];
-        if (!band || !bib || !(bib.getAttribute('d') || '').startsWith('M70.95 133.75') || !p) return '';
+        // 邊線以上那一層的圖（peek() 的 .mc-fig；照 DOM 順序第一個——邊線以下那一層只畫 front）。塞在最前面＝畫在新圖後面，跟突變塞進 fig 開頭同一個位置
+        const fig = el.querySelector('g.mc-fig[filter]');
+        const p = fig && (fig.getAttribute('filter').match(/#(pk\d+)-rim/) || [])[1];
+        if (!fig || !p) return '';
         const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         tmp.innerHTML = SRC.split('@@P@@').join(p);
-        bib.remove();
-        band.replaceWith(...tmp.childNodes);
-        return el.querySelector(`clipPath[id="${p}-i3"]`) ? '換回舊寫法' : '';
+        fig.prepend(...tmp.childNodes);
+        return el.querySelector(`clipPath[id="${p}-i3"]`) && fig.firstElementChild.getAttribute('transform') === 'rotate(3 100 136)' ? '塞回舊寫法' : '';
       }, SCOUT_SEL, OLD_HEAD('@@P@@'));
       if (how) old = await headCorners(page);
     }
   } catch (e) {
     console.log(`  ${tag} P9 例外：${String(e && e.message || e).split('\n')[0]}`);
   }
-  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `上角 ${c.L}／${c.R}、頭頂中間 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素`);
+  const say = (c) => (!c ? '沒量到' : c.off ? c.off : `左上角兩點 ${c.L}／${c.R}、臉頰 ${c.M}；每單位 ${c.kx.toFixed(2)}×${c.ky.toFixed(2)} 畫素`);
   yes(!!now && !now.off && now.scaleOk && now.mid && !now.corner,
-    `${tag} P9 建立行程頁的阿灰望遠鏡：頭頂深灰帶照圓頭裁，頭的外接長方形兩個上角不是深灰帶（前置：頭頂中間是深灰帶）（到了建立行程頁 ${go}；${say(now)}）`);
+    `${tag} P9 建立行程頁的阿灰望遠鏡：頭上沒有灰色方框，左上角兩個取樣點不是深灰帶（前置：臉頰對得上）（到了建立行程頁 ${go}；${say(now)}）`);
   yes(!!old && !old.off && old.scaleOk && old.mid && old.corner,
-    `${tag} P9 對照組：同一頁頭頂用 11-18 以前的 clipPath 寫法，量得到方框（兩個上角是深灰帶）（${how || '換不回去'}；${say(old)}）`);
+    `${tag} P9 對照組：同一頁塞回 11-18 以前的 clipPath 寫法，量得到方框（取樣點是深灰帶）（${how || '塞不回去'}；${say(old)}）`);
 }
 
 async function washiRound() {
@@ -826,7 +833,7 @@ async function darkRound() {
     yes(/完成/.test(r.ttl) && r.p.found && r.p.kind === 'cam' && aligned(r.p) && /url\(/.test(r.p.filter || '') && r.p.extra === false,
       `［深色］ 慶祝畫面的探頭圖：邊線對齊照片上緣、身體套白邊、動作線不畫（${brief(r.p)}；濾鏡 ${r.p.filter}；動作線 ${r.p.extra}）`);
     await clearCelebrations(page);
-    // P9 深色也量一次（白邊包著頭，上角量到的是白邊或底色；舊寫法的方框蓋在白邊上面）
+    // P9 深色也量一次（取樣點離頭的白邊夠遠、量到的是底色；舊寫法的方框跟著套白邊，取樣點落在方框裡面、量到深灰帶）
     await scoutHead(page, '［深色］');
   } catch (e) {
     yes(false, `［深色］ 例外：${e && e.stack || e}`);

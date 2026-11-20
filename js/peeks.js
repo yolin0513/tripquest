@@ -118,7 +118,7 @@ export function peek(kind, k = 0.6) {
 // 新畫的圖別把 path 形的 clipPath 放進轉過角度的群組裡（scripts/cliptest.mjs 擋這種寫法）。
 // v1.100.0 起指路阿灰（point）換成照參考圖描的向量：參考圖的翅尖不是深色、照畫不另裁，整張沒有 clipPath；上面講 point 翅尖的是換圖前的事。
 // v1.100.0 阿灰望遠鏡（scout）也換成描的：頭不再轉 3°（側臉、照參考圖），頭頂帶是描出來的色塊，整張沒有 clipPath；上面講 scout 頭頂帶的也是換圖前的事。
-//   會動的是望遠鏡加掛帶（pk-scan，轉軸在握望遠鏡那隻翅膀的手心）。scripts/peektest.mjs 的 P9 量的是舊圖的座標，換圖後要重寫（STATUS 2026-11-20）。
+//   會動的是望遠鏡加掛帶（pk-scan，轉軸在握望遠鏡那隻翅膀的手心）。scripts/peektest.mjs 的 P9 2026-11-20 照新圖重寫（取樣點在新圖左上角、前置量臉頰）。
 export const POSE_K = 0.6;
 // 置中掛（.pose-c）時對齊宿主中線的是「身體中線」、不是圖框中間（v1.96.0）：
 // 揮手的鬍鬍（hello）圖框裡含舉起的手與揮動線，圖框中間在 x 120、身體中線在 100（鼻子 cx 100），
