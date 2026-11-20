@@ -184,7 +184,9 @@ try {
   // ---------- X4：帳只在同群組的另一趟 ----------
   const dA = await pressTrash('阿姨');
   yes(dA.open && dA.text.includes('付了 1 筆') && dA.text.includes('分攤 1 筆'), 'X4 阿姨的帳只在同群組的另一趟 → 這一趟的設定也講得出「付了 1 筆、分攤 1 筆」', dA.text.slice(0, 200));
-  await mustPress('取消');
+  // 對話框有跳才按取消（2026-11-20）：沒跳時上一條 X4 已經紅了；原本照樣 mustPress 會丟例外、後面 24 項沒跑，
+  // 突變執行器 11-11 起對項數，就判成「沒跑完」（X4、X1 兩條突變）。有跳卻按不到「取消」照樣丟例外（mustPress 的本意不變）。
+  if (dA.open) await mustPress('取消');
 
   // ---------- X5：只有照片 ----------
   const dB = await pressTrash('表哥');
