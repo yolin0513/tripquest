@@ -739,7 +739,9 @@ async function darkRound() {
     // 只量看得到的那一塊：每一層外面包著裁切框（邊線以上／以下），身體畫到邊線以下很深、被裁掉的部分不算——
     // 要罩住的是「外框往外加白邊寬度」∩「裁切框往外加白邊寬度」（後者是因為裁切框邊上那一圈的白邊，要靠框外 5 個單位內的圖形長出來）。
     // 母體：每一張探頭圖（PEEK_KINDS，用對外的 peek() 畫出來、放進這一頁）每一層套了白邊的 g，數出來的層數要等於圖裡 g.mc-fig 的層數；
-    // 對照組（同一個檢查）：把小鳳那張的範圍改回舊的 ±15%，必須抓到邊線以下那一層、上層不受影響。
+    // 對照組（同一個檢查）：小鳳那張邊線以下那層的內容換成 6×6 單位的小方塊、範圍改回舊的 ±15%，必須抓到邊線以下那一層、上層不受影響。
+    //   （2026-11-20 改成合成小方塊：原本直接用小鳳那張，小鳳換新圖（faccf51）後邊線以下那層變大，±15% 罩得住，
+    //    對照組量到 0 層、不再落在盲點——run2-peek-1055 實測。用合成的大小，不再依賴哪一張圖畫多大。）
     const rim = await page.evaluate(async () => {
       const m = await import('./js/peeks.js');
       const frac = (v) => (v.endsWith('%') ? parseFloat(v) / 100 : parseFloat(v));
@@ -802,6 +804,14 @@ async function darkRound() {
         stray: all.flatMap((s) => [...s.innerHTML.matchAll(/url\(#([^)]+)\)/g)].map((x) => x[1]).filter((id) => !s.querySelector(`[id="${CSS.escape(id)}"]`))) };
       const ctl = m.peek(m.DONE_PEEK, 0.6);
       host.append(ctl);
+      // 合成樣本：邊線以下那層換成裁切框正中央 6×6 單位的小方塊（±15% 只多 0.9 單位，遠小於白邊寬度）；換不上就 ctlSyn＝false、這條紅
+      const cdn = ctl.querySelector('[clip-path$="-dn)"] > g.mc-fig');
+      const cdr = ctl.querySelector('clipPath[id$="-dn"] rect');
+      const ctlSyn = !!(cdn && cdr);
+      if (ctlSyn) {
+        const cx = +cdr.getAttribute('x') + +cdr.getAttribute('width') / 2, cy = +cdr.getAttribute('y') + +cdr.getAttribute('height') / 2;
+        cdn.innerHTML = `<rect x="${cx - 3}" y="${cy - 3}" width="6" height="6" fill="#888"/>`;
+      }
       const cf = ctl.querySelector('filter');
       cf.removeAttribute('filterUnits');
       for (const [a, v] of [['x', '-15%'], ['y', '-15%'], ['width', '130%'], ['height', '130%']]) cf.setAttribute(a, v);
@@ -811,14 +821,14 @@ async function darkRound() {
       cd.setAttribute('y', String(+cu.getAttribute('y') + +cu.getAttribute('height')));
       const ctlSeam = seam(ctl);
       host.remove();
-      return { kinds: m.PEEK_KINDS.length, rows, layers, seams, ctlSeam, multi,
+      return { kinds: m.PEEK_KINDS.length, rows, layers, seams, ctlSeam, multi, ctlSyn,
         ctlDn: ctlRows.filter((c) => c.dn && !c.ok).length, ctlUp: ctlRows.filter((c) => !c.dn && !c.ok).length };
     });
     const rimBad = rim.rows.filter((x) => !x.ok);
     const rimDn = rim.rows.filter((x) => x.dn).length;
     const rimMin = rim.rows.length ? Math.min(...rim.rows.map((x) => x.margin)) : NaN;
-    yes(rim.kinds >= 7 && rim.rows.length === rim.layers && rimDn >= 1 && rimBad.length === 0 && rim.ctlDn === 1 && rim.ctlUp === 0,
-      `［深色］ 白邊濾鏡的範圍罩得住圖形加白邊（${rim.kinds} 張、數到 ${rim.rows.length} 層／圖裡 ${rim.layers} 層，其中邊線以下 ${rimDn} 層；最少還留 ${rimMin.toFixed(1)} 單位；罩不住：${rimBad.map((x) => `${x.kind}${x.dn ? '邊線以下' : '上層'}（${x.why || '算不出來'}）`).join('、') || '無'}；對照組改回 ±15%：抓到邊線以下 ${rim.ctlDn} 層、上層 ${rim.ctlUp} 層）`);
+    yes(rim.kinds >= 7 && rim.rows.length === rim.layers && rimDn >= 1 && rimBad.length === 0 && rim.ctlSyn && rim.ctlDn === 1 && rim.ctlUp === 0,
+      `［深色］ 白邊濾鏡的範圍罩得住圖形加白邊（${rim.kinds} 張、數到 ${rim.rows.length} 層／圖裡 ${rim.layers} 層，其中邊線以下 ${rimDn} 層；最少還留 ${rimMin.toFixed(1)} 單位；罩不住：${rimBad.map((x) => `${x.kind}${x.dn ? '邊線以下' : '上層'}（${x.why || '算不出來'}）`).join('、') || '無'}；對照組（小鳳那張邊線以下換成 6 單位小方塊${rim.ctlSyn ? '' : '——沒換上'}、範圍改回 ±15%）：抓到邊線以下 ${rim.ctlDn} 層、上層 ${rim.ctlUp} 層）`);
     // 接縫（2026-11-13 放大截圖看到、量到：修正前深色那一列比上下暗 41、和紙暗 3；兩層重疊 1 個單位後一樣亮）
     const seamBad = rim.seams.filter((x) => !(x.overlap >= 0.5));
     yes(rim.seams.length === rimDn && rim.seams.length >= 1 && seamBad.length === 0 && rim.ctlSeam === 0,
