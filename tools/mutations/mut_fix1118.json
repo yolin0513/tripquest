@@ -163,15 +163,6 @@
     "cmd": "node scripts/saytest.mjs", "done": "^吉祥物講一句：\\d+ 項通過"
   },
   {
-    "name": "探頭圖：前景下層那一份不換前綴（新姿勢第一版的寫法）",
-    "why": "（事後寫 2026-11-18 21:4x：預期照 A 場第一次跑的實測紅）js/peeks.js 的 peek() 下層前景照上層同一個前綴：前景裡有裁切框的（山雀坐姿、鬍鬍揮手）同一張圖裡 id 出現兩次。mascottest 紅兩輪的「M8 設定頁」（山雀坐姿 pk5-i1 重複）；空白頁白兔、回顧白熊的前景沒有裁切框，照樣綠。",
-    "expect": ["［和紙］ M8 設定頁", "［深色］ M8 設定頁"],
-    "file": "js/peeks.js",
-    "find": "${pre(p.front, `${id}d`)}",
-    "replace": "${pre(p.front)}",
-    "cmd": "node scripts/mascottest.mjs"
-  },
-  {
     "name": "進度條頭像：軌道不裁橫向（第一版的寫法）",
     "why": "（事後寫 2026-11-18 22:3x：預期照 C 場 layouttest 跑修正前的程式時的實測紅；這條沒另外跑，修正前的那一次就是它的證據）css/style.css 的 .tp-bar 拿掉 overflow-x: clip：.tp-run 跟軌道一樣寬、translateX 把框推出畫面，行程頁 360／390／430 寬整頁多出橫向捲動。layouttest 只紅總結那一條「零版面問題」（overflow-x 8、overflow-el 8，全部在行程頁）。",
     "expect": ["零版面問題"],
@@ -217,5 +208,32 @@
     "find": "    if (outer && inner && r2.run === 0 && diff === 0) break;",
     "replace": "    if (outer && inner && r2.run === 0) break;",
     "cmd": "node scripts/peektest.mjs"
+  },
+  {
+    "name": "CT4 守門：阿灰望遠鏡的前景帶一個 id",
+    "why": "（事前寫 2026-11-20 16:3x，跑之前）js/peeks.js 的 PEEK.scout 前景開頭插 id=\"zzfront\"：前景帶 id 的張數從 0 變 1 → 只紅「CT4 真的檔」。前景裡沒有 clipPath，CT2、CT3 照樣綠；合成樣本的 CT1、CT4 對照組不讀真的檔，照樣綠。這條證明守門檢查讀得到真的檔、真的會擋（「探頭圖：前景下層那一份不換前綴」移出清單的替代）。",
+    "expect": ["CT4 真的檔"],
+    "file": "js/peeks.js",
+    "find": "    front: '<path d=\"M95.1 141.7C97.2 142.1",
+    "replace": "    front: '<path id=\"zzfront\" d=\"M95.1 141.7C97.2 142.1",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "CT4 守門：數 id 的那一段數不到",
+    "why": "（事前寫 2026-11-20 16:3x，跑之前）cliptest 的 frontIds 把 'id=\"' 改成 'idq=\"'：真的檔本來就是 0 個，照樣綠；合成樣本 a 的前景帶 id 卻數到 0 → 只紅「CT4 對照組」。證明對照組守得住「數 id 那一段壞掉、真的檔照樣報 0」。",
+    "expect": ["CT4 對照組"],
+    "file": "scripts/cliptest.mjs",
+    "find": "ids: lines[i].split('id=\"').length - 1",
+    "replace": "ids: lines[i].split('idq=\"').length - 1",
+    "cmd": "node scripts/cliptest.mjs"
+  },
+  {
+    "name": "CT4 守門：前景行認不得（寫法變了就數成 0 行）",
+    "why": "（事前寫 2026-11-20 16:3x，跑之前）cliptest 的 frontIds 認前景行的開頭從「四格空白 front: 」改成「四格空白 fronts: 」：真的檔前景 0 行≠19 張 → 紅「CT4 真的檔」；合成樣本也數到 0 行 → 紅「CT4 對照組」。證明母體那一道（前景行跟張數一樣多）擋得住「讀不到就當成 0 個帶 id」。",
+    "expect": ["CT4 對照組", "CT4 真的檔"],
+    "file": "scripts/cliptest.mjs",
+    "find": "if (lines[i].startsWith('    front: ')) fronts.push",
+    "replace": "if (lines[i].startsWith('    fronts: ')) fronts.push",
+    "cmd": "node scripts/cliptest.mjs"
   }
 ]

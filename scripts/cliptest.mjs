@@ -35,6 +35,13 @@
 //       （證明這支讀得到真的圖的結構，不是只在合成樣本上有用）。
 //       2026-11-20 從「換回」改成「插入」：原本是把 11-18 算好的頭頂帶、翅尖字串換回 clipPath 寫法，v1.100.0 那兩張換成描圖後字串不在了。
 //       插入不依賴圖裡畫了什麼，換圖前後都成立。
+//   CT4 探頭圖的前景（PEEK 每一張的 front）都不帶 id（2026-11-20 加；Dispatch 16:3x 選甲；寫之前 date＝16:36）：
+//       peek() 把前景另外畫一份在邊線以下那一層，帶 id 的話那一份要換前綴，不然同一張圖裡 id 出現兩次（11-18 鬍鬍揮手、山雀坐姿就是）。
+//       守這件事的突變「探頭圖：前景下層那一份不換前綴」在 v1.100.0 換圖後沒紅——main 有兩張前景帶 id、HEAD 一張都沒有
+//       （.logs/v1100/frontids.mjs），換不換前綴結果一樣，現在的資料下是等價突變，已從 mut_fix1118 移出。
+//       這一條替它守門：前景帶 id 的張數必須是 0；哪天新圖的前景又帶 id（例：前景裡有裁切框），這條紅＝要把那條突變放回清單、重新證明會紅。
+//       母體：PEEK 區塊（const PEEK = { 到下一個行首 };）裡「  名字: { vb: [」的張數 ≥ 15，而且前景行（行首四格空白 front:）跟張數一樣多——
+//       寫法變了（例：前景拆成多行）數不到，就紅，不當成 0 個。對照組：合成一段兩張的 PEEK（一張前景帶 id、fig 也帶 id），必須剛好數到前景那 1 個。
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -133,6 +140,33 @@ for (const [kind, label] of [['scout', '阿灰望遠鏡'], ['point', '指路阿�
   const id = 'ct3' + kind, r = inject(kind, id);
   yes(r.ok && r.before === 0 && r.hits.length === 1 && r.hits[0].line === r.line && r.hits[0].id === id,
     `CT3 真的檔的對照：${label}（${kind}）那一張插一個轉過角度的 path 形裁切框 → 抓到 1 個、在插的那一行（${r.ok ? `插在第 ${r.line} 行；插之前會出事 ${r.before} 個；抓到 ${r.hits.map((x) => `第 ${x.line} 行 ${x.id} <${x.shape}>`).join('、') || '0 個'}` : r.why}）`);
+}
+
+// ---- CT4 探頭圖的前景都不帶 id（說明見檔頭） ----
+function frontIds(text) {
+  const lines = text.split('\n');
+  const s = lines.findIndex((l) => /^const PEEK = \{/.test(l));
+  if (s < 0) return { ok: false, why: '找不到 const PEEK = { 那一行' };
+  const e = lines.findIndex((l, i) => i > s && /^\};/.test(l));
+  if (e < 0) return { ok: false, why: 'PEEK 區塊找不到結尾（行首 };）' };
+  const body = lines.slice(s + 1, e);
+  const kinds = body.filter((l) => /^ {2}\w+: \{ vb: \[/.test(l)).length;
+  const fronts = [];
+  for (let i = s + 1; i < e; i++) if (lines[i].startsWith('    front: ')) fronts.push({ line: i + 1, ids: lines[i].split('id="').length - 1 });
+  return { ok: true, kinds, fronts, withId: fronts.filter((f) => f.ids > 0) };
+}
+{
+  const FT = ['const PEEK = {', '  a: { vb: [0, 0, 1, 1], edge: 1,', "    fig: '<g id=\"x\"/>',", "    front: '<clipPath id=\"y\"><rect/></clipPath>',", "    extra: '' },",
+    '  b: { vb: [0, 0, 1, 1], edge: 1,', "    fig: '',", "    front: '<path/>',", "    extra: '' },", '};'].join('\n');
+  const c = frontIds(FT);
+  yes(c.ok && c.kinds === 2 && c.fronts.length === 2 && c.withId.length === 1 && c.withId[0].line === 4,
+    `CT4 對照組：合成兩張的 PEEK（a 的前景與 fig 都帶 id、b 都不帶），必須數到 2 張、2 行前景、帶 id 的只有第 4 行那 1 行（${c.ok ? `${c.kinds} 張、${c.fronts.length} 行前景、帶 id 的 ${c.withId.map((f) => `第 ${f.line} 行`).join('、') || '0 行'}` : c.why}）`);
+}
+{
+  const r = src['js/peeks.js'] ? frontIds(src['js/peeks.js']) : { ok: false, why: '讀不到 js/peeks.js' };
+  yes(r.ok && r.kinds >= 15 && r.fronts.length === r.kinds && r.withId.length === 0,
+    `CT4 真的檔：探頭圖的前景都不帶 id（js/peeks.js 的 PEEK ${r.ok ? `${r.kinds} 張（要 ≥ 15）、前景 ${r.fronts.length} 行（要跟張數一樣）、帶 id 的 ${r.withId.map((f) => `第 ${f.line} 行 ${f.ids} 個`).join('、') || '0 行'}` : r.why}）`
+    + '——紅的話：把 mut_fix1118 移出的「探頭圖：前景下層那一份不換前綴」放回去、重新證明會紅');
 }
 
 console.log(`\n${pass} 項通過${fail ? `，${fail} 項失敗` : ''}`);
